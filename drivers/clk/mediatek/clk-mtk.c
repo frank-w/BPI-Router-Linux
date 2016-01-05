@@ -244,3 +244,28 @@ void mtk_clk_register_composites(const struct mtk_composite *mcs,
 			clk_data->clks[mc->id] = clk;
 	}
 }
+
+void __init mtk_clk_register_dividers(const struct mtk_clk_divider *mcds,
+			int num, void __iomem *base, spinlock_t *lock,
+				struct clk_onecell_data *clk_data)
+{
+	struct clk *clk;
+	int i;
+
+	for (i = 0; i <  num; i++) {
+		const struct mtk_clk_divider *mcd = &mcds[i];
+
+		clk = clk_register_divider(NULL, mcd->name, mcd->parent_name,
+			mcd->flags, base +  mcd->div_reg, mcd->div_shift,
+			mcd->div_width, mcd->clk_divider_flags, lock);
+
+		if (IS_ERR(clk)) {
+			pr_err("Failed to register clk %s: %ld\n",
+				mcd->name, PTR_ERR(clk));
+			continue;
+		}
+
+		if (clk_data)
+			clk_data->clks[mcd->id] = clk;
+	}
+}

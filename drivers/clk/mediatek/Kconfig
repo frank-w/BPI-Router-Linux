@@ -6,6 +6,14 @@ config COMMON_CLK_MEDIATEK
 	---help---
 	  Mediatek SoCs' clock support.
 
+config COMMON_CLK_MT2701
+	bool "Clock driver for Mediatek MT2701 and MT7623"
+	depends on COMMON_CLK
+	select COMMON_CLK_MEDIATEK
+	default ARCH_MEDIATEK
+	---help---
+	  This driver supports Mediatek MT2701 and MT7623 clocks.
+
 config COMMON_CLK_MT8135
 	bool "Clock driver for Mediatek MT8135"
 	depends on ARCH_MEDIATEK || COMPILE_TEST
