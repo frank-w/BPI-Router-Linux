@@ -301,4 +301,15 @@ config VMD
 	  To compile this driver as a module, choose M here: the
 	  module will be called vmd.
 
+config PCIE_MTK
+	bool "Mediatek PCIe Controller"
+	depends on MACH_MT2701 || MACH_MT7623
+	depends on OF
+	depends on PCI
+	help
+	  Say Y here if you want to enable PCI controller support on Mediatek MT7623.
+	  MT7623 PCIe supports single Root complex (RC) with 3 Root Ports.
+	  Each port supports a Gen2 1-lan Link.
+	  PCIe include one Host/PCI bridge and 3 PCIe MAC.
+
 endmenu

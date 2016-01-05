@@ -25,6 +25,7 @@ config MACH_MT6592
 config MACH_MT7623
 	bool "MediaTek MT7623 SoCs support"
 	default ARCH_MEDIATEK
+	select MIGHT_HAVE_PCI
 
 config MACH_MT8127
 	bool "MediaTek MT8127 SoCs support"
