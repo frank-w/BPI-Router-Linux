@@ -74,6 +74,15 @@ config ARM_KIRKWOOD_CPUFREQ
 	  This adds the CPUFreq driver for Marvell Kirkwood
 	  SoCs.
 
+config ARM_MT7623_CPUFREQ
+	bool "Mediatek MT7623 CPUFreq support"
+	depends on ARCH_MEDIATEK && REGULATOR
+	depends on ARM || (ARM_CPU_TOPOLOGY && COMPILE_TEST)
+	depends on !CPU_THERMAL || THERMAL=y
+	select PM_OPP
+	help
+	  This adds the CPUFreq driver support for Mediatek MT7623 SoC.
+
 config ARM_MT8173_CPUFREQ
 	tristate "Mediatek MT8173 CPUFreq support"
 	depends on ARCH_MEDIATEK && REGULATOR
