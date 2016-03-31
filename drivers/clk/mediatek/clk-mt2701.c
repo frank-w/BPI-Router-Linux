@@ -573,6 +573,20 @@ static const struct mtk_gate top_clks[] __initconst = {
 	GATE_TOP_AUD(CLK_TOP_AUD_I2S6_MCLK, "aud_i2s6_mclk", "aud_k6_src_div", 28),
 };
 
+static struct clk_onecell_data *mt7623_top_clk_data __initdata;
+static struct clk_onecell_data *mt7623_pll_clk_data __initdata;
+
+static void __init mtk_clk_enable_critical(void)
+{
+	if (!mt7623_top_clk_data || !mt7623_pll_clk_data)
+		return;
+
+	clk_prepare_enable(mt7623_pll_clk_data->clks[CLK_APMIXED_ARMPLL]);
+	clk_prepare_enable(mt7623_top_clk_data->clks[CLK_TOP_MEM_SEL]);
+	clk_prepare_enable(mt7623_top_clk_data->clks[CLK_TOP_DDRPHYCFG_SEL]);
+	clk_prepare_enable(mt7623_top_clk_data->clks[CLK_TOP_RTC_SEL]);
+}
+
 static void __init mtk_topckgen_init(struct device_node *node)
 {
 	struct clk_onecell_data *clk_data;
@@ -585,7 +599,7 @@ static void __init mtk_topckgen_init(struct device_node *node)
 		return;
 	}
 
-	clk_data = mtk_alloc_clk_data(CLK_TOP_NR);
+	mt7623_top_clk_data = clk_data = mtk_alloc_clk_data(CLK_TOP_NR);
 
 	mtk_clk_register_fixed_clks(top_fixed_clks, ARRAY_SIZE(top_fixed_clks),
 								clk_data);
@@ -606,6 +620,8 @@ static void __init mtk_topckgen_init(struct device_node *node)
 	if (r)
 		pr_err("%s(): could not register clock provider: %d\n",
 			__func__, r);
+
+	mtk_clk_enable_critical();
 }
 CLK_OF_DECLARE(mtk_topckgen, "mediatek,mt2701-topckgen", mtk_topckgen_init);
 
@@ -1202,7 +1218,7 @@ static void __init mtk_apmixedsys_init(struct device_node *node)
 	struct clk_onecell_data *clk_data;
 	int r;
 
-	clk_data = mtk_alloc_clk_data(ARRAY_SIZE(apmixed_plls));
+	mt7623_pll_clk_data = clk_data = mtk_alloc_clk_data(ARRAY_SIZE(apmixed_plls));
 	if (!clk_data)
 		return;
 
@@ -1213,6 +1229,8 @@ static void __init mtk_apmixedsys_init(struct device_node *node)
 	if (r)
 		pr_err("%s(): could not register clock provider: %d\n",
 			__func__, r);
+
+	mtk_clk_enable_critical();
 }
 CLK_OF_DECLARE(mtk_apmixedsys, "mediatek,mt2701-apmixedsys",
 							mtk_apmixedsys_init);
