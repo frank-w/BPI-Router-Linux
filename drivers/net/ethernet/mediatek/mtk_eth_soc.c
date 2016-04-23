@@ -710,7 +710,16 @@ static int mtk_tx_map(struct sk_buff *skb, struct net_device *dev,
 	WRITE_ONCE(itxd->txd3, (TX_DMA_SWC | TX_DMA_PLEN0(skb_headlen(skb)) |
 				(!nr_frags * TX_DMA_LS0)));
 
-	netdev_sent_queue(dev, skb->len);
+	/* we have a single DMA ring so BQL needs to be updated for all devices
+	 * sitting on this ring
+	 */
+	for (i = 0; i < MTK_MAC_COUNT; i++) {
+		if (!eth->netdev[i])
+			continue;
+
+		netdev_sent_queue(eth->netdev[i], skb->len);
+	}
+
 	skb_tx_timestamp(skb);
 
 	ring->next_free = mtk_qdma_phys_to_virt(ring, txd->txd2);
@@ -1002,21 +1011,18 @@ static int mtk_poll_tx(struct mtk_eth *eth, int budget)
 	struct mtk_tx_dma *desc;
 	struct sk_buff *skb;
 	struct mtk_tx_buf *tx_buf;
-	unsigned int done[MTK_MAX_DEVS];
-	unsigned int bytes[MTK_MAX_DEVS];
+	int total = 0, done = 0;
+	unsigned int bytes = 0;
 	u32 cpu, dma;
 	static int condition;
-	int total = 0, i;
-
-	memset(done, 0, sizeof(done));
-	memset(bytes, 0, sizeof(bytes));
+	int i;
 
 	cpu = mtk_r32(eth, MTK_QTX_CRX_PTR);
 	dma = mtk_r32(eth, MTK_QTX_DRX_PTR);
 
 	desc = mtk_qdma_phys_to_virt(ring, cpu);
 
-	while ((cpu != dma) && budget) {
+	while ((cpu != dma) && done < budget) {
 		u32 next_cpu = desc->txd2;
 		int mac = 0;
 
@@ -1035,9 +1041,8 @@ static int mtk_poll_tx(struct mtk_eth *eth, int budget)
 		}
 
 		if (skb != (struct sk_buff *)MTK_DMA_DUMMY_DESC) {
-			bytes[mac] += skb->len;
-			done[mac]++;
-			budget--;
+			bytes += skb->len;
+			done++;
 		}
 		mtk_tx_unmap(eth, tx_buf);
 
@@ -1049,11 +1054,13 @@ static int mtk_poll_tx(struct mtk_eth *eth, int budget)
 
 	mtk_w32(eth, cpu, MTK_QTX_CRX_PTR);
 
+	/* we have a single DMA ring so BQL needs to be updated for all devices
+	 * sitting on this ring
+	 */
 	for (i = 0; i < MTK_MAC_COUNT; i++) {
-		if (!eth->netdev[i] || !done[i])
+		if (!eth->netdev[i])
 			continue;
-		netdev_completed_queue(eth->netdev[i], done[i], bytes[i]);
-		total += done[i];
+		netdev_completed_queue(eth->netdev[i], done, bytes);
 	}
 
 	if (mtk_queue_stopped(eth) &&
