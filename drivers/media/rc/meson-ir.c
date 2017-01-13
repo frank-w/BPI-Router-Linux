@@ -131,7 +131,7 @@ static int meson_ir_probe(struct platform_device *pdev)
 		return ir->irq;
 	}
 
-	ir->rc = rc_allocate_device();
+	ir->rc = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!ir->rc) {
 		dev_err(dev, "failed to allocate rc device\n");
 		return -ENOMEM;

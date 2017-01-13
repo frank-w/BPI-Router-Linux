@@ -58,7 +58,7 @@ int sms_ir_init(struct smscore_device_t *coredev)
 	struct rc_dev *dev;
 
 	pr_debug("Allocating rc device\n");
-	dev = rc_allocate_device();
+	dev = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!dev)
 		return -ENOMEM;
 

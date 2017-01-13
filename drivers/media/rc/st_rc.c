@@ -235,7 +235,7 @@ static int st_rc_probe(struct platform_device *pdev)
 	if (!rc_dev)
 		return -ENOMEM;
 
-	rdev = rc_allocate_device();
+	rdev = rc_allocate_device(RC_DRIVER_IR_RAW);
 
 	if (!rdev)
 		return -ENOMEM;

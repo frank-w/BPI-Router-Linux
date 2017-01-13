@@ -431,7 +431,7 @@ static int iguanair_probe(struct usb_interface *intf,
 	struct usb_host_interface *idesc;
 
 	ir = kzalloc(sizeof(*ir), GFP_KERNEL);
-	rc = rc_allocate_device();
+	rc = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!ir || !rc) {
 		ret = -ENOMEM;
 		goto out;

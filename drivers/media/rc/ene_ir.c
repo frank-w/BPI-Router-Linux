@@ -1012,7 +1012,7 @@ static int ene_probe(struct pnp_dev *pnp_dev, const struct pnp_device_id *id)
 
 	/* allocate memory */
 	dev = kzalloc(sizeof(struct ene_device), GFP_KERNEL);
-	rdev = rc_allocate_device();
+	rdev = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!dev || !rdev)
 		goto exit_free_dev_rdev;
 

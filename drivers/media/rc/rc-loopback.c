@@ -181,7 +181,7 @@ static int __init loop_init(void)
 	struct rc_dev *rc;
 	int ret;
 
-	rc = rc_allocate_device();
+	rc = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!rc) {
 		printk(KERN_ERR DRIVER_NAME ": rc_dev allocation failed\n");
 		return -ENOMEM;

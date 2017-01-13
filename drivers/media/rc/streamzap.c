@@ -291,7 +291,7 @@ static struct rc_dev *streamzap_init_rc_dev(struct streamzap_ir *sz)
 	struct device *dev = sz->dev;
 	int ret;
 
-	rdev = rc_allocate_device();
+	rdev = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!rdev) {
 		dev_err(dev, "remote dev allocation failed\n");
 		goto out;

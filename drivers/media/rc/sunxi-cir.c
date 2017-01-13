@@ -212,7 +212,7 @@ static int sunxi_ir_probe(struct platform_device *pdev)
 		goto exit_clkdisable_clk;
 	}
 
-	ir->rc = rc_allocate_device();
+	ir->rc = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!ir->rc) {
 		dev_err(dev, "failed to allocate device\n");
 		ret = -ENOMEM;

@@ -222,7 +222,7 @@ static int hix5hd2_ir_probe(struct platform_device *pdev)
 		return priv->irq;
 	}
 
-	rdev = rc_allocate_device();
+	rdev = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!rdev)
 		return -ENOMEM;
 

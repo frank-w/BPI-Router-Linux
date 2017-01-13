@@ -267,7 +267,6 @@ int cx23885_input_init(struct cx23885_dev *dev)
 	struct cx23885_kernel_ir *kernel_ir;
 	struct rc_dev *rc;
 	char *rc_map;
-	enum rc_driver_type driver_type;
 	u64 allowed_protos;
 
 	int ret;
@@ -352,7 +351,7 @@ int cx23885_input_init(struct cx23885_dev *dev)
 				    pci_name(dev->pci));
 
 	/* input device */
-	rc = rc_allocate_device();
+	rc = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!rc) {
 		ret = -ENOMEM;
 		goto err_out_free;
@@ -371,7 +370,6 @@ int cx23885_input_init(struct cx23885_dev *dev)
 		rc->input_id.product = dev->pci->device;
 	}
 	rc->dev.parent = &dev->pci->dev;
-	rc->driver_type = driver_type;
 	rc->allowed_protocols = allowed_protos;
 	rc->priv = kernel_ir;
 	rc->open = cx23885_input_ir_open;

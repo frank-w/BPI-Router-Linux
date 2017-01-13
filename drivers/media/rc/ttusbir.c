@@ -205,7 +205,7 @@ static int ttusbir_probe(struct usb_interface *intf,
 	int altsetting = -1;
 
 	tt = kzalloc(sizeof(*tt), GFP_KERNEL);
-	rc = rc_allocate_device();
+	rc = rc_allocate_device(RC_DRIVER_IR_RAW);
 	if (!tt || !rc) {
 		ret = -ENOMEM;
 		goto out;
