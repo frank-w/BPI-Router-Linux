@@ -34,4 +34,12 @@ config NET_DSA_QCA8K
 	  This enables support for the Qualcomm Atheros QCA8K Ethernet
 	  switch chips.
 
+config NET_DSA_MT7530
+	tristate "Mediatek MT7530 Ethernet switch support"
+	depends on NET_DSA
+	select NET_DSA_TAG_MTK
+	---help---
+	  This enables support for the Mediatek MT7530 Ethernet switch
+	  chip.
+
 endmenu
