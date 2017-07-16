@@ -139,12 +139,10 @@ static inline void key_alloc_serial(struct key *key)
 	struct rb_node *parent, **p;
 	struct key *xkey;
 
-	/* propose a random serial number and look for a hole for it in the
-	 * serial number tree */
+	/* propose a non-negative random serial number and look for a hole for
+	 * it in the serial number tree */
 	do {
-		get_random_bytes(&key->serial, sizeof(key->serial));
-
-		key->serial >>= 1; /* negative numbers are not permitted */
+		key->serial = get_random_u32() >> 1;
 	} while (key->serial < 3);
 
 	spin_lock(&key_serial_lock);

@@ -766,10 +766,12 @@ static int encrypted_init(struct encrypted_key_payload *epayload,
 
 	__ekey_init(epayload, format, master_desc, datalen);
 	if (!hex_encoded_iv) {
-		get_random_bytes(epayload->iv, ivsize);
+		ret = get_random_bytes_wait(epayload->iv, ivsize);
+		if (unlikely(ret))
+			return ret;
 
-		get_random_bytes(epayload->decrypted_data,
-				 epayload->decrypted_datalen);
+		ret = get_random_bytes_wait(epayload->decrypted_data,
+					    epayload->decrypted_datalen);
 	} else
 		ret = encrypted_key_decrypt(epayload, format, hex_encoded_iv);
 	return ret;
