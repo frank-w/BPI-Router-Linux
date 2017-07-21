@@ -525,8 +525,8 @@ struct mtk_rx_ring {
  * @pctl:		The register map pointing at the range used to setup
  *			GMAC port drive/slew values
  * @dma_refcnt:		track how many netdevs are using the DMA engine
- * @tx_ring:		Pointer to the memore holding info about the TX ring
- * @rx_ring:		Pointer to the memore holding info about the RX ring
+ * @tx_ring:		Pointer to the memory holding info about the TX ring
+ * @rx_ring:		Pointer to the memory holding info about the RX ring
  * @tx_napi:		The TX NAPI struct
  * @rx_napi:		The RX NAPI struct
  * @scratch_ring:	Newer SoCs need memory for a second HW managed TX ring
