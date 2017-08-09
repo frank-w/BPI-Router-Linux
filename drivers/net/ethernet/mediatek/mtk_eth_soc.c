@@ -1894,6 +1894,8 @@ static int mtk_hw_init(struct mtk_eth *eth)
 	 */
 	val = mtk_r32(eth, MTK_CDMQ_IG_CTRL);
 	mtk_w32(eth, val | MTK_CDMQ_STAG_EN, MTK_CDMQ_IG_CTRL);
+	val = mtk_r32(eth, MTK_CDMP_IG_CTRL);
+	mtk_w32(eth, val | MTK_CDMP_STAG_EN, MTK_CDMP_IG_CTRL);
 
 	/* Enable RX VLan Offloading */
 	if (MTK_HW_FEATURES & NETIF_F_HW_VLAN_CTAG_RX)
