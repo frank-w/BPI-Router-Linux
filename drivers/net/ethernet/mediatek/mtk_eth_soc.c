@@ -933,10 +933,16 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 		if (!(trxd.rxd2 & RX_DMA_DONE))
 			break;
 
-		/* find out which mac the packet come from. values start at 1 */
-		mac = (trxd.rxd4 >> RX_DMA_FPORT_SHIFT) &
-		      RX_DMA_FPORT_MASK;
-		mac--;
+		/* find out which mac the packet comes from. If the special tag is
+		 * we can assume that the traffic is coming from the builtin mt7530
+		 * and the DSA driver has loaded. FPORT will be the physical switch
+		 * port in this case rather than the FE forward port id. */
+		if (!(trxd.rxd4 & RX_DMA_SP_TAG)) {
+			/* values start at 1 */
+			mac = (trxd.rxd4 >> RX_DMA_FPORT_SHIFT) &
+			      RX_DMA_FPORT_MASK;
+			mac--;
+		}
 
 		netdev = eth->netdev[mac];
 

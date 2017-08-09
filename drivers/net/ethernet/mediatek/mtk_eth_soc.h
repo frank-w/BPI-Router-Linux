@@ -284,6 +284,7 @@
 
 /* QDMA descriptor rxd4 */
 #define RX_DMA_L4_VALID		BIT(24)
+#define RX_DMA_SP_TAG		BIT(22)
 #define RX_DMA_FPORT_SHIFT	19
 #define RX_DMA_FPORT_MASK	0x7
 
