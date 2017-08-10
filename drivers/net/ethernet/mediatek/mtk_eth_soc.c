@@ -1873,6 +1873,8 @@ static int mtk_hw_init(struct mtk_eth *eth)
 	pm_runtime_enable(eth->dev);
 	pm_runtime_get_sync(eth->dev);
 
+	clk_set_rate(eth->clks[MTK_CLK_TRGPLL], 250000000);
+
 	clk_prepare_enable(eth->clks[MTK_CLK_ETHIF]);
 	clk_prepare_enable(eth->clks[MTK_CLK_ESW]);
 	clk_prepare_enable(eth->clks[MTK_CLK_GP1]);
