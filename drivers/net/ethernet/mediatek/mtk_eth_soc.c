@@ -1904,8 +1904,13 @@ static int mtk_hw_init(struct mtk_eth *eth)
 		mtk_w32(eth, 0, MTK_CDMP_EG_CTRL);
 
 	/* disable delay and normal interrupt */
-	mtk_w32(eth, 0, MTK_QDMA_DELAY_INT);
+#ifdef MTK_IRQ_DLY
+	mtk_w32(eth, 0x84048404, MTK_PDMA_DELAY_INT);
+	mtk_w32(eth, 0x84048404, MTK_QDMA_DELAY_INT);
+#else
 	mtk_w32(eth, 0, MTK_PDMA_DELAY_INT);
+	mtk_w32(eth, 0, MTK_QDMA_DELAY_INT);
+#endif
 	mtk_irq_disable(eth, MTK_QDMA_INT_MASK, ~0);
 	mtk_irq_disable(eth, MTK_PDMA_INT_MASK, ~0);
 	mtk_w32(eth, RST_GL_PSE, MTK_RST_GL);

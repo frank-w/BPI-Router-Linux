@@ -12,6 +12,8 @@
  *   Copyright (C) 2013-2016 Michael Lee <igvtee@gmail.com>
  */
 
+#define MTK_IRQ_DLY
+
 #ifndef MTK_ETH_H
 #define MTK_ETH_H
 
@@ -220,11 +222,15 @@
 #define MTK_TX_DONE_INT2	BIT(2)
 #define MTK_TX_DONE_INT1	BIT(1)
 #define MTK_TX_DONE_INT0	BIT(0)
+#ifdef MTK_IRQ_DLY
+#define MTK_RX_DONE_INT		BIT(30)
+#define MTK_TX_DONE_INT		BIT(28)
+#else
 #define MTK_RX_DONE_INT		(MTK_RX_DONE_INT0 | MTK_RX_DONE_INT1 | \
 				 MTK_RX_DONE_INT2 | MTK_RX_DONE_INT3)
 #define MTK_TX_DONE_INT		(MTK_TX_DONE_INT0 | MTK_TX_DONE_INT1 | \
 				 MTK_TX_DONE_INT2 | MTK_TX_DONE_INT3)
-
+#endif
 /* QDMA Interrupt grouping registers */
 #define MTK_QDMA_INT_GRP1	0x1a20
 #define MTK_QDMA_INT_GRP2	0x1a24
