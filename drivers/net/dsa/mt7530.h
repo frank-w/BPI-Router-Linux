@@ -379,6 +379,8 @@ struct mt7530_priv {
 	struct mt7530_port	ports[MT7530_NUM_PORTS];
 	/* protect among processes for registers access*/
 	struct mutex reg_mutex;
+
+	struct net_device *bridge_dev[MT7530_NUM_PORTS];
 };
 
 struct mt7530_hw_stats {

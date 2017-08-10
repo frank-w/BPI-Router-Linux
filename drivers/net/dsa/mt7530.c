@@ -834,6 +834,7 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
 	int i;
 
 	mutex_lock(&priv->reg_mutex);
+	priv->bridge_dev[port] = bridge;
 
 	for (i = 0; i < MT7530_NUM_PORTS; i++) {
 		/* Add this port to the port matrix of the other ports in the
@@ -841,7 +842,7 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
 		 * and not being setup until the port becomes enabled.
 		 */
 		if (ds->enabled_port_mask & BIT(i) && i != port) {
-			if (ds->ports[i].bridge_dev != bridge)
+			if (priv->bridge_dev[i] != bridge)
 				continue;
 			if (priv->ports[i].enable)
 				mt7530_set(priv, MT7530_PCR_P(i),
@@ -864,8 +865,7 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
 }
 
 static void
-mt7530_port_bridge_leave(struct dsa_switch *ds, int port,
-			 struct net_device *bridge)
+mt7530_port_bridge_leave(struct dsa_switch *ds, int port)
 {
 	struct mt7530_priv *priv = ds->priv;
 	int i;
@@ -878,7 +878,7 @@ mt7530_port_bridge_leave(struct dsa_switch *ds, int port,
 		 * is kept and not being setup until the port becomes enabled.
 		 */
 		if (ds->enabled_port_mask & BIT(i) && i != port) {
-			if (ds->ports[i].bridge_dev != bridge)
+			if (priv->bridge_dev[i] != priv->bridge_dev[port])
 				continue;
 			if (priv->ports[i].enable)
 				mt7530_clear(priv, MT7530_PCR_P(i),
@@ -890,6 +890,7 @@ mt7530_port_bridge_leave(struct dsa_switch *ds, int port,
 	/* Set the cpu port to be the only one in the port matrix of
 	 * this port.
 	 */
+	priv->bridge_dev[port] = NULL;
 	if (priv->ports[port].enable)
 		mt7530_rmw(priv, MT7530_PCR_P(port), PCR_MATRIX_MASK,
 			   PCR_MATRIX(BIT(MT7530_CPU_PORT)));
@@ -1033,7 +1034,7 @@ mt7530_probe(struct mdio_device *mdiodev)
 	if (!priv)
 		return -ENOMEM;
 
-	priv->ds = dsa_switch_alloc(&mdiodev->dev, DSA_MAX_PORTS);
+	priv->ds = devm_kzalloc(&mdiodev->dev, sizeof(*priv->ds), GFP_KERNEL);
 	if (!priv->ds)
 		return -ENOMEM;
 
@@ -1076,12 +1077,13 @@ mt7530_probe(struct mdio_device *mdiodev)
 	priv->bus = mdiodev->bus;
 	priv->dev = &mdiodev->dev;
 	priv->ds->priv = priv;
+	priv->ds->dev = &mdiodev->dev;
 	priv->ds->ops = &mt7530_switch_ops;
 	mutex_init(&priv->reg_mutex);
 	lpriv = priv;
 	dev_set_drvdata(&mdiodev->dev, priv);
 
-	return dsa_register_switch(priv->ds, &mdiodev->dev);
+	return dsa_register_switch(priv->ds, priv->ds->dev->of_node);
 }
 
 static void
