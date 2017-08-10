@@ -964,6 +964,10 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 			mac--;
 		}
 
+		if (unlikely(mac < 0 || mac >= MTK_MAC_COUNT ||
+			     !eth->netdev[mac]))
+			goto release_desc;
+
 		netdev = eth->netdev[mac];
 
 		if (unlikely(test_bit(MTK_RESETTING, &eth->state)))
