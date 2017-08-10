@@ -643,8 +643,8 @@ static int mtk_tx_map(struct sk_buff *skb, struct net_device *dev,
 		txd4 |= TX_DMA_CHKSUM;
 
 	/* VLAN header offload */
-	if (skb_vlan_tag_present(skb))
-		txd4 |= TX_DMA_INS_VLAN | skb_vlan_tag_get(skb);
+//	if (skb_vlan_tag_present(skb))
+//		txd4 |= TX_DMA_INS_VLAN | skb_vlan_tag_get(skb);
 
 	mapped_addr = dma_map_single(eth->dev, skb->data,
 				     skb_headlen(skb), DMA_TO_DEVICE);
@@ -1874,7 +1874,10 @@ static int mtk_hw_init(struct mtk_eth *eth)
 	mtk_w32(eth, val | MTK_CDMQ_STAG_EN, MTK_CDMQ_IG_CTRL);
 
 	/* Enable RX VLan Offloading */
-	mtk_w32(eth, 1, MTK_CDMP_EG_CTRL);
+	if (MTK_HW_FEATURES & NETIF_F_HW_VLAN_CTAG_RX)
+		mtk_w32(eth, 1, MTK_CDMP_EG_CTRL);
+	else
+		mtk_w32(eth, 0, MTK_CDMP_EG_CTRL);
 
 	/* disable delay and normal interrupt */
 	mtk_w32(eth, 0, MTK_QDMA_DELAY_INT);
