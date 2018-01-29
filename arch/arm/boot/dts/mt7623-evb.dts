@@ -26,8 +26,25 @@
 	memory {
 		reg = <0 0x80000000 0 0x40000000>;
 	};
+/*
+	pwm_pins: pwm {
+		pins_pwm1 {
+			pinmux = <MT7623_PIN_204_PWM1_FUNC_PWM1>;
+		};
+
+		pins_pwm2 {
+			pinmux = <MT7623_PIN_205_PWM2_FUNC_PWM2>;
+		};
+	};*/
+
 };
 
 &uart2 {
 	status = "okay";
 };
+
+/*&pwm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm_pins>;
+	status = "okay";
+};*/
