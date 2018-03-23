@@ -17,7 +17,6 @@
 #include <linux/module.h>
 #include <linux/regmap.h>
 #include <linux/rtc.h>
-#include <linux/irqdomain.h>
 #include <linux/jiffies.h>
 #include <linux/platform_device.h>
 #include <linux/of_address.h>
@@ -337,7 +336,7 @@ static int mtk_rtc_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to request alarm IRQ: %d: %d\n",
 			rtc->irq, ret);
-		goto out_dispose_irq;
+		return ret;
 	}
 
 	device_init_wakeup(&pdev->dev, 1);
@@ -354,8 +353,7 @@ static int mtk_rtc_probe(struct platform_device *pdev)
 
 out_free_irq:
 	free_irq(rtc->irq, rtc->rtc_dev);
-out_dispose_irq:
-	irq_dispose_mapping(rtc->irq);
+
 	return ret;
 }
 
@@ -365,7 +363,6 @@ static int mtk_rtc_remove(struct platform_device *pdev)
 
 	rtc_device_unregister(rtc->rtc_dev);
 	free_irq(rtc->irq, rtc->rtc_dev);
-	irq_dispose_mapping(rtc->irq);
 
 	return 0;
 }
