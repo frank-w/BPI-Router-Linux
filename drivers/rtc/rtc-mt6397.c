@@ -16,6 +16,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/of_platform.h>
 #include <linux/regmap.h>
 #include <linux/rtc.h>
 #include <linux/jiffies.h>
@@ -350,7 +351,7 @@ static int mtk_rtc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	return 0;
+	return devm_of_platform_populate(&pdev->dev);
 }
 
 #ifdef CONFIG_PM_SLEEP
