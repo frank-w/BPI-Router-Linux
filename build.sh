@@ -10,6 +10,10 @@ crosscompile=0
 if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then
 	if [[ -z "$(which arm-linux-gnueabihf-gcc)" ]];then echo "please install gcc-arm-linux-gnueabihf";exit 1;fi
 
+	CCVER=$(arm-linux-gnueabihf-gcc --version |grep arm| sed -e 's/^.* \([0-9]\.[0-9-]\).*$/\1/')
+	if [[ $CCVER =~ ^7 ]]; then
+		echo "arm-linux-gnueabihf-gcc version 7 currently not supported";exit 1;
+	fi
 	export ARCH=arm;export CROSS_COMPILE=arm-linux-gnueabihf-
 	crosscompile=1
 fi;
@@ -94,7 +98,7 @@ function build {
 
 		exec 3> >(tee build.log)
 		export LOCALVERSION="-${gitbranch}"
-		make ${CFLAGS} 2>&3 #&& make modules_install 2>&3
+		make ${MAKEFLAGS} 2>&3 #&& make modules_install 2>&3
 		ret=$?
 		exec 3>&-
 
@@ -160,7 +164,8 @@ function prepare_SD {
 if [ -n "$kernver" ]; then
 	action=$1
 	LANG=C
-	CFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
+	MAKEFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
+	#  export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/7/include"
 
 	case "$action" in
 		"reset")
