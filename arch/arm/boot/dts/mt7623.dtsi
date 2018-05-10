@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 MediaTek Inc.
+ * Copyright (c) 2017-2018 MediaTek Inc.
  * Author: John Crispin <john@phrozen.org>
  *	   Sean Wang <sean.wang@mediatek.com>
  *
@@ -28,7 +28,7 @@
 	compatible = "mediatek,mt7623";
 	interrupt-parent = <&sysirq>;
 
-	cpu_opp_table: opp_table {
+	cpu_opp_table: opp-table {
 		compatible = "operating-points-v2";
 		opp-shared;
 
@@ -96,6 +96,9 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-a7";
 			reg = <0x1>;
+			clocks = <&infracfg CLK_INFRA_CPUSEL>,
+				 <&apmixedsys CLK_APMIXED_MAINPLL>;
+			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cpu_opp_table>;
 			clock-frequency = <1300000000>;
 		};
@@ -104,6 +107,9 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-a7";
 			reg = <0x2>;
+			clocks = <&infracfg CLK_INFRA_CPUSEL>,
+				 <&apmixedsys CLK_APMIXED_MAINPLL>;
+			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cpu_opp_table>;
 			clock-frequency = <1300000000>;
 		};
@@ -112,6 +118,9 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-a7";
 			reg = <0x3>;
+			clocks = <&infracfg CLK_INFRA_CPUSEL>,
+				 <&apmixedsys CLK_APMIXED_MAINPLL>;
+			clock-names = "cpu", "intermediate";
 			operating-points-v2 = <&cpu_opp_table>;
 			clock-frequency = <1300000000>;
 		};
@@ -138,32 +147,32 @@
 	};
 
 	thermal-zones {
-			cpu_thermal: cpu_thermal {
+			cpu_thermal: cpu-thermal {
 				polling-delay-passive = <1000>;
 				polling-delay = <1000>;
 
 				thermal-sensors = <&thermal 0>;
 
 				trips {
-					cpu_passive: cpu_passive {
+					cpu_passive: cpu-passive {
 						temperature = <47000>;
 						hysteresis = <2000>;
 						type = "passive";
 					};
 
-					cpu_active: cpu_active {
+					cpu_active: cpu-active {
 						temperature = <67000>;
 						hysteresis = <2000>;
 						type = "active";
 					};
 
-					cpu_hot: cpu_hot {
+					cpu_hot: cpu-hot {
 						temperature = <87000>;
 						hysteresis = <2000>;
 						type = "hot";
 					};
 
-					cpu_crit {
+					cpu-crit {
 						temperature = <107000>;
 						hysteresis = <2000>;
 						type = "critical";
@@ -350,17 +359,6 @@
 		#io-channel-cells = <1>;
 	};
 
-	uart2: serial@11004000 {
-		compatible = "mediatek,mt7623-uart",
-			     "mediatek,mt6577-uart";
-		reg = <0 0x11004000 0 0x400>;
-		interrupts = <GIC_SPI 53 IRQ_TYPE_LEVEL_LOW>;
-		clocks = <&pericfg CLK_PERI_UART2_SEL>,
-			 <&pericfg CLK_PERI_UART2>;
-		clock-names = "baud", "bus";
-		status = "disabled";
-	};
-
 	uart0: serial@11002000 {
 		compatible = "mediatek,mt7623-uart",
 			     "mediatek,mt6577-uart";
@@ -379,6 +377,17 @@
 		interrupts = <GIC_SPI 52 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&pericfg CLK_PERI_UART1_SEL>,
 			 <&pericfg CLK_PERI_UART1>;
+		clock-names = "baud", "bus";
+		status = "disabled";
+	};
+
+	uart2: serial@11004000 {
+		compatible = "mediatek,mt7623-uart",
+			     "mediatek,mt6577-uart";
+		reg = <0 0x11004000 0 0x400>;
+		interrupts = <GIC_SPI 53 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&pericfg CLK_PERI_UART2_SEL>,
+			 <&pericfg CLK_PERI_UART2>;
 		clock-names = "baud", "bus";
 		status = "disabled";
 	};
@@ -485,6 +494,18 @@
 		nvmem-cell-names = "calibration-data";
 	};
 
+	btif: serial@1100c000 {
+		compatible = "mediatek,mt7623-btif",
+			     "mediatek,mtk-btif";
+		reg = <0 0x1100c000 0 0x1000>;
+		interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&pericfg CLK_PERI_BTIF>;
+		clock-names = "main";
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		status = "disabled";
+	};
+
 	nandc: nfi@1100d000 {
 		compatible = "mediatek,mt7623-nfc",
 			     "mediatek,mt2701-nfc";
@@ -507,6 +528,18 @@
 		interrupts = <GIC_SPI 55 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&pericfg CLK_PERI_NFI_ECC>;
 		clock-names = "nfiecc_clk";
+		status = "disabled";
+	};
+
+	nor_flash: spi@11014000 {
+		compatible = "mediatek,mt7623-nor",
+			     "mediatek,mt8173-nor";
+		reg = <0 0x11014000 0 0x1000>;
+		clocks = <&pericfg CLK_PERI_FLASH>,
+			 <&topckgen CLK_TOP_FLASH_SEL>;
+		clock-names = "spi", "sf";
+		#address-cells = <1>;
+		#size-cells = <0>;
 		status = "disabled";
 	};
 
@@ -639,17 +672,6 @@
 			 "top_syspll_d5";
 	};
 
-	mmc1: mmc@11240000 {
-		compatible = "mediatek,mt7623-mmc",
-			     "mediatek,mt2701-mmc";
-		reg = <0 0x11240000 0 0x1000>;
-		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_LOW>;
-		clocks = <&pericfg CLK_PERI_MSDC30_1>,
-			 <&topckgen CLK_TOP_MSDC30_1_SEL>;
-		clock-names = "source", "hclk";
-		status = "disabled";
-	};
-
 	mmc0: mmc@11230000 {
 		compatible = "mediatek,mt7623-mmc",
 			     "mediatek,mt2701-mmc";
@@ -657,6 +679,17 @@
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&pericfg CLK_PERI_MSDC30_0>,
 			 <&topckgen CLK_TOP_MSDC30_0_SEL>;
+		clock-names = "source", "hclk";
+		status = "disabled";
+	};
+
+	mmc1: mmc@11240000 {
+		compatible = "mediatek,mt7623-mmc",
+			     "mediatek,mt2701-mmc";
+		reg = <0 0x11240000 0 0x1000>;
+		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&pericfg CLK_PERI_MSDC30_1>,
+			 <&topckgen CLK_TOP_MSDC30_1_SEL>;
 		clock-names = "source", "hclk";
 		status = "disabled";
 	};
@@ -759,6 +792,16 @@
 		reg = <0 0x1b000000 0 0x1000>;
 		#clock-cells = <1>;
 		#reset-cells = <1>;
+	};
+
+	hsdma: dma-controller@1b007000 {
+		compatible = "mediatek,mt7623-hsdma";
+		reg = <0 0x1b007000 0 0x1000>;
+		interrupts = <GIC_SPI 98 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&ethsys CLK_ETHSYS_HSDMA>;
+		clock-names = "hsdma";
+		power-domains = <&scpsys MT2701_POWER_DOMAIN_ETH>;
+		#dma-cells = <1>;
 	};
 
 	eth: ethernet@1b100000 {

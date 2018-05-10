@@ -1,0 +1,11 @@
+drivers/misc/mediatek/connectivity/common/conn_soc/mt7623/mtk_wcn_consys_hw.c:32:36: fatal error: soc/mediatek/pmic_wrap.h: No such file or directory
+compilation terminated.
+make[7]: *** [drivers/misc/mediatek/connectivity/common/conn_soc/mt7623/mtk_wcn_consys_hw.o] Error 1
+make[6]: *** [drivers/misc/mediatek/connectivity/common/conn_soc/mt7623] Error 2
+make[5]: *** [drivers/misc/mediatek/connectivity/common/conn_soc] Error 2
+make[4]: *** [drivers/misc/mediatek/connectivity/common] Error 2
+make[3]: *** [drivers/misc/mediatek/connectivity] Error 2
+make[2]: *** [drivers/misc/mediatek] Error 2
+make[1]: *** [drivers/misc] Error 2
+make[1]: *** Waiting for unfinished jobs....
+make: *** [drivers] Error 2
