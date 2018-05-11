@@ -54,13 +54,18 @@ function install {
 	else
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
-			kernelfile=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/uImage
+			imagename="uImage_${kernver}-${gitbranch}"
+			read -e -i $imagename -p "uImage-filename: " input
+			imagename="${input:-$imagename}"
+
+			echo "Name: $imagename"
+			kernelfile=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/${imagename}
 			if [[ -e $kernelfile ]];then
 				echo "backup of kernel: $kernelfile.bak"
 				cp $kernelfile $kernelfile.bak
 			fi
 			echo "copy new kernel"
-			cp ./uImage /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/uImage
+			cp ./uImage $kernelfile
 			echo "copy modules (root needed because of ext-fs permission)"
 			export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 			echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
