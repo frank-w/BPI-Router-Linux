@@ -84,6 +84,7 @@ static int of_reset_simple_xlate(struct reset_controller_dev *rcdev,
  */
 int reset_controller_register(struct reset_controller_dev *rcdev)
 {
+	printk(KERN_WARNING "%s: (%s:%i) of_node=%s", __FUNCTION__, __FILE__, __LINE__, rcdev->of_node ? rcdev->of_node->name : "<NULL>");
 	if (!rcdev->of_xlate) {
 		rcdev->of_reset_n_cells = 1;
 		rcdev->of_xlate = of_reset_simple_xlate;
@@ -438,6 +439,7 @@ struct reset_control *__of_reset_control_get(struct device_node *node,
 	struct of_phandle_args args;
 	int rstc_id;
 	int ret;
+	printk(KERN_WARNING "%s: (%s:%i) node=%s", __FUNCTION__, __FILE__, __LINE__, node->name);
 
 	if (!node)
 		return ERR_PTR(-EINVAL);
@@ -445,6 +447,7 @@ struct reset_control *__of_reset_control_get(struct device_node *node,
 	if (id) {
 		index = of_property_match_string(node,
 						 "reset-names", id);
+		printk(KERN_WARNING "%s: (%s:%i) index = %i", __FUNCTION__, __FILE__, __LINE__, index);
 		if (index == -EILSEQ)
 			return ERR_PTR(index);
 		if (index < 0)
@@ -453,6 +456,7 @@ struct reset_control *__of_reset_control_get(struct device_node *node,
 
 	ret = of_parse_phandle_with_args(node, "resets", "#reset-cells",
 					 index, &args);
+	printk(KERN_WARNING "%s: (%s:%i) ret = %p", __FUNCTION__, __FILE__, __LINE__, (void*)ret);
 	if (ret == -EINVAL)
 		return ERR_PTR(ret);
 	if (ret)
@@ -461,6 +465,8 @@ struct reset_control *__of_reset_control_get(struct device_node *node,
 	mutex_lock(&reset_list_mutex);
 	rcdev = NULL;
 	list_for_each_entry(r, &reset_controller_list, list) {
+//		printk(KERN_WARNING "%s: (%s:%i) %p == %p", __FUNCTION__, __FILE__, __LINE__, (void*)args.np, (void*)r->of_node);
+		printk(KERN_WARNING "%s: (%s:%i) %s == %s", __FUNCTION__, __FILE__, __LINE__, args.np ? args.np->name : "<NULL>", r->of_node ? r->of_node->name : "<NULL>");
 		if (args.np == r->of_node) {
 			rcdev = r;
 			break;
@@ -470,6 +476,7 @@ struct reset_control *__of_reset_control_get(struct device_node *node,
 
 	if (!rcdev) {
 		mutex_unlock(&reset_list_mutex);
+		printk(KERN_WARNING "%s: (%s:%i) !rcdev, returning -EPROBE_DEFER", __FUNCTION__, __FILE__, __LINE__);
 		return ERR_PTR(-EPROBE_DEFER);
 	}
 
@@ -489,6 +496,7 @@ struct reset_control *__of_reset_control_get(struct device_node *node,
 
 	mutex_unlock(&reset_list_mutex);
 
+	printk(KERN_WARNING "%s: (%s:%i) rstc = %p", __FUNCTION__, __FILE__, __LINE__, (void*)rstc);
 	return rstc;
 }
 EXPORT_SYMBOL_GPL(__of_reset_control_get);
