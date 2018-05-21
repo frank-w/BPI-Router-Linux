@@ -46,6 +46,7 @@
 #include <linux/sched/debug.h>
 #include <linux/sched/signal.h>
 #include <asm/system_misc.h>
+#include <linux/seq_file.h>
 #ifdef CONFIG_MT6397_MISC
 #include <linux/mfd/mt6397/rtc_misc.h>
 #endif
