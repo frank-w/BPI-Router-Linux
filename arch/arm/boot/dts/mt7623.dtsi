@@ -718,7 +718,6 @@
 					<GIC_SPI 163 IRQ_TYPE_LEVEL_LOW>;  /* WDT_EINT */
 		resets = <&watchdog MT2701_TOPRGU_CONN_MCU_RST>;
 		reset-names = "connsys";
-		#reset-cells = <1>;
 		status="disabled";
 	};
 
