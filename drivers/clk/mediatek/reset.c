@@ -69,8 +69,11 @@ void mtk_register_reset_controller(struct device_node *np,
 	struct mtk_reset *data;
 	int ret;
 	struct regmap *regmap;
+	printk(KERN_WARNING "%s: (%s:%i) node=%s", __FUNCTION__, __FILE__, __LINE__, np ? np->name : "<NULL>");
 
 	regmap = syscon_node_to_regmap(np);
+//	printk(KERN_WARNING "%s: (%s:%i) regmap=%s", __FUNCTION__, __FILE__, __LINE__, regmap ? *regmap->name : "<NULL>");
+
 	if (IS_ERR(regmap)) {
 		pr_err("Cannot find regmap for %pOF: %ld\n", np,
 				PTR_ERR(regmap));
@@ -78,8 +81,11 @@ void mtk_register_reset_controller(struct device_node *np,
 	}
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
+
 	if (!data)
 		return;
+
+	printk(KERN_WARNING "%s: (%s:%i) data=%s", __FUNCTION__, __FILE__, __LINE__, data ? "mem allocated" : "<NULL>");
 
 	data->regmap = regmap;
 	data->regofs = regofs;
@@ -88,7 +94,9 @@ void mtk_register_reset_controller(struct device_node *np,
 	data->rcdev.ops = &mtk_reset_ops;
 	data->rcdev.of_node = np;
 
+	printk(KERN_WARNING "%s: (%s:%i)", __FUNCTION__, __FILE__, __LINE__);
 	ret = reset_controller_register(&data->rcdev);
+	printk(KERN_WARNING "%s: (%s:%i) ret=%i", __FUNCTION__, __FILE__, __LINE__, ret);
 	if (ret) {
 		pr_err("could not register reset controller: %d\n", ret);
 		kfree(data);

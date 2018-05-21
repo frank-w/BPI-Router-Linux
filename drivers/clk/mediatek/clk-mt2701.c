@@ -780,13 +780,14 @@ static int mtk_infrasys_init(struct platform_device *pdev)
 {
 	int r, i;
 	struct device_node *node = pdev->dev.of_node;
-
+	printk(KERN_WARNING "%s: (%s:%i) of_node=%s", __FUNCTION__, __FILE__, __LINE__, node ? node->name : "<NULL>");
 	if (!infra_clk_data) {
 		infra_clk_data = mtk_alloc_clk_data(CLK_INFRA_NR);
 	} else {
 		for (i = 0; i < CLK_INFRA_NR; i++) {
 			if (infra_clk_data->clks[i] == ERR_PTR(-EPROBE_DEFER))
 				infra_clk_data->clks[i] = ERR_PTR(-ENOENT);
+		printk(KERN_WARNING "%s: (%s:%i) infra_clk_data->clks[%i]=%i", __FUNCTION__, __FILE__, __LINE__, i, (int)infra_clk_data->clks[i]);
 		}
 	}
 
@@ -798,6 +799,7 @@ static int mtk_infrasys_init(struct platform_device *pdev)
 	r = of_clk_add_provider(node, of_clk_src_onecell_get, infra_clk_data);
 	if (r)
 		return r;
+	printk(KERN_WARNING "%s: (%s:%i) r=%i", __FUNCTION__, __FILE__, __LINE__, r);
 
 	mtk_register_reset_controller(node, 2, 0x30);
 

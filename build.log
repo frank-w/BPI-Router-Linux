@@ -1,0 +1,22 @@
+drivers/watchdog/mtk_wdt.c: In function 'wk_proc_cmd_read':
+drivers/watchdog/mtk_wdt.c:529:2: error: implicit declaration of function 'seq_printf' [-Werror=implicit-function-declaration]
+  seq_printf(s, "enabled timeout\n%-4d %-8d\n", enabled, wdt_dev->timeout);
+  ^
+drivers/watchdog/mtk_wdt.c: In function 'wk_proc_cmd_open':
+drivers/watchdog/mtk_wdt.c:536:9: error: implicit declaration of function 'single_open' [-Werror=implicit-function-declaration]
+  return single_open(file, wk_proc_cmd_read, NULL);
+         ^
+drivers/watchdog/mtk_wdt.c: At top level:
+drivers/watchdog/mtk_wdt.c:591:10: error: 'seq_read' undeclared here (not in a function)
+  .read = seq_read,
+          ^
+drivers/watchdog/mtk_wdt.c:593:12: error: 'seq_lseek' undeclared here (not in a function)
+  .llseek = seq_lseek,
+            ^
+drivers/watchdog/mtk_wdt.c:594:13: error: 'single_release' undeclared here (not in a function)
+  .release = single_release,
+             ^
+cc1: some warnings being treated as errors
+make[2]: *** [drivers/watchdog/mtk_wdt.o] Error 1
+make[1]: *** [drivers/watchdog] Error 2
+make: *** [drivers] Error 2
