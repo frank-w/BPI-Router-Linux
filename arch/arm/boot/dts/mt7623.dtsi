@@ -28,7 +28,7 @@
 	compatible = "mediatek,mt7623";
 	interrupt-parent = <&sysirq>;
 
-	cpu_opp_table: opp-table {
+	cpu_opp_table: opp_table {
 		compatible = "operating-points-v2";
 		opp-shared;
 
@@ -147,32 +147,32 @@
 	};
 
 	thermal-zones {
-			cpu_thermal: cpu-thermal {
+			cpu_thermal: cpu_thermal {
 				polling-delay-passive = <1000>;
 				polling-delay = <1000>;
 
 				thermal-sensors = <&thermal 0>;
 
 				trips {
-					cpu_passive: cpu-passive {
+					cpu_passive: cpu_passive {
 						temperature = <47000>;
 						hysteresis = <2000>;
 						type = "passive";
 					};
 
-					cpu_active: cpu-active {
+					cpu_active: cpu_active {
 						temperature = <67000>;
 						hysteresis = <2000>;
 						type = "active";
 					};
 
-					cpu_hot: cpu-hot {
+					cpu_hot: cpu_hot {
 						temperature = <87000>;
 						hysteresis = <2000>;
 						type = "hot";
 					};
 
-					cpu-crit {
+					cpu_crit {
 						temperature = <107000>;
 						hysteresis = <2000>;
 						type = "critical";
@@ -196,14 +196,6 @@
 				};
 			};
 		};
-	};
-
-	watchdog: watchdog@10007000 {
-		compatible = "mediatek,mt7623-wdt",
-			     "mediatek,mt6589-wdt";
-		reg = <0 0x10007000 0 0x100>;
-		interrupts = <GIC_SPI 88 IRQ_TYPE_EDGE_FALLING>;
-		#reset-cells = <1>;
 	};
 
 	timer {
@@ -273,6 +265,14 @@
 			 <&topckgen CLK_TOP_MFG_SEL>,
 			 <&topckgen CLK_TOP_ETHIF_SEL>;
 		clock-names = "mm", "mfg", "ethif";
+	};
+
+	watchdog: watchdog@10007000 {
+		compatible = "mediatek,mt7623-wdt",
+			     "mediatek,mt6589-wdt";
+		reg = <0 0x10007000 0 0x100>;
+		interrupts = <GIC_SPI 88 IRQ_TYPE_EDGE_FALLING>;
+		#reset-cells = <1>;
 	};
 
 	timer: timer@10008000 {
