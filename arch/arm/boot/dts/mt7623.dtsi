@@ -869,8 +869,6 @@
 		mediatek,syscon-hdmi = <&mmsys 0x900>;
 		cec = <&cec>;
 		ddc-i2c-bus = <&hdmiddc0>;
-		assigned-clocks = <&topckgen CLK_TOP_HDMI_SEL>;
-		assigned-clock-parents = <&hdmi_phy>;
 		status = "disabled";
 	};
 
