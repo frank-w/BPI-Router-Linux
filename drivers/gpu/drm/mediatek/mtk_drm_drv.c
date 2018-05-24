@@ -267,9 +267,6 @@ static int mtk_drm_kms_init(struct drm_device *drm)
 
 	return 0;
 
-//err_kms_helper_poll_fini:
-//	drm_kms_helper_poll_fini(drm);
-//	drm_vblank_cleanup(drm);
 err_component_unbind:
 	component_unbind_all(drm->dev, drm);
 err_config_cleanup:
@@ -283,7 +280,6 @@ static void mtk_drm_kms_deinit(struct drm_device *drm)
 	mtk_fbdev_fini(drm);
 	drm_kms_helper_poll_fini(drm);
 
-//	drm_vblank_cleanup(drm);
 	component_unbind_all(drm->dev, drm);
 	drm_mode_config_cleanup(drm);
 }
