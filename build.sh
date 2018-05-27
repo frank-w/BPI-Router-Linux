@@ -79,6 +79,7 @@ function install {
 			#sudo cp -r ../mod/lib/modules /media/$USER/BPI-ROOT/lib/
 			if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
 				echo "MT76 set,don't forget the firmware-files...";
+
 			fi
 		else
 			echo "SD-Card not found!"
@@ -94,7 +95,7 @@ function build {
 
 		exec 3> >(tee build.log)
 		export LOCALVERSION="-${gitbranch}"
-		make ${CFLAGS} 2>&3 #&& make modules_install 2>&3
+		make ${MAKEFLAGS} 2>&3 #&& make modules_install 2>&3
 		ret=$?
 		exec 3>&-
 
@@ -160,7 +161,12 @@ function prepare_SD {
 if [ -n "$kernver" ]; then
 	action=$1
 	LANG=C
-	CFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
+	MAKEFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
+#    if [[ -e /usr/lib/gcc-cross/arm-linux-gnueabihf/4.8/include/stdarg.h ]];then
+		export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/4.8/include/"
+#	elif [[ -e /usr/lib/gcc-cross/arm-linux-gnueabihf/7/include/stdarg.h ]];then
+#		KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/7/include"
+#	fi
 
 	case "$action" in
 		"reset")
