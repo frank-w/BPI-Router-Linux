@@ -162,11 +162,7 @@ if [ -n "$kernver" ]; then
 	action=$1
 	LANG=C
 	MAKEFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
-#    if [[ -e /usr/lib/gcc-cross/arm-linux-gnueabihf/4.8/include/stdarg.h ]];then
-		export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/4.8/include/"
-#	elif [[ -e /usr/lib/gcc-cross/arm-linux-gnueabihf/7/include/stdarg.h ]];then
-#		KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/7/include"
-#	fi
+	export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/"$(arm-linux-gnueabihf-gcc -dumpversion)"/include"
 
 	case "$action" in
 		"reset")
