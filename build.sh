@@ -101,15 +101,20 @@ function install {
 }
 
 function update_kernel_source {
+	changedfiles=$(git diff --name-only)
+	if [[ -z "$changedfiles" ]]; then
 	git fetch stable
 	ret=$?
 	if [[ $ret -eq 0 ]];then
 		newkernver=$(increase_kernel)
 		echo "newkernver:$newkernver"
-		#git merge v$newkernver
+		git merge v$newkernver
 	elif [[ $ret -eq 128 ]];then
 		#repo not found
 		git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+	fi
+	else
+		echo "please first commit/stash modified files: $changedfiles"
 	fi
 }
 
