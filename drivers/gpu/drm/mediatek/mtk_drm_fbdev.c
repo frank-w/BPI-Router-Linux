@@ -78,17 +78,17 @@ static int mtk_fbdev_probe(struct drm_fb_helper *helper,
 
 	info = drm_fb_helper_alloc_fbi(helper);
 	if (IS_ERR(info)) {
+		err = PTR_ERR(info);
 		DRM_DEV_ERROR(dev->dev, "failed to allocate framebuffer info, %d\n",
 			err);
-		err = PTR_ERR(info);
 		goto out;
 	}
 
 	fb = mtk_drm_framebuffer_create(dev, &mode, private->fbdev_bo);
 	if (IS_ERR(fb)) {
+		err = PTR_ERR(fb);
 		DRM_DEV_ERROR(dev->dev, "failed to allocate DRM framebuffer, %d\n",
 			err);
-		err = PTR_ERR(fb);
 		goto out;
 	}
 	helper->fb = fb;
