@@ -28,6 +28,19 @@ if [ ${PACKAGE_Error} == 1 ]; then exit 1; fi
 kernver=$(make kernelversion)
 gitbranch=$(git rev-parse --abbrev-ref HEAD|sed 's/^4\.[0-9]\+-//')
 
+function increase_kernel {
+	#echo $kernver
+	old_IFS=$IFS
+	IFS='.'
+	read -ra KV <<< "$kernver"
+	IFS=','
+	newkernver=${KV[0]}"."${KV[1]}"."$(( ${KV[2]} +1 ))
+	echo $newkernver
+}
+
+#increase_kernel
+
+
 function pack {
 	prepare_SD
 	echo "pack..."
@@ -88,10 +101,29 @@ function install {
 			#sudo cp -r ../mod/lib/modules /media/$USER/BPI-ROOT/lib/
 			if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
 				echo "MT76 set,don't forget the firmware-files...";
+
 			fi
 		else
 			echo "SD-Card not found!"
 		fi
+	fi
+}
+
+function update_kernel_source {
+	changedfiles=$(git diff --name-only)
+	if [[ -z "$changedfiles" ]]; then
+	git fetch stable
+	ret=$?
+	if [[ $ret -eq 0 ]];then
+		newkernver=$(increase_kernel)
+		echo "newkernver:$newkernver"
+		git merge v$newkernver
+	elif [[ $ret -eq 128 ]];then
+		#repo not found
+		git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+	fi
+	else
+		echo "please first commit/stash modified files: $changedfiles"
 	fi
 }
 
@@ -170,7 +202,7 @@ if [ -n "$kernver" ]; then
 	action=$1
 	LANG=C
 	MAKEFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
-	#  export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/7/include"
+	export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/"$(arm-linux-gnueabihf-gcc -dumpversion)"/include"
 
 	case "$action" in
 		"reset")
@@ -184,6 +216,11 @@ if [ -n "$kernver" ]; then
 		"update")
 			echo "Update Git Repo"
 			git pull
+			;;
+
+		"updatesrc")
+			echo "Update kernel source"
+			update_kernel_source
 			;;
 
   		"umount")

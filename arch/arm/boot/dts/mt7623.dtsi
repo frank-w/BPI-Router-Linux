@@ -996,7 +996,7 @@
 		#reset-cells = <1>;
 	};
 
-	pcie: pcie@1a140000 {
+	pcie: pcie-controller@1a140000 {
 		compatible = "mediatek,mt7623-pcie";
 		device_type = "pci";
 		reg = <0 0x1a140000 0 0x1000>, /* PCIe shared registers */
@@ -1031,6 +1031,7 @@
 			  0x83000000 0 0x60000000 0 0x60000000 0 0x10000000>;
 
 		pcie@0,0 {
+			device_type = "pci";
 			reg = <0x0000 0 0 0 0>;
 			#address-cells = <3>;
 			#size-cells = <2>;
@@ -1043,6 +1044,7 @@
 		};
 
 		pcie@1,0 {
+			device_type = "pci";
 			reg = <0x0800 0 0 0 0>;
 			#address-cells = <3>;
 			#size-cells = <2>;
@@ -1055,6 +1057,7 @@
 		};
 
 		pcie@2,0 {
+			device_type = "pci";
 			reg = <0x1000 0 0 0 0>;
 			#address-cells = <3>;
 			#size-cells = <2>;
