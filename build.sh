@@ -202,7 +202,7 @@ if [ -n "$kernver" ]; then
 	action=$1
 	LANG=C
 	MAKEFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
-	export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/"$(arm-linux-gnueabihf-gcc -dumpversion)"/include"
+#	export KCFLAGS="-I/usr/lib/gcc-cross/arm-linux-gnueabihf/"$(arm-linux-gnueabihf-gcc -dumpversion)"/include"
 
 	case "$action" in
 		"reset")

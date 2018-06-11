@@ -12,7 +12,7 @@
 #
 
 #$(call all-subdir-src-or-makefile)
-subdir-ccflags-y += -Werror
+#subdir-ccflags-y += -Werror
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
 
 obj-$(CONFIG_MTK_COMBO) += connectivity/

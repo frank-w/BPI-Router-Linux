@@ -1,0 +1,3 @@
+drivers/misc/mediatek/connectivity/wlan/gen2/mgmt/rate.c:98:21: warning: 'aucDefaultAckCtsRateIndex' defined but not used [-Wunused-const-variable=]
+ static const UINT_8 aucDefaultAckCtsRateIndex[RATE_NUM] = {
+                     ^~~~~~~~~~~~~~~~~~~~~~~~~
