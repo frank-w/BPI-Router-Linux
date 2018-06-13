@@ -244,6 +244,11 @@ if [ -n "$kernver" ]; then
 			nano arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
 			;;
 
+		"uenv")
+			echo "Edit uEnv.txt on SD-Card"
+			nano /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt
+			;;
+
 		"importmylconfig")
 			echo "Import myl config"
 			make mt7623n_myl_defconfig
