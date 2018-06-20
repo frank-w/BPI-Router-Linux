@@ -71,6 +71,11 @@ static int set_rwqe_data_seg(struct ib_qp *ibqp, struct ib_send_wr *wr,
 			return -EINVAL;
 		}
 
+		if (wr->opcode == IB_WR_RDMA_READ) {
+			dev_err(hr_dev->dev, "Not support inline data!\n");
+			return -EINVAL;
+		}
+
 		for (i = 0; i < wr->num_sge; i++) {
 			memcpy(wqe, ((void *)wr->sg_list[i].addr),
 			       wr->sg_list[i].length);
@@ -148,7 +153,7 @@ static int hns_roce_v2_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 		     ibqp->qp_type != IB_QPT_GSI &&
 		     ibqp->qp_type != IB_QPT_UD)) {
 		dev_err(dev, "Not supported QP(0x%x)type!\n", ibqp->qp_type);
-		*bad_wr = NULL;
+		*bad_wr = wr;
 		return -EOPNOTSUPP;
 	}
 
@@ -456,6 +461,7 @@ static int hns_roce_v2_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 		} else {
 			dev_err(dev, "Illegal qp_type(0x%x)\n", ibqp->qp_type);
 			spin_unlock_irqrestore(&qp->sq.lock, flags);
+			*bad_wr = wr;
 			return -EOPNOTSUPP;
 		}
 	}
@@ -3161,7 +3167,8 @@ static int hns_roce_v2_modify_qp(struct ib_qp *ibqp,
 		   (cur_state == IB_QPS_RTR && new_state == IB_QPS_ERR) ||
 		   (cur_state == IB_QPS_RTS && new_state == IB_QPS_ERR) ||
 		   (cur_state == IB_QPS_SQD && new_state == IB_QPS_ERR) ||
-		   (cur_state == IB_QPS_SQE && new_state == IB_QPS_ERR)) {
+		   (cur_state == IB_QPS_SQE && new_state == IB_QPS_ERR) ||
+		   (cur_state == IB_QPS_ERR && new_state == IB_QPS_ERR)) {
 		/* Nothing */
 		;
 	} else {
