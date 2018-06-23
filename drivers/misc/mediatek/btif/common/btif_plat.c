@@ -207,7 +207,7 @@ static void _btif_set_default_setting(void)
 	unsigned int irq_info[3] = {0, 0, 0};
 	unsigned int phy_base;
 
-	node = of_find_compatible_node(NULL, NULL, "mediatek,btif");
+	node = of_find_compatible_node(NULL, NULL, "mediatek,mtk-btif");
 	if (node) {
 		mtk_btif.p_irq->irq_id = irq_of_parse_and_map(node, 0);
 		/*fixme, be compitable arch 64bits*/
@@ -278,7 +278,7 @@ int hal_btif_clk_get_and_prepare(struct platform_device *pdev)
 {
 		int i_ret = -1;
 
-		clk_btif = devm_clk_get(&pdev->dev, "btifc");
+		clk_btif = devm_clk_get(&pdev->dev, "main");
 		if (IS_ERR(clk_btif)) {
 			BTIF_ERR_FUNC("[CCF]cannot get clk_btif clock.\n");
 			return PTR_ERR(clk_btif);

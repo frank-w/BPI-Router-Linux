@@ -200,7 +200,7 @@ static struct timeval btif_rxd_time_stamp[MAX_BTIF_RXD_TIME_REC];
 
 #ifdef CONFIG_OF
 const struct of_device_id apbtif_of_ids[] = {
-	{ .compatible = "mediatek,btif", },
+	{ .compatible = "mediatek,mtk-btif", },
 	{}
 };
 #endif
