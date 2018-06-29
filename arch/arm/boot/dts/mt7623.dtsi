@@ -496,12 +496,11 @@
 
 	btif: serial@1100c000 {
 		compatible = "mediatek,mt7623-btif",
-			     "mediatek,btif",
 			     "mediatek,mtk-btif";
 		reg = <0 0x1100c000 0 0x1000>;
 		interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&pericfg CLK_PERI_BTIF>, <&pericfg CLK_PERI_AP_DMA>;
-		clock-names = "btifc", "apdmac";
+		clock-names = "main", "apdmac";
 		reg-shift = <2>;
 		reg-io-width = <4>;
 		status = "disabled";

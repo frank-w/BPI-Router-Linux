@@ -22,6 +22,7 @@
 #include <linux/cdev.h>
 #include <linux/poll.h>
 
+#define DEBUG
 /*#include <mach/eint.h>*/
 /*-----------driver own header files----------------*/
 #ifdef CONFIG_COMPAT

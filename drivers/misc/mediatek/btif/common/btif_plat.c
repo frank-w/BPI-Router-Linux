@@ -21,6 +21,8 @@
 #include "btif_pub.h"
 #include "btif_priv.h"
 
+#define DEBUG
+
 #define BTIF_USER_ID "btif_driver"
 
 static spinlock_t g_clk_cg_spinlock;	/*BTIF clock's spinlock */
