@@ -125,6 +125,10 @@
 	};
 };
 
+&btif {
+	status = "okay";
+};
+
 &cir {
 	pinctrl-names = "default";
 	pinctrl-0 = <&cir_pins_a>;
