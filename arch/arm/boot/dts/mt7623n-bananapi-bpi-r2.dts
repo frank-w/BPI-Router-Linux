@@ -101,15 +101,16 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&led_pins_a>;
 
-		green {
-			label = "bpi-r2:pio:green";
-			gpios = <&pio 241 GPIO_ACTIVE_LOW>;
-			default-state = "off";
-		};
 
 		blue {
 			label = "bpi-r2:pio:blue";
 			gpios = <&pio 240 GPIO_ACTIVE_LOW>;
+			default-state = "off";
+		};
+
+		green {
+			label = "bpi-r2:pio:green";
+			gpios = <&pio 241 GPIO_ACTIVE_LOW>;
 			default-state = "off";
 		};
 
