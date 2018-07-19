@@ -491,6 +491,12 @@ config XILINX_GMII2RGMII
 	  the Reduced Gigabit Media Independent Interface(RGMII) between
 	  Ethernet physical media devices and the Gigabit Ethernet controller.
 
+config RTL8367S_GSW
+        tristate "RTL8367 Gigabit Switch support"
+        depends on NET_VENDOR_MEDIATEK
+        ---help---
+         This driver supports RTL8367s Switch
+
 endif # PHYLIB
 
 config MICREL_KS8995MA
