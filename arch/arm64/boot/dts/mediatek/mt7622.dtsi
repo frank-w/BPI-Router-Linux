@@ -926,6 +926,12 @@
 		status = "disabled";
 	};
 
+	rtkgsw: rtkgswsys@1b100000 {
+		compatible = "mediatek,rtk-gsw";
+		mediatek,ethsys = <&ethsys>;
+		status = "disabled";
+	};
+
 	sgmiisys: sgmiisys@1b128000 {
 		compatible = "mediatek,mt7622-sgmiisys",
 			     "syscon";
