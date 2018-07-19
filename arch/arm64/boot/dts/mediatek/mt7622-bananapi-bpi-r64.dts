@@ -146,6 +146,12 @@
 	};
 };
 
+&rtkgsw {
+	mediatek,mdio = <&mdio>;
+	mediatek,reset-pin = <&pio 54 0>;
+	status = "okay";
+};
+
 &i2c1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_pins>;
