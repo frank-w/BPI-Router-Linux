@@ -115,25 +115,41 @@
 };
 
 &eth {
-	pinctrl-names = "default";
-	pinctrl-0 = <&eth_pins>;
 	status = "okay";
+	gmac0: mac@0 {
+		compatible = "mediatek,eth-mac";
+		reg = <0>;
+		phy-mode = "sgmii";
+
+		fixed-link {
+			speed = <1000>;
+			full-duplex;
+			pause;
+		};
+	};
 
 	gmac1: mac@1 {
 		compatible = "mediatek,eth-mac";
 		reg = <1>;
-		phy-handle = <&phy5>;
-	};
+		phy-mode = "rgmii";
 
-	mdio-bus {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		phy5: ethernet-phy@5 {
-			reg = <5>;
-			phy-mode = "sgmii";
+		fixed-link {
+			speed = <1000>;
+			full-duplex;
+			pause;
 		};
 	};
+
+	mdio: mdio-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+};
+
+&rtkgsw {
+	mediatek,mdio = <&mdio>;
+	mediatek,reset-pin = <&pio 54 0>;
+	status = "okay";
 };
 
 &i2c1 {
