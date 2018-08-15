@@ -5,8 +5,7 @@ some thoughts:
 Wifi-name (AP)
  
 gl_p2p_init.c
-Showing the top three matches Last indexed on 1 Sep 2017
-C
+````
 44 	#if CFG_TC1_FEATURE
 45 	#define AP_MODE_INF_NAME "wlan%d"
 46 	#else
@@ -33,7 +32,7 @@ C
 1346 	#endif
 1347 	} else {
 1348 	#if CFG_SUPPORT_PERSIST_NETDEV
- 
+````
 Activate wifi-ap:
  
 https://github.com/frank-w/BPI-R2-4.14/blob/b514a6a62ed8d088f740ba8f376bdc440d865359/drivers/misc/mediatek/connectivity/common/conn_soc/linux/pub/wmt_chrdev_wifi.c#L519
@@ -54,24 +53,25 @@ mtk_wcn_wmt_set_chipid(arg);
  
 https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/81776dada7beacfe4efbe3fbb16fbf909f94fe2e/linux-mt/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/conn_drv_init.c#L41
 = do_connectivity_driver_init(int chip_id)
- 
- 
+
+````
 stp_uart_launcher -p /etc/firmware
  
 ROMv2_lm_patch_1_0_hdr.bin
 ROMv2_lm_patch_1_1_hdr.bin
 WIFI_RAM_CODE_7623
- 
+````
  
 https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/d94f55022a9192cb181d380b1a6699949a36f30c/vendor/mediatek/connectivity/tools/src/stp_uart_launcher.c#L1609
- 
+
+
+````
 sStpParaConfig.pPatchPath = gPatchFolder;
  
 setHifInfo(chipId, sStpParaConfig.pPatchPath);
- 
+````
  wmt_dev.c
-Showing the top two matches Last indexed on 1 Sep 2017
-C
+````
 73 	#define WMT_IOCTL_SET_PATCH_NUM _IOW(WMT_IOC_MAGIC, 14, int)
 74 	#define WMT_IOCTL_SET_PATCH_INFO _IOW(WMT_IOC_MAGIC, 15, char*)
 75 	#define WMT_IOCTL_PORT_NAME _IOWR(WMT_IOC_MAGIC, 20, char*)
@@ -84,5 +84,5 @@ C
 1208 	
 1209 	case WMT_IOCTL_SET_PATCH_INFO:{
 1210 	WMT_PATCH_INFO wMtPatchInfo;
- 
+````
 https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/81776dada7beacfe4efbe3fbb16fbf909f94fe2e/linux-mt/drivers/misc/mediatek/connectivity/common/combo/linux/wmt_dev.c#L1209
