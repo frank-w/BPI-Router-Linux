@@ -1,0 +1,27 @@
+[    4.460852] [WMT-DETECT][I]wmt_detect_driver_init:driver(major 154) installed
+ success
+[    4.468729] [SDIO-DETECT][I]sdio_detect_init:sdio_register_driver() ret=0
+[    4.475490] set current consys chipid (0x7623)
+[    4.479903] [WMT-MOD-INIT][I]do_common_drv_init:start to do common driver ini
+t, chipid:0x00007623
+[    4.489425] [WMT-DEV][E]wmt_dev_read_file(1458):error code:-2
+[    4.495192] [WMT-DEV][E]wmt_dev_patch_get(1575):load file (/system/etc/firmwa
+re/WMT_SOC.cfg) fail, iRet(-2)
+[    4.504887] [WMT-CONF][E]wmt_conf_read_file(516):read /system/etc/firmware/WM
+T_SOC.cfg file fails
+[    4.513711] drivers/misc/mediatek/connectivity/common/conn_soc/core/wmt_conf.
+c, 517, (0)
+[    4.521765] [WMT-LIB][E]wmt_lib_init(179):read wmt config file fail(-1)
+[    4.528334] [WMT-DEV][E]WMT_init(2441):wmt_lib_init() fails (-1)
+[    4.534311] [WMT-LIB][E]wmt_lib_deinit(306):osal_thread_stop(0xc110d0f0) fail
+(-1)
+[    4.541753] [cmb_stub] unregistered
+[    4.545215] DEBUG: Passed wmt_plat_deinit 355 now calling wmt wakelock deinit
+[    4.552310] DEBUG: Passed wmt_plat_deinit 362 now calling wake lock destroy -
+1055585968
+[    4.560259] DEBUG: Passed wmt_plat_deinit 364 now wmtWakeLock:-1055585968
+[    4.567009] DEBUG: Passed wmt_plat_deinit 365 now wmtWakeLock->ws: -105558596
+8
+[    4.574199] Unable to handle kernel NULL pointer dereference at virtual addre
+ss 00000000
+

@@ -279,6 +279,7 @@ static int wmt_detect_driver_init(void)
 	dev_t devID = MKDEV(gWmtDetectMajor, 0);
 	int cdevErr = -1;
 	int ret = -1;
+	int chipid=0;
 
 	ret = register_chrdev_region(devID, WMT_DETECT_DEV_NUM, WMT_DETECT_DRVIER_NAME);
 	if (ret) {
@@ -318,6 +319,16 @@ static int wmt_detect_driver_init(void)
 		WMT_DETECT_ERR_FUNC("platform driver register fail ret:%d\n", ret);
 #endif
 
+
+	chipid=wmt_plat_get_soc_chipid();
+	if (chipid)
+	{
+		mtk_wcn_wmt_set_chipid(chipid);
+		if (do_connectivity_driver_init(chipid)>=0)
+		{
+			printk("[FW] conn_driver_init success!!");
+		} else printk("[FW] conn_driver_init failed");
+	}else printk("[FW] getchipid failed");
 	return 0;
 
 err2:
