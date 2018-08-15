@@ -1,27 +1,142 @@
-[    4.460852] [WMT-DETECT][I]wmt_detect_driver_init:driver(major 154) installed
+[    4.470026] [WMT-DETECT][I]wmt_detect_driver_init:driver(major 154) installed
  success
-[    4.468729] [SDIO-DETECT][I]sdio_detect_init:sdio_register_driver() ret=0
-[    4.475490] set current consys chipid (0x7623)
-[    4.479903] [WMT-MOD-INIT][I]do_common_drv_init:start to do common driver ini
+[    4.477889] [SDIO-DETECT][I]sdio_detect_init:sdio_register_driver() ret=0
+[    4.484646] set current consys chipid (0x7623)
+[    4.489059] [WMT-MOD-INIT][I]do_common_drv_init:start to do common driver ini
 t, chipid:0x00007623
-[    4.489425] [WMT-DEV][E]wmt_dev_read_file(1458):error code:-2
-[    4.495192] [WMT-DEV][E]wmt_dev_patch_get(1575):load file (/system/etc/firmwa
+[    4.498574] [WMT-DEV][E]wmt_dev_read_file(1458):error code:-2
+[    4.504324] [WMT-DEV][E]wmt_dev_patch_get(1575):load file (/system/etc/firmwa
 re/WMT_SOC.cfg) fail, iRet(-2)
-[    4.504887] [WMT-CONF][E]wmt_conf_read_file(516):read /system/etc/firmware/WM
+[    4.514018] [WMT-CONF][E]wmt_conf_read_file(516):read /system/etc/firmware/WM
 T_SOC.cfg file fails
-[    4.513711] drivers/misc/mediatek/connectivity/common/conn_soc/core/wmt_conf.
+[    4.522841] drivers/misc/mediatek/connectivity/common/conn_soc/core/wmt_conf.
 c, 517, (0)
-[    4.521765] [WMT-LIB][E]wmt_lib_init(179):read wmt config file fail(-1)
-[    4.528334] [WMT-DEV][E]WMT_init(2441):wmt_lib_init() fails (-1)
-[    4.534311] [WMT-LIB][E]wmt_lib_deinit(306):osal_thread_stop(0xc110d0f0) fail
-(-1)
-[    4.541753] [cmb_stub] unregistered
-[    4.545215] DEBUG: Passed wmt_plat_deinit 355 now calling wmt wakelock deinit
-[    4.552310] DEBUG: Passed wmt_plat_deinit 362 now calling wake lock destroy -
-1055585968
-[    4.560259] DEBUG: Passed wmt_plat_deinit 364 now wmtWakeLock:-1055585968
-[    4.567009] DEBUG: Passed wmt_plat_deinit 365 now wmtWakeLock->ws: -105558596
-8
-[    4.574199] Unable to handle kernel NULL pointer dereference at virtual addre
-ss 00000000
-
+[    4.530878] [WMT-LIB][E]wmt_lib_init(179):read wmt config file fail(-1)
+[    4.539739] [WMT-CONSYS-HW][E]mtk_wmt_probe(122):Wmt Cannot find pinctrl default!
+[    4.547268] [WMT-CONSYS-HW][E]mtk_wmt_probe(149):Regulator_get VCN_1V8 fail, 
+ret=-517
+[    4.555082] [WMT-CONSYS-HW][E]mtk_wmt_probe(154):Regulator_get VCN_2V8 fail, 
+ret=-517
+[    4.562879] [WMT-CONSYS-HW][E]mtk_wmt_probe(159):Regulator_get VCN33_BT fail,
+ ret=-517
+[    4.570750] [WMT-CONSYS-HW][E]mtk_wmt_probe(164):Regulator_get VCN33_WIFI fai
+l, ret=-517
+[    4.578810] [WMT-CONSYS-HW][E]mtk_wmt_probe(170):CanNot get consys reset. ret
+=-517
+[    4.587828] [WMT-MOD-INIT][I]do_common_drv_init:finish common driver init
+[    4.594598] [BT-MOD-INIT][I]do_bluetooth_drv_init:start to do bluetooth drive
+r init
+[    4.602396] [MTK-BT] BT_init: mtk_stp_BT_chrdev driver(major 192) installed
+[    4.609681] [BT-MOD-INIT][I]do_bluetooth_drv_init:finish bluetooth driver ini
+t, i_ret:0
+[    4.609826] DEBUG: Passed mtk_wcn_consys_hw_reg_ctrl 234 
+[    4.609839] Unable to handle kernel paging request at virtual address fffffe2
+b
+[    4.609843] pgd = c0004000
+[    4.609846] [fffffe2b] *pgd=a07fd861, *pte=00000000, *ppte=00000000
+[    4.609862] Internal error: Oops: 37 [#1] SMP ARM
+[    4.609866] Modules linked in:
+[    4.609875] CPU: 3 PID: 78 Comm: mtk_wmtd Not tainted 4.14.62-bpi-r2-wifi_pat
+ching #83
+[    4.609878] Hardware name: Mediatek Cortex-A7 (Device Tree)
+[    4.609881] task: deca1e00 task.stack: dd806000
+[    4.609895] PC is at regulator_set_mode+0x18/0xb4
+[    4.609905] LR is at mtk_wcn_consys_hw_reg_ctrl+0x118/0x68c
+[    4.609908] pc : [<c04900f8>]    lr : [<c057e2b8>]    psr: 60000013
+[    4.609912] sp : dd807d70  ip : dd807d98  fp : dd807d94
+[    4.609915] r10: c110d7f4  r9 : 00000001  r8 : 00000001
+[    4.609919] r7 : 00000000  r6 : c1058698  r5 : c11508f8  r4 : c109f980
+[    4.609922] r3 : c0fa43d8  r2 : 00000000  r1 : 00000008  r0 : fffffdfb
+[    4.609928] Flags: nZCv  IRQs on  FIQs on  Mode SVC_32  ISA ARM  Segment none
+[    4.609932] Control: 10c5387d  Table: 8000406a  DAC: 00000051
+[    4.609935] Process mtk_wmtd (pid: 78, stack limit = 0xdd806218)
+[    4.609940] Stack: (0xdd807d70 to 0xdd808000)
+[    4.609946] 7d60:                                     df5d43f8 dd807d8c dd807
+dd4 c109f980
+[    4.609955] 7d80: c11508f8 c1058698 dd807dd4 dd807d98 c057e2b8 c04900ec 00000
+000 df5d434c
+[    4.609962] 7da0: 20000093 c1003ca0 dd807e1c c1058698 00000000 c0d5440c 00000
+000 00000000
+[    4.609970] 7dc0: 00000001 c110d7f4 dd807dec dd807dd8 c057e9e0 c057e1ac c1058
+684 c109fd88
+[    4.609978] 7de0: dd807e04 dd807df0 c05807a8 c057e99c dd807eb4 dd807eb0 dd807
+e14 dd807e08
+[    4.609986] 7e00: c055cd80 c0580714 dd807e24 dd807e18 c055ce6c c055cd24 dd807
+ea4 dd807e28
+[    4.609994] 7e20: c05593c4 c055ce34 c0d05450 c015b0bc 00000001 c014937c fffff
+fff 00000001
+[    4.610001] 7e40: 00000000 00000000 c014937c c0102ec8 de93a018 deca1e00 00000
+000 de914800
+[    4.610009] 7e60: c1028f30 df5d3f40 deca1e00 de914800 00000000 c1028f30 deca2
+178 c0b02a04
+[    4.610017] 7e80: 00000002 c0b6009c c0d5440c c11508c8 c110cb3c c0d543e4 dd807
+ee4 dd807ea8
+[    4.610025] 7ea0: c055b368 c0559384 1e627000 c0d530fc 00000000 00000000 dd807
+eec c110cb3c
+[    4.610033] 7ec0: 00000000 c110d0f0 c110d7f4 c055ffac c11508c8 c110d10c dd807
+f14 dd807ee8
+[    4.610041] 7ee0: c055b598 c055b2ec c055ffac c110d10c dd807f34 c110d7f4 c110d
+0c8 c110d0f0
+[    4.610049] 7f00: dd806000 c055ffac dd807f24 dd807f18 c05592ec c055b548 dd807
+f34 dd807f28
+[    4.610056] 7f20: c0559338 c05592c4 dd807f74 dd807f38 c0562650 c0559318 c0d58
+42c c0d58498
+[    4.610064] 7f40: c0d58454 00000000 debe861c debe8600 00000000 defa5600 dd806
+000 c110d0c8
+[    4.610072] 7f60: debe861c de90bd88 dd807fac dd807f78 c0147978 c05624bc 00000
+000 c05624b0
+[    4.610079] 7f80: dd807fac defa5600 c0147834 00000000 00000000 00000000 00000
+000 00000000
+[    4.610087] 7fa0: 00000000 dd807fb0 c0108ee8 c0147840 00000000 00000000 00000
+000 00000000
+[    4.610094] 7fc0: 00000000 00000000 00000000 00000000 00000000 00000000 00000
+000 00000000
+[    4.610101] 7fe0: 00000000 00000000 00000000 00000000 00000013 00000000 00000
+000 00000000
+[    4.610125] [<c04900f8>] (regulator_set_mode) from [<c057e2b8>] (mtk_wcn_cons
+ys_hw_reg_ctrl+0x118/0x68c)
+[    4.610137] [<c057e2b8>] (mtk_wcn_consys_hw_reg_ctrl) from [<c057e9e0>] (mtk_
+wcn_consys_hw_pwr_on+0x50/0xc4)
+[    4.610149] [<c057e9e0>] (mtk_wcn_consys_hw_pwr_on) from [<c05807a8>] (wmt_pl
+at_pwr_ctrl+0xa0/0x124)
+[    4.610162] [<c05807a8>] (wmt_plat_pwr_ctrl) from [<c055cd80>] (wmt_ctrl_hw_p
+wr_on+0x68/0x88)
+[    4.610173] [<c055cd80>] (wmt_ctrl_hw_pwr_on) from [<c055ce6c>] (wmt_ctrl+0x4
+4/0xc0)
+[    4.610182] [<c055ce6c>] (wmt_ctrl) from [<c05593c4>] (wmt_core_ctrl+0x4c/0xc
+c)
+[    4.610192] [<c05593c4>] (wmt_core_ctrl) from [<c055b368>] (opfunc_pwr_on+0x8
+8/0x25c)
+[    4.610202] [<c055b368>] (opfunc_pwr_on) from [<c055b598>] (opfunc_func_on+0x
+5c/0x340)
+[    4.610211] [<c055b598>] (opfunc_func_on) from [<c05592ec>] (wmt_core_opid_ha
+ndler+0x34/0x54)
+[    4.610220] [<c05592ec>] (wmt_core_opid_handler) from [<c0559338>] (wmt_core_
+opid+0x2c/0x6c)
+[    4.610231] [<c0559338>] (wmt_core_opid) from [<c0562650>] (wmtd_thread+0x1a0
+/0x254)
+[    4.610243] [<c0562650>] (wmtd_thread) from [<c0147978>] (kthread+0x144/0x174
+)
+[    4.610256] [<c0147978>] (kthread) from [<c0108ee8>] (ret_from_fork+0x14/0x2c
+)
+[    4.610266] Code: e24cb004 e24dd00c e52de004 e8bd4000 (e5904030) 
+[    4.610279] ---[ end trace a7fb3b64ebf6dcc2 ]---
+[    5.015010] [GPS-MOD-INIT][I]do_gps_drv_init:CONFIG_MTK_COMBO_GPS is not defi
+ned
+[    5.022357] [WCN-MOD-INIT][E]do_connectivity_driver_init(62):do common driver
+ init failed, ret:-1
+[    5.031177] [FM-MOD-INIT][I]do_fm_drv_init:start to do fm module init
+[    5.037583] [FM-MOD-INIT][I]do_fm_drv_init:finish fm module init
+[    5.043558] [WLAN-MOD-INIT][I]do_wlan_drv_init:start to do wlan module init 0
+x7623
+[    5.051250] [MTK-WIFI] WIFI_init: mtk_wmt_WIFI_chrdev driver(major 155) insta
+lled.
+[    5.058789] [WLAN-MOD-INIT][I]do_wlan_drv_init:WMT-WIFI char dev init, ret:0
+[    5.066739] [WLAN-MOD-INIT][I]do_wlan_drv_init:WLAN-GEN2 driver init, ret:0
+[    5.073682] [WLAN-MOD-INIT][I]do_wlan_drv_init:finish wlan module init
+[    5.080168] [FW] conn_driver_init failed
+[    5.080301] MTK-BTIF[E]hal_btif_clk_get_and_prepare(286):[CCF]clk_btif=defa69
+00
+[    5.091479] MTK-BTIF[E]hal_btif_clk_get_and_prepare(292):[CCF]clk_btif_apdma=
+defa6980
+[    5.101076] mt6323-regulator mt6323-regulator: Chip ID = 0x2023
