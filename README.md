@@ -86,3 +86,35 @@ setHifInfo(chipId, sStpParaConfig.pPatchPath);
 1210 	WMT_PATCH_INFO wMtPatchInfo;
 ````
 https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/81776dada7beacfe4efbe3fbb16fbf909f94fe2e/linux-mt/drivers/misc/mediatek/connectivity/common/combo/linux/wmt_dev.c#L1209
+
+crash:
+drivers/misc/mediatek/connectivity/common/conn_soc/linux/pri/wmt_dev.c
+````
+1559     /* load patch file from fs */
+1560     iRet = wmt_dev_read_file(pPatchName, (const PPUINT8)&pfw->data, 0, pad$
+1561     set_fs(orig_fs);
+1562
+1563     cred->fsuid.val = orig_uid;
+1564     cred->fsgid.val = orig_gid;
+1565
+1566
+1567     if (iRet > 0) {
+1568         pfw->size = iRet;
+1569         *ppPatch = pfw;
+1570         WMT_DBG_FUNC("load (%s) to addr(0x%p) success\n", pPatchName, pfw-$
+1571         return 0;
+1572     }
+1573     kfree(pfw);
+1574     *ppPatch = NULL;
+1575     WMT_ERR_FUNC("load file (%s) fail, iRet(%d)\n", pPatchName, iRet);
+1576     return -1;
+````
+drivers/misc/mediatek/connectivity/common/conn_soc/core/wmt_ctrl.c
+````
+ 673     if (0 == wmt_dev_patch_get(pFileName, &pNvram, 0)) {
+ 674         *ppBuf = (PUINT8) (pNvram)->data;
+ 675         *pSize = (pNvram)->size;
+ 676         gDevWmt.pNvram = pNvram;
+ 677         return 0;
+ 678     }
+````
