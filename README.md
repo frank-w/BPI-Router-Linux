@@ -1,89 +1,88 @@
-Kernel 4.14 for BPI-R2
+only testing to kick wmt-tools
 
-## Requirements
+some thoughts:
 
-On x86/x64-host you need cross compile tools for the armhf architecture (bison and flex-package are needed for kernels >=4.16):
-```sh
-sudo apt-get install gcc-arm-linux-gnueabihf libc6-armhf-cross u-boot-tools bc make gcc libc6-dev libncurses5-dev libssl-dev bison flex
-```
-if you build directly on r2 (not recommended) you do not need the crosscompile-packages gcc-arm-linux-gnueabihf and libc6-armhf-cross
+Wifi-name (AP)
+ 
+gl_p2p_init.c
+Showing the top three matches Last indexed on 1 Sep 2017
+C
+44 	#if CFG_TC1_FEATURE
+45 	#define AP_MODE_INF_NAME "wlan%d"
+46 	#else
+47 	#define AP_MODE_INF_NAME "ap%d"//<<<<<<
+48 	#endif
+49 	/* #define MAX_INF_NAME_LEN 15 */
+… 	
+102 	VOID p2pCheckInterfaceName(VOID)
+103 	{
+104 	
+105 	if (mode) {
+106 	mode = RUNNING_AP_MODE;
+107 	ifname = AP_MODE_INF_NAME;//<<<<
+108 	}
+109 	#if 0
+BPI-SINOVOIP/BPI-R2-bsp – gl_p2p.c
+Showing the top match Last indexed on 1 Sep 2017
+C
+1341 	if (kalStrnCmp(gprP2pWdev->netdev->name, AP_MODE_INF_NAME, 2)) {//<<<<<
+1342 	rtnl_lock();
+1343 	dev_change_name(gprP2pWdev->netdev->name, AP_MODE_INF_NAME); //<<<<<
+1344 	rtnl_unlock();
+1345 	}
+1346 	#endif
+1347 	} else {
+1348 	#if CFG_SUPPORT_PERSIST_NETDEV
+ 
+Activate wifi-ap:
+ 
+https://github.com/frank-w/BPI-R2-4.14/blob/b514a6a62ed8d088f740ba8f376bdc440d865359/drivers/misc/mediatek/connectivity/common/conn_soc/linux/pub/wmt_chrdev_wifi.c#L519
+ 
+ 
+WMTLOADER:
+https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/d94f55022a9192cb181d380b1a6699949a36f30c/vendor/mediatek/connectivity/tools/src/wmt_loader.c#L56
+ 
 
-## Issues
-currently gcc7 is not supported (https://bugs.linaro.org/show_bug.cgi?id=3823)
-```sh
-sudo apt-get install gcc-5-arm-linux-gnueabihf
-sudo update-alternatives --install /usr/bin/arm-linux-gnueabihf-gcc arm-linux-gnueabihf-gcc /usr/bin/arm-linux-gnueabihf-gcc-7  50
-update-alternatives: using /usr/bin/arm-linux-gnueabihf-gcc-7 to provide /usr/bin/arm-linux-gnueabihf-gcc (arm-linux-gnueabihf-gcc) in auto mode
-sudo update-alternatives --install /usr/bin/arm-linux-gnueabihf-gcc arm-linux-gnueabihf-gcc /usr/bin/arm-linux-gnueabihf-gcc-5  100
-update-alternatives: using /usr/bin/arm-linux-gnueabihf-gcc-5 to provide /usr/bin/arm-linux-gnueabihf-gcc (arm-linux-gnueabihf-gcc) in auto mode
+    COMBO_IOCTL_GET_SOC_CHIP_ID
+    COMBO_IOCTL_SET_CHIP_ID chipId
+    COMBO_IOCTL_DO_MODULE_INIT chipId
 
-sudo update-alternatives --config arm-linux-gnueabihf-gcc
-```
-
-## Usage
-
-```sh
-  ./build.sh importconfig
-  ./build.sh config
-  ./build.sh
-```
-
-## Branch details
-
-Kernel upstream + BPI-R2
-* 4.14-main
-* 4.9-main
-* 4.16-main (EOL)
-* 4.17-main
-* 4.18-main
-
-## Kernel version
-
-Kernel breakdown features by version
-
-|          | 4.4 | 4.9 | 4.14 | 4.16 | 4.17 | 4.18 |
-|----------| --- | --- | --- | --- | --- | --- |
-| PCIe     |  Y  |  Y  |  Y  |  Y  |     |   ?  |
-| SATA     |  Y  |  Y  |  Y  |  Y?  |     |  Y   |
-| 2 GMAC   |  Y  |  Y  |  Y  |  N  |     |     |
-| DSA      |  N  |  Y  |  Y  |  Y  |  Y  |   Y  |
-| USB      |  Y  |  Y  |  Y  |  Y?  |     |  ?   |
-| VLAN     |     |     |  Y  |     |     |  ?   |
-| HW NAT   |     |  Y  |  Y |     |     |     |
-| HW QOS   |     |  Y  |  ? |     |     |     |
-| Crypto   |  Y  |  Y  |  Y  |  Y?  |     |     |
-| WIFI     |     |     |  Y  |  Y |  Y  |   Y  |
-| BT       |     |     |     |     |     |     |
-| VIDEO    |  Y  |  N  |  Y  |  Y  |     |     |
-| ACPI |  ?  |  N  |  Y  |  N  |     |     |
-||| other Options ||||     |
-| OpenVPN  |  ?  |  Y  |  Y  |  ?  |     |   ?  |
-| iptables |  ?  |  ?  |  Y  |  ?  |     |   ?  |
-| LXC / Docker |  ?  |  ?  |  Y  |  ?  |     |  ?   |
-
-? = unsure
-
-() = testing (separate Branch wlan/hdmi/hwnat/hwqos)
-
-HW-NAT only works between LAN and WAN (bridge unclear, wifi not working)
-HW-QoS is merged into 4.14-main, but we do not know how to test it
-ACPI-feature means System is powered off, not only halted (power-consumption ~0.2W, no reboot on reset), reboot-problem with soldered power-switch (see https://github.com/frank-w/BPI-R2-4.14/issues/35). Power-off is also initiated by pressing the power-switch
-VIDEO is hdmi-output (X-server/framebuffer-console)...here some resolutions are not supported by vendor-driver
-
-kernel 4.4 / uboot: https://github.com/frank-w/BPI-R2-4.4
-
-## Links
-
-* BPI-R2: http://www.banana-pi.org/r2.html
-* Kernel: https://www.kernel.org/ , Stable-RC: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git/
-* linux-mediatek: https://patchwork.kernel.org/project/linux-mediatek/list/, Threaded: http://lists.infradead.org/pipermail/linux-mediatek/
-* kernelci: https://kernelci.org/boot/mt7623n-bananapi-bpi-r2/
-* Forum: http://forum.banana-pi.org/c/Banana-Pi-BPI-R2
-* Wiki: http://www.fw-web.de/dokuwiki/doku.php?id=en/bpi-r2/start
-
-License
-----
-
-GPL-2.0
-
-**Free Software, Hell Yeah!**
+ 
+https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/81776dada7beacfe4efbe3fbb16fbf909f94fe2e/linux-mt/drivers/misc/mediatek/connectivity/common/common_detect/wmt_detect.c#L133
+wmt_plat_get_soc_chipid();
+mtk_wcn_wmt_set_chipid(arg);
+ 
+https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/81776dada7beacfe4efbe3fbb16fbf909f94fe2e/linux-mt/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/conn_drv_init.c#L41
+= do_connectivity_driver_init(int chip_id)
+ 
+ 
+stp_uart_launcher -p /etc/firmware
+ 
+ROMv2_lm_patch_1_0_hdr.bin
+ROMv2_lm_patch_1_1_hdr.bin
+WIFI_RAM_CODE_7623
+ 
+ 
+https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/d94f55022a9192cb181d380b1a6699949a36f30c/vendor/mediatek/connectivity/tools/src/stp_uart_launcher.c#L1609
+ 
+sStpParaConfig.pPatchPath = gPatchFolder;
+ 
+setHifInfo(chipId, sStpParaConfig.pPatchPath);
+ 
+ wmt_dev.c
+Showing the top two matches Last indexed on 1 Sep 2017
+C
+73 	#define WMT_IOCTL_SET_PATCH_NUM _IOW(WMT_IOC_MAGIC, 14, int)
+74 	#define WMT_IOCTL_SET_PATCH_INFO _IOW(WMT_IOC_MAGIC, 15, char*)
+75 	#define WMT_IOCTL_PORT_NAME _IOWR(WMT_IOC_MAGIC, 20, char*)
+… 	
+1203 	WMT_ERR_FUNC("allocate memory fail!\n");
+1204 	break;
+1205 	}
+1206 	}
+1207 	break;
+1208 	
+1209 	case WMT_IOCTL_SET_PATCH_INFO:{
+1210 	WMT_PATCH_INFO wMtPatchInfo;
+ 
+https://github.com/BPI-SINOVOIP/BPI-R2-bsp/blob/81776dada7beacfe4efbe3fbb16fbf909f94fe2e/linux-mt/drivers/misc/mediatek/connectivity/common/combo/linux/wmt_dev.c#L1209
