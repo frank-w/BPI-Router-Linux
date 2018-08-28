@@ -132,3 +132,10 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+#own
+DEBIAN/
+arch/arm/boot/zImage-dtb
+build.log
+scripts/kconfig/zconf.hash.c
+uImage
