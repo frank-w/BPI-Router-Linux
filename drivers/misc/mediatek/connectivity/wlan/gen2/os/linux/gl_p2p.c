@@ -877,7 +877,8 @@ unsigned int _p2p_cfg80211_classify8021d(struct sk_buff *skb)
 static const UINT_16 au16Wlan1dToQueueIdx[8] = { 1, 0, 0, 1, 2, 2, 3, 3 };
 
 static UINT_16 p2pSelectQueue(struct net_device *dev, struct sk_buff *skb,
-				void *accel_priv, select_queue_fallback_t fallback)
+				struct net_device *sb_dev,
+				select_queue_fallback_t fallback)
 {
 	skb->priority = _p2p_cfg80211_classify8021d(skb);
 

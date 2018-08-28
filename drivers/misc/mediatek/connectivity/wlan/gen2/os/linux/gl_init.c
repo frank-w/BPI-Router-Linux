@@ -1144,7 +1144,8 @@ unsigned int _cfg80211_classify8021d(struct sk_buff *skb)
 static const UINT_16 au16Wlan1dToQueueIdx[8] = { 1, 0, 0, 1, 2, 2, 3, 3 };
 
 static UINT_16 wlanSelectQueue(struct net_device *dev, struct sk_buff *skb,
-				void *accel_priv, select_queue_fallback_t fallback)
+				struct net_device *sb_dev,
+				select_queue_fallback_t fallback)
 {
 	skb->priority = _cfg80211_classify8021d(skb);
 
