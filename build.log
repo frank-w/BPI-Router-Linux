@@ -1,0 +1,16 @@
+<stdin>:1332:2: warning: #warning syscall io_pgetevents not implemented [-Wcpp]
+drivers/misc/mediatek/connectivity/wlan/gen2/os/linux/gl_init.c:2300:22: error: initialization from incompatible pointer type [-Werror=incompatible-pointer-types]
+  .ndo_select_queue = wlanSelectQueue,
+                      ^~~~~~~~~~~~~~~
+drivers/misc/mediatek/connectivity/wlan/gen2/os/linux/gl_init.c:2300:22: note: (near initialization for 'wlan_netdev_ops.ndo_select_queue')
+cc1: all warnings being treated as errors
+make[6]: *** [drivers/misc/mediatek/connectivity/wlan/gen2/os/linux/gl_init.o] Error 1
+make[6]: *** Waiting for unfinished jobs....
+make[5]: *** [drivers/misc/mediatek/connectivity/wlan/gen2] Error 2
+make[4]: *** [drivers/misc/mediatek/connectivity/wlan] Error 2
+make[3]: *** [drivers/misc/mediatek/connectivity] Error 2
+make[2]: *** [drivers/misc/mediatek] Error 2
+make[1]: *** [drivers/misc] Error 2
+make[1]: *** Waiting for unfinished jobs....
+make: *** [drivers] Error 2
+make: *** Waiting for unfinished jobs....
