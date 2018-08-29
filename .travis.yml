@@ -13,8 +13,7 @@ if: tag IS blank
 
 branches:
   only:
-    - /^.*-main$/
-	- /^.*-rc$/
+    - /^.*-(main|rc)$/
 
 install:
     - sudo apt-add-repository 'deb http://archive.ubuntu.com/ubuntu xenial main'
