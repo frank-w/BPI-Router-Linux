@@ -1,0 +1,1 @@
+<stdin>:1332:2: warning: #warning syscall io_pgetevents not implemented [-Wcpp]
