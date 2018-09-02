@@ -32,6 +32,7 @@
 #include "mtk_drm_ddp_comp.h"
 #include "mtk_drm_drv.h"
 #include "mtk_drm_fb.h"
+#include "mtk_drm_fbdev.h"
 #include "mtk_drm_gem.h"
 
 #define DRIVER_NAME "mediatek"
@@ -174,6 +175,7 @@ static const enum mtk_ddp_comp_id mt2712_mtk_ddp_third[] = {
 	DDP_COMPONENT_PWM2,
 };
 
+
 static enum mtk_ddp_comp_id mt8173_mtk_ddp_main[] = {
 	DDP_COMPONENT_OVL0,
 	DDP_COMPONENT_COLOR0,
@@ -299,6 +301,10 @@ static int mtk_drm_kms_init(struct drm_device *drm)
 	drm_kms_helper_poll_init(drm);
 	drm_mode_config_reset(drm);
 
+	ret = mtk_fbdev_init(drm);
+	if (ret)
+		goto err_component_unbind;
+
 	return 0;
 
 err_component_unbind:
@@ -311,6 +317,7 @@ err_config_cleanup:
 
 static void mtk_drm_kms_deinit(struct drm_device *drm)
 {
+	mtk_fbdev_fini(drm);
 	drm_kms_helper_poll_fini(drm);
 
 	component_unbind_all(drm->dev, drm);
@@ -329,28 +336,29 @@ static const struct file_operations mtk_drm_fops = {
 };
 
 static struct drm_driver mtk_drm_driver = {
-	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_PRIME |
-			   DRIVER_ATOMIC,
+       .driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_PRIME |
+                          DRIVER_ATOMIC,
 
-	.gem_free_object_unlocked = mtk_drm_gem_free_object,
-	.gem_vm_ops = &drm_gem_cma_vm_ops,
-	.dumb_create = mtk_drm_gem_dumb_create,
+       .gem_free_object_unlocked = mtk_drm_gem_free_object,
+       .gem_vm_ops = &drm_gem_cma_vm_ops,
+       .dumb_create = mtk_drm_gem_dumb_create,
 
-	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
-	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
-	.gem_prime_export = drm_gem_prime_export,
-	.gem_prime_import = drm_gem_prime_import,
-	.gem_prime_get_sg_table = mtk_gem_prime_get_sg_table,
-	.gem_prime_import_sg_table = mtk_gem_prime_import_sg_table,
-	.gem_prime_mmap = mtk_drm_gem_mmap_buf,
-	.fops = &mtk_drm_fops,
+       .prime_handle_to_fd = drm_gem_prime_handle_to_fd,
+       .prime_fd_to_handle = drm_gem_prime_fd_to_handle,
+       .gem_prime_export = drm_gem_prime_export,
+       .gem_prime_import = drm_gem_prime_import,
+       .gem_prime_get_sg_table = mtk_gem_prime_get_sg_table,
+       .gem_prime_import_sg_table = mtk_gem_prime_import_sg_table,
+       .gem_prime_mmap = mtk_drm_gem_mmap_buf,
+       .fops = &mtk_drm_fops,
 
-	.name = DRIVER_NAME,
-	.desc = DRIVER_DESC,
-	.date = DRIVER_DATE,
-	.major = DRIVER_MAJOR,
-	.minor = DRIVER_MINOR,
+       .name = DRIVER_NAME,
+       .desc = DRIVER_DESC,
+       .date = DRIVER_DATE,
+       .major = DRIVER_MAJOR,
+       .minor = DRIVER_MINOR,
 };
+
 
 static int compare_of(struct device *dev, void *data)
 {
