@@ -2061,7 +2061,6 @@ VOID nicRxProcessEventPacket(IN P_ADAPTER_T prAdapter, IN OUT P_SW_RFB_T prSwRfb
 	case EVENT_ID_BT_OVER_WIFI:
 #if CFG_ENABLE_BT_OVER_WIFI
 		{
-			UINT_8 aucTmp[sizeof(AMPC_EVENT) + sizeof(BOW_LINK_DISCONNECTED)];
 			P_EVENT_BT_OVER_WIFI prEventBtOverWifi;
 			P_AMPC_EVENT prBowEvent;
 			P_BOW_LINK_CONNECTED prBowLinkConnected;
@@ -2069,11 +2068,11 @@ VOID nicRxProcessEventPacket(IN P_ADAPTER_T prAdapter, IN OUT P_SW_RFB_T prSwRfb
 
 			prEventBtOverWifi = (P_EVENT_BT_OVER_WIFI) (prEvent->aucBuffer);
 
-			/* construct event header */
-			prBowEvent = (P_AMPC_EVENT) aucTmp;
-
 			if (prEventBtOverWifi->ucLinkStatus == 0) {
 				/* Connection */
+				UINT_8 aucTmp[sizeof(AMPC_EVENT) + sizeof(BOW_LINK_CONNECTED)];
+				/* construct event header */
+				prBowEvent = (P_AMPC_EVENT) aucTmp;
 				prBowEvent->rHeader.ucEventId = BOW_EVENT_ID_LINK_CONNECTED;
 				prBowEvent->rHeader.ucSeqNumber = 0;
 				prBowEvent->rHeader.u2PayloadLength = sizeof(BOW_LINK_CONNECTED);
@@ -2086,6 +2085,9 @@ VOID nicRxProcessEventPacket(IN P_ADAPTER_T prAdapter, IN OUT P_SW_RFB_T prSwRfb
 				kalIndicateBOWEvent(prAdapter->prGlueInfo, prBowEvent);
 			} else {
 				/* Disconnection */
+				UINT_8 aucTmp[sizeof(AMPC_EVENT) + sizeof(BOW_LINK_DISCONNECTED)];
+				/* construct event header */
+				prBowEvent = (P_AMPC_EVENT) aucTmp;
 				prBowEvent->rHeader.ucEventId = BOW_EVENT_ID_LINK_DISCONNECTED;
 				prBowEvent->rHeader.ucSeqNumber = 0;
 				prBowEvent->rHeader.u2PayloadLength = sizeof(BOW_LINK_DISCONNECTED);
