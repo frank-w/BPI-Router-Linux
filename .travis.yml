@@ -27,10 +27,11 @@ script:
     - bash build.sh pack
 before_deploy:
     # Set up git user name and tag this commit
+    - echo -e "machine github.com\n login $GITHUB_TOKEN" > ~/.netrc
     - git config --local user.name "Frank Wunderlich"
     - git config --local user.email "frank-w@public-files.de"
     - git tag "CI-BUILD-$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)"
-    #- git push --tags
+    - git push --tags
 deploy:
     provider: releases
     api_key: $GITHUB_TOKEN
