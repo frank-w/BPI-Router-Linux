@@ -82,6 +82,7 @@ sesInfoAlloc(void)
 		INIT_LIST_HEAD(&ret_buf->smb_ses_list);
 		INIT_LIST_HEAD(&ret_buf->tcon_list);
 		mutex_init(&ret_buf->session_mutex);
+		spin_lock_init(&ret_buf->iface_lock);
 	}
 	return ret_buf;
 }
@@ -102,6 +103,7 @@ sesInfoFree(struct cifs_ses *buf_to_free)
 	kfree(buf_to_free->user_name);
 	kfree(buf_to_free->domainName);
 	kzfree(buf_to_free->auth_key.response);
+	kfree(buf_to_free->iface_list);
 	kzfree(buf_to_free);
 }
 
@@ -117,11 +119,10 @@ tconInfoAlloc(void)
 		INIT_LIST_HEAD(&ret_buf->openFileList);
 		INIT_LIST_HEAD(&ret_buf->tcon_list);
 		spin_lock_init(&ret_buf->open_file_lock);
-		mutex_init(&ret_buf->prfid_mutex);
-		ret_buf->prfid = kzalloc(sizeof(struct cifs_fid), GFP_KERNEL);
-#ifdef CONFIG_CIFS_STATS
+		mutex_init(&ret_buf->crfid.fid_mutex);
+		ret_buf->crfid.fid = kzalloc(sizeof(struct cifs_fid),
+					     GFP_KERNEL);
 		spin_lock_init(&ret_buf->stat_lock);
-#endif
 	}
 	return ret_buf;
 }
@@ -136,7 +137,7 @@ tconInfoFree(struct cifs_tcon *buf_to_free)
 	atomic_dec(&tconInfoAllocCount);
 	kfree(buf_to_free->nativeFileSystem);
 	kzfree(buf_to_free->password);
-	kfree(buf_to_free->prfid);
+	kfree(buf_to_free->crfid.fid);
 	kfree(buf_to_free);
 }
 
@@ -401,9 +402,17 @@ is_valid_oplock_break(char *buffer, struct TCP_Server_Info *srv)
 			(struct smb_com_transaction_change_notify_rsp *)buf;
 		struct file_notify_information *pnotify;
 		__u32 data_offset = 0;
+		size_t len = srv->total_read - sizeof(pSMBr->hdr.smb_buf_length);
+
 		if (get_bcc(buf) > sizeof(struct file_notify_information)) {
 			data_offset = le32_to_cpu(pSMBr->DataOffset);
 
+			if (data_offset >
+			    len - sizeof(struct file_notify_information)) {
+				cifs_dbg(FYI, "invalid data_offset %u\n",
+					 data_offset);
+				return true;
+			}
 			pnotify = (struct file_notify_information *)
 				((char *)&pSMBr->hdr.Protocol + data_offset);
 			cifs_dbg(FYI, "dnotify on %s Action: 0x%x\n",

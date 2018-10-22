@@ -553,43 +553,29 @@ int drm_mode_create_lease_ioctl(struct drm_device *dev,
 
 	/* Clone the lessor file to create a new file for us */
 	DRM_DEBUG_LEASE("Allocating lease file\n");
-	path_get(&lessor_file->f_path);
-	lessee_file = alloc_file(&lessor_file->f_path,
-				 lessor_file->f_mode,
-				 fops_get(lessor_file->f_inode->i_fop));
-
+	lessee_file = file_clone_open(lessor_file);
 	if (IS_ERR(lessee_file)) {
 		ret = PTR_ERR(lessee_file);
 		goto out_lessee;
 	}
 
-	/* Initialize the new file for DRM */
-	DRM_DEBUG_LEASE("Initializing the file with %p\n", lessee_file->f_op->open);
-	ret = lessee_file->f_op->open(lessee_file->f_inode, lessee_file);
-	if (ret)
-		goto out_lessee_file;
-
 	lessee_priv = lessee_file->private_data;
-
 	/* Change the file to a master one */
 	drm_master_put(&lessee_priv->master);
 	lessee_priv->master = lessee;
 	lessee_priv->is_master = 1;
 	lessee_priv->authenticated = 1;
 
-	/* Hook up the fd */
-	fd_install(fd, lessee_file);
-
 	/* Pass fd back to userspace */
 	DRM_DEBUG_LEASE("Returning fd %d id %d\n", fd, lessee->lessee_id);
 	cl->fd = fd;
 	cl->lessee_id = lessee->lessee_id;
 
+	/* Hook up the fd */
+	fd_install(fd, lessee_file);
+
 	DRM_DEBUG_LEASE("drm_mode_create_lease_ioctl succeeded\n");
 	return 0;
-
-out_lessee_file:
-	fput(lessee_file);
 
 out_lessee:
 	drm_master_put(&lessee);

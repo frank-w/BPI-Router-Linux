@@ -10,11 +10,8 @@
 #include <linux/file.h>
 #include "msgfmt.h"
 
-#define UMH_start _binary_net_bpfilter_bpfilter_umh_start
-#define UMH_end _binary_net_bpfilter_bpfilter_umh_end
-
-extern char UMH_start;
-extern char UMH_end;
+extern char bpfilter_umh_start;
+extern char bpfilter_umh_end;
 
 static struct umh_info info;
 /* since ip_getsockopt() can run in parallel, serialize access to umh */
@@ -26,9 +23,11 @@ static void shutdown_umh(struct umh_info *info)
 
 	if (!info->pid)
 		return;
-	tsk = pid_task(find_vpid(info->pid), PIDTYPE_PID);
-	if (tsk)
+	tsk = get_pid_task(find_vpid(info->pid), PIDTYPE_PID);
+	if (tsk) {
 		force_sig(SIGKILL, tsk);
+		put_task_struct(tsk);
+	}
 	fput(info->pipe_to_umh);
 	fput(info->pipe_from_umh);
 	info->pid = 0;
@@ -62,7 +61,7 @@ static int __bpfilter_process_sockopt(struct sock *sk, int optname,
 	req.is_set = is_set;
 	req.pid = current->pid;
 	req.cmd = optname;
-	req.addr = (long)optval;
+	req.addr = (long __force __user)optval;
 	req.len = optlen;
 	mutex_lock(&bpfilter_lock);
 	if (!info.pid)
@@ -93,13 +92,15 @@ static int __init load_umh(void)
 	int err;
 
 	/* fork usermode process */
-	err = fork_usermode_blob(&UMH_start, &UMH_end - &UMH_start, &info);
+	err = fork_usermode_blob(&bpfilter_umh_start,
+				 &bpfilter_umh_end - &bpfilter_umh_start,
+				 &info);
 	if (err)
 		return err;
 	pr_info("Loaded bpfilter_umh pid %d\n", info.pid);
 
 	/* health check that usermode process started correctly */
-	if (__bpfilter_process_sockopt(NULL, 0, 0, 0, 0) != 0) {
+	if (__bpfilter_process_sockopt(NULL, 0, NULL, 0, 0) != 0) {
 		stop_umh();
 		return -EFAULT;
 	}

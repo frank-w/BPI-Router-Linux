@@ -609,7 +609,8 @@ static void start_io_acct(struct dm_io *io)
 
 	io->start_time = jiffies;
 
-	generic_start_io_acct(md->queue, rw, bio_sectors(bio), &dm_disk(md)->part0);
+	generic_start_io_acct(md->queue, bio_op(bio), bio_sectors(bio),
+			      &dm_disk(md)->part0);
 
 	atomic_set(&dm_disk(md)->part0.in_flight[rw],
 		   atomic_inc_return(&md->pending[rw]));
@@ -628,7 +629,8 @@ static void end_io_acct(struct dm_io *io)
 	int pending;
 	int rw = bio_data_dir(bio);
 
-	generic_end_io_acct(md->queue, rw, &dm_disk(md)->part0, io->start_time);
+	generic_end_io_acct(md->queue, bio_op(bio), &dm_disk(md)->part0,
+			    io->start_time);
 
 	if (unlikely(dm_stats_used(&md->stats)))
 		dm_stats_account_io(&md->stats, bio_data_dir(bio),
@@ -1056,8 +1058,7 @@ static long dm_dax_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
 	if (len < 1)
 		goto out;
 	nr_pages = min(len, nr_pages);
-	if (ti->type->direct_access)
-		ret = ti->type->direct_access(ti, pgoff, nr_pages, kaddr, pfn);
+	ret = ti->type->direct_access(ti, pgoff, nr_pages, kaddr, pfn);
 
  out:
 	dm_put_live_table(md, srcu_idx);
@@ -1154,12 +1155,14 @@ void dm_accept_partial_bio(struct bio *bio, unsigned n_sectors)
 EXPORT_SYMBOL_GPL(dm_accept_partial_bio);
 
 /*
- * The zone descriptors obtained with a zone report indicate
- * zone positions within the target device. The zone descriptors
- * must be remapped to match their position within the dm device.
- * A target may call dm_remap_zone_report after completion of a
- * REQ_OP_ZONE_REPORT bio to remap the zone descriptors obtained
- * from the target device mapping to the dm device.
+ * The zone descriptors obtained with a zone report indicate zone positions
+ * within the target backing device, regardless of that device is a partition
+ * and regardless of the target mapping start sector on the device or partition.
+ * The zone descriptors start sector and write pointer position must be adjusted
+ * to match their relative position within the dm device.
+ * A target may call dm_remap_zone_report() after completion of a
+ * REQ_OP_ZONE_REPORT bio to remap the zone descriptors obtained from the
+ * backing device.
  */
 void dm_remap_zone_report(struct dm_target *ti, struct bio *bio, sector_t start)
 {
@@ -1170,12 +1173,22 @@ void dm_remap_zone_report(struct dm_target *ti, struct bio *bio, sector_t start)
 	struct blk_zone *zone;
 	unsigned int nr_rep = 0;
 	unsigned int ofst;
+	sector_t part_offset;
 	struct bio_vec bvec;
 	struct bvec_iter iter;
 	void *addr;
 
 	if (bio->bi_status)
 		return;
+
+	/*
+	 * bio sector was incremented by the request size on completion. Taking
+	 * into account the original request sector, the target start offset on
+	 * the backing device and the target mapping offset (ti->begin), the
+	 * start sector of the backing device. The partition offset is always 0
+	 * if the target uses a whole device.
+	 */
+	part_offset = bio->bi_iter.bi_sector + ti->begin - (start + bio_end_sector(report_bio));
 
 	/*
 	 * Remap the start sector of the reported zones. For sequential zones,
@@ -1194,6 +1207,7 @@ void dm_remap_zone_report(struct dm_target *ti, struct bio *bio, sector_t start)
 		/* Set zones start sector */
 		while (hdr->nr_zones && ofst < bvec.bv_len) {
 			zone = addr + ofst;
+			zone->start -= part_offset;
 			if (zone->start >= start + ti->len) {
 				hdr->nr_zones = 0;
 				break;
@@ -1205,7 +1219,7 @@ void dm_remap_zone_report(struct dm_target *ti, struct bio *bio, sector_t start)
 				else if (zone->cond == BLK_ZONE_COND_EMPTY)
 					zone->wp = zone->start;
 				else
-					zone->wp = zone->wp + ti->begin - start;
+					zone->wp = zone->wp + ti->begin - start - part_offset;
 			}
 			ofst += sizeof(struct blk_zone);
 			hdr->nr_zones--;
@@ -1606,10 +1620,9 @@ static blk_qc_t __split_and_process_bio(struct mapped_device *md,
 				 * the usage of io->orig_bio in dm_remap_zone_report()
 				 * won't be affected by this reassignment.
 				 */
-				struct bio *b = bio_clone_bioset(bio, GFP_NOIO,
-								 &md->queue->bio_split);
+				struct bio *b = bio_split(bio, bio_sectors(bio) - ci.sector_count,
+							  GFP_NOIO, &md->queue->bio_split);
 				ci.io->orig_bio = b;
-				bio_advance(bio, (bio_sectors(bio) - ci.sector_count) << 9);
 				bio_chain(b, bio);
 				ret = generic_make_request(bio);
 				break;
