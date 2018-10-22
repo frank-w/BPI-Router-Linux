@@ -5,6 +5,8 @@ then
   exit 1;
 fi
 
+. build.conf
+
 clr_red=$'\e[1;31m'
 clr_green=$'\e[1;32m'
 clr_yellow=$'\e[1;33m'
@@ -76,6 +78,16 @@ function pack {
 	md5sum $fname > $fname.md5
 	ls -lh $(pwd)"/"$fname
 	cd $olddir
+}
+
+function upload {
+	imagename="uImage_${kernver}-${gitbranch}"
+	read -e -i $imagename -p "uImage-filename: " input
+	imagename="${input:-$imagename}"
+
+	echo "Name: $imagename"
+
+	scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 }
 
 function install {
@@ -325,6 +337,7 @@ function release
 		echo Merge;
 	else
 		echo "normal commit";
+		lc=${lc//[^a-zA-Z0-9]/_}
 		reltag="${reltag}_${lc}"
 	fi
 	echo "RelTag:"$reltag
@@ -444,6 +457,11 @@ if [ -n "$kernver" ]; then
 			install
 			;;
 
+		"upload")
+			echo "Upload Kernel to TFTP-Server"
+			upload
+			;;
+
 		"build")
 			echo "Build Kernel"
 			build
@@ -501,7 +519,8 @@ if [ -n "$kernver" ]; then
 					echo "2) install to SD-Card"
 				fi;
 				echo "3) deb-package"
-				read -n1 -p "choice [123]:" choice
+				echo "4) upload"
+				read -n1 -p "choice [1234]:" choice
 				echo
 				if [[ "$choice" == "1" ]]; then
 					$0 pack
@@ -509,6 +528,8 @@ if [ -n "$kernver" ]; then
 					$0 install
 				elif [[ "$choice" == "3" ]];then
 					$0 deb
+				elif [[ "$choice" == "4" ]];then
+					$0 upload
 				else
 					echo "wrong option: $choice"
 				fi
