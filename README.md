@@ -66,6 +66,7 @@ Kernel features by version
 | LXC / Docker |  ?  |  ?  |  Y  |  ?  |     |  ?   |    |
 
 Symbols:
+
 |Symbol|Meaning|
 |------|-------|
 |  ?   |Unsure |
