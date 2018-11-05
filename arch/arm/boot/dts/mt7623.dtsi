@@ -386,6 +386,17 @@
 		#io-channel-cells = <1>;
 	};
 
+	uart2: serial@11004000 {
+		compatible = "mediatek,mt7623-uart",
+			     "mediatek,mt6577-uart";
+		reg = <0 0x11004000 0 0x400>;
+		interrupts = <GIC_SPI 53 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&pericfg CLK_PERI_UART2_SEL>,
+			 <&pericfg CLK_PERI_UART2>;
+		clock-names = "baud", "bus";
+		status = "disabled";
+	};
+
 	uart0: serial@11002000 {
 		compatible = "mediatek,mt7623-uart",
 			     "mediatek,mt6577-uart";
@@ -404,17 +415,6 @@
 		interrupts = <GIC_SPI 52 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&pericfg CLK_PERI_UART1_SEL>,
 			 <&pericfg CLK_PERI_UART1>;
-		clock-names = "baud", "bus";
-		status = "disabled";
-	};
-
-	uart2: serial@11004000 {
-		compatible = "mediatek,mt7623-uart",
-			     "mediatek,mt6577-uart";
-		reg = <0 0x11004000 0 0x400>;
-		interrupts = <GIC_SPI 53 IRQ_TYPE_LEVEL_LOW>;
-		clocks = <&pericfg CLK_PERI_UART2_SEL>,
-			 <&pericfg CLK_PERI_UART2>;
 		clock-names = "baud", "bus";
 		status = "disabled";
 	};
@@ -693,17 +693,6 @@
 		};
 	};
 
-	mmc0: mmc@11230000 {
-		compatible = "mediatek,mt7623-mmc",
-			     "mediatek,mt2701-mmc";
-		reg = <0 0x11230000 0 0x1000>;
-		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_LOW>;
-		clocks = <&pericfg CLK_PERI_MSDC30_0>,
-			 <&topckgen CLK_TOP_MSDC30_0_SEL>;
-		clock-names = "source", "hclk";
-		status = "disabled";
-	};
-
 	mmc1: mmc@11240000 {
 		compatible = "mediatek,mt7623-mmc",
 			     "mediatek,mt2701-mmc";
@@ -711,6 +700,17 @@
 		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&pericfg CLK_PERI_MSDC30_1>,
 			 <&topckgen CLK_TOP_MSDC30_1_SEL>;
+		clock-names = "source", "hclk";
+		status = "disabled";
+	};
+
+	mmc0: mmc@11230000 {
+		compatible = "mediatek,mt7623-mmc",
+			     "mediatek,mt2701-mmc";
+		reg = <0 0x11230000 0 0x1000>;
+		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&pericfg CLK_PERI_MSDC30_0>,
+			 <&topckgen CLK_TOP_MSDC30_0_SEL>;
 		clock-names = "source", "hclk";
 		status = "disabled";
 	};
