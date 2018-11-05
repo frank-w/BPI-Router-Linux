@@ -1,20 +1,10 @@
 #!/bin/bash
 if [ $UID -eq 0 ];
 then
-  echo "Should not be run as root."
-  echo "Press any key to force..."
-  read -n 1 -s
-  echo "[ ... ] Please wait"
-  sleep 3
-  echo "To continue process now, type 'forceroot' and hit enter."
-  read force
-  if [ $force != "forceroot" ]; then
-    echo "Process aborted."
-    exit 1;
-  fi
-  echo " "
+  echo "This should not be run as root."
+  echo "Hit enter key to force or press CTRL+C to abort."
+  read -s
   echo "[ OK ] Proceeding now."
-  exit
 fi
 
 clr_red=$'\e[1;31m'
