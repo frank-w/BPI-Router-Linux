@@ -132,3 +132,15 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+#FWU
+scripts/kconfig/zconf.hash.c
+*asn1.[ch]
+*.log
+
+DEBIAN/
+SD/
+mod/
+
+uImage
+zImage-dtb
