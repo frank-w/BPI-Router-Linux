@@ -18,7 +18,24 @@
 			compatible = "mediatek,mt6323-led";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			status = "disabled";
+
+                        led@0 {
+                                reg = <0>;
+                                label = "bpi-r2:isink:green";
+                                default-state = "off";
+                        };
+
+                        led@1 {
+                                reg = <1>;
+                                label = "bpi-r2:isink:red";
+                                default-state = "off";
+                        };
+
+                        led@2 {
+                                reg = <2>;
+                                label = "bpi-r2:isink:blue";
+                                default-state = "off";
+                        };
 		};
 
 		mt6323regulator: mt6323regulator{
@@ -238,5 +255,32 @@
 				regulator-enable-ramp-delay = <216>;
 			};
 		};
+
+                mt6323keys: mt6323keys {
+                        compatible = "mediatek,mt6323-keys";
+                        mediatek,long-press-mode = <1>;
+                        power-off-time-sec = <0>;
+
+                        power {
+                                linux,keycodes = <116>;
+                                wakeup-source;
+                        };
+
+                        home {
+                                linux,keycodes = <114>;
+                        };
+                };
+
+                codec: mt6397codec {
+                        compatible = "mediatek,mt6397-codec";
+                };
+
+                power-controller {
+                        compatible = "mediatek,mt6323-pwrc";
+                };
+
+                rtc {
+                        compatible = "mediatek,mt6323-rtc";
+                };
 	};
 };
