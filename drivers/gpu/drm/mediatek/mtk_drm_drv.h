@@ -14,6 +14,7 @@
 #ifndef MTK_DRM_DRV_H
 #define MTK_DRM_DRV_H
 
+#include <drm/drm_fb_helper.h>
 #include <linux/io.h>
 #include "mtk_drm_ddp_comp.h"
 
@@ -59,6 +60,8 @@ struct mtk_drm_private {
 	} commit;
 
 	struct drm_atomic_state *suspend_state;
+	struct drm_fb_helper fb_helper;
+	struct drm_gem_object *fbdev_bo;
 };
 
 extern struct platform_driver mtk_ddp_driver;

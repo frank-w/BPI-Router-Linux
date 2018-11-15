@@ -28,7 +28,7 @@ static const struct drm_framebuffer_funcs mtk_drm_fb_funcs = {
 	.destroy = drm_gem_fb_destroy,
 };
 
-static struct drm_framebuffer *mtk_drm_framebuffer_init(struct drm_device *dev,
+struct drm_framebuffer *mtk_drm_framebuffer_init(struct drm_device *dev,
 					const struct drm_mode_fb_cmd2 *mode,
 					struct drm_gem_object *obj)
 {
@@ -55,7 +55,6 @@ static struct drm_framebuffer *mtk_drm_framebuffer_init(struct drm_device *dev,
 
 	return fb;
 }
-
 /*
  * Wait for any exclusive fence in fb's gem object's reservation object.
  *
