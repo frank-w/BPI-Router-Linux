@@ -1489,17 +1489,20 @@ VOID p2pFsmRunEventScanRequest(IN P_ADAPTER_T prAdapter, IN P_MSG_HDR_T prMsgHdr
 		}
 
 		u4ChnlListSize = sizeof(RF_CHANNEL_INFO_T) * prScanReqInfo->ucNumChannelList;
+
 		kalMemCopy(prScanReqInfo->arScanChannelList, prP2pScanReqMsg->arChannelListInfo, u4ChnlListSize);
 
 		/* TODO: I only take the first SSID. Multiple SSID may be needed in the future. */
 		/* SSID */
-		if (prP2pScanReqMsg->i4SsidNum >= 1)
-			kalMemCopy(&(prScanReqInfo->rSsidStruct), prP2pScanReqMsg->prSSID, sizeof(P2P_SSID_STRUCT_T));
+		if (prP2pScanReqMsg->i4SsidNum >= 1 && prP2pScanReqMsg->prSSID)
+			kalMemCopy(&(prScanReqInfo->rSsidStruct), prP2pScanReqMsg->prSSID, sizeof(prScanReqInfo->rSsidStruct));
 		else
 			prScanReqInfo->rSsidStruct.ucSsidLen = 0;
 
 		/* IE Buffer */
-		kalMemCopy(prScanReqInfo->aucIEBuf, prP2pScanReqMsg->pucIEBuf, prP2pScanReqMsg->u4IELen);
+		kalMemCopy(prScanReqInfo->aucIEBuf,
+		    prP2pScanReqMsg->pucIEBuf,
+		    prP2pScanReqMsg->u4IELen > CFG_IE_BUFFER_SIZE? CFG_IE_BUFFER_SIZE : prP2pScanReqMsg->u4IELen);
 
 		prScanReqInfo->u4BufLength = prP2pScanReqMsg->u4IELen;
 
