@@ -676,7 +676,7 @@ static int mtk_thermal_probe(struct platform_device *pdev)
 
 	ret = mtk_thermal_get_calibration_data(&pdev->dev, mt);
 	if (ret)
-		return ret;
+		dev_err(&pdev->dev, "MTK Thermal probe - no calibration data (%d)\n", ret);
 
 	mutex_init(&mt->lock);
 
