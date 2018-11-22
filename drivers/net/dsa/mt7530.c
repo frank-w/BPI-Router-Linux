@@ -1351,12 +1351,15 @@ mt7530_probe(struct mdio_device *mdiodev)
 	struct mt7530_priv *priv;
 	struct device_node *dn, *mdio;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	dn = mdiodev->dev.of_node;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	priv = devm_kzalloc(&mdiodev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	priv->ds = dsa_switch_alloc(&mdiodev->dev, DSA_MAX_PORTS);
 	if (!priv->ds)
 		return -ENOMEM;
@@ -1364,21 +1367,26 @@ mt7530_probe(struct mdio_device *mdiodev)
 	/* Use medatek,mcm property to distinguish hardware type that would
 	 * casues a little bit differences on power-on sequence.
 	 */
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	priv->mcm = of_property_read_bool(dn, "mediatek,mcm");
 	if (priv->mcm) {
 		dev_info(&mdiodev->dev, "MT7530 adapts as multi-chip module\n");
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		priv->rstc = devm_reset_control_get(&mdiodev->dev, "mcm");
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		if (IS_ERR(priv->rstc)) {
 			dev_err(&mdiodev->dev, "Couldn't get our reset line\n");
 			return PTR_ERR(priv->rstc);
 		}
 	}
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	priv->core_pwr = devm_regulator_get(&mdiodev->dev, "core");
 	if (IS_ERR(priv->core_pwr))
 		return PTR_ERR(priv->core_pwr);
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	priv->io_pwr = devm_regulator_get(&mdiodev->dev, "io");
 	if (IS_ERR(priv->io_pwr))
 		return PTR_ERR(priv->io_pwr);
@@ -1388,6 +1396,7 @@ mt7530_probe(struct mdio_device *mdiodev)
 	 * the reset, otherwise memory-mapped register accessing used
 	 * through syscon provides in the case of MCM.
 	 */
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (!priv->mcm) {
 		priv->reset = devm_gpiod_get_optional(&mdiodev->dev, "reset",
 						      GPIOD_OUT_LOW);
@@ -1396,19 +1405,24 @@ mt7530_probe(struct mdio_device *mdiodev)
 			return PTR_ERR(priv->reset);
 		}
 	}
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 //	mdio = of_parse_phandle(dn, "dsa,mii-bus", 0);
 	mdio = of_get_parent(dn);
+printk(KERN_ALERT "DEBUG: Passed %s %d (mdio:0x%x)\n",__FUNCTION__,__LINE__,(unsigned int)mdio);
 	if (!mdio)
 		return -EINVAL;
 
 	priv->bus = of_mdio_find_bus(mdio);
+printk(KERN_ALERT "DEBUG: Passed %s %d (mdio:0x%x %s,bus:0x%x)\n",__FUNCTION__,__LINE__,(unsigned int)mdio,mdio->name,(unsigned int)priv->bus);
 	if (!priv->bus)
 		return -EPROBE_DEFER;
+printk(KERN_ALERT "DEBUG: Passed %s %d (mdio-dev:0x%x,priv:0x%x)\n",__FUNCTION__,__LINE__,(unsigned int)&mdiodev->dev,(unsigned int)priv);
 	priv->dev = &mdiodev->dev;
 	priv->ds->priv = priv;
 	priv->ds->ops = &mt7530_switch_ops;
 	mutex_init(&priv->reg_mutex);
 	dev_set_drvdata(&mdiodev->dev, priv);
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	return dsa_register_switch(priv->ds);
 }
