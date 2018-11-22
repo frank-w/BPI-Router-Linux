@@ -124,10 +124,6 @@
 		device_type = "memory";
 		reg = <0 0x80000000 0 0x80000000>;
 	};
-
-	mt7530: switch@0 {
-		compatible = "mediatek,mt7530";
-	};
 };
 
 &btif {
@@ -174,9 +170,8 @@
 	mdio: mdio-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
-	};
-};
-		&mt7530 {
+
+		switch@0 {
 			compatible = "mediatek,mt7530";
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -184,8 +179,6 @@
 			reset-gpios = <&pio 33 0>;
 			core-supply = <&mt6323_vpa_reg>;
 			io-supply = <&mt6323_vemc3v3_reg>;
-
-			dsa,mii-bus = <&mdio>;
 
 			ports {
 				#address-cells = <1>;
@@ -244,6 +237,8 @@
 				};
 			};
 		};
+	};
+};
 
 &i2c0 {
 	pinctrl-names = "default";
