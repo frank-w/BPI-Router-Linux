@@ -255,6 +255,23 @@ static void dsa_tree_teardown_default_cpu(struct dsa_switch_tree *dst)
 	dst->cpu_dp = NULL;
 }
 
+static int dsa_user_parse(struct dsa_port *port, u32 index,
+			  struct dsa_switch *ds)
+{
+	struct device_node *cpu_port;
+	const unsigned int *cpu_port_reg;
+	int cpu_port_index;
+	cpu_port = of_parse_phandle(port->dn, "cpu", 0);
+	if (cpu_port) {
+		cpu_port_reg = of_get_property(cpu_port, "reg", NULL);
+		if (!cpu_port_reg)
+			return -EINVAL;
+		cpu_port_index = be32_to_cpup(cpu_port_reg);
+		ds->ports[index].upstream = cpu_port_index;
+	}
+	return 0;
+}
+
 static int dsa_port_setup(struct dsa_port *dp)
 {
 	struct dsa_switch *ds = dp->ds;
@@ -285,6 +302,8 @@ static int dsa_port_setup(struct dsa_port *dp)
 				ds->index, dp->index);
 			return err;
 		}
+		if (dp->master)
+			dp->master->dsa_ptr = dp;
 		break;
 	case DSA_PORT_TYPE_DSA:
 		/* dp->index is used now as port_number. However
@@ -305,12 +324,17 @@ static int dsa_port_setup(struct dsa_port *dp)
 		devlink_port_attrs_set(&dp->devlink_port,
 				       DEVLINK_PORT_FLAVOUR_PHYSICAL,
 				       dp->index, false, 0);
+		err = dsa_user_parse(dp, dp->index, ds);
+		if (err)
+			return err;
+
 		err = dsa_slave_create(dp);
 		if (err)
 			dev_err(ds->dev, "failed to create slave for port %d.%d\n",
 				ds->index, dp->index);
 		else
 			devlink_port_type_eth_set(&dp->devlink_port, dp->slave);
+
 		break;
 	}
 
@@ -326,6 +350,14 @@ static void dsa_port_teardown(struct dsa_port *dp)
 	case DSA_PORT_TYPE_UNUSED:
 		break;
 	case DSA_PORT_TYPE_CPU:
+		dsa_port_link_unregister_of(dp);
+		if (dp->master)
+			dp->master->dsa_ptr = NULL;
+		if (dp->ethernet) {
+			dev_put(dp->ethernet);
+			dp->ethernet = NULL;
+		}
+		break;
 	case DSA_PORT_TYPE_DSA:
 		dsa_port_link_unregister_of(dp);
 		break;
@@ -579,6 +611,9 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *master)
 	dp->tag_ops = tag_ops;
 	dp->master = master;
 	dp->dst = dst;
+
+	dev_hold(master);
+	ds->ports[dp->index].ethernet = master;
 
 	return 0;
 }

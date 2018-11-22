@@ -678,9 +678,17 @@ static int
 mt7530_cpu_port_enable(struct mt7530_priv *priv,
 		       int port)
 {
+	u8 port_mask = 0;
+	int i;
+
 	/* Enable Mediatek header mode on the cpu port */
 	mt7530_write(priv, MT7530_PVC_P(port),
 		     PORT_SPEC_TAG);
+
+	/* Enable Mediatek header mode on the GMAC that the cpu port
+	 * connects to */
+	regmap_write_bits(priv->ethernet, MTK_GDMA_FWD_CFG(port),
+			  GDMA_SPEC_TAG, GDMA_SPEC_TAG);
 
 	/* Setup the MAC by default for the cpu port */
 	mt7530_write(priv, MT7530_PMCR_P(port), PMCR_CPUP_LINK);
@@ -694,8 +702,14 @@ mt7530_cpu_port_enable(struct mt7530_priv *priv,
 	/* CPU port gets connected to all user ports of
 	 * the switch
 	 */
+
+	for (i = 0; i < MT7530_NUM_PORTS; i++)
+		if ((priv->ds->ports[port].type==DSA_PORT_TYPE_USER) &&
+		    (dsa_port_upstream_port(priv->ds, i) == port))
+			port_mask |= BIT(i);
+
 	mt7530_write(priv, MT7530_PCR_P(port),
-		     PCR_MATRIX(dsa_user_ports(priv->ds)));
+		     PCR_MATRIX(port_mask));
 
 	return 0;
 }
@@ -705,6 +719,7 @@ mt7530_port_enable(struct dsa_switch *ds, int port,
 		   struct phy_device *phy)
 {
 	struct mt7530_priv *priv = ds->priv;
+	u8 upstream = dsa_port_upstream_port(ds, port);
 
 	mutex_lock(&priv->reg_mutex);
 
@@ -715,7 +730,7 @@ mt7530_port_enable(struct dsa_switch *ds, int port,
 	 * restore the port matrix if the port is the member of a certain
 	 * bridge.
 	 */
-	priv->ports[port].pm |= PCR_MATRIX(BIT(MT7530_CPU_PORT));
+	priv->ports[port].pm |= PCR_MATRIX(BIT(upstream));
 	priv->ports[port].enable = true;
 	mt7530_rmw(priv, MT7530_PCR_P(port), PCR_MATRIX_MASK,
 		   priv->ports[port].pm);
@@ -778,7 +793,8 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
 			struct net_device *bridge)
 {
 	struct mt7530_priv *priv = ds->priv;
-	u32 port_bitmap = BIT(MT7530_CPU_PORT);
+	u8 upstream = dsa_port_upstream_port(ds, port);
+	u32 port_bitmap = BIT(upstream);
 	int i;
 
 	mutex_lock(&priv->reg_mutex);
@@ -879,6 +895,7 @@ mt7530_port_bridge_leave(struct dsa_switch *ds, int port,
 			 struct net_device *bridge)
 {
 	struct mt7530_priv *priv = ds->priv;
+	u8 upstream = dsa_port_upstream_port(ds, port);
 	int i;
 
 	mutex_lock(&priv->reg_mutex);
@@ -906,8 +923,8 @@ mt7530_port_bridge_leave(struct dsa_switch *ds, int port,
 	 */
 	if (priv->ports[port].enable)
 		mt7530_rmw(priv, MT7530_PCR_P(port), PCR_MATRIX_MASK,
-			   PCR_MATRIX(BIT(MT7530_CPU_PORT)));
-	priv->ports[port].pm = PCR_MATRIX(BIT(MT7530_CPU_PORT));
+			   PCR_MATRIX(BIT(upstream)));
+	priv->ports[port].pm = PCR_MATRIX(BIT(upstream));
 
 	mt7530_port_set_vlan_unaware(ds, port);
 
@@ -1198,15 +1215,7 @@ mt7530_port_vlan_del(struct dsa_switch *ds, int port,
 static enum dsa_tag_protocol
 mtk_get_tag_protocol(struct dsa_switch *ds, int port)
 {
-	struct mt7530_priv *priv = ds->priv;
-
-	if (port != MT7530_CPU_PORT) {
-		dev_warn(priv->dev,
-			 "port not matched with tagging CPU port\n");
-		return DSA_TAG_PROTO_NONE;
-	} else {
-		return DSA_TAG_PROTO_MTK;
-	}
+	return DSA_TAG_PROTO_MTK;
 }
 
 static int
@@ -1279,8 +1288,13 @@ mt7530_setup(struct dsa_switch *ds)
 
 	/* Enable Port 6 only; P5 as GMAC5 which currently is not supported */
 	val = mt7530_read(priv, MT7530_MHWTRAP);
-	val &= ~MHWTRAP_P6_DIS & ~MHWTRAP_PHY_ACCESS;
+	val &= ~MHWTRAP_P5_DIS & ~MHWTRAP_P6_DIS & ~MHWTRAP_PHY_ACCESS;
 	val |= MHWTRAP_MANUAL;
+	if (!dsa_is_cpu_port(ds, 5)) {
+		val |= MHWTRAP_P5_DIS;
+		val |= MHWTRAP_P5_MAC_SEL;
+		val |= MHWTRAP_P5_RGMII_MODE;
+	}
 	mt7530_write(priv, MT7530_MHWTRAP, val);
 
 	/* Enable and reset MIB counters */
@@ -1331,10 +1345,11 @@ static const struct dsa_switch_ops mt7530_switch_ops = {
 };
 
 static int
-mt7530_probe(struct mdio_device *mdiodev)
+mt7530_probe(struct platform_device *mdiodev)
+//mt7530_probe(struct mdio_device *mdiodev)
 {
 	struct mt7530_priv *priv;
-	struct device_node *dn;
+	struct device_node *dn, *mdio;
 
 	dn = mdiodev->dev.of_node;
 
@@ -1381,8 +1396,13 @@ mt7530_probe(struct mdio_device *mdiodev)
 			return PTR_ERR(priv->reset);
 		}
 	}
+	mdio = of_parse_phandle(dn, "dsa,mii-bus", 0);
+	if (!mdio)
+		return -EINVAL;
 
-	priv->bus = mdiodev->bus;
+	priv->bus = of_mdio_find_bus(mdio);
+	if (!priv->bus)
+		return -EPROBE_DEFER;
 	priv->dev = &mdiodev->dev;
 	priv->ds->priv = priv;
 	priv->ds->ops = &mt7530_switch_ops;
@@ -1392,8 +1412,9 @@ mt7530_probe(struct mdio_device *mdiodev)
 	return dsa_register_switch(priv->ds);
 }
 
-static void
-mt7530_remove(struct mdio_device *mdiodev)
+static int //void
+mt7530_remove(struct platform_device *mdiodev)
+//mt7530_remove(struct mdio_device *mdiodev)
 {
 	struct mt7530_priv *priv = dev_get_drvdata(&mdiodev->dev);
 	int ret = 0;
@@ -1410,6 +1431,8 @@ mt7530_remove(struct mdio_device *mdiodev)
 
 	dsa_unregister_switch(priv->ds);
 	mutex_destroy(&priv->reg_mutex);
+
+	return 0;
 }
 
 static const struct of_device_id mt7530_of_match[] = {
@@ -1418,16 +1441,25 @@ static const struct of_device_id mt7530_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, mt7530_of_match);
 
-static struct mdio_driver mt7530_mdio_driver = {
+static struct platform_driver mtk_mt7530_driver = {
+	.probe  = mt7530_probe,
+	.remove = mt7530_remove,
+	.driver = {
+		.name = "mt7530",
+		.of_match_table = mt7530_of_match,
+	},
+};
+/*static struct mdio_driver mt7530_mdio_driver = {
 	.probe  = mt7530_probe,
 	.remove = mt7530_remove,
 	.mdiodrv.driver = {
 		.name = "mt7530",
 		.of_match_table = mt7530_of_match,
 	},
-};
+};*/
 
-mdio_module_driver(mt7530_mdio_driver);
+module_platform_driver(mtk_mt7530_driver);
+//mdio_module_driver(mt7530_mdio_driver);
 
 MODULE_AUTHOR("Sean Wang <sean.wang@mediatek.com>");
 MODULE_DESCRIPTION("Driver for Mediatek MT7530 Switch");
