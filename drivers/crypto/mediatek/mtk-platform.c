@@ -579,6 +579,7 @@ static int mtk_crypto_remove(struct platform_device *pdev)
 
 static const struct of_device_id of_crypto_id[] = {
 	{ .compatible = "mediatek,eip97-crypto" },
+	{ .compatible = "mediatek,mt7623-crypto" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, of_crypto_id);
