@@ -157,6 +157,18 @@
 		};
 	};
 
+	gmac1: mac@1 {
+		compatible = "mediatek,eth-mac";
+		reg = <1>;
+		phy-mode = "trgmii";
+
+		fixed-link {
+			speed = <1000>;
+			full-duplex;
+			pause;
+		};
+	};
+
 	mdio: mdio-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -175,29 +187,44 @@
 				port@0 {
 					reg = <0>;
 					label = "wan";
+					default_cpu = <&cpu_port1>;
 				};
 
 				port@1 {
 					reg = <1>;
 					label = "lan0";
+					default_cpu = <&cpu_port0>;
 				};
 
 				port@2 {
 					reg = <2>;
 					label = "lan1";
+					default_cpu = <&cpu_port0>;
 				};
 
 				port@3 {
 					reg = <3>;
 					label = "lan2";
+					default_cpu = <&cpu_port0>;
 				};
 
 				port@4 {
 					reg = <4>;
 					label = "lan3";
+					default_cpu = <&cpu_port0>;
 				};
 
-				port@6 {
+				cpu_port1: port@5 {
+					reg = <5>;
+					label = "cpu";
+					ethernet = <&gmac1>;
+					phy-mode = "trgmii";
+					fixed-link {
+						speed = <1000>;
+						full-duplex;
+					};
+				};
+				cpu_port0: port@6 {
 					reg = <6>;
 					label = "cpu";
 					ethernet = <&gmac0>;
