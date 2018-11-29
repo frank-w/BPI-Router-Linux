@@ -318,6 +318,12 @@ static inline unsigned int dsa_towards_port(struct dsa_switch *ds, int device,
 		return ds->rtable[device];
 }
 
+
+static inline bool dsa_is_upstream_port(struct dsa_switch *ds, int p)
+{
+	return dsa_is_cpu_port(ds, p) || dsa_is_dsa_port(ds, p);
+}
+
 /* Return the local port used to reach the dedicated CPU port */
 static inline unsigned int dsa_upstream_port(struct dsa_switch *ds, int port)
 {
@@ -328,6 +334,18 @@ static inline unsigned int dsa_upstream_port(struct dsa_switch *ds, int port)
 		return port;
 
 	return dsa_towards_port(ds, cpu_dp->ds->index, cpu_dp->index);
+}
+
+static inline u8 dsa_port_upstream_port(struct dsa_switch *ds, int port)
+{
+	/*
+	 * If this port has a specific upstream cpu port, use it,
+	 * otherwise use the switch default.
+	 */
+	if (ds->ports[port].upstream)
+		return ds->ports[port].upstream;
+	else
+		return dsa_upstream_port(ds, port);
 }
 
 typedef int dsa_fdb_dump_cb_t(const unsigned char *addr, u16 vid,
