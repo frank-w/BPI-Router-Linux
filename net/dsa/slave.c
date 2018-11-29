@@ -1291,11 +1291,11 @@ static void dsa_slave_notify(struct net_device *dev, unsigned long val)
 int dsa_slave_create(struct dsa_port *port)
 {
 	const struct dsa_port *cpu_dp = port->cpu_dp;
-	struct net_device *master = cpu_dp->master;
 	struct dsa_switch *ds = port->ds;
 	const char *name = port->name;
 	struct net_device *slave_dev;
 	struct dsa_slave_priv *p;
+	struct net_device *master = ds->ports[port->upstream].ethernet;
 	int ret;
 
 	if (!ds->num_tx_queues)
@@ -1334,6 +1334,7 @@ int dsa_slave_create(struct dsa_port *port)
 	p->dp = port;
 	INIT_LIST_HEAD(&p->mall_tc_list);
 	p->xmit = cpu_dp->tag_ops->xmit;
+	p->master = master;
 	port->slave = slave_dev;
 
 	netif_carrier_off(slave_dev);
