@@ -202,6 +202,10 @@ struct dsa_port {
 	struct net_device	*bridge_dev;
 	struct devlink_port	devlink_port;
 	struct phylink		*pl;
+
+	struct net_device	*ethernet;
+	int			upstream;
+
 	/*
 	 * Original copy of the master netdev ethtool_ops
 	 */
