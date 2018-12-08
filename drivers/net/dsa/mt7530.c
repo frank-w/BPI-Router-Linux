@@ -1349,7 +1349,7 @@ static int
 mt7530_probe(struct mdio_device *mdiodev)
 {
 	struct mt7530_priv *priv;
-	struct device_node *dn;
+	struct device_node *dn, *mdio;
 
 	dn = mdiodev->dev.of_node;
 
@@ -1396,8 +1396,14 @@ mt7530_probe(struct mdio_device *mdiodev)
 			return PTR_ERR(priv->reset);
 		}
 	}
+	mdio = of_get_parent(dn);
+	if (!mdio)
+		return -EINVAL;
 
-	priv->bus = mdiodev->bus;
+	priv->bus = of_mdio_find_bus(mdio);
+	if (!priv->bus)
+		return -EPROBE_DEFER;
+
 	priv->dev = &mdiodev->dev;
 	priv->ds->priv = priv;
 	priv->ds->ops = &mt7530_switch_ops;
