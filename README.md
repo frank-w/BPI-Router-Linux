@@ -35,34 +35,31 @@ sudo update-alternatives --config arm-linux-gnueabihf-gcc
 Kernel upstream + BPI-R2
 * 4.14-main
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.9-main">4.9-main</a>
-* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.16-main">4.16-main</a> (EOL)
-* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.17-main">4.17-main</a> (EOL)
-* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.18-main">4.18-main</a> (EOL)
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-main">4.19-main</a> (LTS, currently not all features merged)
 
 ## Kernel versions
 
 Kernel features by version
 
-| Feature  | 4.4 | 4.9 | 4.14 | 4.16 | 4.17 | 4.18 | 4.19 |
-|----------| --- | --- | --- | --- | --- | --- | --- |
-| PCIe     |  Y  |  Y  |  Y  |  Y  |     |   ?  |  Y  |
-| SATA     |  Y  |  Y  |  Y  |  Y?  |     |  Y   |  Y  |
-| 2 GMAC   |  Y  |  Y  |  Y  |  N  |     |     |  (N)  |
-| DSA      |  N  |  Y  |  Y  |  Y  |  Y  |   Y  |  Y  |
-| USB      |  Y  |  Y  |  Y  |  Y?  |     |  ?   |  Y  |
-| VLAN     |     |     |  Y  |     |     |  ?   |    |
-| HW NAT   |     |  Y  |  Y |     |     |     |    |
-| HW QOS   |     |  Y  |  ? |     |     |     |    |
-| Crypto   |  Y  |  Y  |  Y  |  Y?  |     |     |    |
-| WIFI     |     |  Y  |  Y  |  Y |  Y  |   Y  |  Y  |
-| BT       |  N  |  N  |  N  |     |     |     |  N  |
-| VIDEO    |  Y  |  N  |  Y  |  Y  |     |     |  (Y)  |
-| ACPI |  ?  |  N  |  Y  |  N  |     |     |  Y  |
-| Other options |--|--|--|--|--|--|--|
-| OpenVPN  |  ?  |  Y  |  Y  |  ?  |     |   ?  |    |
-| iptables |  ?  |  Y  |  Y  |  ?  |     |   ?  |  Y  |
-| LXC / Docker |  ?  |  ?  |  Y  |  ?  |     |  ?   |    |
+| Feature  | 4.4 | 4.9 | 4.14 | 4.19 |
+|----------| --- | --- | --- | --- |
+| PCIe     |  Y  |  Y  |  Y  |  Y  |
+| SATA     |  Y  |  Y  |  Y  |  Y  |
+| 2 GMAC   |  Y  |  Y  |  Y  |  (N)  |
+| DSA      |  N  |  Y  |  Y  |  Y  |
+| USB      |  Y  |  Y  |  Y  |  Y  |
+| VLAN     |     |     |  Y  |     |
+| HW NAT   |     |  Y  |  Y |      |
+| HW QOS   |     |  Y  |  ? |      |
+| Crypto   |  Y  |  Y  |  Y  |     |
+| WIFI     |     |  Y  |  Y  |  Y  |
+| BT       |  N  |  N  |  N  |  N  |
+| VIDEO    |  Y  |  N  |  Y  |  (Y)  |
+| ACPI     |  ?  |  N  |  Y  |  Y  |
+| Other options  |--|--|--|--|--|--|--|
+| OpenVPN  |  ?  |  Y  |  Y  |    |
+| iptables |  ?  |  Y  |  Y  |  Y  |
+| LXC / Docker |  ?  |  ?  |  Y  |    |
 
 Symbols:
 
