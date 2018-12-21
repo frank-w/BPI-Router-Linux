@@ -11,16 +11,6 @@ sudo apt install gcc-arm-linux-gnueabihf libc6-armhf-cross u-boot-tools bc make 
 If you build it directly on the BananaPi-R2 (not recommended) you do not need the crosscompile-packages gcc-arm-linux-gnueabihf and libc6-armhf-cross
 
 ## Issues
-Currently gcc7 is not supported (https://bugs.linaro.org/show_bug.cgi?id=3823)
-```sh
-sudo apt install gcc-5-arm-linux-gnueabihf
-sudo update-alternatives --install /usr/bin/arm-linux-gnueabihf-gcc arm-linux-gnueabihf-gcc /usr/bin/arm-linux-gnueabihf-gcc-7  50
-update-alternatives: using /usr/bin/arm-linux-gnueabihf-gcc-7 to provide /usr/bin/arm-linux-gnueabihf-gcc (arm-linux-gnueabihf-gcc) in auto mode
-sudo update-alternatives --install /usr/bin/arm-linux-gnueabihf-gcc arm-linux-gnueabihf-gcc /usr/bin/arm-linux-gnueabihf-gcc-5  100
-update-alternatives: using /usr/bin/arm-linux-gnueabihf-gcc-5 to provide /usr/bin/arm-linux-gnueabihf-gcc (arm-linux-gnueabihf-gcc) in auto mode
-
-sudo update-alternatives --config arm-linux-gnueabihf-gcc
-```
 
 ## Usage
 
