@@ -22,8 +22,8 @@ if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then
 #	if [[ $CCVER =~ ^7 ]]; then
 #		echo "arm-linux-gnueabihf-gcc version 7 currently not supported";exit 1;
 #	fi
-
-	export ARCH=arm;export CROSS_COMPILE='ccache arm-linux-gnueabihf-'
+#gcc-aarch64-linux-gnu
+	export ARCH=arm64;export CROSS_COMPILE='ccache aarch64-linux-gnu-'
 	crosscompile=1
 fi;
 
@@ -261,7 +261,7 @@ EOF
 function build {
 	if [ -e ".config" ]; then
 		echo Cleanup Kernel Build
-		rm arch/arm/boot/zImage-dtb 2>/dev/null
+		rm arch/arm64/boot/Image-dtb 2>/dev/null
 		rm ./uImage 2>/dev/null
 
 		exec 3> >(tee build.log)
@@ -271,8 +271,9 @@ function build {
 		exec 3>&-
 
 		if [[ $ret == 0 ]]; then
-			cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
-			mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
+			#how to create zImage?? make zImage does not work here
+			cat arch/arm64/boot/Image arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb > arch/arm64/boot/Image-dtb
+			mkimage -A arm64 -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm64/boot/Image-dtb ./uImage
 		fi
 	else
 		echo "No Configfile found, Please Configure Kernel"
@@ -404,21 +405,16 @@ if [ -n "$kernver" ]; then
 			nano arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
 			;;
 
-		"importmylconfig")
-			echo "import myl config"
-			make mt7623n_myl_defconfig
-			;;
-
-
 		"importconfig")
 			echo "import a defconfig file"
 			if [[ -z "$file" ]];then
 				echo "Import fwu config"
-				make mt7623n_evb_fwu_defconfig
+				#make mt7622_rfb1_defconfig
+				make mt7622_bpi-r64_defconfig
 			else
-				f=mt7623n_${file}_defconfig
+				f=mt7622_${file}_defconfig
 				echo "Import config: $f"
-				if [[ -e "arch/arm/configs/${f}" ]];then
+				if [[ -e "arch/arm64/configs/${f}" ]];then
 					make ${f}
 				else
 					echo "file not found"
@@ -430,7 +426,7 @@ if [ -n "$kernver" ]; then
 			echo "menu for multiple conf-files...currently in developement"
 			files=();
 			i=1;
-			for f in $(cd arch/arm/configs/; ls mt7623n*defconfig)
+			for f in $(cd arch/arm64/configs/; ls mt7622*defconfig)
 			do
 				echo "[$i] $f"
 				files+=($f)
