@@ -22,8 +22,8 @@ if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then
 #	if [[ $CCVER =~ ^7 ]]; then
 #		echo "arm-linux-gnueabihf-gcc version 7 currently not supported";exit 1;
 #	fi
-
-	export ARCH=arm;export CROSS_COMPILE='ccache arm-linux-gnueabihf-'
+#gcc-aarch64-linux-gnu
+	export ARCH=arm64;export CROSS_COMPILE='ccache aarch64-linux-gnu-'
 	crosscompile=1
 fi;
 
@@ -93,33 +93,56 @@ function upload {
 function install {
 
 	imagename="uImage_${kernver}-${gitbranch}"
-	read -e -i $imagename -p "uImage-filename: " input
+	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
 
+	dtbname="${kernver}-${gitbranch}.dtb"
+	read -e -i $dtbname -p "DeviceTree-filename: " input
+	dtbname="${input:-$dtbname}"
+
+	echo "Name: $dtbname"
+
 	if [[ $crosscompile -eq 0 ]]; then
-		kernelfile=/boot/bananapi/bpi-r2/linux/$imagename
-		if [[ -e $kernelfile ]];then
-			echo "backup of kernel: $kernelfile.bak"
-			cp $kernelfile $kernelfile.bak
-			cp ./uImage $kernelfile
-			sudo make modules_install
+		kernelfile=/boot/bananapi/bpi-r64/linux/$imagename
+		dtbfile=/boot/bananapi/bpi-r64/linux/dtb/$dtbname
+		if  [[ -d /media/$USER/BPI-BOOT ]];
+		then
+			if [[ -e $kernelfile ]];then
+				echo "backup of kernel: $kernelfile.bak"
+				cp $kernelfile $kernelfile.bak
+				cp ./uImage $kernelfile
+				sudo make modules_install
+				if [[ -e $dtbfile ]];then
+					echo "backup of dtb: $dtbfile.bak"
+					cp $dtbfile $dtbfile.bak
+					cp ./bpi-r64.dtb $dtbfile
+				fi
+			fi
 		else
 			echo "actual Kernel not found...is /boot mounted?"
 		fi
 	else
-		echo "by default this kernel-file will be loaded (uEnv.txt):"
-		grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
+		echo "by default this kernel/dtb-file will be loaded (uEnv.txt):"
+		grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt|tail -1
+		grep '^fdt=' /media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt|tail -1
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
-			kernelfile=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/$imagename
+			kernelfile=/media/$USER/BPI-BOOT/bananapi/bpi-r64/linux/$imagename
+			dtbfile=/media/$USER/BPI-BOOT/bananapi/bpi-r64/linux/dtb/$dtbname
 			if [[ -e $kernelfile ]];then
 				echo "backup of kernel: $kernelfile.bak"
 				cp $kernelfile $kernelfile.bak
 			fi
+			if [[ -e $dtbfile ]];then
+				echo "backup of dtb: $dtbfile.bak"
+				cp $dtbfile $dtbfile.bak
+			fi
 			echo "copy new kernel"
 			cp ./uImage $kernelfile
+			echo "copy new dtb"
+			cp ./bpi-r64.dtb $dtbfile
 			echo "copy modules (root needed because of ext-fs permission)"
 			export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 			echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
@@ -205,7 +228,7 @@ clr_reset=\$'\e[0m'
 case "\$1" in
 	configure)
 	#install|upgrade)
-		echo "kernel=${uimagename}">>/boot/bananapi/bpi-r2/linux/uEnv.txt
+		echo "kernel=${uimagename}">>/boot/bananapi/bpi-r64/linux/uEnv.txt
 
 		#check for non-dsa-kernel (4.4.x)
 		kernver=\$(uname -r)
@@ -227,8 +250,8 @@ case "\$1" in
 		echo "installation aborted"
 	;;
 	remove|purge)
-		cp /boot/bananapi/bpi-r2/linux/uEnv.txt /boot/bananapi/bpi-r2/linux/uEnv.txt.bak
-		grep -v  ${uimagename} /boot/bananapi/bpi-r2/linux/uEnv.txt.bak > /boot/bananapi/bpi-r2/linux/uEnv.txt
+		cp /boot/bananapi/bpi-r64/linux/uEnv.txt /boot/bananapi/bpi-r64/linux/uEnv.txt.bak
+		grep -v  ${uimagename} /boot/bananapi/bpi-r64/linux/uEnv.txt.bak > /boot/bananapi/bpi-r64/linux/uEnv.txt
 	;;
 esac
 EOF
@@ -261,18 +284,22 @@ EOF
 function build {
 	if [ -e ".config" ]; then
 		echo Cleanup Kernel Build
-		rm arch/arm/boot/zImage-dtb 2>/dev/null
-		rm ./uImage 2>/dev/null
+		rm arch/arm64/boot/Image-dtb 2>/dev/null
+		rm ./Image 2>/dev/null
 
 		exec 3> >(tee build.log)
 		export LOCALVERSION="-${gitbranch}"
-		make ${CFLAGS} 2>&3 #&& make modules_install 2>&3
+		make ${CFLAGS} UIMAGE_LOADADDR=0x40008000 Image dtbs 2>&3 #&& make modules_install 2>&3
 		ret=$?
 		exec 3>&-
 
 		if [[ $ret == 0 ]]; then
-			cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
-			mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
+			#how to create zImage?? make zImage does not work here
+			#cat arch/arm64/boot/Image arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb > arch/arm64/boot/Image-dtb
+			#cp arch/arm64/boot/Image Image
+			mkimage -A arm -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm64/boot/Image ./uImage
+			cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb bpi-r64.dtb
+			#mkimage -A arm64 -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm64/boot/Image-dtb ./uImage
 		fi
 	else
 		echo "No Configfile found, Please Configure Kernel"
@@ -383,12 +410,12 @@ if [ -n "$kernver" ]; then
 
  		"uenv")
 			echo "edit uEnv.txt on sd-card"
-			nano /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt
+			nano /media/$USER/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt
 			;;
 
 		"defconfig")
 			echo "edit def config"
-			nano arch/arm/configs/mt7623n_evb_fwu_defconfig
+			nano arch/arm64/configs/mt7622_bpi-r64_defconfig
 			;;
 		"deb")
 			echo "deb-package (currently testing-state)"
@@ -396,29 +423,24 @@ if [ -n "$kernver" ]; then
 			;;
 		"dtsi")
 			echo "edit mt7623.dtsi"
-			nano arch/arm/boot/dts/mt7623.dtsi
+			nano arch/arm64/boot/dts/mediatek/mt7622.dtsi
 			;;
 
 		"dts")
 			echo "edit mt7623n-bpi.dts"
-			nano arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
+			nano arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
 			;;
-
-		"importmylconfig")
-			echo "import myl config"
-			make mt7623n_myl_defconfig
-			;;
-
 
 		"importconfig")
 			echo "import a defconfig file"
 			if [[ -z "$file" ]];then
 				echo "Import fwu config"
-				make mt7623n_evb_fwu_defconfig
+				#make mt7622_rfb1_defconfig
+				make mt7622_bpi-r64_defconfig
 			else
-				f=mt7623n_${file}_defconfig
+				f=mt7622_${file}_defconfig
 				echo "Import config: $f"
-				if [[ -e "arch/arm/configs/${f}" ]];then
+				if [[ -e "arch/arm64/configs/${f}" ]];then
 					make ${f}
 				else
 					echo "file not found"
@@ -430,7 +452,7 @@ if [ -n "$kernver" ]; then
 			echo "menu for multiple conf-files...currently in developement"
 			files=();
 			i=1;
-			for f in $(cd arch/arm/configs/; ls mt7623n*defconfig)
+			for f in $(cd arch/arm64/configs/; ls mt7622*defconfig)
 			do
 				echo "[$i] $f"
 				files+=($f)
