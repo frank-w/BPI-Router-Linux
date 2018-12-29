@@ -289,7 +289,7 @@ function build {
 
 		exec 3> >(tee build.log)
 		export LOCALVERSION="-${gitbranch}"
-		make ${CFLAGS} UIMAGE_LOADADDR=0x40008000 Image dtbs 2>&3 #&& make modules_install 2>&3
+		make ${CFLAGS} 2>&3 #&& make modules_install 2>&3
 		ret=$?
 		exec 3>&-
 
