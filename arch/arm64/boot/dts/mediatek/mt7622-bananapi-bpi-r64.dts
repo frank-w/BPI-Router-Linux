@@ -149,6 +149,7 @@
 &rtkgsw {
 	mediatek,mdio = <&mdio>;
 	mediatek,reset-pin = <&pio 54 0>;
+	mediatek,port_map = "wllll";
 	status = "okay";
 };
 
