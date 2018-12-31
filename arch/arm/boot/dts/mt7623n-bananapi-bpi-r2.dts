@@ -15,6 +15,7 @@
 
 	aliases {
 		serial2 = &uart2;
+		ethernet0 = &gmac0;
 	};
 
 	chosen {
@@ -147,6 +148,7 @@
 		compatible = "mediatek,eth-mac";
 		reg = <0>;
 		phy-mode = "trgmii";
+		mac-address = [02 02 02 02 02 02];
 
 		fixed-link {
 			speed = <1000>;
