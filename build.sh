@@ -109,22 +109,34 @@ function install {
 			echo "actual Kernel not found...is /boot mounted?"
 		fi
 	else
-		echo "by default this kernel-file will be loaded (uEnv.txt):"
-		grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
-			kernelfile=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/$imagename
+			targetdir=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux
+			kernelfile=$targetdir/$imagename
 			if [[ -e $kernelfile ]];then
 				echo "backup of kernel: $kernelfile.bak"
 				cp $kernelfile $kernelfile.bak
 			fi
 			echo "copy new kernel"
 			cp ./uImage $kernelfile
+			cp ./uImage_nodt ${kernelfile}_nodt
+			mkdir -p $targetdir/dtb
+			dtbfile=$targetdir/dtb/${kernver}-${gitbranch}.dtb
+			if [[ -e $dtbfile ]];then
+				echo "backup of dtb: $dtbfile.bak"
+				cp $dtbfile $dtbfile.bak
+			fi
+			cp ./bpi-r2.dtb $dtbfile
 			echo "copy modules (root needed because of ext-fs permission)"
 			export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 			echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
 			sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH modules_install
 			echo "syncing sd-card...this will take a while"
+
+			echo "uImage:${kernelfile} / ${kernelfile}_nodt"
+			echo "DTB: ${dtbfile}"
+			echo "by default this kernel-file will be loaded (kernel-var in uEnv.txt):"
+			grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
 			sync
 
 			kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
@@ -273,7 +285,17 @@ function build {
 		if [[ $ret == 0 ]]; then
 			cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
 			mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
+
+			echo "build uImage without appended DTB..."
+			make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n &>/dev/null #output/errors can be ignored because they are printed before
+			ret=$?
+			if [[ $ret == 0 ]]; then
+				cp arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb ./bpi-r2.dtb
+				mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm/boot/zImage ./uImage_nodt
+			fi
 		fi
+
+
 	else
 		echo "No Configfile found, Please Configure Kernel"
 	fi
