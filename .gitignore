@@ -141,3 +141,5 @@ scripts/kconfig/zconf.hash.c
 DEBIAN/
 SD/
 mod/
+bpi-r2-zimage*
+uImage_nodt
