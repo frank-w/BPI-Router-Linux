@@ -287,7 +287,8 @@ function build {
 			mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
 
 			echo "build uImage without appended DTB..."
-			make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n &>/dev/null #output/errors can be ignored because they are printed before
+			export DTC_FLAGS=-@
+			make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n zImage dtbs &>/dev/null #output/errors can be ignored because they are printed before
 			ret=$?
 			if [[ $ret == 0 ]]; then
 				cp arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb ./bpi-r2.dtb

@@ -1,0 +1,12 @@
+/dts-v1/;
+/plugin/;
+ 
+/ {
+    fragment@0 {
+        /*target = <&gmac0>;*/
+        target-path = "/eth/gmac0";
+        __overlay__ {
+            mac-address = [02 01 02 03 04 05];
+        };
+    };
+};
