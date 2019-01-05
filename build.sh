@@ -314,7 +314,7 @@ function prepare_SD {
 	for toDel in "$SD/BPI-BOOT/" "$SD/BPI-ROOT/"; do
 		rm -r ${toDel} 2>/dev/null
 	done
-	for createDir in "$SD/BPI-BOOT/bananapi/bpi-r2/linux/" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
+	for createDir in "$SD/BPI-BOOT/bananapi/bpi-r2/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
 		mkdir -p ${createDir} >/dev/null 2>/dev/null
 	done
 
@@ -322,6 +322,9 @@ function prepare_SD {
 	export INSTALL_MOD_PATH=$SD/BPI-ROOT/;
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
 	cp ./uImage $SD/BPI-BOOT/bananapi/bpi-r2/linux/uImage
+    cp ./uImage_nodt $SD/BPI-BOOT/bananapi/bpi-r2/linux/uImage_nodt
+    cp ./bpi-r2.dtb $SD/BPI-BOOT/bananapi/bpi-r2/linux/bpi-r2.dtb
+
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
@@ -410,6 +413,13 @@ if [ -n "$kernver" ]; then
  		"uenv")
 			echo "edit uEnv.txt on sd-card"
 			nano /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt
+			;;
+
+ 		"lskernel")
+			echo "list kernels on sd-card"
+			ls -lh /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/
+			echo "available DTBs:"
+			ls -lh /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/dtb
 			;;
 
 		"defconfig")
