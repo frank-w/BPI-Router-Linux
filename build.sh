@@ -41,7 +41,9 @@ if [ ${PACKAGE_Error} == 1 ]; then exit 1; fi
 kernver=$(make kernelversion)
 #kernbranch=$(git rev-parse --abbrev-ref HEAD)
 kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD' | head -1 | sed 's/^..//')
-gitbranch=$(echo $kernbranch|sed 's/^4\.[0-9]\+-//')
+gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
+
+echo "kernbranch:$kernbranch,gitbranch:$gitbranch"
 
 function increase_kernel {
         #echo $kernver
@@ -84,7 +86,7 @@ function pack {
 }
 
 function upload {
-	imagename="uImage_${kernver}-${gitbranch}"
+	imagename="uImage_${kernver}${gitbranch}"
 	read -e -i $imagename -p "uImage-filename: " input
 	imagename="${input:-$imagename}"
 
@@ -95,7 +97,7 @@ function upload {
 
 function install {
 
-	imagename="uImage_${kernver}-${gitbranch}"
+	imagename="uImage_${kernver}${gitbranch}"
 	read -e -i $imagename -p "uImage-filename: " input
 	imagename="${input:-$imagename}"
 
@@ -124,7 +126,7 @@ function install {
 			cp ./uImage $kernelfile
 			cp ./uImage_nodt ${kernelfile}_nodt
 			mkdir -p $targetdir/dtb
-			dtbfile=$targetdir/dtb/${kernver}-${gitbranch}.dtb
+			dtbfile=$targetdir/dtb/${kernver}${gitbranch}.dtb
 			if [[ -e $dtbfile ]];then
 				echo "backup of dtb: $dtbfile.bak"
 				cp $dtbfile $dtbfile.bak
@@ -166,8 +168,8 @@ function install {
 
 function deb {
 #set -x
-  ver=${kernver}-bpi-r2-${gitbranch}
-  uimagename=uImage_${kernver}-${gitbranch}
+  ver=${kernver}-bpi-r2${gitbranch}
+  uimagename=uImage_${kernver}${gitbranch}
   echo "deb package ${ver}"
   prepare_SD
 
@@ -185,7 +187,7 @@ function deb {
   if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
     cp ./uImage debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/${uimagename}
     cp ./uImage_nodt debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/${uimagename}_nodt
-    cp ./bpi-r2.dtb debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/dtb/bpi-r2-${kernver}-${gitbranch}.dtb
+    cp ./bpi-r2.dtb debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/dtb/bpi-r2-${kernver}${gitbranch}.dtb
 #    pwd
     cp -r ../SD/BPI-ROOT/lib/modules/${ver} debian/bananapi-r2-image/lib/modules/
     #rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
@@ -282,14 +284,14 @@ function build {
 		rm ./uImage 2>/dev/null
 
 		exec 3> >(tee build.log)
-		export LOCALVERSION="-${gitbranch}"
+		export LOCALVERSION="${gitbranch}"
 		make ${CFLAGS} 2>&3 #&& make modules_install 2>&3
 		ret=$?
 		exec 3>&-
 
 		if [[ $ret == 0 ]]; then
 			cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
-			mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
+			mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
 
 			echo "build uImage without appended DTB..."
 			export DTC_FLAGS=-@
@@ -297,7 +299,7 @@ function build {
 			ret=$?
 			if [[ $ret == 0 ]]; then
 				cp arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb ./bpi-r2.dtb
-				mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm/boot/zImage ./uImage_nodt
+				mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage ./uImage_nodt
 			fi
 		fi
 
