@@ -390,8 +390,8 @@ CONFIG_NL80211_TESTMODE=y
 
 #internal Bluetooth (also not working yet)
 CONFIG_BT=y
-#CONFIG_MTK_COMBO_BT=y
-#CONFIG_MTK_COMBO_BT_HCI=y
+CONFIG_MTK_COMBO_BT=m
+CONFIG_MTK_COMBO_BT_HCI=y
 #needed for BT?
 #Bluetooth Classic (BR/EDR) features 
 CONFIG_BT_BREDR=y
