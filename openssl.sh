@@ -17,8 +17,11 @@ export LD=${CROSS}-ld
 export AS=${CROSS}-as
 export AR=${CROSS}-ar
 
+#cryptodev needs cryptodev-dir...crypto/cryptodev.h
+CDOPTS="-DHAVE_CRYPTODEV -DUSE_CRYPTODEV_DIGESTS -I../cryptodev/cryptodev-linux/"
+
 make clean
-./Configure linux-generic32 -DOPENSSL_NO_HEARTBEATS --prefix=$INSTALL_DIR --openssldir=${INSTALL_DIR}/final shared
+./Configure linux-generic32 -DOPENSSL_NO_HEARTBEATS ${CDOPTS} --prefix=$INSTALL_DIR --openssldir=${INSTALL_DIR}/final shared
 echo $?
 echo "========================================================"
 
