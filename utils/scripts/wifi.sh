@@ -81,3 +81,6 @@ else
 	echo "restart dnsmasq..."
 	service dnsmasq restart
 fi
+
+#load bluetooth-driver (has to be done after stp_uart_launcher)
+modprobe stp_chrdev_bt
