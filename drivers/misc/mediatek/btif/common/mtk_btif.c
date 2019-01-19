@@ -1879,7 +1879,7 @@ static int _btif_vfifo_init(p_mtk_btif_dma p_dma)
 	}
 
 /*vFIFO memory allocation*/
-	p_vfifo->p_vir_addr = dma_zalloc_coherent(dev,
+	p_vfifo->p_vir_addr = dma_alloc_coherent(dev,
 						  p_vfifo->vfifo_size,
 						  &p_vfifo->phy_addr, GFP_DMA | GFP_DMA32);
 	if (p_vfifo->p_vir_addr == NULL) {
