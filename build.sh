@@ -145,7 +145,7 @@ function install {
 			kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
 			EXTRA_MODULE_PATH=$INSTALL_MOD_PATH"/lib/modules/"$kernelname"/kernel/extras"
 			#echo $kernelname" - "${EXTRA_MODULE_PATH}
-			CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
+			CRYPTODEV="utils/cryptodev/cryptodev-linux/cryptodev.ko"
 			if [ -e "${CRYPTODEV}" ]; then
 				echo Copy CryptoDev
 				sudo mkdir -p "${EXTRA_MODULE_PATH}"
@@ -190,7 +190,7 @@ function deb {
     cp -r ../SD/BPI-ROOT/lib/modules/${ver} debian/bananapi-r2-image/lib/modules/
     #rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
     #mkdir debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
-    #cp cryptodev-linux/cryptodev.ko debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
+    #cp utils/cryptodev-linux/cryptodev.ko debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
 	cat > debian/bananapi-r2-image/DEBIAN/preinst << EOF
 #!/bin/bash
 clr_red=\$'\e[1;31m'
@@ -330,7 +330,7 @@ function prepare_SD {
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
-	CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
+	CRYPTODEV="utils/cryptodev/cryptodev-linux/cryptodev.ko"
 	mkdir -p "${INSTALL_MOD_PATH}/etc/modules-load.d"
 
 	LOCALVERSION=$(find ../SD/BPI-ROOT/lib/modules/* -maxdepth 0 -type d |rev|cut -d"/" -f1 | rev)
@@ -516,7 +516,7 @@ if [ -n "$kernver" ]; then
 
 		"cryptodev")
 			echo "Build CryptoDev"
-			cryptodev/build.sh
+			utils/cryptodev/build.sh
 			;;
 
 		"utils")
