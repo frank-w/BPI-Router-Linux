@@ -536,7 +536,11 @@ if [ -n "$kernver" ]; then
 			#$0 cryptodev
 			$0 pack
 			;;
-
+		"c"|"complete")
+			echo "register options for bash-completion"
+			commands=$(grep '^\s*".*")$' build.sh | sed -e 's/^\s*"\(.*\)")$/\1/')
+			complete -W "$commands" ./build.sh
+			;;
 		"help")
 			echo "print help"
 			sed -n -e '/case "$action" in/,/esac/{//!p}'  $0 | grep -A1 '")$' | sed -e 's/echo "\(.*\)"/\1/'
