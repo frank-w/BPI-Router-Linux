@@ -143,3 +143,5 @@ SD/
 mod/
 bpi-r2-zimage*
 uImage_nodt
+utils/openssl/
+openssl/
