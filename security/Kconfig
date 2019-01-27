@@ -195,6 +195,21 @@ config FORTIFY_SOURCE
 	  Detect overflows of buffers in common string and memory functions
 	  where the compiler can determine and validate the buffer sizes.
 
+config PAGE_SANITIZE
+	bool "Sanitize pages"
+	default y
+	help
+	  Zero fill page allocations on free, reducing the lifetime of
+	  sensitive data and helping to mitigate use-after-free bugs.
+
+config PAGE_SANITIZE_VERIFY
+	bool "Verify sanitized pages"
+	depends on PAGE_SANITIZE
+	default y
+	help
+	  Verify that newly allocated pages are zeroed to detect
+	  write-after-free bugs.
+
 config STATIC_USERMODEHELPER
 	bool "Force all usermode helper calls through a single binary"
 	help
