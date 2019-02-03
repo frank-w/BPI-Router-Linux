@@ -11,7 +11,7 @@
 #
 .*
 *.a
-*.asn1.[ch]
+*asn1.[ch]
 *.bin
 *.bz2
 *.c.[012]*.*
@@ -132,3 +132,12 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+#added by fwu
+*.log
+uImage
+arch/arm/boot/zImage-dtb
+scripts/kconfig/zconf.hash.c
+DEBIAN/
+SD/
+mod/
