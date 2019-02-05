@@ -73,7 +73,7 @@ function pack {
 	echo "pack..."
 	olddir=$(pwd)
 	cd ../SD
-	fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
+	fname=bpi-r64_${kernver}_${gitbranch}.tar.gz
 	tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 	md5sum $fname > $fname.md5
 	ls -lh $(pwd)"/"$fname
@@ -174,7 +174,7 @@ function install {
 
 function deb {
 #set -x
-  ver=${kernver}-bpi-r2-${gitbranch}
+  ver=${kernver}-bpi-r64-${gitbranch}
   uimagename=uImage_${kernver}-${gitbranch}
   echo "deb package ${ver}"
   prepare_SD
@@ -183,21 +183,22 @@ function deb {
 #    fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
 #    tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 
-  mkdir -p debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/
-  mkdir -p debian/bananapi-r2-image/lib/modules/
-  mkdir -p debian/bananapi-r2-image/DEBIAN/
-  rm debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/*
-  rm -rf debian/bananapi-r2-image/lib/modules/*
+  mkdir -p debian/bananapi-r64-image/boot/bananapi/bpi-r2/linux/dtb
+  mkdir -p debian/bananapi-r64-image/lib/modules/
+  mkdir -p debian/bananapi-r64-image/DEBIAN/
+  rm debian/bananapi-r64-image/boot/bananapi/bpi-r2/linux/*
+  rm -rf debian/bananapi-r64-image/lib/modules/*
 
   #sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
   if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
-    cp ./uImage debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/${uimagename}
+    cp ./uImage debian/bananapi-r64-image/boot/bananapi/bpi-r64/linux/${uimagename}
+    cp ./bpi-r64.dtb debian/bananapi-r64-image/boot/bananapi/bpi-r64/linux/dtb/${uimagename}.dtb
 #    pwd
-    cp -r ../SD/BPI-ROOT/lib/modules/${ver} debian/bananapi-r2-image/lib/modules/
+    cp -r ../SD/BPI-ROOT/lib/modules/${ver} debian/bananapi-r64-image/lib/modules/
     #rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
     #mkdir debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
     #cp cryptodev-linux/cryptodev.ko debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
-	cat > debian/bananapi-r2-image/DEBIAN/preinst << EOF
+	cat > debian/bananapi-r64-image/DEBIAN/preinst << EOF
 #!/bin/bash
 clr_red=\$'\e[1;31m'
 clr_green=\$'\e[1;32m'
@@ -210,15 +211,15 @@ then
 	echo "\${clr_red}/boot needs to be mountpoint for /dev/mmcblk0p1\${clr_reset}";
 	exit 1;
 fi
-kernelfile=/boot/bananapi/bpi-r2/linux/${uimagename}
+kernelfile=/boot/bananapi/bpi-r64/linux/${uimagename}
 if [[ -e "\${kernelfile}" ]];then
 	echo "\${clr_red}\${kernelfile} already exists\${clr_reset}"
 	echo "\${clr_red}please remove/rename it or uninstall previous installed kernel-package\${clr_reset}"
 	exit 2;
 fi
 EOF
-	chmod +x debian/bananapi-r2-image/DEBIAN/preinst
-	cat > debian/bananapi-r2-image/DEBIAN/postinst << EOF
+	chmod +x debian/bananapi-r64-image/DEBIAN/preinst
+	cat > debian/bananapi-r64-image/DEBIAN/postinst << EOF
 #!/bin/bash
 clr_red=\$'\e[1;31m'
 clr_green=\$'\e[1;32m'
@@ -242,8 +243,8 @@ case "\$1" in
 	*) echo "unhandled \$1 in postinst-script"
 esac
 EOF
-	chmod +x debian/bananapi-r2-image/DEBIAN/postinst
-	cat > debian/bananapi-r2-image/DEBIAN/postrm << EOF
+	chmod +x debian/bananapi-r64-image/DEBIAN/postinst
+	cat > debian/bananapi-r64-image/DEBIAN/postrm << EOF
 #!/bin/bash
 case "\$1" in
 	abort-install)
@@ -255,23 +256,23 @@ case "\$1" in
 	;;
 esac
 EOF
-	chmod +x debian/bananapi-r2-image/DEBIAN/postrm
-    cat > debian/bananapi-r2-image/DEBIAN/control << EOF
-Package: bananapi-r2-image-${kernbranch}
+	chmod +x debian/bananapi-r64-image/DEBIAN/postrm
+    cat > debian/bananapi-r64-image/DEBIAN/control << EOF
+Package: bananapi-r64-image-${kernbranch}
 Version: ${kernver}-1
 Section: custom
 Priority: optional
-Architecture: armhf
+Architecture: arm64
 Multi-Arch: no
 Essential: no
 Maintainer: Frank Wunderlich
-Description: BPI-R2 linux image ${ver}
+Description: BPI-R64 linux image ${ver}
 EOF
     cd debian
-    fakeroot dpkg-deb --build bananapi-r2-image ../debian
+    fakeroot dpkg-deb --build bananapi-r64-image ../debian
     cd ..
     ls -lh debian/*.deb
-    debfile=debian/bananapi-r2-image-${kernbranch,,}_${kernver}-1_armhf.deb
+    debfile=debian/bananapi-r64-image-${kernbranch,,}_${kernver}-1_arm64.deb
     dpkg -c $debfile
 
 	dpkg -I $debfile
@@ -315,14 +316,15 @@ function prepare_SD {
 	for toDel in "$SD/BPI-BOOT/" "$SD/BPI-ROOT/"; do
 		rm -r ${toDel} 2>/dev/null
 	done
-	for createDir in "$SD/BPI-BOOT/bananapi/bpi-r2/linux/" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
+	for createDir in "$SD/BPI-BOOT/bananapi/bpi-r2/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
 		mkdir -p ${createDir} >/dev/null 2>/dev/null
 	done
 
 	echo "copy..."
 	export INSTALL_MOD_PATH=$SD/BPI-ROOT/;
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-	cp ./uImage $SD/BPI-BOOT/bananapi/bpi-r2/linux/uImage
+	cp ./uImage $SD/BPI-BOOT/bananapi/bpi-r64/linux/uImage
+	cp ./bpi-r64.dtb $SD/BPI-BOOT/bananapi/bpi-r64/linux/dtb/bpi-r64.dtb
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
@@ -345,9 +347,9 @@ function prepare_SD {
 		echo "blacklist cryptodev" >${INSTALL_MOD_PATH}/etc/modules-load.d/cryptodev.conf
 	fi
 
-	cp utils/wmt/config/* $SD/BPI-ROOT/system/etc/firmware/
-	cp utils/wmt/src/{wmt_loader,wmt_loopback,stp_uart_launcher} $SD/BPI-ROOT/usr/bin/
-	cp -r utils/wmt/firmware/* $SD/BPI-ROOT/etc/firmware/
+#	cp utils/wmt/config/* $SD/BPI-ROOT/system/etc/firmware/
+#	cp utils/wmt/src/{wmt_loader,wmt_loopback,stp_uart_launcher} $SD/BPI-ROOT/usr/bin/
+#	cp -r utils/wmt/firmware/* $SD/BPI-ROOT/etc/firmware/
 
 	if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
 		echo "MT76 set, including the firmware-files...";
