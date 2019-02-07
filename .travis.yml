@@ -6,7 +6,7 @@ dist: trusty
 cache: ccache
 
 git:
-  depth: false
+  depth: 10
   quiet: false
   
 if: tag IS blank
