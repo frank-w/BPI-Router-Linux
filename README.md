@@ -43,7 +43,7 @@ Kernel features by version
 | HW QOS   |     |  Y  |  ? |      |
 | Crypto   |  Y  |  Y  |  Y  |     |
 | WIFI     |     |  Y  |  Y  |  Y  |
-| BT       |  N  |  N  |  N  |  N  |
+| BT       |  N  |  N  |  Y  |  Y  |
 | VIDEO    |  Y  |  N  |  Y  |  (Y)  |
 | ACPI     |  ?  |  N  |  Y  |  Y  |
 | Other options  |--|--|--|--|--|--|--|
