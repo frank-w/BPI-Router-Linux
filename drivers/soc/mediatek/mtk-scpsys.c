@@ -237,7 +237,8 @@ static int scpsys_power_on(struct generic_pm_domain *genpd)
 		 * MT7622_POWER_DOMAIN_WB and thus just a trivial setup is
 		 * applied here.
 		 */
-		usleep_range(12000, 12100);
+		//usleep_range(12000, 12100);
+		msleep(50);
 
 	} else {
 		ret = readl_poll_timeout(ctl_addr, tmp, (tmp & pdn_ack) == 0,
