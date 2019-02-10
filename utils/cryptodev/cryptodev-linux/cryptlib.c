@@ -38,7 +38,9 @@
 #include "cryptodev_int.h"
 #include "cipherapi.h"
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0))
 extern const struct crypto_type crypto_givcipher_type;
+#endif
 
 static void cryptodev_complete(struct crypto_async_request *req, int err)
 {
@@ -157,8 +159,11 @@ int cryptodev_cipher_init(struct cipher_data *out, const char *alg_name,
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
 		tfm = crypto_skcipher_tfm(out->async.s);
-		if ((tfm->__crt_alg->cra_type == &crypto_ablkcipher_type) ||
-		    (tfm->__crt_alg->cra_type == &crypto_givcipher_type)) {
+		if ((tfm->__crt_alg->cra_type == &crypto_ablkcipher_type)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0))
+		    || (tfm->__crt_alg->cra_type == &crypto_givcipher_type)
+#endif
+							) {
 			struct ablkcipher_alg *alg;
 
 			alg = &tfm->__crt_alg->cra_ablkcipher;
