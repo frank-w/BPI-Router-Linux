@@ -180,7 +180,7 @@ function install {
 
 function deb {
 #set -x
-  ver=${kernver}-bpi-r64-${gitbranch}
+  ver=${kernver}-${gitbranch}
   uimagename=uImage_${kernver}-${gitbranch}
   echo "deb package ${ver}"
   prepare_SD
@@ -189,10 +189,10 @@ function deb {
 #    fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
 #    tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 
-  mkdir -p debian/bananapi-r64-image/boot/bananapi/bpi-r2/linux/dtb
+  mkdir -p debian/bananapi-r64-image/boot/bananapi/bpi-r64/linux/dtb
   mkdir -p debian/bananapi-r64-image/lib/modules/
   mkdir -p debian/bananapi-r64-image/DEBIAN/
-  rm debian/bananapi-r64-image/boot/bananapi/bpi-r2/linux/*
+  rm debian/bananapi-r64-image/boot/bananapi/bpi-r64/linux/*
   rm -rf debian/bananapi-r64-image/lib/modules/*
 
   #sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
@@ -323,7 +323,7 @@ function prepare_SD {
 	for toDel in "$SD/BPI-BOOT/" "$SD/BPI-ROOT/"; do
 		rm -r ${toDel} 2>/dev/null
 	done
-	for createDir in "$SD/BPI-BOOT/bananapi/bpi-r2/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
+	for createDir in "$SD/BPI-BOOT/bananapi/bpi-r64/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
 		mkdir -p ${createDir} >/dev/null 2>/dev/null
 	done
 
