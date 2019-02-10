@@ -118,6 +118,7 @@ function install {
 					echo "backup of dtb: $dtbfile.bak"
 					cp $dtbfile $dtbfile.bak
 					cp ./bpi-r64.dtb $dtbfile
+					cp ./bpi-r64-gpio.dtb ${dtbfile%.*}-gpio.${dtbfile#*.}
 				fi
 			fi
 		else
@@ -139,10 +140,15 @@ function install {
 				echo "backup of dtb: $dtbfile.bak"
 				cp $dtbfile $dtbfile.bak
 			fi
+			if [[ -e ${dtbfile%.*}-gpio.dtb ]];then
+				echo "backup of gpio-dtb: ${dtbfile%.*}-gpio.dtb.bak"
+				cp ${dtbfile%.*}-gpio.dtb ${dtbfile%.*}-gpio.dtb.bak
+			fi
 			echo "copy new kernel"
 			cp ./uImage $kernelfile
 			echo "copy new dtb"
 			cp ./bpi-r64.dtb $dtbfile
+			cp ./bpi-r64-gpio.dtb ${dtbfile%.*}-gpio.dtb
 			echo "copy modules (root needed because of ext-fs permission)"
 			export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 			echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
@@ -300,6 +306,7 @@ function build {
 			#cp arch/arm64/boot/Image Image
 			mkimage -A arm -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm64/boot/Image ./uImage
 			cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb bpi-r64.dtb
+			cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-gpio.dtb bpi-r64-gpio.dtb
 			#mkimage -A arm64 -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver-$gitbranch" -d arch/arm64/boot/Image-dtb ./uImage
 		fi
 	else
@@ -325,6 +332,7 @@ function prepare_SD {
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
 	cp ./uImage $SD/BPI-BOOT/bananapi/bpi-r64/linux/uImage
 	cp ./bpi-r64.dtb $SD/BPI-BOOT/bananapi/bpi-r64/linux/dtb/bpi-r64.dtb
+	cp ./bpi-r64-gpio.dtb $SD/BPI-BOOT/bananapi/bpi-r64/linux/dtb/bpi-r64-gpio.dtb
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
