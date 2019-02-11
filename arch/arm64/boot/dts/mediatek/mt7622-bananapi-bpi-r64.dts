@@ -373,7 +373,42 @@
 		};
 	};
 
-	pwm7_pins: pwm1-2-pins {
+	pwm1_pins: pwm1-pins {
+		mux {
+			function = "pwm";
+			groups = "pwm_ch1_0";/* mt7622_pwm_ch1_0_pins[] = { 51, }; */
+		};
+	};
+
+	pwm2_pins: pwm2-pins {
+		mux {
+			function = "pwm";
+			groups = "pwm_ch2_0"; /*mt7622_pwm_ch2_0_pins[] = { 52, };*/
+		};
+	};
+
+	pwm4_pins: pwm4-pins {
+		mux {
+			function = "pwm";
+			groups = "pwm_ch4_1"; /*mt7622_pwm_ch4_1_pins[] = { 67, };*/
+		};
+	};
+
+	pwm5_pins: pwm5-pins {
+		mux {
+			function = "pwm";
+			groups = "pwm_ch5_0"; /*mt7622_pwm_ch5_0_pins[] = { 68, };*/
+		};
+	};
+
+	pwm6_pins: pwm6-pins {
+		mux {
+			function = "pwm";
+			groups = "pwm_ch6_0"; /*mt7622_pwm_ch6_0_pins[] = { 69, };*/
+		};
+	};
+
+	pwm7_pins: pwm7-pins {
 		mux {
 			function = "pwm";
 			groups = "pwm_ch7_2";
@@ -505,6 +540,32 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm7_pins>;
 	status = "okay";
+/*
+	pwm1 {
+		pinctrl-0 = <&pwm1_pins>;
+		status="disabled";
+	};
+	pwm2 {
+		pinctrl-0 = <&pwm2_pins>;
+		status="disabled";
+	};
+	pwm4 {
+		pinctrl-0 = <&pwm4_pins>;
+		status="disabled";
+	};
+	pwm5 {
+		pinctrl-0 = <&pwm5_pins>;
+		status="disabled";
+	};
+	pwm6 {
+		pinctrl-0 = <&pwm6_pins>;
+		status="disabled";
+	};
+	pwm7 {
+		pinctrl-0 = <&pwm7_pins>;
+		status="okay";
+	};
+*/
 };
 
 &pwrap {
