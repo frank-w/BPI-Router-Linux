@@ -497,7 +497,7 @@
 &pwm {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm7_pins>;
-	status = "okay";
+	status = "disabled";
 };
 
 &pwrap {
