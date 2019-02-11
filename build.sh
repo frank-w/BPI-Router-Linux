@@ -126,8 +126,18 @@ function install {
 		fi
 	else
 		echo "by default this kernel/dtb-file will be loaded (uEnv.txt):"
-		grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt|tail -1
-		grep '^fdt=' /media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt|tail -1
+		kernelpath=/media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/
+		if [[ -e "${kernelpath}uEnv.txt" ]];
+		then
+			grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt|tail -1
+			grep '^fdt=' /media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt|tail -1
+		elif [[ -e "/media/${USER}/BPI-BOOT/uEnv.txt" ]];
+		then
+			grep '^kernel=' /media/${USER}/BPI-BOOT/uEnv.txt|tail -1
+			grep '^fdt=' /media/${USER}/BPI-BOOT/uEnv.txt|tail -1
+		else
+			echo "uEnv.txt not found";
+		fi;
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
 			kernelfile=/media/$USER/BPI-BOOT/bananapi/bpi-r64/linux/$imagename
@@ -420,7 +430,12 @@ if [ -n "$kernver" ]; then
 
  		"uenv")
 			echo "edit uEnv.txt on sd-card"
-			nano /media/$USER/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt
+			if [[ -e "/media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt" ]];then
+				nano /media/${USER}/BPI-BOOT/bananapi/bpi-r64/linux/uEnv.txt
+			elif [[ -e "/media/${USER}/BPI-BOOT/uEnv.txt" ]];then
+				nano /media/${USER}/BPI-BOOT/uEnv.txt
+			else echo "uEnv.txt not found";
+			fi
 			;;
 
 		"defconfig")
