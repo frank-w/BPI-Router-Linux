@@ -388,9 +388,10 @@
 			 <&pericfg CLK_PERI_PWM3_PD>,
 			 <&pericfg CLK_PERI_PWM4_PD>,
 			 <&pericfg CLK_PERI_PWM5_PD>,
-			 <&pericfg CLK_PERI_PWM6_PD>;
+			 <&pericfg CLK_PERI_PWM6_PD>,
+			 <&pericfg CLK_PERI_PWM7_PD>;
 		clock-names = "top", "main", "pwm1", "pwm2", "pwm3", "pwm4",
-			      "pwm5", "pwm6";
+			      "pwm5", "pwm6", "pwm7";
 		status = "disabled";
 	};
 
