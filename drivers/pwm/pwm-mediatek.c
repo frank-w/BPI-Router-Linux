@@ -283,7 +283,7 @@ static const struct pwm_mediatek_of_data mt2712_pwm_data = {
 };
 
 static const struct pwm_mediatek_of_data mt7622_pwm_data = {
-	.num_pwms = 6,
+	.num_pwms = 7,
 	.pwm45_fixup = false,
 };
 
