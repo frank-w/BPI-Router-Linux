@@ -175,11 +175,11 @@ function deb {
 #    fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
 #    tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 
+  rm -rf debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/* 2>/dev/null
+  rm -rf debian/bananapi-r2-image/lib/modules/* 2>/dev/null
   mkdir -p debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/dtb/
   mkdir -p debian/bananapi-r2-image/lib/modules/
   mkdir -p debian/bananapi-r2-image/DEBIAN/
-  rm debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/*
-  rm -rf debian/bananapi-r2-image/lib/modules/*
 
   #sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
   if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
