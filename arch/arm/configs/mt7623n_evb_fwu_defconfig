@@ -506,7 +506,7 @@ CONFIG_RFKILL_INPUT=y
 CONFIG_RFKILL_GPIO=y
 
 #if you use a mt76x2 or mt76x3 pcie-card
-#CONFIG_MT76=m
+CONFIG_MT76x2E=m
 
 #pcie
 CONFIG_PCIEPORTBUS=y
