@@ -92,14 +92,18 @@ function install {
 	echo "Name: $imagename"
 
 	if [[ $crosscompile -eq 0 ]]; then
-		kernelfile=/boot/bananapi/bpi-r2/linux/$imagename
-		if [[ -e $kernelfile ]];then
-			echo "backup of kernel: $kernelfile.bak"
-			cp $kernelfile $kernelfile.bak
+		kerneldir=/boot/bananapi/bpi-r2/linux
+		kernelfile=$kerneldir/$imagename
+		if [[ -e $kerneldir ]];then
+			if [[ -e $kernelfile ]];then
+				echo "backup of kernel: $kernelfile.bak"
+				cp $kernelfile $kernelfile.bak
+			fi
+			echo "copy new kernel"
 			cp ./uImage $kernelfile
 			sudo make modules_install
 		else
-			echo "Actual kernel not found..."
+			echo "Kerneldir not found..."
 			echo "is /boot mounted?"
 		fi
 	else
