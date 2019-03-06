@@ -533,7 +533,7 @@ if [ -n "$kernver" ]; then
 			$0 update
 			$0 importconfig
 			$0 build
-			#$0 cryptodev
+			$0 cryptodev
 			$0 pack
 			;;
 		"help")
@@ -546,7 +546,7 @@ if [ -n "$kernver" ]; then
 				exit 1;
 			fi;
 			$0 build
-			#$0 cryptodev
+			$0 cryptodev
 			if [ -e "./uImage" ]; then
 				echo "==========================================="
 				echo "1) pack"
