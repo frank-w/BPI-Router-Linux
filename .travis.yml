@@ -22,7 +22,7 @@ install:
 script:
     - export PATH=/usr/lib/ccache:$PATH
     - bash build.sh importconfig
-    - bash build.sh build 
+    - bash ./build.sh build 
 #    - bash build.sh cryptodev 
     - bash build.sh deb
     - bash build.sh pack
