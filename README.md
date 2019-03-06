@@ -19,6 +19,9 @@ If you build it directly on the BananaPi-R2 (not recommended) you do not need th
   ./build.sh config (To configure manually with menuconfig)
   ./build.sh
 ```
+the option "pack" creates a tar.gz-file which contains folders "BPI-BOOT" (content of Boot-partition aka /boot) and BPI-ROOT (content for rootfs aka /). simply backup your existing /boot/bananapi/bpi-r2/linux/uImage and unpack the content of these 2 folders to your system
+
+you can also install direct to sd-card which makes a backup of kernelfile, here you have to change your uEnv.txt if you use a new filename (by default it's containing kernelversion)
 
 ## Branch details
 
