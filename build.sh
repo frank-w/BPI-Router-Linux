@@ -1,11 +1,13 @@
 #!/bin/bash
 if [ $UID -eq 0 ];
 then
-  echo "This should not be run as root."
-  echo "Hit enter key to force or press CTRL+C to abort."
-  read -s
-  echo "[ OK ] Proceeding now."
+	echo "This should not be run as root."
+	echo "Hit enter key to force or press CTRL+C to abort."
+	read -s
+	echo "[ OK ] Proceeding now."
 fi
+
+. build.conf
 
 clr_red=$'\e[1;31m'
 clr_green=$'\e[1;32m'
@@ -64,7 +66,7 @@ function update_kernel_source {
                 git merge v$newkernver
         elif [[ $ret -eq 128 ]];then
                 #repo not found
-                git remote add stable https://git.kernel.org/pub/scm/linux/kern$
+                git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
         fi
         else
                 echo "please first commit/stash modified files: $changedfiles"
@@ -81,6 +83,17 @@ function pack {
 	md5sum $fname > $fname.md5
 	ls -lh $(pwd)"/"$fname
 	cd $olddir
+}
+
+function upload {
+	imagename="uImage_${kernver}-${gitbranch}"
+	read -e -i $imagename -p "uImage-filename: " input
+	imagename="${input:-$imagename}"
+
+	echo "Name: $imagename"
+	echo "uploading to ${uploadserver}:${uploaddir}..."
+
+	scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 }
 
 function install {
@@ -170,11 +183,11 @@ function deb {
 #    fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
 #    tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 
+  rm -rf debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/* 2>/dev/null
+  rm -rf debian/bananapi-r2-image/lib/modules/* 2>/dev/null
   mkdir -p debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/dtb/
   mkdir -p debian/bananapi-r2-image/lib/modules/
   mkdir -p debian/bananapi-r2-image/DEBIAN/
-  rm debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/*
-  rm -rf debian/bananapi-r2-image/lib/modules/*
 
   #sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
   if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
@@ -185,7 +198,7 @@ function deb {
     cp -r ../SD/BPI-ROOT/lib/modules/${ver} debian/bananapi-r2-image/lib/modules/
     #rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
     #mkdir debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
-    #cp cryptodev-linux/cryptodev.ko debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
+    #cp utils/cryptodev-linux/cryptodev.ko debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
 	cat > debian/bananapi-r2-image/DEBIAN/preinst << EOF
 #!/bin/bash
 clr_red=\$'\e[1;31m'
@@ -298,7 +311,7 @@ function build {
 
 
 	else
-		echo "No configfile found, please configure kernel first."
+		echo "No configfile found, please configure Kernel first."
 	fi
 }
 
@@ -363,6 +376,7 @@ function release
 		echo Merge;
 	else
 		echo "normal commit";
+		lc=${lc//[^a-zA-Z0-9]/_}
 		reltag="${reltag}_${lc}"
 	fi
 	echo "RelTag:"$reltag
@@ -370,7 +384,7 @@ function release
 	git tag $reltag
 	git push origin $reltag
 	else
-		echo "Tag already used, please use another tag."
+		echo "Tag already used, please use another"
 	fi
 }
 
@@ -489,6 +503,11 @@ if [ -n "$kernver" ]; then
 			install
 			;;
 
+		"upload")
+			echo "Upload Kernel to TFTP-Server"
+			upload
+			;;
+
 		"build")
 			echo "Build Kernel"
 			build
@@ -525,7 +544,6 @@ if [ -n "$kernver" ]; then
 			$0 cryptodev
 			$0 pack
 			;;
-
 		"help")
 			echo "print help"
 			sed -n -e '/case "$action" in/,/esac/{//!p}'  $0 | grep -A1 '")$' | sed -e 's/echo "\(.*\)"/\1/'
@@ -546,7 +564,8 @@ if [ -n "$kernver" ]; then
 					echo "2) install to SD-Card"
 				fi;
 				echo "3) deb-package"
-				read -n1 -p "choice [123]:" choice
+				echo "4) upload"
+				read -n1 -p "choice [1234]:" choice
 				echo
 				if [[ "$choice" == "1" ]]; then
 					$0 pack
@@ -554,6 +573,8 @@ if [ -n "$kernver" ]; then
 					$0 install
 				elif [[ "$choice" == "3" ]];then
 					$0 deb
+				elif [[ "$choice" == "4" ]];then
+					$0 upload
 				else
 					echo "wrong option: $choice"
 				fi
