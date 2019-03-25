@@ -78,7 +78,7 @@ function pack {
 	echo "pack..."
 	olddir=$(pwd)
 	cd ../SD
-	fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
+	fname=bpi-r2_${kernver}${gitbranch}.tar.gz
 	tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 	md5sum $fname > $fname.md5
 	ls -lh $(pwd)"/"$fname
