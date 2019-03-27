@@ -177,6 +177,11 @@ function install {
 			if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
 				echo "MT76 set,don't forget the firmware-files...";
 			fi
+
+			read -e -i "y" -p "umount SD card [yn]? " input
+			if [[ "$input" == "y" ]];then
+				$0 umount
+			fi
 		else
 			echo "SD-Card not found!"
 		fi
