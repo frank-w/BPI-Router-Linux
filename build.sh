@@ -120,8 +120,8 @@ function install {
 			targetdir=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux
 			kernelfile=$targetdir/$imagename
 
-			read -e -i "y" -p "install kernel with DT [yn]? " input
-			if [[ "$input" == "y" ]];then
+			read -e -i "y" -p "install kernel with DT [yn]? " dtinput
+			if [[ "$dtinput" == "y" ]];then
 				if [[ -e $kernelfile ]];then
 					echo "backup of kernel: $kernelfile.bak"
 					cp $kernelfile $kernelfile.bak
@@ -131,9 +131,9 @@ function install {
 			fi
 
 			ndt="n"
-			if [ "$input" != "y" ];then ndt="y"; fi
-			read -e -i "$ndt" -p "install kernel with separate DT [yn]? " input
-			if [[ "$input" == "y" ]];then
+			if [ "$dtinput" != "y" ];then ndt="y"; fi
+			read -e -i "$ndt" -p "install kernel with separate DT [yn]? " ndtinput
+			if [[ "$ndtinput" == "y" ]];then
 				if [[ -e ${kernelfile}_nodt ]];then
 					echo "backup of kernel: $kernelfile.bak"
 					cp ${kernelfile}_nodt ${kernelfile}_nodt.bak
@@ -149,33 +149,38 @@ function install {
 				echo "copy new dtb"
 				cp ./bpi-r2.dtb $dtbfile
 			fi
-			echo "copy modules (root needed because of ext-fs permission)"
-			export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
-			echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-			sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH modules_install
-			echo "syncing sd-card...this will take a while"
 
-			echo "uImage:${kernelfile} / ${kernelfile}_nodt"
-			echo "DTB: ${dtbfile}"
-			echo "by default this kernel-file will be loaded (kernel-var in uEnv.txt):"
-			grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
-			sync
+			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]];then
+				echo "copy modules (root needed because of ext-fs permission)"
+				export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
+				echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
+				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH modules_install
+				echo "syncing sd-card...this will take a while"
 
-			kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
-			EXTRA_MODULE_PATH=$INSTALL_MOD_PATH"/lib/modules/"$kernelname"/kernel/extras"
-			#echo $kernelname" - "${EXTRA_MODULE_PATH}
-			CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
-			if [ -e "${CRYPTODEV}" ]; then
-				echo Copy CryptoDev
-				sudo mkdir -p "${EXTRA_MODULE_PATH}"
-				sudo cp "${CRYPTODEV}" "${EXTRA_MODULE_PATH}"
-	        	#Build Module Dependencies
-				sudo /sbin/depmod -b $INSTALL_MOD_PATH ${kernelname}
-			fi
+				echo "uImage:${kernelfile} / ${kernelfile}_nodt"
+				echo "DTB: ${dtbfile}"
+				echo "by default this kernel-file will be loaded (kernel-var in uEnv.txt):"
+				grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
+				sync
 
-			#sudo cp -r ../mod/lib/modules /media/$USER/BPI-ROOT/lib/
-			if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
-				echo "MT76 set,don't forget the firmware-files...";
+				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
+				EXTRA_MODULE_PATH=$INSTALL_MOD_PATH"/lib/modules/"$kernelname"/kernel/extras"
+				#echo $kernelname" - "${EXTRA_MODULE_PATH}
+				CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
+				if [ -e "${CRYPTODEV}" ]; then
+					echo Copy CryptoDev
+					sudo mkdir -p "${EXTRA_MODULE_PATH}"
+					sudo cp "${CRYPTODEV}" "${EXTRA_MODULE_PATH}"
+					#Build Module Dependencies
+					sudo /sbin/depmod -b $INSTALL_MOD_PATH ${kernelname}
+				fi
+
+				#sudo cp -r ../mod/lib/modules /media/$USER/BPI-ROOT/lib/
+				if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
+					echo "MT76 set,don't forget the firmware-files...";
+				fi
+			else
+				echo "install of modules skipped because no kernel was installed";
 			fi
 
 			read -e -i "y" -p "umount SD card [yn]? " input
