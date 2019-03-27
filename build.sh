@@ -119,20 +119,36 @@ function install {
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
 			targetdir=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux
 			kernelfile=$targetdir/$imagename
-			if [[ -e $kernelfile ]];then
-				echo "backup of kernel: $kernelfile.bak"
-				cp $kernelfile $kernelfile.bak
+
+			read -e -i "y" -p "install kernel with DT [yn]? " input
+			if [[ "$input" == "y" ]];then
+				if [[ -e $kernelfile ]];then
+					echo "backup of kernel: $kernelfile.bak"
+					cp $kernelfile $kernelfile.bak
+				fi
+				echo "copy new kernel"
+				cp ./uImage $kernelfile
 			fi
-			echo "copy new kernel"
-			cp ./uImage $kernelfile
-			cp ./uImage_nodt ${kernelfile}_nodt
-			mkdir -p $targetdir/dtb
-			dtbfile=$targetdir/dtb/${kernver}${gitbranch}.dtb
-			if [[ -e $dtbfile ]];then
-				echo "backup of dtb: $dtbfile.bak"
-				cp $dtbfile $dtbfile.bak
+
+			ndt="n"
+			if [ "$input" != "y" ];then ndt="y"; fi
+			read -e -i "$ndt" -p "install kernel with separate DT [yn]? " input
+			if [[ "$input" == "y" ]];then
+				if [[ -e ${kernelfile}_nodt ]];then
+					echo "backup of kernel: $kernelfile.bak"
+					cp ${kernelfile}_nodt ${kernelfile}_nodt.bak
+				fi
+				echo "copy new nodt kernel"
+				cp ./uImage_nodt ${kernelfile}_nodt
+				mkdir -p $targetdir/dtb
+				dtbfile=$targetdir/dtb/${kernver}${gitbranch}.dtb
+				if [[ -e $dtbfile ]];then
+					echo "backup of dtb: $dtbfile.bak"
+					cp $dtbfile $dtbfile.bak
+				fi
+				echo "copy new dtb"
+				cp ./bpi-r2.dtb $dtbfile
 			fi
-			cp ./bpi-r2.dtb $dtbfile
 			echo "copy modules (root needed because of ext-fs permission)"
 			export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 			echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
