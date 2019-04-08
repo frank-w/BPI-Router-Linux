@@ -394,4 +394,16 @@ struct mt7530_hw_stats {
 	u8		sizeof_stat;
 };
 
+struct mt7530_dummy_poll {
+	struct mt7530_priv *priv;
+	u32 reg;
+};
+
+static inline void INIT_MT7530_DUMMY_POLL(struct mt7530_dummy_poll *p,
+					  struct mt7530_priv *priv, u32 reg)
+{
+	p->priv = priv;
+	p->reg = reg;
+}
+
 #endif /* __MT7530_H */
