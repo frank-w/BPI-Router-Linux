@@ -231,7 +231,7 @@ static int mtk_cpufreq_set_target(struct cpufreq_policy *policy,
 	}
 
 	freq_hz = freq_table[index].frequency * 1000;
-
+	
 	rcu_read_lock();
 	opp = dev_pm_opp_find_freq_ceil(cpu_dev, &freq_hz);
 	if (IS_ERR(opp)) {
@@ -322,9 +322,7 @@ static void mtk_cpufreq_ready(struct cpufreq_policy *policy)
 		of_property_read_u32(np, DYNAMIC_POWER, &capacitance);
 
 		info->cdev = of_cpufreq_power_cooling_register(np,
-						policy->related_cpus,
-						capacitance,
-						NULL);
+						policy->related_cpus, capacitance, NULL);
 
 		if (IS_ERR(info->cdev)) {
 			dev_err(info->cpu_dev,
@@ -513,7 +511,7 @@ static int mtk_cpufreq_exit(struct cpufreq_policy *policy)
 	return 0;
 }
 
-static struct cpufreq_driver mt8173_cpufreq_driver = {
+static struct cpufreq_driver mtk_cpufreq_driver = {
 	.flags = CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK |
 		 CPUFREQ_HAVE_GOVERNOR_PER_POLICY,
 	.verify = cpufreq_generic_frequency_table_verify,
@@ -526,7 +524,7 @@ static struct cpufreq_driver mt8173_cpufreq_driver = {
 	.attr = cpufreq_generic_attr,
 };
 
-static int mt8173_cpufreq_probe(struct platform_device *pdev)
+static int mtk_cpufreq_probe(struct platform_device *pdev)
 {
 	struct mtk_cpu_dvfs_info *info, *tmp;
 	int cpu, ret;
@@ -553,7 +551,7 @@ static int mt8173_cpufreq_probe(struct platform_device *pdev)
 		list_add(&info->list_head, &dvfs_info_list);
 	}
 
-	ret = cpufreq_register_driver(&mt8173_cpufreq_driver);
+	ret = cpufreq_register_driver(&mtk_cpufreq_driver);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register mtk cpufreq driver\n");
 		goto release_dvfs_info_list;
@@ -570,22 +568,44 @@ release_dvfs_info_list:
 	return ret;
 }
 
-static struct platform_driver mt8173_cpufreq_platdrv = {
+static struct platform_driver mtk_cpufreq_platdrv = {
 	.driver = {
-		.name	= "mt8173-cpufreq",
+		.name	= "mtk-cpufreq",
 	},
-	.probe		= mt8173_cpufreq_probe,
+	.probe		= mtk_cpufreq_probe,
 };
 
-static int mt8173_cpufreq_driver_init(void)
+/* List of machines supported by this driver */
+static const struct of_device_id mtk_cpufreq_machines[] __initconst = {
+	{ .compatible = "mediatek,mt2701", },
+	{ .compatible = "mediatek,mt7622", },
+	{ .compatible = "mediatek,mt7623", },
+	{ .compatible = "mediatek,mt817x", },
+	{ .compatible = "mediatek,mt8173", },
+	{ .compatible = "mediatek,mt8176", },
+
+	{ }
+};
+
+static int __init mtk_cpufreq_driver_init(void)
 {
+	struct device_node *np;
+	const struct of_device_id *match;
 	struct platform_device *pdev;
 	int err;
 
-	if (!of_machine_is_compatible("mediatek,mt8173"))
+	np = of_find_node_by_path("/");
+	if (!np)
 		return -ENODEV;
 
-	err = platform_driver_register(&mt8173_cpufreq_platdrv);
+	match = of_match_node(mtk_cpufreq_machines, np);
+	of_node_put(np);
+	if (!match) {
+		pr_warn("Machine is not compatible with mtk-cpufreq\n");
+		return -ENODEV;
+	}
+
+	err = platform_driver_register(&mtk_cpufreq_platdrv);
 	if (err)
 		return err;
 
@@ -595,7 +615,7 @@ static int mt8173_cpufreq_driver_init(void)
 	 * and the device registration codes are put here to handle defer
 	 * probing.
 	 */
-	pdev = platform_device_register_simple("mt8173-cpufreq", -1, NULL, 0);
+	pdev = platform_device_register_simple("mtk-cpufreq", -1, NULL, 0);
 	if (IS_ERR(pdev)) {
 		pr_err("failed to register mtk-cpufreq platform device\n");
 		return PTR_ERR(pdev);
@@ -603,4 +623,4 @@ static int mt8173_cpufreq_driver_init(void)
 
 	return 0;
 }
-device_initcall(mt8173_cpufreq_driver_init);
+device_initcall(mtk_cpufreq_driver_init);
