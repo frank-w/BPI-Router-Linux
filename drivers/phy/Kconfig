@@ -243,14 +243,6 @@ config PHY_HIX5HD2_SATA
 	help
 	  Support for SATA PHY on Hisilicon hix5hd2 Soc.
 
-config PHY_MT65XX_USB3
-	tristate "Mediatek USB3.0 PHY Driver"
-	depends on ARCH_MEDIATEK && OF
-	select GENERIC_PHY
-	help
-	  Say 'Y' here to add support for Mediatek USB3.0 PHY driver,
-	  it supports multiple usb2.0 and usb3.0 ports.
-
 config PHY_HI6220_USB
 	tristate "hi6220 USB PHY support"
 	depends on (ARCH_HISI && ARM64) || COMPILE_TEST
@@ -490,4 +482,7 @@ config PHY_NS2_PCIE
 	help
 	  Enable this to support the Broadcom Northstar2 PCIe PHY.
 	  If unsure, say N.
+
+source "drivers/phy/mediatek/Kconfig"
+
 endmenu
