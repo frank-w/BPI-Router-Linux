@@ -6,12 +6,20 @@
 
 /dts-v1/;
 #include <dt-bindings/input/input.h>
-#include "_mt7623.dtsi"
+#include "mt7623.dtsi"
 #include "mt6323.dtsi"
 
 / {
 	model = "Bananapi BPI-R2";
 	compatible = "bananapi,bpi-r2", "mediatek,mt7623";
+/*
+	chosen {
+		stdout-path = &uart2;
+	};
+*/
+	memory {
+		reg = <0 0x80000000 0 0x20000000>;
+	};
 
 	aliases {
 		serial2 = &uart2;
@@ -62,9 +70,9 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&led_pins_a>;
 
-		red {
-			label = "bpi-r2:pio:red";
-			gpios = <&pio 239 GPIO_ACTIVE_HIGH>;
+		blue {
+			label = "bpi-r2:pio:blue";
+			gpios = <&pio 241 GPIO_ACTIVE_HIGH>;
 			default-state = "off";
 		};
 
@@ -74,15 +82,11 @@
 			default-state = "off";
 		};
 
-		blue {
-			label = "bpi-r2:pio:blue";
-			gpios = <&pio 241 GPIO_ACTIVE_HIGH>;
+		red {
+			label = "bpi-r2:pio:red";
+			gpios = <&pio 239 GPIO_ACTIVE_HIGH>;
 			default-state = "off";
 		};
-	};
-
-	memory@80000000 {
-		reg = <0 0x80000000 0 0x40000000>;
 	};
 };
 
@@ -98,10 +102,12 @@
 
 &eth {
 	status = "okay";
+
 	gmac0: mac@0 {
 		compatible = "mediatek,eth-mac";
 		reg = <0>;
 		phy-mode = "trgmii";
+
 		fixed-link {
 			speed = <1000>;
 			full-duplex;
@@ -112,12 +118,12 @@
 	mdio: mdio-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
+
 		switch@0 {
 			compatible = "mediatek,mt7530";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
-
 			pinctrl-names = "default";
 			reset-gpios = <&pio 33 0>;
 			core-supply = <&mt6323_vpa_reg>;
@@ -127,6 +133,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				reg = <0>;
+
 				port@0 {
 					reg = <0>;
 					label = "wan";
@@ -157,6 +164,7 @@
 					label = "cpu";
 					ethernet = <&gmac0>;
 					phy-mode = "trgmii";
+
 					fixed-link {
 						speed = <1000>;
 						full-duplex;
@@ -179,11 +187,61 @@
 	status = "okay";
 };
 
+&mmc0 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+	status = "okay";
+	bus-width = <8>;
+	max-frequency = <50000000>;
+	cap-mmc-highspeed;
+	vmmc-supply = <&mt6323_vemc3v3_reg>;
+	vqmmc-supply = <&mt6323_vio18_reg>;
+	non-removable;
+};
+
+&mmc1 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc1_pins_default>;
+	pinctrl-1 = <&mmc1_pins_uhs>;
+	status = "okay";
+	bus-width = <4>;
+	max-frequency = <50000000>;
+	cap-sd-highspeed;
+	cd-gpios = <&pio 261 0>;
+	vmmc-supply = <&mt6323_vmch_reg>;
+	vqmmc-supply = <&mt6323_vio18_reg>;
+};
+
 &pio {
 	cir_pins_a:cir@0 {
 		pins_cir {
 			pinmux = <MT7623_PIN_46_IR_FUNC_IR>;
 			bias-disable;
+		};
+	};
+
+	eth_default: eth {
+		pins_eth {
+			pinmux = <MT7623_PIN_275_G2_MDC_FUNC_MDC>,
+				 <MT7623_PIN_276_G2_MDIO_FUNC_MDIO>,
+				 <MT7623_PIN_262_G2_TXEN_FUNC_G2_TXEN>,
+				 <MT7623_PIN_263_G2_TXD3_FUNC_G2_TXD3>,
+				 <MT7623_PIN_264_G2_TXD2_FUNC_G2_TXD2>,
+				 <MT7623_PIN_265_G2_TXD1_FUNC_G2_TXD1>,
+				 <MT7623_PIN_266_G2_TXD0_FUNC_G2_TXD0>,
+				 <MT7623_PIN_267_G2_TXCLK_FUNC_G2_TXC>,
+				 <MT7623_PIN_268_G2_RXCLK_FUNC_G2_RXC>,
+				 <MT7623_PIN_269_G2_RXD0_FUNC_G2_RXD0>,
+				 <MT7623_PIN_270_G2_RXD1_FUNC_G2_RXD1>,
+				 <MT7623_PIN_271_G2_RXD2_FUNC_G2_RXD2>,
+				 <MT7623_PIN_272_G2_RXD3_FUNC_G2_RXD3>,
+				 <MT7623_PIN_274_G2_RXDV_FUNC_G2_RXDV>;
+		};
+
+		pins_eth_rst {
+			pinmux = <MT7623_PIN_15_GPIO15_FUNC_GPIO15>;
+			output-low;
 		};
 	};
 
@@ -314,6 +372,17 @@
 			bias-pull-down;
 			drive-strength = <MTK_DRIVE_4mA>;
 		};
+
+		pins_wp {
+			pinmux = <MT7623_PIN_29_EINT7_FUNC_MSDC1_WP>;
+			input-enable;
+			bias-pull-up;
+		};
+
+		pins_insert {
+			pinmux = <MT7623_PIN_261_MSDC1_INS_FUNC_GPIO261>;
+			bias-pull-up;
+		};
 	};
 
 	mmc1_pins_uhs: mmc1 {
@@ -335,16 +404,6 @@
 		};
 	};
 
-	spi0_pins_a: spi@0 {
-		pins_spi {
-			pinmux = <MT7623_PIN_53_SPI0_CSN_FUNC_SPI0_CS>,
-				<MT7623_PIN_54_SPI0_CK_FUNC_SPI0_CK>,
-				<MT7623_PIN_55_SPI0_MI_FUNC_SPI0_MI>,
-				<MT7623_PIN_56_SPI0_MO_FUNC_SPI0_MO>;
-			bias-disable;
-		};
-	};
-
 	pwm_pins_a: pwm@0 {
 		pins_pwm {
 			pinmux = <MT7623_PIN_203_PWM0_FUNC_PWM0>,
@@ -352,6 +411,16 @@
 				 <MT7623_PIN_205_PWM2_FUNC_PWM2>,
 				 <MT7623_PIN_206_PWM3_FUNC_PWM3>,
 				 <MT7623_PIN_207_PWM4_FUNC_PWM4>;
+		};
+	};
+
+	spi0_pins_a: spi@0 {
+		pins_spi {
+			pinmux = <MT7623_PIN_53_SPI0_CSN_FUNC_SPI0_CS>,
+				<MT7623_PIN_54_SPI0_CK_FUNC_SPI0_CK>,
+				<MT7623_PIN_55_SPI0_MI_FUNC_SPI0_MI>,
+				<MT7623_PIN_56_SPI0_MO_FUNC_SPI0_MO>;
+			bias-disable;
 		};
 	};
 
@@ -388,11 +457,13 @@
 				label = "bpi-r2:isink:green";
 				default-state = "off";
 			};
+
 			led@1 {
 				reg = <1>;
 				label = "bpi-r2:isink:red";
 				default-state = "off";
 			};
+
 			led@2 {
 				reg = <2>;
 				label = "bpi-r2:isink:blue";
@@ -412,14 +483,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart0_pins_a>;
 	status = "disabled";
-};
-
-&u3phy1 {
-	status = "okay";
-};
-
-&u3phy2 {
-	status = "okay";
 };
 
 &uart1 {
@@ -443,5 +506,13 @@
 };
 
 &hnat {
+	status = "okay";
+};
+
+&u3phy1 {
+	status = "okay";
+};
+
+&u3phy2 {
 	status = "okay";
 };
