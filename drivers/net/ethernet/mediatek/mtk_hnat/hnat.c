@@ -164,7 +164,9 @@ static void hnat_stop(void)
 		    BITS_GDM2_ALL_FRC_P_DISCARD);
 
 	if (ppe_busy_wait()) {
+#if 0
 		reset_control_reset(host->rstc);
+#endif
 		msleep(2000);
 		return;
 	}
@@ -215,7 +217,9 @@ static void hnat_stop(void)
 	writel(0, host->ppe_base + PPE_TB_BASE);
 
 	if (ppe_busy_wait()) {
+#if 0
 		reset_control_reset(host->rstc);
+#endif
 		msleep(2000);
 		return;
 	}
@@ -263,11 +267,11 @@ static int hnat_probe(struct platform_device *pdev)
 	err = hnat_init_debugfs(host);
 	if (err)
 		return err;
-
+#if 0
 	host->rstc = devm_reset_control_get(&pdev->dev, NULL);
 	if (IS_ERR(host->rstc))
 		return PTR_ERR(host->rstc);
-
+#endif
 	err = hnat_start();
 	if (err)
 		goto err_out;

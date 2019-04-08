@@ -28,6 +28,7 @@ static unsigned int skb_to_hnat_info(struct sk_buff *skb,
 {
 	struct foe_entry entry = { 0 };
 	int lan = IS_LAN(dev);
+	int wan = IS_WAN(dev);
 	struct ethhdr *eth;
 	struct iphdr *iph;
 	struct tcphdr *tcph;
@@ -66,7 +67,15 @@ static unsigned int skb_to_hnat_info(struct sk_buff *skb,
 	if (lan) {
 		entry.ipv4_hnapt.etype = htons(ETH_P_8021Q);
 		entry.bfib1.vlan_layer = 1;
-		entry.ipv4_hnapt.vlan1 = BIT(dev->name[3] - '0');
+
+		/* lan0-port1, lan1-port2, lan2-port3, lan3-port4 */
+		entry.ipv4_hnapt.vlan1 = BIT((dev->name[3] - '0')+1);   
+	} else if (wan) {
+		entry.ipv4_hnapt.etype = htons(ETH_P_8021Q);
+		entry.bfib1.vlan_layer = 1;
+
+		/* wan port 0  */
+		entry.ipv4_hnapt.vlan1 = BIT(0);   
 	}
 
 	if (dev->priv_flags & IFF_802_1Q_VLAN) {
@@ -74,10 +83,7 @@ static unsigned int skb_to_hnat_info(struct sk_buff *skb,
 
 		entry.ipv4_hnapt.etype = htons(ETH_P_8021Q);
 		entry.bfib1.vlan_layer = 1;
-		if (lan)
-			entry.ipv4_hnapt.vlan2 = vlan->vlan_id;
-		else
-			entry.ipv4_hnapt.vlan1 = vlan->vlan_id;
+		entry.ipv4_hnapt.vlan2 = vlan->vlan_id;
 	}
 
 	entry.ipv4_hnapt.dmac_hi = swab32(*((u32*) eth->h_dest));
@@ -151,8 +157,10 @@ static unsigned int mtk_hnat_nf_post_routing(struct sk_buff *skb,
 	enum ip_conntrack_info ctinfo;
 	const struct nf_conn_help *help;
 
+#if 0
 	if ((skb->mark & 0x7) < 4)
 		return 0;
+#endif
 
 	ct = nf_ct_get(skb, &ctinfo);
 	if (!ct)
