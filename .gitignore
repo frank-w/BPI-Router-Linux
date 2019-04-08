@@ -33,11 +33,18 @@
 *.lzo
 *.patch
 *.gcno
+*.ll
 modules.builtin
 Module.symvers
 *.dwo
 *.su
 *.c.[012]*.*
+
+arch/arm/boot/zImage-dtb
+build.log
+uImage
+uboot/
+
 
 #
 # Top-level generic files
@@ -114,3 +121,13 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+#ASN
+*.asn1.h
+*.asn1.c
+
+#own
+DEBIAN/
+SD/
+patch-*
+mod/
