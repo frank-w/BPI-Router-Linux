@@ -1,0 +1,12 @@
+Index: linux-4.9.44/drivers/leds/Makefile
+===================================================================
+--- linux-4.9.44.orig/drivers/leds/Makefile	2017-08-30 15:24:13.412252199 +0800
++++ linux-4.9.44/drivers/leds/Makefile	2017-08-30 15:24:33.912254614 +0800
+@@ -71,6 +71,7 @@
+ obj-$(CONFIG_LEDS_IS31FL32XX)		+= leds-is31fl32xx.o
+ obj-$(CONFIG_LEDS_PM8058)		+= leds-pm8058.o
+ obj-$(CONFIG_LEDS_MLXCPLD)		+= leds-mlxcpld.o
++obj-$(CONFIG_LEDS_MT6323)		+= leds-mt6323.o
+ 
+ # LED SPI Drivers
+ obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o

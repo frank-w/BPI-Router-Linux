@@ -1,0 +1,498 @@
+Index: linux-4.9.44/drivers/net/dsa/mt7530.c
+===================================================================
+--- linux-4.9.44.orig/drivers/net/dsa/mt7530.c	2017-08-29 16:39:33.693517932 +0800
++++ linux-4.9.44/drivers/net/dsa/mt7530.c	2017-08-29 16:39:34.194128314 +0800
+@@ -26,6 +26,7 @@
+ #include <linux/regmap.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/reset.h>
++#include <linux/gpio/consumer.h>
+ #include <net/dsa.h>
+ #include <net/switchdev.h>
+ 
+@@ -75,12 +76,6 @@
+ 	MIB_DESC(1, 0xb8, "RxArlDrop"),
+ };
+ 
+-static struct mt7530_priv *lpriv;
+-static void mt7530_port_disable(struct dsa_switch *ds, int port,
+-				struct phy_device *phy);
+-static int mt7530_cpu_port_enable(struct mt7530_priv *priv,
+-				  int port);
+-
+ static int
+ mt7623_trgmii_write(struct mt7530_priv *priv,  u32 reg, u32 val)
+ {
+@@ -301,15 +296,14 @@
+ }
+ 
+ static u32
+-_mt7530_read(u32 reg)
++_mt7530_read(struct mt7530_dummy_poll *p)
+ {
+-	struct mt7530_priv	*priv = lpriv;
+-	struct mii_bus		*bus = priv->bus;
++	struct mii_bus		*bus = p->priv->bus;
+ 	u32 val;
+ 
+ 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
+ 
+-	val = mt7530_mii_read(priv, reg);
++	val = mt7530_mii_read(p->priv, p->reg);
+ 
+ 	mutex_unlock(&bus->mdio_lock);
+ 
+@@ -319,7 +313,10 @@
+ static u32
+ mt7530_read(struct mt7530_priv *priv, u32 reg)
+ {
+-	return _mt7530_read(reg);
++	struct mt7530_dummy_poll p;
++
++	INIT_MT7530_DUMMY_POLL(&p, priv, reg);
++	return _mt7530_read(&p);
+ }
+ 
+ static void
+@@ -356,12 +353,14 @@
+ {
+ 	u32 val;
+ 	int ret;
++	struct mt7530_dummy_poll p;
+ 
+ 	/* Set the command operating upon the MAC address entries */
+ 	val = ATC_BUSY | ATC_MAT(0) | cmd;
+ 	mt7530_write(priv, MT7530_ATC, val);
+ 
+-	ret = readx_poll_timeout(_mt7530_read, MT7530_ATC, val,
++	INIT_MT7530_DUMMY_POLL(&p, priv, MT7530_ATC);
++	ret = readx_poll_timeout(_mt7530_read, &p, val,
+ 				 !(val & ATC_BUSY), 20, 20000);
+ 	if (ret < 0) {
+ 		dev_err(priv->dev, "reset timeout\n");
+@@ -559,107 +558,6 @@
+ 		mt7530_clear(priv, MT7530_PMCR_P(port), mask);
+ }
+ 
+-static int
+-mt7530_setup(struct dsa_switch *ds)
+-{
+-	struct mt7530_priv *priv = ds->priv;
+-	int ret, i;
+-	u32 id, val;
+-	struct device_node *dn;
+-
+-	/* The parent node of master_netdev which holds the common system
+-	 * controller also is the container for two GMACs nodes representing
+-	 * as two netdev instances.
+-	 */
+-	dn = ds->master_netdev->dev.of_node->parent;
+-	priv->ethernet = syscon_node_to_regmap(dn);
+-	if (IS_ERR(priv->ethernet))
+-		return PTR_ERR(priv->ethernet);
+-
+-	regulator_set_voltage(priv->core_pwr, 1000000, 1000000);
+-	ret = regulator_enable(priv->core_pwr);
+-	if (ret < 0) {
+-		dev_err(priv->dev,
+-			"Failed to enable core power: %d\n", ret);
+-		return ret;
+-	}
+-
+-	regulator_set_voltage(priv->io_pwr, 3300000, 3300000);
+-	ret = regulator_enable(priv->io_pwr);
+-	if (ret < 0) {
+-		dev_err(priv->dev, "Failed to enable io pwr: %d\n",
+-			ret);
+-		return ret;
+-	}
+-
+-	/* Reset whole chip through gpio pin or memory-mapped registers for
+-	 * different type of hardware
+-	 */
+-	if (priv->mcm) {
+-		reset_control_assert(priv->rstc);
+-		usleep_range(1000, 1100);
+-		reset_control_deassert(priv->rstc);
+-	} else {
+-		gpiod_set_value_cansleep(priv->reset, 0);
+-		usleep_range(1000, 1100);
+-		gpiod_set_value_cansleep(priv->reset, 1);
+-	}
+-
+-	/* Waiting for MT7530 got to stable */
+-	ret = readx_poll_timeout(_mt7530_read, MT7530_HWTRAP, val, val != 0,
+-				 20, 1000000);
+-	if (ret < 0) {
+-		dev_err(priv->dev, "reset timeout\n");
+-		return ret;
+-	}
+-
+-	id = mt7530_read(priv, MT7530_CREV);
+-	id >>= CHIP_NAME_SHIFT;
+-	if (id != MT7530_ID) {
+-		dev_err(priv->dev, "chip %x can't be supported\n", id);
+-		return -ENODEV;
+-	}
+-
+-	/* Reset the switch through internal reset */
+-	mt7530_write(priv, MT7530_SYS_CTRL,
+-		     SYS_CTRL_PHY_RST | SYS_CTRL_SW_RST |
+-		     SYS_CTRL_REG_RST);
+-
+-	/* Enable Port 6 only; P5 as GMAC5 which currently is not supported */
+-	val = mt7530_read(priv, MT7530_MHWTRAP);
+-	val &= ~MHWTRAP_P5_DIS & ~MHWTRAP_P6_DIS & ~MHWTRAP_PHY_ACCESS;
+-	val |= MHWTRAP_MANUAL;
+-	if (!dsa_is_cpu_port(ds, 5)) {
+-		val |= MHWTRAP_P5_DIS;
+-		val |= MHWTRAP_P5_MAC_SEL;
+-		val |= MHWTRAP_P5_RGMII_MODE;
+-	}
+-	mt7530_write(priv, MT7530_MHWTRAP, val);
+-
+-	/* Enable and reset MIB counters */
+-	mt7530_mib_reset(ds);
+-
+-	mt7530_clear(priv, MT7530_MFC, UNU_FFP_MASK);
+-
+-	for (i = 0; i < MT7530_NUM_PORTS; i++) {
+-		/* Disable forwarding by default on all ports */
+-		mt7530_rmw(priv, MT7530_PCR_P(i), PCR_MATRIX_MASK,
+-			   PCR_MATRIX_CLR);
+-
+-		if (dsa_is_cpu_port(ds, i))
+-			mt7530_cpu_port_enable(priv, i);
+-		else
+-			mt7530_port_disable(ds, i, NULL);
+-	}
+-
+-	/* Flush the FDB table */
+-	ret = mt7530_fdb_cmd(priv, MT7530_FDB_FLUSH, 0);
+-	if (ret < 0)
+-		return ret;
+-
+-	return 0;
+-}
+-
+ static int mt7530_phy_read(struct dsa_switch *ds, int port, int regnum)
+ {
+ 	struct mt7530_priv *priv = ds->priv;
+@@ -1010,7 +908,7 @@
+ static int
+ mt7530_port_fdb_dump(struct dsa_switch *ds, int port,
+ 		     struct switchdev_obj_port_fdb *fdb,
+-		     int (*cb)(struct switchdev_obj *obj))
++		     switchdev_obj_dump_cb_t *cb)
+ {
+ 	struct mt7530_priv *priv = ds->priv;
+ 	struct mt7530_fdb _fdb = { 0 };
+@@ -1052,6 +950,109 @@
+ 	return DSA_TAG_PROTO_MTK;
+ }
+ 
++static int
++mt7530_setup(struct dsa_switch *ds)
++{
++	struct mt7530_priv *priv = ds->priv;
++	int ret, i;
++	u32 id, val;
++	struct device_node *dn;
++	struct mt7530_dummy_poll p;
++
++	/* The parent node of cpu_dp->netdev which holds the common system
++	 * controller also is the container for two GMACs nodes representing
++	 * as two netdev instances.
++	 */
++	dn = ds->master_netdev->dev.of_node->parent;
++	priv->ethernet = syscon_node_to_regmap(dn);
++	if (IS_ERR(priv->ethernet))
++		return PTR_ERR(priv->ethernet);
++
++	regulator_set_voltage(priv->core_pwr, 1000000, 1000000);
++	ret = regulator_enable(priv->core_pwr);
++	if (ret < 0) {
++		dev_err(priv->dev,
++			"Failed to enable core power: %d\n", ret);
++		return ret;
++	}
++
++	regulator_set_voltage(priv->io_pwr, 3300000, 3300000);
++	ret = regulator_enable(priv->io_pwr);
++	if (ret < 0) {
++		dev_err(priv->dev, "Failed to enable io pwr: %d\n",
++			ret);
++		return ret;
++	}
++
++	/* Reset whole chip through gpio pin or memory-mapped registers for
++	 * different type of hardware
++	 */
++	if (priv->mcm) {
++		reset_control_assert(priv->rstc);
++		usleep_range(1000, 1100);
++		reset_control_deassert(priv->rstc);
++	} else {
++		gpiod_set_value_cansleep(priv->reset, 0);
++		usleep_range(1000, 1100);
++		gpiod_set_value_cansleep(priv->reset, 1);
++	}
++
++	/* Waiting for MT7530 got to stable */
++	INIT_MT7530_DUMMY_POLL(&p, priv, MT7530_HWTRAP);
++	ret = readx_poll_timeout(_mt7530_read, &p, val, val != 0,
++				 20, 1000000);
++	if (ret < 0) {
++		dev_err(priv->dev, "reset timeout\n");
++		return ret;
++	}
++
++	id = mt7530_read(priv, MT7530_CREV);
++	id >>= CHIP_NAME_SHIFT;
++	if (id != MT7530_ID) {
++		dev_err(priv->dev, "chip %x can't be supported\n", id);
++		return -ENODEV;
++	}
++
++	/* Reset the switch through internal reset */
++	mt7530_write(priv, MT7530_SYS_CTRL,
++		     SYS_CTRL_PHY_RST | SYS_CTRL_SW_RST |
++		     SYS_CTRL_REG_RST);
++
++	/* Enable Port 6 only; P5 for GMAC2 as the option */
++	val = mt7530_read(priv, MT7530_MHWTRAP);
++	val &= ~MHWTRAP_P5_DIS & ~MHWTRAP_P6_DIS & ~MHWTRAP_PHY_ACCESS;
++	val |= MHWTRAP_MANUAL;
++	if (!dsa_is_cpu_port(ds, 5)) {
++		val |= MHWTRAP_P5_DIS;
++		val |= MHWTRAP_P5_MAC_SEL;
++		val |= MHWTRAP_P5_RGMII_MODE;
++	}
++	mt7530_write(priv, MT7530_MHWTRAP, val);
++
++	/* Enable and reset MIB counters */
++	mt7530_mib_reset(ds);
++
++	mt7530_clear(priv, MT7530_MFC, UNU_FFP_MASK);
++
++	for (i = 0; i < MT7530_NUM_PORTS; i++) {
++		/* Disable forwarding by default on all ports */
++		mt7530_rmw(priv, MT7530_PCR_P(i), PCR_MATRIX_MASK,
++			   PCR_MATRIX_CLR);
++
++		if (dsa_is_cpu_port(ds, i))
++			mt7530_cpu_port_enable(priv, i);
++		else
++			mt7530_port_disable(ds, i, NULL);
++	}
++
++	/* Flush the FDB table */
++	ret = mt7530_fdb_cmd(priv, MT7530_FDB_FLUSH, 0);
++	if (ret < 0)
++		return ret;
++
++	return 0;
++}
++
+ static struct dsa_switch_ops mt7530_switch_ops = {
+ 	.get_tag_protocol	= mtk_get_tag_protocol,
+ 	.setup			= mt7530_setup,
+@@ -1135,9 +1136,7 @@
+ 	priv->ds->dev = &mdiodev->dev;
+ 	priv->ds->ops = &mt7530_switch_ops;
+ 	mutex_init(&priv->reg_mutex);
+-	lpriv = priv;
+ 	dev_set_drvdata(&mdiodev->dev, priv);
+-
+ 	return dsa_register_switch(priv->ds, priv->ds->dev->of_node);
+ }
+ 
+Index: linux-4.9.44/drivers/net/dsa/mt7530.h
+===================================================================
+--- linux-4.9.44.orig/drivers/net/dsa/mt7530.h	2017-08-29 16:39:33.693517932 +0800
++++ linux-4.9.44/drivers/net/dsa/mt7530.h	2017-08-29 16:39:34.194128314 +0800
+@@ -394,4 +394,16 @@
+ 	u8		sizeof_stat;
+ };
+ 
++struct mt7530_dummy_poll {
++	struct mt7530_priv *priv;
++	u32 reg;
++};
++
++static inline void INIT_MT7530_DUMMY_POLL(struct mt7530_dummy_poll *p,
++					  struct mt7530_priv *priv, u32 reg)
++{
++	p->priv = priv;
++	p->reg = reg;
++}
++
+ #endif /* __MT7530_H */
+Index: linux-4.9.44/arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
+===================================================================
+--- linux-4.9.44.orig/arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts	2017-08-29 16:39:34.194128314 +0800
++++ linux-4.9.44/arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts	2017-08-29 16:41:19.252784357 +0800
+@@ -27,6 +27,7 @@
+ 
+ 	chosen {
+ 		stdout-path = "serial2:115200n8";
++		bootargs = "earlyprintk block2mtd.block2mtd=/dev/mmcblk0,65536,eMMC,5 mtdparts=eMMC:256k(mbr)ro,512k(uboot)ro,256k(config)ro,256k(factory)ro,32M(kernel),32M(recovery),1024M(rootfs),2048M(usrdata),-(bmtpool) rootfstype=squashfs,jffs2";
+ 	};
+ 
+ 	cpus {
+@@ -88,6 +89,78 @@
+ 			default-state = "off";
+ 		};
+ 	};
++
++	switch {
++		compatible = "mediatek,mt7530";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		reg = <0>;
++
++		dsa,mii-bus = <&mdio>;
++		pinctrl-names = "default";
++		reset-gpios = <&pio 33 0>;
++		core-supply = <&mt6323_vpa_reg>;
++		io-supply = <&mt6323_vemc3v3_reg>;
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <0>;
++
++			port@0 {
++				reg = <0>;
++				label = "wan";
++				cpu = <&cpu_port1>;
++			};
++
++			port@1 {
++				reg = <1>;
++				label = "lan0";
++				cpu = <&cpu_port0>;
++			};
++
++			port@2 {
++				reg = <2>;
++				label = "lan1";
++				cpu = <&cpu_port0>;
++			};
++
++			port@3 {
++				reg = <3>;
++				label = "lan2";
++				cpu = <&cpu_port0>;
++			};
++
++			port@4 {
++				reg = <4>;
++				label = "lan3";
++				cpu = <&cpu_port0>;
++			};
++
++			cpu_port1: port@5 {
++				reg = <5>;
++				label = "cpu";
++				ethernet = <&gmac1>;
++				phy-mode = "trgmii";
++				fixed-link {
++					speed = <1000>;
++					full-duplex;
++				};
++			};
++
++			cpu_port0: port@6 {
++				reg = <6>;
++				label = "cpu";
++				ethernet = <&gmac0>;
++				phy-mode = "trgmii";
++
++				fixed-link {
++					speed = <1000>;
++					full-duplex;
++				};
++			};
++		};
++	};
+ };
+ 
+ &cir {
+@@ -115,64 +188,22 @@
+ 		};
+ 	};
+ 
++	gmac1: mac@1 {
++		compatible = "mediatek,eth-mac";
++		reg = <1>;
++		phy-mode = "trgmii";
++
++		fixed-link {
++			speed = <1000>;
++			full-duplex;
++			pause;
++		};
++	};
++
+ 	mdio: mdio-bus {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+-
+-		switch@0 {
+-			compatible = "mediatek,mt7530";
+-			#address-cells = <1>;
+-			#size-cells = <0>;
+-			reg = <0>;
+-			pinctrl-names = "default";
+-			reset-gpios = <&pio 33 0>;
+-			core-supply = <&mt6323_vpa_reg>;
+-			io-supply = <&mt6323_vemc3v3_reg>;
+-
+-			ports {
+-				#address-cells = <1>;
+-				#size-cells = <0>;
+-				reg = <0>;
+-
+-				port@0 {
+-					reg = <0>;
+-					label = "wan";
+-				};
+-
+-				port@1 {
+-					reg = <1>;
+-					label = "lan0";
+-				};
+-
+-				port@2 {
+-					reg = <2>;
+-					label = "lan1";
+-				};
+-
+-				port@3 {
+-					reg = <3>;
+-					label = "lan2";
+-				};
+-
+-				port@4 {
+-					reg = <4>;
+-					label = "lan3";
+-				};
+-
+-				port@6 {
+-					reg = <6>;
+-					label = "cpu";
+-					ethernet = <&gmac0>;
+-					phy-mode = "trgmii";
+-
+-					fixed-link {
+-						speed = <1000>;
+-						full-duplex;
+-					};
+-				};
+-			};
+ 		};
+-	};
+ };
+ 
+ &i2c0 {

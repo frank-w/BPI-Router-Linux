@@ -1,0 +1,118 @@
+--- a/arch/arm/boot/dts/mt7623.dtsi	2017-09-25 20:32:14.620036453 +0800
++++ b/arch/arm/boot/dts/mt7623.dtsi	2017-09-25 20:34:15.310590521 +0800
+@@ -892,6 +892,15 @@
+ 		reg = <0>;
+ 	};
+ 
++	hnat: hnat@1b000000 {
++		compatible = "mediatek,mt7623-hnat";
++		reg = <0 0x1b100000 0 0x3000>;
++		mtketh-wan = "wan";
++		resets = <&ethsys 0>;
++		reset-names = "mtketh";
++	};
++
++
+ 	crypto: crypto@1b240000 {
+ 		compatible = "mediatek,eip97-crypto";
+ 		reg = <0 0x1b240000 0 0x20000>;
+
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c	2017-09-25 20:32:15.180030541 +0800
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c	2017-09-29 09:37:24.824652957 +0800
+@@ -2057,8 +2057,8 @@
+ 		/* Enable RX checksum */
+ 		val |= MTK_GDMA_ICS_EN | MTK_GDMA_TCS_EN | MTK_GDMA_UCS_EN;
+ 
+-		if (!i)
+-			val |= BIT(24);
++		/* Enable special tag */
++		val |= BIT(24);
+ 
+ 		/* setup the mac dma */
+ 		mtk_w32(eth, val, MTK_GDMA_FWD_CFG(i));
+--- a/drivers/net/ethernet/mediatek/mtk_hnat/hnat.c	2017-09-25 20:32:15.184030498 +0800
++++ b/drivers/net/ethernet/mediatek/mtk_hnat/hnat.c	2017-09-29 09:38:50.806170843 +0800
+@@ -164,7 +164,9 @@
+ 		    BITS_GDM2_ALL_FRC_P_DISCARD);
+ 
+ 	if (ppe_busy_wait()) {
++#if 0
+ 		reset_control_reset(host->rstc);
++#endif
+ 		msleep(2000);
+ 		return;
+ 	}
+@@ -215,7 +217,9 @@
+ 	writel(0, host->ppe_base + PPE_TB_BASE);
+ 
+ 	if (ppe_busy_wait()) {
++#if 0
+ 		reset_control_reset(host->rstc);
++#endif
+ 		msleep(2000);
+ 		return;
+ 	}
+@@ -263,11 +267,11 @@
+ 	err = hnat_init_debugfs(host);
+ 	if (err)
+ 		return err;
+-
++#if 0
+ 	host->rstc = devm_reset_control_get(&pdev->dev, NULL);
+ 	if (IS_ERR(host->rstc))
+ 		return PTR_ERR(host->rstc);
+-
++#endif
+ 	err = hnat_start();
+ 	if (err)
+ 		goto err_out;
+--- a/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c	2017-09-25 20:32:15.184030498 +0800
++++ b/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c	2017-09-29 09:45:40.016349226 +0800
+@@ -28,6 +28,7 @@
+ {
+ 	struct foe_entry entry = { 0 };
+ 	int lan = IS_LAN(dev);
++	int wan = IS_WAN(dev);
+ 	struct ethhdr *eth;
+ 	struct iphdr *iph;
+ 	struct tcphdr *tcph;
+@@ -66,7 +67,15 @@
+ 	if (lan) {
+ 		entry.ipv4_hnapt.etype = htons(ETH_P_8021Q);
+ 		entry.bfib1.vlan_layer = 1;
+-		entry.ipv4_hnapt.vlan1 = BIT(dev->name[3] - '0');
++
++		/* lan0-port1, lan1-port2, lan2-port3, lan3-port4 */
++		entry.ipv4_hnapt.vlan1 = BIT((dev->name[3] - '0')+1);   
++	} else if (wan) {
++		entry.ipv4_hnapt.etype = htons(ETH_P_8021Q);
++		entry.bfib1.vlan_layer = 1;
++
++		/* wan port 0  */
++		entry.ipv4_hnapt.vlan1 = BIT(0);   
+ 	}
+ 
+ 	if (dev->priv_flags & IFF_802_1Q_VLAN) {
+@@ -74,10 +83,7 @@
+ 
+ 		entry.ipv4_hnapt.etype = htons(ETH_P_8021Q);
+ 		entry.bfib1.vlan_layer = 1;
+-		if (lan)
+-			entry.ipv4_hnapt.vlan2 = vlan->vlan_id;
+-		else
+-			entry.ipv4_hnapt.vlan1 = vlan->vlan_id;
++		entry.ipv4_hnapt.vlan2 = vlan->vlan_id;
+ 	}
+ 
+ 	entry.ipv4_hnapt.dmac_hi = swab32(*((u32*) eth->h_dest));
+@@ -151,8 +157,10 @@
+ 	enum ip_conntrack_info ctinfo;
+ 	const struct nf_conn_help *help;
+ 
++#if 0
+ 	if ((skb->mark & 0x7) < 4)
+ 		return 0;
++#endif
+ 
+ 	ct = nf_ct_get(skb, &ctinfo);
+ 	if (!ct)

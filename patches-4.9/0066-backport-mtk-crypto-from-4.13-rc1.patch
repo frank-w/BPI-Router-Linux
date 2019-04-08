@@ -1,0 +1,111 @@
+Index: linux-4.9.44/arch/arm/boot/dts/mt7623.dtsi
+===================================================================
+--- linux-4.9.44.orig/arch/arm/boot/dts/mt7623.dtsi	2017-08-31 14:15:39.122253979 +0800
++++ linux-4.9.44/arch/arm/boot/dts/mt7623.dtsi	2017-08-31 14:33:53.092253965 +0800
+@@ -800,16 +800,15 @@
+ 	};
+ 
+ 	crypto: crypto@1b240000 {
+-		compatible = "mediatek,mt7623-crypto";
++		compatible = "mediatek,eip97-crypto";
+ 		reg = <0 0x1b240000 0 0x20000>;
+ 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_LOW>,
+ 			     <GIC_SPI 83 IRQ_TYPE_LEVEL_LOW>,
+ 			     <GIC_SPI 84 IRQ_TYPE_LEVEL_LOW>,
+ 			     <GIC_SPI 91 IRQ_TYPE_LEVEL_LOW>,
+ 			     <GIC_SPI 97 IRQ_TYPE_LEVEL_LOW>;
+-		clocks = <&topckgen CLK_TOP_ETHIF_SEL>,
+-			 <&ethsys CLK_ETHSYS_CRYPTO>;
+-		clock-names = "ethif","cryp";
++		clocks = <&ethsys CLK_ETHSYS_CRYPTO>;
++		clock-names = "cryp";
+ 		power-domains = <&scpsys MT2701_POWER_DOMAIN_ETH>;
+ 		status = "disabled";
+ 	};
+Index: linux-4.9.44/drivers/crypto/mediatek/mtk-aes.c
+===================================================================
+--- linux-4.9.44.orig/drivers/crypto/mediatek/mtk-aes.c	2017-08-31 11:46:55.990436334 +0800
++++ linux-4.9.44/drivers/crypto/mediatek/mtk-aes.c	2017-08-31 15:48:21.965187329 +0800
+@@ -928,7 +928,12 @@
+ static int mtk_aes_gcm_crypt(struct aead_request *req, u64 mode)
+ {
+ 	struct mtk_aes_base_ctx *ctx = crypto_aead_ctx(crypto_aead_reqtfm(req));
++	struct mtk_aes_gcm_ctx *gctx = mtk_aes_gcm_ctx_cast(ctx);
+ 	struct mtk_aes_reqctx *rctx = aead_request_ctx(req);
++	
++	/* Empty messages are not supported yet */
++	if (!gctx->textlen && !req->assoclen)
++		return -EINVAL;
+ 
+ 	rctx->mode = AES_FLAGS_GCM | mode;
+ 
+Index: linux-4.9.44/drivers/crypto/mediatek/mtk-platform.c
+===================================================================
+--- linux-4.9.44.orig/drivers/crypto/mediatek/mtk-platform.c	2017-08-31 11:46:55.990436334 +0800
++++ linux-4.9.44/drivers/crypto/mediatek/mtk-platform.c	2017-08-31 13:50:53.672256610 +0800
+@@ -504,19 +504,14 @@
+ 		}
+ 	}
+ 
+-	cryp->clk_ethif = devm_clk_get(&pdev->dev, "ethif");
+ 	cryp->clk_cryp = devm_clk_get(&pdev->dev, "cryp");
+-	if (IS_ERR(cryp->clk_ethif) || IS_ERR(cryp->clk_cryp))
++	if (IS_ERR(cryp->clk_cryp))
+ 		return -EPROBE_DEFER;
+ 
+ 	cryp->dev = &pdev->dev;
+ 	pm_runtime_enable(cryp->dev);
+ 	pm_runtime_get_sync(cryp->dev);
+ 
+-	err = clk_prepare_enable(cryp->clk_ethif);
+-	if (err)
+-		goto err_clk_ethif;
+-
+ 	err = clk_prepare_enable(cryp->clk_cryp);
+ 	if (err)
+ 		goto err_clk_cryp;
+@@ -559,8 +554,6 @@
+ err_resource:
+ 	clk_disable_unprepare(cryp->clk_cryp);
+ err_clk_cryp:
+-	clk_disable_unprepare(cryp->clk_ethif);
+-err_clk_ethif:
+ 	pm_runtime_put_sync(cryp->dev);
+ 	pm_runtime_disable(cryp->dev);
+ 
+@@ -576,7 +569,6 @@
+ 	mtk_desc_dma_free(cryp);
+ 
+ 	clk_disable_unprepare(cryp->clk_cryp);
+-	clk_disable_unprepare(cryp->clk_ethif);
+ 
+ 	pm_runtime_put_sync(cryp->dev);
+ 	pm_runtime_disable(cryp->dev);
+@@ -596,7 +588,6 @@
+ 	.remove = mtk_crypto_remove,
+ 	.driver = {
+ 		   .name = "mtk-crypto",
+-		   .owner = THIS_MODULE,
+ 		   .of_match_table = of_crypto_id,
+ 	},
+ };
+Index: linux-4.9.44/drivers/crypto/mediatek/mtk-platform.h
+===================================================================
+--- linux-4.9.44.orig/drivers/crypto/mediatek/mtk-platform.h	2017-08-31 11:46:59.422252274 +0800
++++ linux-4.9.44/drivers/crypto/mediatek/mtk-platform.h	2017-08-31 13:51:20.174127005 +0800
+@@ -200,7 +200,6 @@
+  * struct mtk_cryp - Cryptographic device
+  * @base:	pointer to mapped register I/O base
+  * @dev:	pointer to device
+- * @clk_ethif:	pointer to ethif clock
+  * @clk_cryp:	pointer to crypto clock
+  * @irq:	global system and rings IRQ
+  * @ring:	pointer to descriptor rings
+@@ -215,7 +214,6 @@
+ struct mtk_cryp {
+ 	void __iomem *base;
+ 	struct device *dev;
+-	struct clk *clk_ethif;
+ 	struct clk *clk_cryp;
+ 	int irq[MTK_IRQ_NUM];
+ 

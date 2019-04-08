@@ -1,0 +1,38 @@
+--- a/drivers/pci/host/pcie-mediatek.c		2017-10-11 00:35:13.547335402 +0800
++++ b/drivers/pci/host/pcie-mediatek.c		2017-10-11 00:36:07.635327373 +0800
+@@ -335,10 +335,23 @@
+ {
+ 	struct mtk_pcie *pcie = bus->sysdata;
+ 	struct mtk_pcie_port *port;
++	struct pci_dev *dev;
++	struct pci_bus *pbus;
+ 
+-	list_for_each_entry(port, &pcie->ports, list)
+-		if (port->slot == PCI_SLOT(devfn))
++	list_for_each_entry(port, &pcie->ports, list) {
++		if (bus->number == 0 && port->slot == PCI_SLOT(devfn)) {
+ 			return port;
++		} else if (bus->number != 0) {
++			pbus = bus;
++			do {
++				dev = pbus->self;
++				if (port->slot == PCI_SLOT(dev->devfn))
++					return port;
++
++				pbus = dev->bus;
++			} while (dev->bus->number != 0);
++		}
++	}
+ 
+ 	return NULL;
+ }
+@@ -665,6 +678,9 @@
+ {
+ 	struct mtk_pcie *pcie = bus->sysdata;
+ 
++	if (!mtk_pcie_find_port(bus, devfn))
++		return 0;
++
+ 	writel(PCIE_CONF_ADDR(where, PCI_FUNC(devfn), PCI_SLOT(devfn),
+ 			      bus->number), pcie->base + PCIE_CFG_ADDR);
+ 
