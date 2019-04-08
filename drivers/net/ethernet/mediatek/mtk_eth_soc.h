@@ -80,7 +80,6 @@
 
 /* CDMP Ingress Control Register */
 #define MTK_CDMP_IG_CTRL	0x400
-#define MTK_CDMP_STAG_EN	BIT(0)
 
 /* CDMP Exgress Control Register */
 #define MTK_CDMP_EG_CTRL	0x404
@@ -91,11 +90,26 @@
 #define MTK_GDMA_TCS_EN		BIT(21)
 #define MTK_GDMA_UCS_EN		BIT(20)
 
+/* GDMA Ingress Control Register */
+#define MTK_GDMA1_IG_CTRL(x)	(0x500 + (x * 0x1000))
+
 /* Unicast Filter MAC Address Register - Low */
 #define MTK_GDMA_MAC_ADRL(x)	(0x508 + (x * 0x1000))
 
 /* Unicast Filter MAC Address Register - High */
 #define MTK_GDMA_MAC_ADRH(x)	(0x50C + (x * 0x1000))
+
+/* QDMA RX Base Pointer Register */
+#define MTK_QRX_BASE_PTR0	0x1900
+#define MTK_QRX_BASE_PTR_CFG(x)	(MTK_QRX_BASE_PTR0 + (x * 0x10))
+
+/* QDMA RX Maximum Count Register */
+#define MTK_QRX_MAX_CNT0	0x1904
+#define MTK_QRX_MAX_CNT_CFG(x)	(MTK_QRX_MAX_CNT0 + (x * 0x10))
+
+/* QDMA RX CPU Pointer Register */
+#define MTK_QRX_CRX_IDX0	0x1908
+#define MTK_QRX_CRX_IDX_CFG(x)	(MTK_QRX_CRX_IDX0 + (x * 0x10))
 
 /* PDMA RX Base Pointer Register */
 #define MTK_PRX_BASE_PTR0	0x900
@@ -240,7 +254,10 @@
 #define MTK_QDMA_INT_MASK	0x1A1C
 
 /* QDMA Interrupt Mask Register */
+#define MTK_QDMA_HRED1		0x1A40
 #define MTK_QDMA_HRED2		0x1A44
+#define MTK_QDMA_SRED1		0x1A48
+#define MTK_QDMA_SRED2		0x1A4c
 
 /* QDMA TX Forward CPU Pointer Register */
 #define MTK_QTX_CTX_PTR		0x1B00
@@ -275,6 +292,7 @@
 #define TX_DMA_TSO		BIT(28)
 #define TX_DMA_FPORT_SHIFT	25
 #define TX_DMA_FPORT_MASK	0x7
+#define TX_DMA_VQID0		BIT(17)
 #define TX_DMA_INS_VLAN		BIT(16)
 
 /* QDMA descriptor txd3 */
@@ -294,7 +312,6 @@
 
 /* QDMA descriptor rxd4 */
 #define RX_DMA_L4_VALID		BIT(24)
-#define RX_DMA_SP_TAG		BIT(22)
 #define RX_DMA_FPORT_SHIFT	19
 #define RX_DMA_FPORT_MASK	0x7
 
@@ -310,6 +327,7 @@
 
 /* Mac control registers */
 #define MTK_MAC_MCR(x)		(0x10100 + (x * 0x100))
+#define MTK_MAC_MSR(x)		(0x10108 + (x * 0x100))
 #define MAC_MCR_MAX_RX_1536	BIT(24)
 #define MAC_MCR_IPG_CFG		(BIT(18) | BIT(16))
 #define MAC_MCR_FORCE_MODE	BIT(15)
@@ -495,7 +513,6 @@ struct mtk_tx_ring {
 enum mtk_rx_flags {
 	MTK_RX_FLAGS_NORMAL = 0,
 	MTK_RX_FLAGS_HWLRO,
-	MTK_RX_FLAGS_QDMA,
 };
 
 /* struct mtk_rx_ring -	This struct holds info describing a RX ring
@@ -539,9 +556,9 @@ struct mtk_rx_ring {
  * @pctl:		The register map pointing at the range used to setup
  *			GMAC port drive/slew values
  * @dma_refcnt:		track how many netdevs are using the DMA engine
- * @tx_ring:		Pointer to the memory holding info about the TX ring
- * @rx_ring:		Pointer to the memory holding info about the RX ring
- * @rx_ring_qdma:	Pointer to the memory holding info about the QDMA RX ring
+ * @tx_ring:		Pointer to the memore holding info about the TX ring
+ * @rx_ring:		Pointer to the memore holding info about the RX ring
+ * @rx_ring_qdma:	Pointer to the memore holding info about the RX ring (QDMA)
  * @tx_napi:		The TX NAPI struct
  * @rx_napi:		The RX NAPI struct
  * @scratch_ring:	Newer SoCs need memory for a second HW managed TX ring
@@ -563,6 +580,7 @@ struct mtk_eth {
 	struct net_device		*netdev[MTK_MAX_DEVS];
 	struct mtk_mac			*mac[MTK_MAX_DEVS];
 	int				irq[3];
+	cpumask_t			affinity_mask[3];
 	u32				msg_enable;
 	unsigned long			sysclk;
 	struct regmap			*ethsys;
@@ -614,5 +632,7 @@ void mtk_stats_update_mac(struct mtk_mac *mac);
 
 void mtk_w32(struct mtk_eth *eth, u32 val, unsigned reg);
 u32 mtk_r32(struct mtk_eth *eth, unsigned reg);
+
+extern unsigned int M2Q_table[16];
 
 #endif /* MTK_ETH_H */
