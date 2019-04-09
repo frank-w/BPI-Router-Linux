@@ -7,7 +7,7 @@
  *
  * Copyright(c) 2012 - 2014 Intel Corporation. All rights reserved.
  * Copyright(c) 2013 - 2015 Intel Mobile Communications GmbH
- * Copyright(c) 2016        Intel Deutschland GmbH
+ * Copyright(c) 2016 - 2017 Intel Deutschland GmbH
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of version 2 of the GNU General Public License as
@@ -34,6 +34,7 @@
  *
  * Copyright(c) 2012 - 2014 Intel Corporation. All rights reserved.
  * Copyright(c) 2013 - 2015 Intel Mobile Communications GmbH
+ * Copyright(c) 2016 - 2017 Intel Deutschland GmbH
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -405,11 +406,11 @@ static void iwl_mvm_set_tx_cmd_crypto(struct iwl_mvm *mvm,
 {
 	struct ieee80211_key_conf *keyconf = info->control.hw_key;
 	u8 *crypto_hdr = skb_frag->data + hdrlen;
+	enum iwl_tx_cmd_sec_ctrl type = TX_CMD_SEC_CCM;
 	u64 pn;
 
 	switch (keyconf->cipher) {
 	case WLAN_CIPHER_SUITE_CCMP:
-	case WLAN_CIPHER_SUITE_CCMP_256:
 		iwl_mvm_set_tx_cmd_ccmp(info, tx_cmd);
 		iwl_mvm_set_tx_cmd_pn(info, crypto_hdr);
 		break;
@@ -433,13 +434,16 @@ static void iwl_mvm_set_tx_cmd_crypto(struct iwl_mvm *mvm,
 		break;
 	case WLAN_CIPHER_SUITE_GCMP:
 	case WLAN_CIPHER_SUITE_GCMP_256:
+		type = TX_CMD_SEC_GCMP;
+		/* Fall through */
+	case WLAN_CIPHER_SUITE_CCMP_256:
 		/* TODO: Taking the key from the table might introduce a race
 		 * when PTK rekeying is done, having an old packets with a PN
 		 * based on the old key but the message encrypted with a new
 		 * one.
 		 * Need to handle this.
 		 */
-		tx_cmd->sec_ctl |= TX_CMD_SEC_GCMP | TX_CMD_SEC_KEY_FROM_TABLE;
+		tx_cmd->sec_ctl |= type | TX_CMD_SEC_KEY_FROM_TABLE;
 		tx_cmd->key[0] = keyconf->hw_key_idx;
 		iwl_mvm_set_tx_cmd_pn(info, crypto_hdr);
 		break;
@@ -499,15 +503,17 @@ static int iwl_mvm_get_ctrl_vif_queue(struct iwl_mvm *mvm,
 	switch (info->control.vif->type) {
 	case NL80211_IFTYPE_AP:
 		/*
-		 * handle legacy hostapd as well, where station may be added
-		 * only after assoc.
+		 * Handle legacy hostapd as well, where station may be added
+		 * only after assoc. Take care of the case where we send a
+		 * deauth to a station that we don't have.
 		 */
-		if (ieee80211_is_probe_resp(fc) || ieee80211_is_auth(fc))
+		if (ieee80211_is_probe_resp(fc) || ieee80211_is_auth(fc) ||
+		    ieee80211_is_deauth(fc))
 			return IWL_MVM_DQA_AP_PROBE_RESP_QUEUE;
 		if (info->hw_queue == info->control.vif->cab_queue)
 			return info->hw_queue;
 
-		WARN_ON_ONCE(1);
+		WARN_ONCE(1, "fc=0x%02x", le16_to_cpu(fc));
 		return IWL_MVM_DQA_AP_PROBE_RESP_QUEUE;
 	case NL80211_IFTYPE_P2P_DEVICE:
 		if (ieee80211_is_mgmt(fc))
@@ -619,8 +625,10 @@ int iwl_mvm_tx_skb_non_sta(struct iwl_mvm *mvm, struct sk_buff *skb)
 	 * values.
 	 * Note that we don't need to make sure it isn't agg'd, since we're
 	 * TXing non-sta
+	 * For DQA mode - we shouldn't increase it though
 	 */
-	atomic_inc(&mvm->pending_frames[sta_id]);
+	if (!iwl_mvm_is_dqa_supported(mvm))
+		atomic_inc(&mvm->pending_frames[sta_id]);
 
 	return 0;
 }
@@ -1007,11 +1015,8 @@ static int iwl_mvm_tx_mpdu(struct iwl_mvm *mvm, struct sk_buff *skb,
 
 	spin_unlock(&mvmsta->lock);
 
-	/* Increase pending frames count if this isn't AMPDU */
-	if ((iwl_mvm_is_dqa_supported(mvm) &&
-	     mvmsta->tid_data[tx_cmd->tid_tspec].state != IWL_AGG_ON &&
-	     mvmsta->tid_data[tx_cmd->tid_tspec].state != IWL_AGG_STARTING) ||
-	    (!iwl_mvm_is_dqa_supported(mvm) && !is_ampdu))
+	/* Increase pending frames count if this isn't AMPDU or DQA queue */
+	if (!iwl_mvm_is_dqa_supported(mvm) && !is_ampdu)
 		atomic_inc(&mvm->pending_frames[mvmsta->sta_id]);
 
 	return 0;
@@ -1081,12 +1086,13 @@ static void iwl_mvm_check_ratid_empty(struct iwl_mvm *mvm,
 	lockdep_assert_held(&mvmsta->lock);
 
 	if ((tid_data->state == IWL_AGG_ON ||
-	     tid_data->state == IWL_EMPTYING_HW_QUEUE_DELBA) &&
+	     tid_data->state == IWL_EMPTYING_HW_QUEUE_DELBA ||
+	     iwl_mvm_is_dqa_supported(mvm)) &&
 	    iwl_mvm_tid_queued(tid_data) == 0) {
 		/*
-		 * Now that this aggregation queue is empty tell mac80211 so it
-		 * knows we no longer have frames buffered for the station on
-		 * this TID (for the TIM bitmap calculation.)
+		 * Now that this aggregation or DQA queue is empty tell
+		 * mac80211 so it knows we no longer have frames buffered for
+		 * the station on this TID (for the TIM bitmap calculation.)
 		 */
 		ieee80211_sta_set_buffered(sta, tid, false);
 	}
@@ -1259,7 +1265,6 @@ static void iwl_mvm_rx_tx_cmd_single(struct iwl_mvm *mvm,
 	u8 skb_freed = 0;
 	u16 next_reclaimed, seq_ctl;
 	bool is_ndp = false;
-	bool txq_agg = false; /* Is this TXQ aggregated */
 
 	__skb_queue_head_init(&skbs);
 
@@ -1285,6 +1290,10 @@ static void iwl_mvm_rx_tx_cmd_single(struct iwl_mvm *mvm,
 			info->flags |= IEEE80211_TX_STAT_ACK;
 			break;
 		case TX_STATUS_FAIL_DEST_PS:
+			/* In DQA, the FW should have stopped the queue and not
+			 * return this status
+			 */
+			WARN_ON(iwl_mvm_is_dqa_supported(mvm));
 			info->flags |= IEEE80211_TX_STAT_TX_FILTERED;
 			break;
 		default:
@@ -1389,15 +1398,6 @@ static void iwl_mvm_rx_tx_cmd_single(struct iwl_mvm *mvm,
 			bool send_eosp_ndp = false;
 
 			spin_lock_bh(&mvmsta->lock);
-			if (iwl_mvm_is_dqa_supported(mvm)) {
-				enum iwl_mvm_agg_state state;
-
-				state = mvmsta->tid_data[tid].state;
-				txq_agg = (state == IWL_AGG_ON ||
-					state == IWL_EMPTYING_HW_QUEUE_DELBA);
-			} else {
-				txq_agg = txq_id >= mvm->first_agg_queue;
-			}
 
 			if (!is_ndp) {
 				tid_data->next_reclaimed = next_reclaimed;
@@ -1454,11 +1454,11 @@ static void iwl_mvm_rx_tx_cmd_single(struct iwl_mvm *mvm,
 	 * If the txq is not an AMPDU queue, there is no chance we freed
 	 * several skbs. Check that out...
 	 */
-	if (txq_agg)
+	if (iwl_mvm_is_dqa_supported(mvm) || txq_id >= mvm->first_agg_queue)
 		goto out;
 
 	/* We can't free more than one frame at once on a shared queue */
-	WARN_ON(!iwl_mvm_is_dqa_supported(mvm) && (skb_freed > 1));
+	WARN_ON(skb_freed > 1);
 
 	/* If we have still frames for this STA nothing to do here */
 	if (!atomic_sub_and_test(skb_freed, &mvm->pending_frames[sta_id]))

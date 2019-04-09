@@ -35,6 +35,7 @@
 static __le32 sctp_gso_make_checksum(struct sk_buff *skb)
 {
 	skb->ip_summed = CHECKSUM_NONE;
+	gso_reset_checksum(skb, ~0);
 	return sctp_compute_cksum(skb, skb_transport_offset(skb));
 }
 
@@ -43,6 +44,9 @@ static struct sk_buff *sctp_gso_segment(struct sk_buff *skb,
 {
 	struct sk_buff *segs = ERR_PTR(-EINVAL);
 	struct sctphdr *sh;
+
+	if (!(skb_shinfo(skb)->gso_type & SKB_GSO_SCTP))
+		goto out;
 
 	sh = sctp_hdr(skb);
 	if (!pskb_may_pull(skb, sizeof(*sh)))

@@ -73,6 +73,7 @@ struct nvmet_sq {
 	u16			qid;
 	u16			size;
 	struct completion	free_done;
+	struct completion	confirm_done;
 };
 
 /**
@@ -109,7 +110,6 @@ struct nvmet_ctrl {
 
 	struct mutex		lock;
 	u64			cap;
-	u64			serial;
 	u32			cc;
 	u32			csts;
 
@@ -150,6 +150,7 @@ struct nvmet_subsys {
 	u16			max_qid;
 
 	u64			ver;
+	u64			serial;
 	char			*subsysnqn;
 
 	struct config_group	group;

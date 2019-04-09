@@ -347,10 +347,9 @@ static int bmp280_read_humid(struct bmp280_data *data, int *val, int *val2)
 	adc_humidity = be16_to_cpu(tmp);
 	comp_humidity = bmp280_compensate_humidity(data, adc_humidity);
 
-	*val = comp_humidity;
-	*val2 = 1024;
+	*val = comp_humidity * 1000 / 1024;
 
-	return IIO_VAL_FRACTIONAL;
+	return IIO_VAL_INT;
 }
 
 static int bmp280_read_raw(struct iio_dev *indio_dev,
@@ -558,7 +557,7 @@ static int bmp280_chip_config(struct bmp280_data *data)
 	u8 osrs = BMP280_OSRS_TEMP_X(data->oversampling_temp + 1) |
 		  BMP280_OSRS_PRESS_X(data->oversampling_press + 1);
 
-	ret = regmap_update_bits(data->regmap, BMP280_REG_CTRL_MEAS,
+	ret = regmap_write_bits(data->regmap, BMP280_REG_CTRL_MEAS,
 				 BMP280_OSRS_TEMP_MASK |
 				 BMP280_OSRS_PRESS_MASK |
 				 BMP280_MODE_MASK,

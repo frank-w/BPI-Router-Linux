@@ -1684,10 +1684,38 @@ static void valleyview_pipestat_irq_handler(struct drm_i915_private *dev_priv,
 
 static u32 i9xx_hpd_irq_ack(struct drm_i915_private *dev_priv)
 {
-	u32 hotplug_status = I915_READ(PORT_HOTPLUG_STAT);
+	u32 hotplug_status = 0, hotplug_status_mask;
+	int i;
 
-	if (hotplug_status)
+	if (IS_G4X(dev_priv) ||
+	    IS_VALLEYVIEW(dev_priv) || IS_CHERRYVIEW(dev_priv))
+		hotplug_status_mask = HOTPLUG_INT_STATUS_G4X |
+			DP_AUX_CHANNEL_MASK_INT_STATUS_G4X;
+	else
+		hotplug_status_mask = HOTPLUG_INT_STATUS_I915;
+
+	/*
+	 * We absolutely have to clear all the pending interrupt
+	 * bits in PORT_HOTPLUG_STAT. Otherwise the ISR port
+	 * interrupt bit won't have an edge, and the i965/g4x
+	 * edge triggered IIR will not notice that an interrupt
+	 * is still pending. We can't use PORT_HOTPLUG_EN to
+	 * guarantee the edge as the act of toggling the enable
+	 * bits can itself generate a new hotplug interrupt :(
+	 */
+	for (i = 0; i < 10; i++) {
+		u32 tmp = I915_READ(PORT_HOTPLUG_STAT) & hotplug_status_mask;
+
+		if (tmp == 0)
+			return hotplug_status;
+
+		hotplug_status |= tmp;
 		I915_WRITE(PORT_HOTPLUG_STAT, hotplug_status);
+	}
+
+	WARN_ONCE(1,
+		  "PORT_HOTPLUG_STAT did not clear (0x%08x)\n",
+		  I915_READ(PORT_HOTPLUG_STAT));
 
 	return hotplug_status;
 }
@@ -1957,10 +1985,10 @@ static void ibx_irq_handler(struct drm_i915_private *dev_priv, u32 pch_iir)
 		DRM_DEBUG_DRIVER("PCH transcoder CRC error interrupt\n");
 
 	if (pch_iir & SDE_TRANSA_FIFO_UNDER)
-		intel_pch_fifo_underrun_irq_handler(dev_priv, TRANSCODER_A);
+		intel_pch_fifo_underrun_irq_handler(dev_priv, PIPE_A);
 
 	if (pch_iir & SDE_TRANSB_FIFO_UNDER)
-		intel_pch_fifo_underrun_irq_handler(dev_priv, TRANSCODER_B);
+		intel_pch_fifo_underrun_irq_handler(dev_priv, PIPE_B);
 }
 
 static void ivb_err_int_handler(struct drm_i915_private *dev_priv)
@@ -1994,13 +2022,13 @@ static void cpt_serr_int_handler(struct drm_i915_private *dev_priv)
 		DRM_ERROR("PCH poison interrupt\n");
 
 	if (serr_int & SERR_INT_TRANS_A_FIFO_UNDERRUN)
-		intel_pch_fifo_underrun_irq_handler(dev_priv, TRANSCODER_A);
+		intel_pch_fifo_underrun_irq_handler(dev_priv, PIPE_A);
 
 	if (serr_int & SERR_INT_TRANS_B_FIFO_UNDERRUN)
-		intel_pch_fifo_underrun_irq_handler(dev_priv, TRANSCODER_B);
+		intel_pch_fifo_underrun_irq_handler(dev_priv, PIPE_B);
 
 	if (serr_int & SERR_INT_TRANS_C_FIFO_UNDERRUN)
-		intel_pch_fifo_underrun_irq_handler(dev_priv, TRANSCODER_C);
+		intel_pch_fifo_underrun_irq_handler(dev_priv, PIPE_C);
 
 	I915_WRITE(SERR_INT, serr_int);
 }

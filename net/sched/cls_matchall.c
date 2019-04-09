@@ -32,6 +32,7 @@ static int mall_classify(struct sk_buff *skb, const struct tcf_proto *tp,
 	if (tc_skip_sw(head->flags))
 		return -1;
 
+	*res = head->res;
 	return tcf_exts_exec(skb, &head->exts, res);
 }
 
@@ -92,6 +93,8 @@ static bool mall_destroy(struct tcf_proto *tp, bool force)
 
 	if (!head)
 		return true;
+
+	tcf_unbind_filter(tp, &head->res);
 
 	if (tc_should_offload(dev, tp, head->flags))
 		mall_destroy_hw_filter(tp, head, (unsigned long) head);

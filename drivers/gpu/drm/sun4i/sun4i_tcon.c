@@ -327,6 +327,7 @@ static int sun4i_tcon_init_clocks(struct device *dev,
 		dev_err(dev, "Couldn't get the TCON channel 0 clock\n");
 		return PTR_ERR(tcon->sclk0);
 	}
+	clk_prepare_enable(tcon->sclk0);
 
 	if (tcon->quirks->has_channel_1) {
 		tcon->sclk1 = devm_clk_get(dev, "tcon-ch1");
@@ -336,12 +337,12 @@ static int sun4i_tcon_init_clocks(struct device *dev,
 		}
 	}
 
-	return sun4i_dclk_create(dev, tcon);
+	return 0;
 }
 
 static void sun4i_tcon_free_clocks(struct sun4i_tcon *tcon)
 {
-	sun4i_dclk_free(tcon);
+	clk_disable_unprepare(tcon->sclk0);
 	clk_disable_unprepare(tcon->clk);
 }
 
@@ -506,22 +507,28 @@ static int sun4i_tcon_bind(struct device *dev, struct device *master,
 		return ret;
 	}
 
-	ret = sun4i_tcon_init_regmap(dev, tcon);
-	if (ret) {
-		dev_err(dev, "Couldn't init our TCON regmap\n");
-		goto err_assert_reset;
-	}
-
 	ret = sun4i_tcon_init_clocks(dev, tcon);
 	if (ret) {
 		dev_err(dev, "Couldn't init our TCON clocks\n");
 		goto err_assert_reset;
 	}
 
+	ret = sun4i_tcon_init_regmap(dev, tcon);
+	if (ret) {
+		dev_err(dev, "Couldn't init our TCON regmap\n");
+		goto err_free_clocks;
+	}
+
+	ret = sun4i_dclk_create(dev, tcon);
+	if (ret) {
+		dev_err(dev, "Couldn't create our TCON dot clock\n");
+		goto err_free_clocks;
+	}
+
 	ret = sun4i_tcon_init_irq(dev, tcon);
 	if (ret) {
 		dev_err(dev, "Couldn't init our TCON interrupts\n");
-		goto err_free_clocks;
+		goto err_free_dotclock;
 	}
 
 	ret = sun4i_rgb_init(drm);
@@ -530,6 +537,8 @@ static int sun4i_tcon_bind(struct device *dev, struct device *master,
 
 	return 0;
 
+err_free_dotclock:
+	sun4i_dclk_free(tcon);
 err_free_clocks:
 	sun4i_tcon_free_clocks(tcon);
 err_assert_reset:
@@ -542,6 +551,7 @@ static void sun4i_tcon_unbind(struct device *dev, struct device *master,
 {
 	struct sun4i_tcon *tcon = dev_get_drvdata(dev);
 
+	sun4i_dclk_free(tcon);
 	sun4i_tcon_free_clocks(tcon);
 }
 

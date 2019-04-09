@@ -90,6 +90,7 @@ static int crypto_authenc_esn_setkey(struct crypto_aead *authenc_esn, const u8 *
 					   CRYPTO_TFM_RES_MASK);
 
 out:
+	memzero_explicit(&keys, sizeof(keys));
 	return err;
 
 badkey:
@@ -278,7 +279,7 @@ static void authenc_esn_verify_ahash_done(struct crypto_async_request *areq,
 	struct aead_request *req = areq->data;
 
 	err = err ?: crypto_authenc_esn_decrypt_tail(req, 0);
-	aead_request_complete(req, err);
+	authenc_esn_request_complete(req, err);
 }
 
 static int crypto_authenc_esn_decrypt(struct aead_request *req)

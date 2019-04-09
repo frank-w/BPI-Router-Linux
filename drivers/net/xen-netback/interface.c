@@ -152,6 +152,13 @@ static u16 xenvif_select_queue(struct net_device *dev, struct sk_buff *skb,
 {
 	struct xenvif *vif = netdev_priv(dev);
 	unsigned int size = vif->hash.size;
+	unsigned int num_queues;
+
+	/* If queues are not set up internally - always return 0
+	 * as the packet going to be dropped anyway */
+	num_queues = READ_ONCE(vif->num_queues);
+	if (num_queues < 1)
+		return 0;
 
 	if (vif->hash.alg == XEN_NETIF_CTRL_HASH_ALGORITHM_NONE)
 		return fallback(dev, skb) % dev->real_num_tx_queues;
@@ -225,10 +232,10 @@ static struct net_device_stats *xenvif_get_stats(struct net_device *dev)
 {
 	struct xenvif *vif = netdev_priv(dev);
 	struct xenvif_queue *queue = NULL;
-	unsigned long rx_bytes = 0;
-	unsigned long rx_packets = 0;
-	unsigned long tx_bytes = 0;
-	unsigned long tx_packets = 0;
+	u64 rx_bytes = 0;
+	u64 rx_packets = 0;
+	u64 tx_bytes = 0;
+	u64 tx_packets = 0;
 	unsigned int index;
 
 	spin_lock(&vif->lock);

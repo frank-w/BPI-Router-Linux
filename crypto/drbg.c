@@ -1133,10 +1133,12 @@ static inline void drbg_dealloc_state(struct drbg_state *drbg)
 {
 	if (!drbg)
 		return;
-	kzfree(drbg->V);
+	kzfree(drbg->Vbuf);
 	drbg->Vbuf = NULL;
-	kzfree(drbg->C);
+	drbg->V = NULL;
+	kzfree(drbg->Cbuf);
 	drbg->Cbuf = NULL;
+	drbg->C = NULL;
 	kzfree(drbg->scratchpadbuf);
 	drbg->scratchpadbuf = NULL;
 	drbg->reseed_ctr = 0;

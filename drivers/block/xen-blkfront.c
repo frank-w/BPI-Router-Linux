@@ -2112,9 +2112,9 @@ static int blkfront_resume(struct xenbus_device *dev)
 			/*
 			 * Get the bios in the request so we can re-queue them.
 			 */
-			if (req_op(shadow[i].request) == REQ_OP_FLUSH ||
-			    req_op(shadow[i].request) == REQ_OP_DISCARD ||
-			    req_op(shadow[i].request) == REQ_OP_SECURE_ERASE ||
+			if (req_op(shadow[j].request) == REQ_OP_FLUSH ||
+			    req_op(shadow[j].request) == REQ_OP_DISCARD ||
+			    req_op(shadow[j].request) == REQ_OP_SECURE_ERASE ||
 			    shadow[j].request->cmd_flags & REQ_FUA) {
 				/*
 				 * Flush operations don't contain bios, so
@@ -2523,6 +2523,9 @@ static int blkfront_remove(struct xenbus_device *xbdev)
 	struct gendisk *disk;
 
 	dev_dbg(&xbdev->dev, "%s removed", xbdev->nodename);
+
+	if (!info)
+		return 0;
 
 	blkif_free(info, 0);
 

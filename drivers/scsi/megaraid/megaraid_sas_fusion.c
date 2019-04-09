@@ -1902,7 +1902,7 @@ static void megasas_build_ld_nonrw_fusion(struct megasas_instance *instance,
 		device_id < instance->fw_supported_vd_count)) {
 
 		ld = MR_TargetIdToLdGet(device_id, local_map_ptr);
-		if (ld >= instance->fw_supported_vd_count)
+		if (ld >= instance->fw_supported_vd_count - 1)
 			fp_possible = 0;
 
 		raid = MR_LdRaidGet(ld, local_map_ptr);
@@ -1960,7 +1960,8 @@ static void megasas_build_ld_nonrw_fusion(struct megasas_instance *instance,
  */
 static void
 megasas_build_syspd_fusion(struct megasas_instance *instance,
-	struct scsi_cmnd *scmd, struct megasas_cmd_fusion *cmd, u8 fp_possible)
+	struct scsi_cmnd *scmd, struct megasas_cmd_fusion *cmd,
+	bool fp_possible)
 {
 	u32 device_id;
 	struct MPI2_RAID_SCSI_IO_REQUEST *io_request;
@@ -2030,6 +2031,9 @@ megasas_build_syspd_fusion(struct megasas_instance *instance,
 		pRAID_Context->timeoutValue = cpu_to_le16(os_timeout_value);
 		pRAID_Context->VirtualDiskTgtId = cpu_to_le16(device_id);
 	} else {
+		if (os_timeout_value)
+			os_timeout_value++;
+
 		/* system pd Fast Path */
 		io_request->Function = MPI2_FUNCTION_SCSI_IO_REQUEST;
 		timeout_limit = (scmd->device->type == TYPE_DISK) ?
@@ -2064,6 +2068,8 @@ megasas_build_io_fusion(struct megasas_instance *instance,
 	u16 sge_count;
 	u8  cmd_type;
 	struct MPI2_RAID_SCSI_IO_REQUEST *io_request = cmd->io_request;
+	struct MR_PRIV_DEVICE *mr_device_priv_data;
+	mr_device_priv_data = scp->device->hostdata;
 
 	/* Zero out some fields so they don't get reused */
 	memset(io_request->LUN, 0x0, 8);
@@ -2092,12 +2098,14 @@ megasas_build_io_fusion(struct megasas_instance *instance,
 		megasas_build_ld_nonrw_fusion(instance, scp, cmd);
 		break;
 	case READ_WRITE_SYSPDIO:
+		megasas_build_syspd_fusion(instance, scp, cmd, true);
+		break;
 	case NON_READ_WRITE_SYSPDIO:
-		if (instance->secure_jbod_support &&
-			(cmd_type == NON_READ_WRITE_SYSPDIO))
-			megasas_build_syspd_fusion(instance, scp, cmd, 0);
+		if (instance->secure_jbod_support ||
+		    mr_device_priv_data->is_tm_capable)
+			megasas_build_syspd_fusion(instance, scp, cmd, false);
 		else
-			megasas_build_syspd_fusion(instance, scp, cmd, 1);
+			megasas_build_syspd_fusion(instance, scp, cmd, true);
 		break;
 	default:
 		break;

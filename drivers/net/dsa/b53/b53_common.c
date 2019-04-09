@@ -326,6 +326,7 @@ static void b53_get_vlan_entry(struct b53_device *dev, u16 vid,
 
 static void b53_set_forwarding(struct b53_device *dev, int enable)
 {
+	struct dsa_switch *ds = dev->ds;
 	u8 mgmt;
 
 	b53_read8(dev, B53_CTRL_PAGE, B53_SWITCH_MODE, &mgmt);
@@ -336,6 +337,15 @@ static void b53_set_forwarding(struct b53_device *dev, int enable)
 		mgmt &= ~SM_SW_FWD_EN;
 
 	b53_write8(dev, B53_CTRL_PAGE, B53_SWITCH_MODE, mgmt);
+
+	/* Include IMP port in dumb forwarding mode when no tagging protocol is
+	 * set
+	 */
+	if (ds->ops->get_tag_protocol(ds) == DSA_TAG_PROTO_NONE) {
+		b53_read8(dev, B53_CTRL_PAGE, B53_SWITCH_CTRL, &mgmt);
+		mgmt |= B53_MII_DUMB_FWDG_EN;
+		b53_write8(dev, B53_CTRL_PAGE, B53_SWITCH_CTRL, mgmt);
+	}
 }
 
 static void b53_enable_vlan(struct b53_device *dev, bool enable)
@@ -1506,6 +1516,18 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.duplex_reg = B53_DUPLEX_STAT_FE,
 	},
 	{
+		.chip_id = BCM5389_DEVICE_ID,
+		.dev_name = "BCM5389",
+		.vlans = 4096,
+		.enabled_ports = 0x1f,
+		.arl_entries = 4,
+		.cpu_port = B53_CPU_PORT,
+		.vta_regs = B53_VTA_REGS,
+		.duplex_reg = B53_DUPLEX_STAT_GE,
+		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
+		.jumbo_size_reg = B53_JUMBO_MAX_SIZE,
+	},
+	{
 		.chip_id = BCM5395_DEVICE_ID,
 		.dev_name = "BCM5395",
 		.vlans = 4096,
@@ -1815,6 +1837,7 @@ int b53_switch_detect(struct b53_device *dev)
 		else
 			dev->chip_id = BCM5365_DEVICE_ID;
 		break;
+	case BCM5389_DEVICE_ID:
 	case BCM5395_DEVICE_ID:
 	case BCM5397_DEVICE_ID:
 	case BCM5398_DEVICE_ID:

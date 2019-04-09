@@ -92,7 +92,7 @@ xfs_zero_range(
 	xfs_off_t		count,
 	bool			*did_zero)
 {
-	return iomap_zero_range(VFS_I(ip), pos, count, NULL, &xfs_iomap_ops);
+	return iomap_zero_range(VFS_I(ip), pos, count, did_zero, &xfs_iomap_ops);
 }
 
 int
@@ -729,6 +729,7 @@ write_retry:
 		xfs_rw_iunlock(ip, iolock);
 		eofb.eof_flags = XFS_EOF_FLAGS_SYNC;
 		xfs_icache_free_eofblocks(ip->i_mount, &eofb);
+		xfs_icache_free_cowblocks(ip->i_mount, &eofb);
 		goto write_retry;
 	}
 
@@ -845,22 +846,26 @@ xfs_file_fallocate(
 		if (error)
 			goto out_unlock;
 	} else if (mode & FALLOC_FL_INSERT_RANGE) {
-		unsigned int blksize_mask = i_blocksize(inode) - 1;
+		unsigned int	blksize_mask = i_blocksize(inode) - 1;
+		loff_t		isize = i_size_read(inode);
 
-		new_size = i_size_read(inode) + len;
 		if (offset & blksize_mask || len & blksize_mask) {
 			error = -EINVAL;
 			goto out_unlock;
 		}
 
-		/* check the new inode size does not wrap through zero */
-		if (new_size > inode->i_sb->s_maxbytes) {
+		/*
+		 * New inode size must not exceed ->s_maxbytes, accounting for
+		 * possible signed overflow.
+		 */
+		if (inode->i_sb->s_maxbytes - isize < len) {
 			error = -EFBIG;
 			goto out_unlock;
 		}
+		new_size = isize + len;
 
 		/* Offset should be less than i_size */
-		if (offset >= i_size_read(inode)) {
+		if (offset >= isize) {
 			error = -EINVAL;
 			goto out_unlock;
 		}
@@ -1139,29 +1144,8 @@ xfs_find_get_desired_pgoff(
 		want = min_t(pgoff_t, end - index, PAGEVEC_SIZE - 1) + 1;
 		nr_pages = pagevec_lookup(&pvec, inode->i_mapping, index,
 					  want);
-		/*
-		 * No page mapped into given range.  If we are searching holes
-		 * and if this is the first time we got into the loop, it means
-		 * that the given offset is landed in a hole, return it.
-		 *
-		 * If we have already stepped through some block buffers to find
-		 * holes but they all contains data.  In this case, the last
-		 * offset is already updated and pointed to the end of the last
-		 * mapped page, if it does not reach the endpoint to search,
-		 * that means there should be a hole between them.
-		 */
-		if (nr_pages == 0) {
-			/* Data search found nothing */
-			if (type == DATA_OFF)
-				break;
-
-			ASSERT(type == HOLE_OFF);
-			if (lastoff == startoff || lastoff < endoff) {
-				found = true;
-				*offset = lastoff;
-			}
+		if (nr_pages == 0)
 			break;
-		}
 
 		for (i = 0; i < nr_pages; i++) {
 			struct page	*page = pvec.pages[i];
@@ -1227,21 +1211,20 @@ xfs_find_get_desired_pgoff(
 
 		/*
 		 * The number of returned pages less than our desired, search
-		 * done.  In this case, nothing was found for searching data,
-		 * but we found a hole behind the last offset.
+		 * done.
 		 */
-		if (nr_pages < want) {
-			if (type == HOLE_OFF) {
-				*offset = lastoff;
-				found = true;
-			}
+		if (nr_pages < want)
 			break;
-		}
 
 		index = pvec.pages[i - 1]->index + 1;
 		pagevec_release(&pvec);
 	} while (index <= end);
 
+	/* No page at lastoff and we are not done - we found a hole. */
+	if (type == HOLE_OFF && lastoff < endoff) {
+		*offset = lastoff;
+		found = true;
+	}
 out:
 	pagevec_release(&pvec);
 	return found;

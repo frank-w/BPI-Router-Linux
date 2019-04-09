@@ -212,13 +212,9 @@ static struct f2fs_dir_entry *find_in_level(struct inode *dir,
 		f2fs_put_page(dentry_page, 0);
 	}
 
-	/* This is to increase the speed of f2fs_create */
-	if (!de && room) {
-		F2FS_I(dir)->task = current;
-		if (F2FS_I(dir)->chash != namehash) {
-			F2FS_I(dir)->chash = namehash;
-			F2FS_I(dir)->clevel = level;
-		}
+	if (!de && room && F2FS_I(dir)->chash != namehash) {
+		F2FS_I(dir)->chash = namehash;
+		F2FS_I(dir)->clevel = level;
 	}
 
 	return de;
@@ -259,6 +255,9 @@ struct f2fs_dir_entry *__f2fs_find_entry(struct inode *dir,
 			break;
 	}
 out:
+	/* This is to increase the speed of f2fs_create */
+	if (!de)
+		F2FS_I(dir)->task = current;
 	return de;
 }
 
@@ -277,7 +276,10 @@ struct f2fs_dir_entry *f2fs_find_entry(struct inode *dir,
 
 	err = fscrypt_setup_filename(dir, child, 1, &fname);
 	if (err) {
-		*res_page = ERR_PTR(err);
+		if (err == -ENOENT)
+			*res_page = NULL;
+		else
+			*res_page = ERR_PTR(err);
 		return NULL;
 	}
 

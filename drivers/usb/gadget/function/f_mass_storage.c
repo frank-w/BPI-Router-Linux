@@ -220,6 +220,8 @@
 #include <linux/usb/gadget.h>
 #include <linux/usb/composite.h>
 
+#include <linux/nospec.h>
+
 #include "configfs.h"
 
 
@@ -306,8 +308,6 @@ struct fsg_common {
 	struct completion	thread_notifier;
 	struct task_struct	*thread_task;
 
-	/* Callback functions. */
-	const struct fsg_operations	*ops;
 	/* Gadget's private data. */
 	void			*private_data;
 
@@ -2505,6 +2505,7 @@ static void handle_exception(struct fsg_common *common)
 static int fsg_main_thread(void *common_)
 {
 	struct fsg_common	*common = common_;
+	int			i;
 
 	/*
 	 * Allow the thread to be killed by a signal, but set the signal mask
@@ -2566,21 +2567,16 @@ static int fsg_main_thread(void *common_)
 	common->thread_task = NULL;
 	spin_unlock_irq(&common->lock);
 
-	if (!common->ops || !common->ops->thread_exits
-	 || common->ops->thread_exits(common) < 0) {
-		int i;
+	/* Eject media from all LUNs */
 
-		down_write(&common->filesem);
-		for (i = 0; i < ARRAY_SIZE(common->luns); --i) {
-			struct fsg_lun *curlun = common->luns[i];
-			if (!curlun || !fsg_lun_is_open(curlun))
-				continue;
+	down_write(&common->filesem);
+	for (i = 0; i < ARRAY_SIZE(common->luns); i++) {
+		struct fsg_lun *curlun = common->luns[i];
 
+		if (curlun && fsg_lun_is_open(curlun))
 			fsg_lun_close(curlun);
-			curlun->unit_attention_data = SS_MEDIUM_NOT_PRESENT;
-		}
-		up_write(&common->filesem);
 	}
+	up_write(&common->filesem);
 
 	/* Let fsg_unbind() know the thread has exited */
 	complete_and_exit(&common->thread_notifier, 0);
@@ -2769,13 +2765,6 @@ void fsg_common_remove_luns(struct fsg_common *common)
 	_fsg_common_remove_luns(common, ARRAY_SIZE(common->luns));
 }
 EXPORT_SYMBOL_GPL(fsg_common_remove_luns);
-
-void fsg_common_set_ops(struct fsg_common *common,
-			const struct fsg_operations *ops)
-{
-	common->ops = ops;
-}
-EXPORT_SYMBOL_GPL(fsg_common_set_ops);
 
 void fsg_common_free_buffers(struct fsg_common *common)
 {
@@ -3273,6 +3262,7 @@ static struct config_group *fsg_lun_make(struct config_group *group,
 	fsg_opts = to_fsg_opts(&group->cg_item);
 	if (num >= FSG_MAX_LUNS)
 		return ERR_PTR(-ERANGE);
+	num = array_index_nospec(num, FSG_MAX_LUNS);
 
 	mutex_lock(&fsg_opts->lock);
 	if (fsg_opts->refcnt || fsg_opts->common->luns[num]) {

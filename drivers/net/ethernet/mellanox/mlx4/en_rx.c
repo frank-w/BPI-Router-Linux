@@ -142,16 +142,17 @@ static void mlx4_en_free_frag(struct mlx4_en_priv *priv,
 			      struct mlx4_en_rx_alloc *frags,
 			      int i)
 {
-	const struct mlx4_en_frag_info *frag_info = &priv->frag_info[i];
-	u32 next_frag_end = frags[i].page_offset + 2 * frag_info->frag_stride;
+	if (frags[i].page) {
+		const struct mlx4_en_frag_info *frag_info = &priv->frag_info[i];
+		u32 next_frag_end = frags[i].page_offset +
+				2 * frag_info->frag_stride;
 
-
-	if (next_frag_end > frags[i].page_size)
-		dma_unmap_page(priv->ddev, frags[i].dma, frags[i].page_size,
-			       frag_info->dma_dir);
-
-	if (frags[i].page)
+		if (next_frag_end > frags[i].page_size) {
+			dma_unmap_page(priv->ddev, frags[i].dma,
+				       frags[i].page_size, frag_info->dma_dir);
+		}
 		put_page(frags[i].page);
+	}
 }
 
 static int mlx4_en_init_allocator(struct mlx4_en_priv *priv,
@@ -586,21 +587,28 @@ static int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
 				    int length)
 {
 	struct skb_frag_struct *skb_frags_rx = skb_shinfo(skb)->frags;
-	struct mlx4_en_frag_info *frag_info;
 	int nr;
 	dma_addr_t dma;
 
 	/* Collect used fragments while replacing them in the HW descriptors */
 	for (nr = 0; nr < priv->num_frags; nr++) {
-		frag_info = &priv->frag_info[nr];
+		struct mlx4_en_frag_info *frag_info = &priv->frag_info[nr];
+		u32 next_frag_end = frags[nr].page_offset +
+				2 * frag_info->frag_stride;
+
 		if (length <= frag_info->frag_prefix_size)
 			break;
 		if (unlikely(!frags[nr].page))
 			goto fail;
 
 		dma = be64_to_cpu(rx_desc->data[nr].addr);
-		dma_sync_single_for_cpu(priv->ddev, dma, frag_info->frag_size,
-					DMA_FROM_DEVICE);
+		if (next_frag_end > frags[nr].page_size)
+			dma_unmap_page(priv->ddev, frags[nr].dma,
+				       frags[nr].page_size, frag_info->dma_dir);
+		else
+			dma_sync_single_for_cpu(priv->ddev, dma,
+						frag_info->frag_size,
+						DMA_FROM_DEVICE);
 
 		/* Save page reference in skb */
 		__skb_frag_set_page(&skb_frags_rx[nr], frags[nr].page);
@@ -769,13 +777,27 @@ static int get_fixed_ipv6_csum(__wsum hw_checksum, struct sk_buff *skb,
 	return 0;
 }
 #endif
+
+#define short_frame(size) ((size) <= ETH_ZLEN + ETH_FCS_LEN)
+
 static int check_csum(struct mlx4_cqe *cqe, struct sk_buff *skb, void *va,
 		      netdev_features_t dev_features)
 {
 	__wsum hw_checksum = 0;
+	void *hdr;
 
-	void *hdr = (u8 *)va + sizeof(struct ethhdr);
+	/* CQE csum doesn't cover padding octets in short ethernet
+	 * frames. And the pad field is appended prior to calculating
+	 * and appending the FCS field.
+	 *
+	 * Detecting these padded frames requires to verify and parse
+	 * IP headers, so we simply force all those small frames to skip
+	 * checksum complete.
+	 */
+	if (short_frame(skb->len))
+		return -EINVAL;
 
+	hdr = (u8 *)va + sizeof(struct ethhdr);
 	hw_checksum = csum_unfold((__force __sum16)cqe->checksum);
 
 	if (cqe->vlan_my_qpn & cpu_to_be32(MLX4_CQE_CVLAN_PRESENT_MASK) &&
@@ -937,6 +959,11 @@ xdp_drop:
 		}
 
 		if (likely(dev->features & NETIF_F_RXCSUM)) {
+			/* TODO: For IP non TCP/UDP packets when csum complete is
+			 * not an option (not supported or any other reason) we can
+			 * actually check cqe IPOK status bit and report
+			 * CHECKSUM_UNNECESSARY rather than CHECKSUM_NONE
+			 */
 			if (cqe->status & cpu_to_be16(MLX4_CQE_STATUS_TCP |
 						      MLX4_CQE_STATUS_UDP)) {
 				if ((cqe->status & cpu_to_be16(MLX4_CQE_STATUS_IPOK)) &&

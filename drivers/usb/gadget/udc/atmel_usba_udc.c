@@ -28,6 +28,8 @@
 #include <linux/of_gpio.h>
 
 #include "atmel_usba_udc.h"
+#define USBA_VBUS_IRQFLAGS (IRQF_ONESHOT \
+			   | IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING)
 
 #ifdef CONFIG_USB_GADGET_DEBUG_FS
 #include <linux/debugfs.h>
@@ -1921,6 +1923,8 @@ static struct usba_ep * atmel_udc_of_init(struct platform_device *pdev,
 	udc->errata = match->data;
 	udc->pmc = syscon_regmap_lookup_by_compatible("atmel,at91sam9g45-pmc");
 	if (IS_ERR(udc->pmc))
+		udc->pmc = syscon_regmap_lookup_by_compatible("atmel,at91sam9rl-pmc");
+	if (IS_ERR(udc->pmc))
 		udc->pmc = syscon_regmap_lookup_by_compatible("atmel,at91sam9x5-pmc");
 	if (udc->errata && IS_ERR(udc->pmc))
 		return ERR_CAST(udc->pmc);
@@ -2172,7 +2176,7 @@ static int usba_udc_probe(struct platform_device *pdev)
 					IRQ_NOAUTOEN);
 			ret = devm_request_threaded_irq(&pdev->dev,
 					gpio_to_irq(udc->vbus_pin), NULL,
-					usba_vbus_irq_thread, IRQF_ONESHOT,
+					usba_vbus_irq_thread, USBA_VBUS_IRQFLAGS,
 					"atmel_usba_udc", udc);
 			if (ret) {
 				udc->vbus_pin = -ENODEV;
