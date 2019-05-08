@@ -136,7 +136,7 @@ function install {
 			fi
 
 			ndt="n"
-			if [ "$input" != "y" ];then ndt="y"; fi
+			if [ "$dtinput" != "y" ];then ndt="y"; fi
 			read -e -i "$ndt" -p "install kernel with separate DT [yn]? " ndtinput
 			if [[ "$ndtinput" == "y" ]];then
 				if [[ -e ${kernelfile}_nodt ]];then
