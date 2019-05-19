@@ -35,16 +35,16 @@ Kernel features by version
 |----------| --- | --- | --- | --- |
 | PCIe     |  Y  |  Y  |  Y  |  Y  |
 | SATA     |  Y  |  Y  |  Y  |  Y  |
-| 2 GMAC   |  Y  |  Y  |  Y  |  (N)  |
+| 2 GMAC   |  Y  |  Y  |  Y  |  Y  |
 | DSA      |  N  |  Y  |  Y  |  Y  |
 | USB      |  Y  |  Y  |  Y  |  Y  |
 | VLAN     |     |     |  Y  |     |
-| HW NAT   |     |  Y  |  Y |      |
-| HW QOS   |     |  Y  |  ? |      |
+| HW NAT   |     |  Y  |  Y |   N   |
+| HW QOS   |     |  Y  |  ? |   N   |
 | Crypto   |  Y  |  Y  |  Y  |     |
 | WIFI     |     |  Y  |  Y  |  Y  |
 | BT       |  N  |  N  |  Y  |  Y  |
-| VIDEO    |  Y  |  N  |  Y  |  (Y)  |
+| VIDEO    |  Y  |  N  |  Y  |  Y  |
 | ACPI     |  ?  |  N  |  Y  |  Y  |
 | Other options  |--|--|--|--|--|--|--|
 | OpenVPN  |  ?  |  Y  |  Y  |    |
@@ -60,12 +60,16 @@ Symbols:
 
 (Testing in seperate branch wlan/hdmi/hwnat/hwqos)
 
-* HW-NAT only works between LAN and WAN (bridge unclear, wifi not supported)
+* HW-NAT only works on 4.14 between LAN and WAN (bridge unclear, wifi not supported)
 * HW-QoS is merged into 4.14-main, but we do not know how to test it
 * ACPI-feature means System is powered off, not only halted (power-consumption ~0.2W, no reboot on reset), reboot-problem with soldered power-switch (see https://github.com/frank-w/BPI-R2-4.14/issues/35). Power-off is also initiated by pressing the power-switch
 * VIDEO is hdmi-output (X-server/framebuffer-console)...here some resolutions are not supported by vendor-driver
 
-kernel 4.4 / uboot: https://github.com/frank-w/BPI-R2-4.4
+kernel 4.4 / uboot (2014-04): https://github.com/frank-w/BPI-R2-4.4
+
+4.4-main does not contain drivers for r2 yet because this is too much work to merge it
+
+new uboot: https://github.com/frank-w/u-boot
 
 ## Links
 
