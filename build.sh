@@ -15,6 +15,34 @@ ver=${kernver}-${gitbranch}${gittag}
 export LOCALVERSION="-${gitbranch}"
 export KDIR=$(pwd)
 
+function increase_kernel {
+        #echo $kernver
+        old_IFS=$IFS
+        IFS='.'
+        read -ra KV <<< "$kernver"
+        IFS=','
+        newkernver=${KV[0]}"."${KV[1]}"."$(( ${KV[2]} +1 ))
+        echo $newkernver
+}
+
+function update_kernel_source {
+        changedfiles=$(git diff --name-only)
+        if [[ -z "$changedfiles" ]]; then
+        git fetch stable
+        ret=$?
+        if [[ $ret -eq 0 ]];then
+                newkernver=$(increase_kernel)
+                echo "newkernver:$newkernver"
+                git merge v$newkernver
+        elif [[ $ret -eq 128 ]];then
+                #repo not found
+                git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+        fi
+        else
+                echo "please first commit/stash modified files: $changedfiles"
+        fi
+}
+
 case $1 in
 "defconfig")
   echo "defconfig"
@@ -36,6 +64,10 @@ case $1 in
   make clean
   cd cryptodev-linux
   make clean && cd -
+  ;;
+"updatesrc")
+  echo "Update kernel source"
+  update_kernel_source
   ;;
 "cryptodev")
   echo "cryptodev"
