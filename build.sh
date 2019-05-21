@@ -128,6 +128,7 @@ function install {
 				fi
 				echo "copy new kernel"
 				cp ./uImage $kernelfile
+				if [[ $? -ne 0 ]];then exit 1;fi
 			fi
 
 			ndt="n"
@@ -140,6 +141,7 @@ function install {
 				fi
 				echo "copy new nodt kernel"
 				cp ./uImage_nodt ${kernelfile}_nodt
+				if [[ $? -ne 0 ]];then exit 1;fi
 				mkdir -p $targetdir/dtb
 				dtbfile=$targetdir/dtb/${kernver}${gitbranch}.dtb
 				if [[ -e $dtbfile ]];then
