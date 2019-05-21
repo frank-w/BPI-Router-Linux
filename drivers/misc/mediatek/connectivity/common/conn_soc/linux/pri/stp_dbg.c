@@ -102,23 +102,24 @@ enum {
 };
 #define MTK_WIFI_COMMAND_MAX    (__STP_DBG_COMMAND_MAX - 1)
 
+/* attribute policy */
+static struct nla_policy stp_dbg_genl_policy[STP_DBG_ATTR_MAX + 1] = {
+	[STP_DBG_ATTR_MSG] = {.type = NLA_NUL_STRING},
+};
+
 static struct genl_family stp_dbg_gnl_family = {
 	.id = GENL_ID_GENERATE,
 	.hdrsize = 0,
 	.name = STP_DBG_FAMILY_NAME,
 	.version = 1,
 	.maxattr = STP_DBG_ATTR_MAX,
+	.policy = stp_dbg_genl_policy,
 };
 
 static void stp_dbg_nl_init(void);
 static void stp_dbg_nl_deinit(void);
 static int stp_dbg_nl_bind(struct sk_buff *skb, struct genl_info *info);
 static int stp_dbg_nl_reset(struct sk_buff *skb, struct genl_info *info);
-
-/* attribute policy */
-static struct nla_policy stp_dbg_genl_policy[STP_DBG_ATTR_MAX + 1] = {
-	[STP_DBG_ATTR_MSG] = {.type = NLA_NUL_STRING},
-};
 
 /* operation definition */
 #if 0
@@ -142,14 +143,12 @@ static struct genl_ops stp_dbg_gnl_ops_array[] = {
 	{
 		.cmd = STP_DBG_COMMAND_BIND,
 		.flags = 0,
-		.policy = stp_dbg_genl_policy,
 		.doit = stp_dbg_nl_bind,
 		.dumpit = NULL,
 	},
 	{
 		.cmd = STP_DBG_COMMAND_RESET,
 		.flags = 0,
-		.policy = stp_dbg_genl_policy,
 		.doit = stp_dbg_nl_reset,
 		.dumpit = NULL,
 	},
