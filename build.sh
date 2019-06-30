@@ -28,22 +28,52 @@ if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then
 fi;
 
 #Check Dependencies
-PACKAGE_Error=0
-PACKAGES=$(dpkg -l | awk '{print $2}')
 
-for package in "u-boot-tools" "bc" "make" "gcc" "libc6-dev" "libncurses5-dev" "libssl-dev" "fakeroot" "ccache"; do
-	#TESTPKG=$(dpkg -l |grep "\s${package}")
-	TESTPKG=$(echo "$PACKAGES" |grep "^${package}")
-	if [[ -z "${TESTPKG}" ]];then echo "please install ${package}";PACKAGE_Error=1;fi
-done
-if [ ${PACKAGE_Error} == 1 ]; then exit 1; fi
+function check_dep()
+{
+	PACKAGE_Error=0
+
+	PACKAGES=$(dpkg -l | awk '{print $2}')
+
+	NEEDED_PKGS="make"
+
+	#echo "needed: $NEEDED_PKGS"
+
+	if [[ $# -ge 1 ]];
+	then
+		if [[ $@ =~ "build" ]];then
+			NEEDED_PKGS+=" u-boot-tools bc gcc libc6-dev libncurses5-dev ccache"
+		fi
+		if [[ $@ =~ "ssl" ]];then
+			NEEDED_PKGS+=" libssl-dev"
+		fi
+		if [[ $@ =~ "deb" ]];then
+			NEEDED_PKGS+=" fakeroot"
+		fi
+	fi
+
+	echo "needed: $NEEDED_PKGS"
+	for package in $NEEDED_PKGS; do
+		#TESTPKG=$(dpkg -l |grep "\s${package}")
+		TESTPKG=$(echo "$PACKAGES" |grep "^${package}")
+		if [[ -z "${TESTPKG}" ]];then echo "please install ${package}";PACKAGE_Error=1;fi
+	done
+	if [ ${PACKAGE_Error} == 1 ]; then return 1; fi
+	return 0;
+}
 
 kernver=$(make kernelversion)
-#kernbranch=$(git rev-parse --abbrev-ref HEAD)
-kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD' | head -1 | sed 's/^..//')
-gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
+#echo $kernver
 
-echo "kernbranch:$kernbranch,gitbranch:$gitbranch"
+function get_version()
+{
+	echo "generate branch vars..."
+	#kernbranch=$(git rev-parse --abbrev-ref HEAD)
+	kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD' | head -1 | sed 's/^..//')
+	gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
+
+	echo "kernbranch:$kernbranch,gitbranch:$gitbranch"
+}
 
 function increase_kernel {
         #echo $kernver
@@ -74,6 +104,7 @@ function update_kernel_source {
 }
 
 function pack {
+	get_version
 	prepare_SD
 	echo "pack..."
 	olddir=$(pwd)
@@ -86,6 +117,7 @@ function pack {
 }
 
 function upload {
+	get_version
 	imagename="uImage_${kernver}${gitbranch}"
 	read -e -i $imagename -p "uImage-filename: " input
 	imagename="${input:-$imagename}"
@@ -96,8 +128,9 @@ function upload {
 	scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 }
 
-function install {
-
+function install
+{
+	get_version
 	imagename="uImage_${kernver}${gitbranch}"
 	read -e -i $imagename -p "uImage-filename: " input
 	imagename="${input:-$imagename}"
@@ -197,6 +230,9 @@ function install {
 
 function deb {
 #set -x
+	check_dep "deb"
+	if [[ $? -ne 0 ]];then exit 1;fi
+	get_version
   ver=${kernver}-bpi-r2${gitbranch}
   uimagename=uImage_${kernver}${gitbranch}
   echo "deb package ${ver}"
@@ -307,6 +343,9 @@ EOF
 }
 
 function build {
+	check_dep "build"
+	if [[ $? -ne 0 ]];then exit 1;fi
+	get_version
 	if [ -e ".config" ]; then
 		echo Cleanup Kernel Build
 		rm arch/arm/boot/zImage-dtb 2>/dev/null
@@ -418,7 +457,14 @@ if [ -n "$kernver" ]; then
 	LANG=C
 	CFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
 
+	#echo $action
+
 	case "$action" in
+		"checkdep")
+			echo "checking depencies..."
+			check_dep "build";
+			if [[ $? -eq 0 ]];then echo "OK";else echo "failed";fi
+		;;
 		"reset")
 			echo "Reset Git"
 			##Reset Git
