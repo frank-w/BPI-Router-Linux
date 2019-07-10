@@ -1,3 +1,5 @@
 #!/bin/sh
 
-docker build . --tag bpi-cross-compile:1
+DIR=$(dirname "$(readlink -f "$0")")
+
+docker build "$DIR" --tag bpi-cross-compile:1
