@@ -7,6 +7,8 @@ fi
 
 . build.conf
 
+if [[ -z "$board" ]];then board="bpi-r2";fi
+
 clr_red=$'\e[1;31m'
 clr_green=$'\e[1;32m'
 clr_yellow=$'\e[1;33m'
@@ -15,15 +17,20 @@ clr_reset=$'\e[0m'
 
 #Check Crosscompile
 crosscompile=0
-if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then
-	if [[ -z "$(which arm-linux-gnueabihf-gcc)" ]];then echo "please install gcc-arm-linux-gnueabihf";exit 1;fi
+if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then #check needs to be done on r64...
 
-	CCVER=$(arm-linux-gnueabihf-gcc --version |grep arm| sed -e 's/^.* \([0-9]\.[0-9-]\).*$/\1/')
+	if [[ "$board" == "bpi-r64" ]];then
+		if [[ -z "$(which aarch64-linux-gnu-gcc)" ]];then echo "please install gcc-aarch64-linux-gnu";exit 1;fi
+		export ARCH=arm64;export CROSS_COMPILE='ccache aarch64-linux-gnu-'
+	else
+		if [[ -z "$(which arm-linux-gnueabihf-gcc)" ]];then echo "please install gcc-arm-linux-gnueabihf";exit 1;fi
+		export ARCH=arm;export CROSS_COMPILE='ccache arm-linux-gnueabihf-'
+	fi
+#	CCVER=$(arm-linux-gnueabihf-gcc --version |grep arm| sed -e 's/^.* \([0-9]\.[0-9-]\).*$/\1/')
 #	if [[ $CCVER =~ ^7 ]]; then
 #		echo "arm-linux-gnueabihf-gcc version 7 currently not supported";exit 1;
 #	fi
 
-	export ARCH=arm;export CROSS_COMPILE='ccache arm-linux-gnueabihf-'
 	crosscompile=1
 fi;
 
@@ -60,6 +67,17 @@ function check_dep()
 	done
 	if [ ${PACKAGE_Error} == 1 ]; then return 1; fi
 	return 0;
+}
+
+function getuenvpath {
+	uenv=/media/${USER}/BPI-BOOT/bananapi/$board/linux/uEnv.txt
+	if [[ ! -e $uenv ]];then
+		uenv=/media/${USER}/BPI-BOOT/uEnv.txt
+		if [[ ! -e $uenv ]];then
+			uenv="";
+		fi
+	fi
+	echo "uenv: $uenv";
 }
 
 kernver=$(make kernelversion)
@@ -109,7 +127,7 @@ function pack {
 	echo "pack..."
 	olddir=$(pwd)
 	cd ../SD
-	fname=bpi-r2_${kernver}${gitbranch}.tar.gz
+	fname=${board}_${kernver}${gitbranch}.tar.gz
 	tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 	md5sum $fname > $fname.md5
 	ls -lh $(pwd)"/"$fname
@@ -119,13 +137,24 @@ function pack {
 function upload {
 	get_version
 	imagename="uImage_${kernver}${gitbranch}"
-	read -e -i $imagename -p "uImage-filename: " input
+	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
 	echo "uploading to ${uploadserver}:${uploaddir}..."
 
+	if [[ "$board" == "bpi-r64" ]];then
+		dtbname="${kernver}${gitbranch}.dtb"
+		read -e -i $dtbname -p "dtb-filename: " input
+		dtbname="${input:-$dtbname}"
+
+		echo "Name: $dtbname"
+	fi
+
 	scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
+	if [[ "$board" == "bpi-r64" ]];then
+		scp bpi-r64.dtb ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
+	fi
 }
 
 function install
@@ -138,7 +167,7 @@ function install
 	echo "Name: $imagename"
 
 	if [[ $crosscompile -eq 0 ]]; then
-		kernelfile=/boot/bananapi/bpi-r2/linux/$imagename
+		kernelfile=/boot/bananapi/$board/linux/$imagename
 		if [[ -e $kernelfile ]];then
 			echo "backup of kernel: $kernelfile.bak"
 			cp $kernelfile $kernelfile.bak
@@ -150,39 +179,46 @@ function install
 	else
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
-			targetdir=/media/$USER/BPI-BOOT/bananapi/bpi-r2/linux
+			targetdir=/media/$USER/BPI-BOOT/bananapi/$board/linux
 			kernelfile=$targetdir/$imagename
 
-			read -e -i "y" -p "install kernel with DT [yn]? " dtinput
-			if [[ "$dtinput" == "y" ]];then
-				if [[ -e $kernelfile ]];then
-					echo "backup of kernel: $kernelfile.bak"
-					cp $kernelfile $kernelfile.bak
+			if [[ "$board" == "bpi-r64" ]];then
+				dtinput=n
+				ndtinput=y
+			else
+				read -e -i "y" -p "install kernel with DT [yn]? " dtinput
+				if [[ "$dtinput" == "y" ]];then
+					if [[ -e $kernelfile ]];then
+						echo "backup of kernel: $kernelfile.bak"
+						cp $kernelfile $kernelfile.bak
+					fi
+					echo "copy new kernel"
+					cp ./uImage $kernelfile
+					if [[ $? -ne 0 ]];then exit 1;fi
 				fi
-				echo "copy new kernel"
-				cp ./uImage $kernelfile
-				if [[ $? -ne 0 ]];then exit 1;fi
+
+				ndt="n"
+				if [ "$dtinput" != "y" ];then ndt="y"; fi
+				read -e -i "$ndt" -p "install kernel with separate DT [yn]? " ndtinput
+				ndtsuffix="_nodt"
 			fi
 
-			ndt="n"
-			if [ "$dtinput" != "y" ];then ndt="y"; fi
-			read -e -i "$ndt" -p "install kernel with separate DT [yn]? " ndtinput
 			if [[ "$ndtinput" == "y" ]];then
-				if [[ -e ${kernelfile}_nodt ]];then
+				if [[ -e ${kernelfile}${ndtsuffix} ]];then
 					echo "backup of kernel: $kernelfile.bak"
-					cp ${kernelfile}_nodt ${kernelfile}_nodt.bak
+					cp ${kernelfile}${ndtsuffix} ${kernelfile}${ndtsuffix}.bak
 				fi
 				echo "copy new nodt kernel"
-				cp ./uImage_nodt ${kernelfile}_nodt
+				cp ./uImage_nodt ${kernelfile}${ndtsuffix}
 				if [[ $? -ne 0 ]];then exit 1;fi
 				mkdir -p $targetdir/dtb
-				dtbfile=$targetdir/dtb/${kernver}${gitbranch}.dtb
+				dtbfile=$targetdir/dtb/${board}${kernver}${gitbranch}.dtb
 				if [[ -e $dtbfile ]];then
 					echo "backup of dtb: $dtbfile.bak"
 					cp $dtbfile $dtbfile.bak
 				fi
 				echo "copy new dtb"
-				cp ./bpi-r2.dtb $dtbfile
+				cp ./$board.dtb $dtbfile
 			fi
 
 			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]];then
@@ -192,10 +228,13 @@ function install
 				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH modules_install
 				echo "syncing sd-card...this will take a while"
 
-				echo "uImage:${kernelfile} / ${kernelfile}_nodt"
+				echo "uImage:${kernelfile} / ${kernelfile}${ndtsuffix}"
 				echo "DTB: ${dtbfile}"
-				echo "by default this kernel-file will be loaded (kernel-var in uEnv.txt):"
-				grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
+				uenv=$(getuenvpath)
+				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
+				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
+				grep '^kernel=' $uenv|tail -1
+				grep '^fdt=' $uenv|tail -1
 				sync
 
 				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
@@ -233,32 +272,36 @@ function deb {
 	check_dep "deb"
 	if [[ $? -ne 0 ]];then exit 1;fi
 	get_version
-  ver=${kernver}-bpi-r2${gitbranch}
-  uimagename=uImage_${kernver}${gitbranch}
-  echo "deb package ${ver}"
-  prepare_SD
+	ver=${kernver}-${board}${gitbranch}
+	uimagename=uImage_${kernver}${gitbranch}
+	echo "deb package ${ver}"
+	prepare_SD
+	boardv=${board:4}
+	targetdir=debian/bananapi-$boardv-image
 
 #    cd ../SD
 #    fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
 #    tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 
-  mkdir -p debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/dtb/
-  mkdir -p debian/bananapi-r2-image/lib/modules/
-  mkdir -p debian/bananapi-r2-image/DEBIAN/
-  rm debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/*
-  rm -rf debian/bananapi-r2-image/lib/modules/*
+	mkdir -p $targetdir/boot/bananapi/$board/linux/dtb/
+	mkdir -p $targetdir/lib/modules/
+	mkdir -p $targetdir/DEBIAN/
+	rm $targetdir/boot/bananapi/$board/linux/*
+	rm -rf $targetdir/lib/modules/*
 
-  #sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
-  if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
-    cp ./uImage debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/${uimagename}
-    cp ./uImage_nodt debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/${uimagename}_nodt
-    cp ./bpi-r2.dtb debian/bananapi-r2-image/boot/bananapi/bpi-r2/linux/dtb/bpi-r2-${kernver}${gitbranch}.dtb
+	#sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
+	if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
+	cp ./uImage $targetdir/boot/bananapi/$board/linux/${uimagename}
+	if [[ -e ./uImage_nodt ]];then
+		cp ./uImage_nodt $targetdir/boot/bananapi/$board/linux/${uimagename}_nodt
+	fi
+	cp ./$board.dtb $targetdir/boot/bananapi/$board/linux/dtb/$board-${kernver}${gitbranch}.dtb
 #    pwd
-    cp -r ../SD/BPI-ROOT/lib/modules/${ver} debian/bananapi-r2-image/lib/modules/
-    #rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
-    #mkdir debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
-    #cp cryptodev-linux/cryptodev.ko debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
-	cat > debian/bananapi-r2-image/DEBIAN/preinst << EOF
+	cp -r ../SD/BPI-ROOT/lib/modules/${ver} $targetdir/lib/modules/
+	#rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
+	#mkdir debian/bananapi-r2-image/lib/modules/${ver}/kernel/extras
+	#cp cryptodev-linux/cryptodev.ko debian/bananapi-r2-image/lib/modules/${ver}/kernel/extra
+	cat > $targetdir/DEBIAN/preinst << EOF
 #!/bin/bash
 clr_red=\$'\e[1;31m'
 clr_green=\$'\e[1;32m'
@@ -271,15 +314,15 @@ then
 	echo "\${clr_red}/boot needs to be mountpoint for /dev/mmcblk0p1\${clr_reset}";
 	exit 1;
 fi
-kernelfile=/boot/bananapi/bpi-r2/linux/${uimagename}
+kernelfile=/boot/bananapi/$board/linux/${uimagename}
 if [[ -e "\${kernelfile}" ]];then
 	echo "\${clr_red}\${kernelfile} already exists\${clr_reset}"
 	echo "\${clr_red}please remove/rename it or uninstall previous installed kernel-package\${clr_reset}"
 	exit 2;
 fi
 EOF
-	chmod +x debian/bananapi-r2-image/DEBIAN/preinst
-	cat > debian/bananapi-r2-image/DEBIAN/postinst << EOF
+	chmod +x $targetdir/DEBIAN/preinst
+	cat > $targetdir/DEBIAN/postinst << EOF
 #!/bin/bash
 clr_red=\$'\e[1;31m'
 clr_green=\$'\e[1;32m'
@@ -289,7 +332,7 @@ clr_reset=\$'\e[0m'
 case "\$1" in
 	configure)
 	#install|upgrade)
-		echo "kernel=${uimagename}">>/boot/bananapi/bpi-r2/linux/uEnv.txt
+		echo "kernel=${uimagename}">>/boot/bananapi/$board/linux/uEnv.txt
 
 		#check for non-dsa-kernel (4.4.x)
 		kernver=\$(uname -r)
@@ -303,36 +346,46 @@ case "\$1" in
 	*) echo "unhandled \$1 in postinst-script"
 esac
 EOF
-	chmod +x debian/bananapi-r2-image/DEBIAN/postinst
-	cat > debian/bananapi-r2-image/DEBIAN/postrm << EOF
+	chmod +x $targetdir/DEBIAN/postinst
+	cat > $targetdir/DEBIAN/postrm << EOF
 #!/bin/bash
 case "\$1" in
 	abort-install)
 		echo "installation aborted"
 	;;
 	remove|purge)
-		cp /boot/bananapi/bpi-r2/linux/uEnv.txt /boot/bananapi/bpi-r2/linux/uEnv.txt.bak
-		grep -v  ${uimagename} /boot/bananapi/bpi-r2/linux/uEnv.txt.bak > /boot/bananapi/bpi-r2/linux/uEnv.txt
+		if [[ -e /boot/bananapi/$board/linux/uEnv.txt ]];then
+			cp /boot/bananapi/$board/linux/uEnv.txt /boot/bananapi/$board/linux/uEnv.txt.bak
+			grep -v  ${uimagename} /boot/bananapi/$board/linux/uEnv.txt.bak > /boot/bananapi/$board/linux/uEnv.txt
+		else
+			cp /boot/uEnv.txt /boot/uEnv.txt.bak
+			grep -v  ${uimagename} /boot/uEnv.txt.bak > /boot/uEnv.txt
+		fi
 	;;
 esac
 EOF
-	chmod +x debian/bananapi-r2-image/DEBIAN/postrm
-    cat > debian/bananapi-r2-image/DEBIAN/control << EOF
-Package: bananapi-r2-image-${kernbranch}
+	chmod +x $targetdir/DEBIAN/postrm
+	if [[ "$board"=="bpi-r64" ]];then
+		debarch=arm64
+	else
+		debarch=armhf
+	fi
+    cat > $targetdir/DEBIAN/control << EOF
+Package: bananapi-$boardv-image-${kernbranch}
 Version: ${kernver}-1
 Section: custom
 Priority: optional
-Architecture: armhf
+Architecture: $debarch
 Multi-Arch: no
 Essential: no
 Maintainer: Frank Wunderlich
-Description: BPI-R2 linux image ${ver}
+Description: ${BOARD^^} linux image ${ver}
 EOF
     cd debian
-    fakeroot dpkg-deb --build bananapi-r2-image ../debian
+    fakeroot dpkg-deb --build bananapi-$boardv-image ../debian
     cd ..
     ls -lh debian/*.deb
-    debfile=debian/bananapi-r2-image-${kernbranch,,}_${kernver}-1_armhf.deb
+    debfile=debian/bananapi-$boardv-image-${kernbranch,,}_${kernver}-1_armhf.deb
     dpkg -c $debfile
 
 	dpkg -I $debfile
@@ -348,8 +401,11 @@ function build {
 	get_version
 	if [ -e ".config" ]; then
 		echo Cleanup Kernel Build
+		rm arch/arm/boot/zImage 2>/dev/null
 		rm arch/arm/boot/zImage-dtb 2>/dev/null
+		rm arch/arm64/boot/Image 2>/dev/null
 		rm ./uImage 2>/dev/null
+		rm ${board}.dtb 2>/dev/null
 
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
@@ -357,17 +413,23 @@ function build {
 		ret=$?
 		exec 3>&-
 
-		if [[ $ret == 0 ]]; then
-			cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
-			mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
-
-			echo "build uImage without appended DTB..."
-			export DTC_FLAGS=-@
-			make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n &>/dev/null #output/errors can be ignored because they are printed before
-			ret=$?
+		if [[ "$board" == "bpi-r64" ]];then
+			#how to create zImage?? make zImage does not work here
+			mkimage -A arm -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage
+			cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
+		else
 			if [[ $ret == 0 ]]; then
-				cp arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb ./bpi-r2.dtb
-				mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage ./uImage_nodt
+				cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
+				mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
+
+				echo "build uImage without appended DTB..."
+				export DTC_FLAGS=-@
+				make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n &>/dev/null #output/errors can be ignored because they are printed before
+				ret=$?
+				if [[ $ret == 0 ]]; then
+					cp arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb $board.dtb
+					mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage ./uImage_nodt
+				fi
 			fi
 		fi
 
@@ -386,17 +448,18 @@ function prepare_SD {
 	for toDel in "$SD/BPI-BOOT/" "$SD/BPI-ROOT/"; do
 		rm -r ${toDel} 2>/dev/null
 	done
-	for createDir in "$SD/BPI-BOOT/bananapi/bpi-r2/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
+	for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
 		mkdir -p ${createDir} >/dev/null 2>/dev/null
 	done
 
 	echo "copy..."
 	export INSTALL_MOD_PATH=$SD/BPI-ROOT/;
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-	cp ./uImage $SD/BPI-BOOT/bananapi/bpi-r2/linux/uImage
-    cp ./uImage_nodt $SD/BPI-BOOT/bananapi/bpi-r2/linux/uImage_nodt
-    cp ./bpi-r2.dtb $SD/BPI-BOOT/bananapi/bpi-r2/linux/dtb/bpi-r2.dtb
-
+	cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
+	if [[ -e ./uImage_nodt ]];then
+    	cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
+	fi
+    cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
@@ -491,32 +554,51 @@ if [ -n "$kernver" ]; then
 
 		"uenv")
 			echo "edit uEnv.txt on sd-card"
-			nano /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt
+			uenv=$(getuenvpath)
+			if [[ -n "$uenv" ]];then
+				nano $uenv
+			else
+				echo "uenv.txt not found"
+			fi
 			;;
 
 		"lskernel")
 			echo "list kernels on sd-card"
-			ls -lh /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/
+			ls -lh /media/$USER/BPI-BOOT/bananapi/$board/linux/
 			echo "available DTBs:"
-			ls -lh /media/$USER/BPI-BOOT/bananapi/bpi-r2/linux/dtb
+			ls -lh /media/$USER/BPI-BOOT/bananapi/$board/linux/dtb
 			;;
 
 		"defconfig")
 			echo "edit def config"
-			nano arch/arm/configs/mt7623n_evb_fwu_defconfig
+			if [[ "$board" == "bpi-r64" ]];then
+				nano arch/arm64/configs/mt7622_bpi-r64_defconfig
+			else
+				nano arch/arm/configs/mt7623n_evb_fwu_defconfig
+			fi
 			;;
 		"deb")
 			echo "deb-package (currently testing-state)"
 			deb
 			;;
 		"dtsi")
-			echo "edit mt7623.dtsi"
-			nano arch/arm/boot/dts/mt7623.dtsi
+			if [[ "$board" == "bpi-r64" ]];then
+				echo "edit mt7622.dtsi"
+				nano arch/arm64/boot/dts/mt7622.dtsi
+			else
+				echo "edit mt7623.dtsi"
+				nano arch/arm/boot/dts/mt7623.dtsi
+			fi
 			;;
 
 		"dts")
-			echo "edit mt7623n-bpi.dts"
-			nano arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
+			if [[ "$board" == "bpi-r64" ]];then
+				echo "edit mt7622n-bpi.dts"
+				nano arch/arm64/boot/dts/mt7622n-bananapi-bpi-r64.dts
+			else
+				echo "edit mt7623n-bpi.dts"
+				nano arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
+			fi
 			;;
 
 		"importmylconfig")
@@ -527,17 +609,24 @@ if [ -n "$kernver" ]; then
 
 		"importconfig")
 			echo "import a defconfig file"
-			if [[ -z "$file" ]];then
-				echo "Import fwu config"
-				make mt7623n_evb_fwu_defconfig
+			if [[ "$board" == "bpi-r64" ]];then
+				p=arm64
+				echo "Import r64 config"
+				f=mt7622_bpi-r64_defconfig
 			else
-				f=mt7623n_${file}_defconfig
-				echo "Import config: $f"
-				if [[ -e "arch/arm/configs/${f}" ]];then
-					make ${f}
+				p=arm
+				if [[ -z "$file" ]];then
+					echo "Import fwu config"
+					f=mt7623n_evb_fwu_defconfig
 				else
-					echo "file not found"
+					echo "Import config: $f"
+					f=mt7623n_${file}_defconfig
 				fi
+			fi
+			if [[ -e "arch/${p}/configs/${f}" ]];then
+				make ${f}
+			else
+				echo "file not found"
 			fi
 			;;
 
@@ -545,7 +634,14 @@ if [ -n "$kernver" ]; then
 			echo "menu for multiple conf-files...currently in developement"
 			files=();
 			i=1;
-			for f in $(cd arch/arm/configs/; ls mt7623n*defconfig)
+			if [[ "$board" == "bpi-r64" ]];then
+				p=arch/arm64/configs/
+				ff="mt7622*defconfig"
+			else
+				p=arch/arm/configs/
+				ff="mt7623n*defconfig"
+			fi
+			for f in $(cd $p; ls $ff)
 			do
 				echo "[$i] $f"
 				files+=($f)
