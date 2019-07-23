@@ -141,16 +141,16 @@ function upload {
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
-	echo "uploading to ${uploadserver}:${uploaddir}..."
 
 	if [[ "$board" == "bpi-r64" ]];then
 		dtbname="${kernver}${gitbranch}.dtb"
 		read -e -i $dtbname -p "dtb-filename: " input
 		dtbname="${input:-$dtbname}"
 
-		echo "Name: $dtbname"
+		echo "DTB Name: $dtbname"
 	fi
 
+	echo "uploading to ${uploadserver}:${uploaddir}..."
 	scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 	if [[ "$board" == "bpi-r64" ]];then
 		scp bpi-r64.dtb ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
