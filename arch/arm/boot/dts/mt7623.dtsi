@@ -370,7 +370,7 @@
 		interrupts = <GIC_SPI 106 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&infracfg CLK_INFRA_M4U>;
 		clock-names = "bclk";
-		mediatek,larbs = <&larb0 &larb1 &larb2 &larb3>;
+		mediatek,larbs = <&larb0 &larb1 &larb2>;
 		#iommu-cells = <1>;
 	};
 
@@ -780,17 +780,6 @@
 		#reset-cells = <1>;
 	};
 
-	larb3: larb@13010000 {
-		compatible = "mediatek,mt7623-smi-larb",
-			     "mediatek,mt2701-smi-larb";
-		reg = <0 0x13010000 0 0x1000>;
-		mediatek,smi = <&smi_common>;
-		mediatek,larb-id = <3>;
-		clocks = <&clk26m>, <&clk26m>;
-		clock-names = "apb", "smi";
-		power-domains = <&scpsys MT2701_POWER_DOMAIN_MFG>;
-	};
-
 	mali: gpu@13040000 {
 		compatible = "mediatek,mt7623-mali", "arm,mali-450";
 		reg = <0 0x13040000 0 0x30000>;
@@ -812,7 +801,6 @@
 			 <&g3dsys CLK_G3DSYS_CORE>;
 		clock-names = "bus", "core";
 		power-domains = <&scpsys MT2701_POWER_DOMAIN_MFG>;
-		mediatek,larb = <&larb3>;
 		resets = <&g3dsys MT2701_G3DSYS_CORE_RST>;
 	};
 
