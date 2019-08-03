@@ -209,6 +209,8 @@ config LED_TRIGGER_PHY
 		for any speed known to the PHY.
 
 
+source "drivers/net/phy/mtk/mt753x/Kconfig"
+
 comment "MII PHY device drivers"
 
 config SFP
