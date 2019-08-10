@@ -80,6 +80,10 @@ else
 	ip addr add 192.168.10.1/24 dev ap0
 	echo "restart dnsmasq..."
 	service dnsmasq restart
+
+	#limit speed as suggested in http://wiki.banana-pi.org/Getting_Started_with_R2#WiFi_and_Ap_mode_on_R2_Openwrt
+	#tc qdisc add dev ap0 root handle 1: htb default 11
+	#tc class add dev ap0 parent 1:1 classid 1:2 htb rate 8Mbit ceil 4Mbit prio 2
 fi
 
 #load bluetooth-driver (has to be done after stp_uart_launcher)
