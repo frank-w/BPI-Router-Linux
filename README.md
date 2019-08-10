@@ -19,7 +19,32 @@ If you build it directly on the BananaPi-R2 (not recommended) you do not need th
   ./build.sh config (To configure manually with menuconfig)
   ./build.sh
 ```
+### Usage with docker
 
+The Dockerfile in `utils/docker/` provides a build environment without installing the native compilers on the local system.
+
+The local directory will be mounted into the docker container. All changes will also be present in the respository folder.
+
+1. Build the docker container for building once:
+    ```sh
+    sh ./utils/docker/build_container.sh
+    ```
+1. Start and connect to the running docker container: 
+    ```sh 
+    sh ./utils/docker/run.sh
+    ```
+1. Now you can use the commands from above:
+    ```sh 
+    ./build.sh
+    ```
+1. Close the container with `exit` or `CTRL-D`.
+1. Your build artifacts from the build script will be in the folder `./SD/` 
+
+
+If you want to clean up you can remove all containers (and the associated docker images) with:
+```sh
+docker rmi bpi-cross-compile:1 --force
+```
 ## Branch details
 
 Kernel upstream + BPI-R2
