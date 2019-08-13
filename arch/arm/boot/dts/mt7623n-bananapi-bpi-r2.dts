@@ -16,7 +16,6 @@
 	aliases {
 		serial2 = &uart2;
 		ethernet0 = &gmac0;
-		ethernet1 = &gmac1;
 	};
 
 	chosen {
