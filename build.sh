@@ -599,7 +599,7 @@ if [ -n "$kernver" ]; then
 		"dtsi")
 			if [[ "$board" == "bpi-r64" ]];then
 				echo "edit mt7622.dtsi"
-				nano arch/arm64/boot/dts/mt7622.dtsi
+				nano arch/arm64/boot/dts/mediatek/mt7622.dtsi
 			else
 				echo "edit mt7623.dtsi"
 				nano arch/arm/boot/dts/mt7623.dtsi
@@ -609,7 +609,7 @@ if [ -n "$kernver" ]; then
 		"dts")
 			if [[ "$board" == "bpi-r64" ]];then
 				echo "edit mt7622n-bpi.dts"
-				nano arch/arm64/boot/dts/mt7622n-bananapi-bpi-r64.dts
+				nano arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
 			else
 				echo "edit mt7623n-bpi.dts"
 				nano arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
