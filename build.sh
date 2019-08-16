@@ -66,7 +66,9 @@ function update_kernel_source {
                 git merge v$newkernver
         elif [[ $ret -eq 128 ]];then
                 #repo not found
+		echo "add linux-stable,,,"
                 git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+		update_kernel_source
         fi
         else
                 echo "please first commit/stash modified files: $changedfiles"
