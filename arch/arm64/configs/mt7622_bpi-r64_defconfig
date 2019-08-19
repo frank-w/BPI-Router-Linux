@@ -288,3 +288,6 @@ CONFIG_MT7615E=m
 
 
 CONFIG_MT753X_GSW=y
+
+#CONFIG_BLK_DEV_INITRD=y
+#CONFIG_INITRAMFS_SOURCE="../busybox/output/initramfs_arm64.cpio"
