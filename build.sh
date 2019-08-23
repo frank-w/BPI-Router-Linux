@@ -287,11 +287,11 @@ function deb {
 #    fname=bpi-r2_${kernver}_${gitbranch}.tar.gz
 #    tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 
+	rm -rf $targetdir/boot/bananapi/$board/linux/*
+	rm -rf $targetdir/lib/modules/*
 	mkdir -p $targetdir/boot/bananapi/$board/linux/dtb/
 	mkdir -p $targetdir/lib/modules/
 	mkdir -p $targetdir/DEBIAN/
-	rm $targetdir/boot/bananapi/$board/linux/*
-	rm -rf $targetdir/lib/modules/*
 
 	#sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
 	if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
@@ -389,7 +389,7 @@ EOF
     fakeroot dpkg-deb --build bananapi-$boardv-image ../debian
     cd ..
     ls -lh debian/*.deb
-    debfile=debian/bananapi-$boardv-image-${kernbranch,,}_${kernver}-1_armhf.deb
+    debfile=debian/bananapi-$boardv-image-${kernbranch,,}_${kernver}-1_$debarch.deb
     dpkg -c $debfile
 
 	dpkg -I $debfile
