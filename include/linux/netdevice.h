@@ -1237,6 +1237,8 @@ struct netdev_net_notifier {
  *	TX queue.
  * int (*ndo_get_iflink)(const struct net_device *dev);
  *	Called to get the iflink value of this device.
+ * int (*ndo_set_iflink)(struct net_device *dev, int iflink);
+ *	Called to set the iflink value of this device.
  * void (*ndo_change_proto_down)(struct net_device *dev,
  *				 bool proto_down);
  *	This function is used to pass protocol port error state information
@@ -1470,6 +1472,8 @@ struct net_device_ops {
 						      int queue_index,
 						      u32 maxrate);
 	int			(*ndo_get_iflink)(const struct net_device *dev);
+	int			(*ndo_set_iflink)(struct net_device *dev,
+						  int iflink);
 	int			(*ndo_change_proto_down)(struct net_device *dev,
 							 bool proto_down);
 	int			(*ndo_fill_metadata_dst)(struct net_device *dev,
@@ -2829,6 +2833,7 @@ void dev_add_offload(struct packet_offload *po);
 void dev_remove_offload(struct packet_offload *po);
 
 int dev_get_iflink(const struct net_device *dev);
+int dev_set_iflink(struct net_device *dev, int iflink);
 int dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
 struct net_device *__dev_get_by_flags(struct net *net, unsigned short flags,
 				      unsigned short mask);

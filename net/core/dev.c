@@ -821,6 +821,21 @@ int dev_get_iflink(const struct net_device *dev)
 EXPORT_SYMBOL(dev_get_iflink);
 
 /**
+ *	dev_set_iflink - set 'iflink' value of an interface
+ *	@dev: target interface
+ *	@iflink: new value
+ *
+ *	Change the interface to which this interface is linked to.
+ */
+int dev_set_iflink(struct net_device *dev, int iflink)
+{
+	if (dev->netdev_ops && dev->netdev_ops->ndo_set_iflink)
+		return dev->netdev_ops->ndo_set_iflink(dev, iflink);
+
+	return -EOPNOTSUPP;
+}
+
+/**
  *	dev_fill_metadata_dst - Retrieve tunnel egress information.
  *	@dev: targeted interface
  *	@skb: The packet.
