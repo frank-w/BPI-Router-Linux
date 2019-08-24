@@ -647,6 +647,11 @@ struct dsa_switch_ops {
 	int	(*port_change_mtu)(struct dsa_switch *ds, int port,
 				   int new_mtu);
 	int	(*port_max_mtu)(struct dsa_switch *ds, int port);
+	/*
+	 * Multi-CPU port support
+	 */
+	int	(*port_change_cpu_port)(struct dsa_switch *ds, int port,
+					struct dsa_port *new_cpu_dp);
 };
 
 #define DSA_DEVLINK_PARAM_DRIVER(_id, _name, _type, _cmodes)		\
