@@ -211,36 +211,43 @@ static bool dsa_tree_setup_routing_table(struct dsa_switch_tree *dst)
 	return complete;
 }
 
-static struct dsa_port *dsa_tree_find_first_cpu(struct dsa_switch_tree *dst)
+static int dsa_tree_setup_default_cpus(struct dsa_switch_tree *dst)
 {
-	struct dsa_port *dp;
+	struct dsa_port *cpu_dp, *dp, *first_cpu_dp = NULL, *last_cpu_dp = NULL;
 
+	/* Find first and last CPU port */
 	list_for_each_entry(dp, &dst->ports, list)
-		if (dsa_port_is_cpu(dp))
-			return dp;
+		if (dsa_port_is_cpu(dp)) {
+			if (first_cpu_dp == NULL)
+				first_cpu_dp = dp;
 
-	return NULL;
-}
+			last_cpu_dp = dp;
+		}
 
-static int dsa_tree_setup_default_cpu(struct dsa_switch_tree *dst)
-{
-	struct dsa_port *cpu_dp, *dp;
-
-	cpu_dp = dsa_tree_find_first_cpu(dst);
-	if (!cpu_dp) {
+	if (first_cpu_dp == NULL) {
 		pr_err("DSA: tree %d has no CPU port\n", dst->index);
 		return -EINVAL;
 	}
 
-	/* Assign the default CPU port to all ports of the fabric */
+	cpu_dp = first_cpu_dp;
+
+	/* Assign the CPU ports in round-robbin way to all ports of the fabric */
 	list_for_each_entry(dp, &dst->ports, list)
-		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
+		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp)) {
 			dp->cpu_dp = cpu_dp;
+
+			if (cpu_dp == last_cpu_dp)
+				cpu_dp = first_cpu_dp;
+			else
+				while((cpu_dp = list_next_entry(cpu_dp, list)) != 0)
+					if (dsa_port_is_cpu(cpu_dp))
+						break;
+		}
 
 	return 0;
 }
 
-static void dsa_tree_teardown_default_cpu(struct dsa_switch_tree *dst)
+static void dsa_tree_teardown_default_cpus(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *dp;
 
@@ -566,7 +573,7 @@ static void dsa_tree_teardown_switches(struct dsa_switch_tree *dst)
 		dsa_switch_teardown(dp->ds);
 }
 
-static int dsa_tree_setup_master(struct dsa_switch_tree *dst)
+static int dsa_tree_setup_masters(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *dp;
 	int err;
@@ -575,14 +582,20 @@ static int dsa_tree_setup_master(struct dsa_switch_tree *dst)
 		if (dsa_port_is_cpu(dp)) {
 			err = dsa_master_setup(dp->master, dp);
 			if (err)
-				return err;
+				goto teardown;
 		}
 	}
 
 	return 0;
+teardown:
+	list_for_each_entry(dp, &dst->ports, list)
+		if (dsa_port_is_cpu(dp))
+			dsa_master_teardown(dp->master);
+
+	return err;
 }
 
-static void dsa_tree_teardown_master(struct dsa_switch_tree *dst)
+static void dsa_tree_teardown_masters(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *dp;
 
@@ -606,7 +619,7 @@ static int dsa_tree_setup(struct dsa_switch_tree *dst)
 	if (!complete)
 		return 0;
 
-	err = dsa_tree_setup_default_cpu(dst);
+	err = dsa_tree_setup_default_cpus(dst);
 	if (err)
 		return err;
 
@@ -614,7 +627,7 @@ static int dsa_tree_setup(struct dsa_switch_tree *dst)
 	if (err)
 		goto teardown_default_cpu;
 
-	err = dsa_tree_setup_master(dst);
+	err = dsa_tree_setup_masters(dst);
 	if (err)
 		goto teardown_switches;
 
@@ -627,7 +640,7 @@ static int dsa_tree_setup(struct dsa_switch_tree *dst)
 teardown_switches:
 	dsa_tree_teardown_switches(dst);
 teardown_default_cpu:
-	dsa_tree_teardown_default_cpu(dst);
+	dsa_tree_teardown_default_cpus(dst);
 
 	return err;
 }
@@ -639,11 +652,11 @@ static void dsa_tree_teardown(struct dsa_switch_tree *dst)
 	if (!dst->setup)
 		return;
 
-	dsa_tree_teardown_master(dst);
+	dsa_tree_teardown_masters(dst);
 
 	dsa_tree_teardown_switches(dst);
 
-	dsa_tree_teardown_default_cpu(dst);
+	dsa_tree_teardown_default_cpus(dst);
 
 	list_for_each_entry_safe(dl, next, &dst->rtable, list) {
 		list_del(&dl->list);
