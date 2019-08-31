@@ -43,6 +43,7 @@ Table of Contents
   3.7   /proc/<pid>/task/<tid>/children - Information about task children
   3.8   /proc/<pid>/fdinfo/<fd> - Information about opened file
   3.9   /proc/<pid>/map_files - Information about memory mapped files
+  3.10  /proc/<pid>/timerslack_ns - Task timerslack value
 
   4	Configuring procfs
   4.1	Mount options
@@ -380,6 +381,8 @@ is not associated with a file:
  [stack]                  = the stack of the main process
  [vdso]                   = the "virtual dynamic shared object",
                             the kernel system call handler
+ [anon:<name>]            = an anonymous mapping that has been
+                            named by userspace
 
  or if empty, the mapping is anonymous.
 
@@ -406,6 +409,7 @@ KernelPageSize:        4 kB
 MMUPageSize:           4 kB
 Locked:                0 kB
 VmFlags: rd ex mr mw me dw
+Name:           name from userspace
 
 the first of these lines shows the same information as is displayed for the
 mapping in /proc/PID/maps.  The remaining lines show the size of the mapping
@@ -467,6 +471,9 @@ manner. The codes are the following:
 Note that there is no guarantee that every flag and associated mnemonic will
 be present in all further kernel releases. Things get changed, the flags may
 be vanished or the reverse -- new added.
+
+The "Name" field will only be present on a mapping that has been named by
+userspace, and will show the name passed in by userspace.
 
 This file is only present if the CONFIG_MMU kernel configuration option is
 enabled.
@@ -1820,6 +1827,23 @@ files in a fast way instead of parsing /proc/<pid>/maps or
 time one can open(2) mappings from the listings of two processes and
 comparing their inode numbers to figure out which anonymous memory areas
 are actually shared.
+
+3.10	/proc/<pid>/timerslack_ns - Task timerslack value
+---------------------------------------------------------
+This file provides the value of the task's timerslack value in nanoseconds.
+This value specifies a amount of time that normal timers may be deferred
+in order to coalesce timers and avoid unnecessary wakeups.
+
+This allows a task's interactivity vs power consumption trade off to be
+adjusted.
+
+Writing 0 to the file will set the tasks timerslack to the default value.
+
+Valid values are from 0 - ULLONG_MAX
+
+An application setting the value must have PTRACE_MODE_ATTACH_FSCREDS level
+permissions on the task specified to change its timerslack_ns value.
+
 
 ------------------------------------------------------------------------------
 Configuring procfs

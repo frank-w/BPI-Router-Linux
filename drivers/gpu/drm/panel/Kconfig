@@ -51,4 +51,22 @@ config DRM_PANEL_SHARP_LQ101R1SX01
 	  To compile this driver as a module, choose M here: the module
 	  will be called panel-sharp-lq101r1sx01.
 
+config DRM_PANEL_TRULY_TDO_BD0598U40004
+	tristate "Truly TDO BD0598U40004 FHD video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for Sharp TDO BD0598U40004 FHD
+	  (1080x1920) DSI panel as found on the Mediatek BX2701 EVB board
+
+config DRM_PANEL_CM_N070ICE
+	tristate "CM N070ICE FHD DSI video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for N070ICE RGB panel.
+	  To compile this driver as a module, choose M here.
+
 endmenu

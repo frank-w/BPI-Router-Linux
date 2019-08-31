@@ -100,3 +100,5 @@ void tracing_stop_cmdline_record(void)
 {
 	tracing_stop_sched_switch();
 }
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(sched_switch);

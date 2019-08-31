@@ -34,6 +34,8 @@
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 #include <net/netfilter/nf_log.h>
 
+#include <net/ra_nat.h>
+
 static bool ipv6_pkt_to_tuple(const struct sk_buff *skb, unsigned int nhoff,
 			      struct nf_conntrack_tuple *tuple)
 {
@@ -151,6 +153,8 @@ static unsigned int ipv6_confirm(void *priv,
 		pr_debug("proto header not found\n");
 		goto out;
 	}
+
+	hwnat_magic_tag_set_zero(skb);
 
 	/* adjust seqs for loopback traffic only in outgoing direction */
 	if (test_bit(IPS_SEQ_ADJUST_BIT, &ct->status) &&

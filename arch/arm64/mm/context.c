@@ -182,12 +182,17 @@ void check_and_switch_context(struct mm_struct *mm, unsigned int cpu)
 	raw_spin_unlock_irqrestore(&cpu_asid_lock, flags);
 
 switch_mm_fastpath:
-	cpu_switch_mm(mm->pgd, mm);
+	/*
+	 * Defer TTBR0_EL1 setting for user threads to uaccess_enable() when
+	 * emulating PAN.
+	 */
+	if (!system_uses_ttbr0_pan())
+		cpu_switch_mm(mm->pgd, mm);
 }
 
 static int asids_init(void)
 {
-	int fld = cpuid_feature_extract_field(read_cpuid(ID_AA64MMFR0_EL1), 4);
+	int fld = cpuid_feature_extract_field(read_cpuid(SYS_ID_AA64MMFR0_EL1), 4);
 
 	switch (fld) {
 	default:

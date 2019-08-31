@@ -388,4 +388,14 @@ config IR_SUNXI
 	   To compile this driver as a module, choose M here: the module will
 	   be called sunxi-ir.
 
+config IR_MTK
+	tristate "Mediatek IR remote control"
+	depends on RC_CORE
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	---help---
+	   Say Y if you want to use Mediatek internal IR Controller
+
+	   To compile this driver as a module, choose M here: the module will
+	   be called mtk-cir.
+
 endif #RC_DEVICES

@@ -826,7 +826,8 @@ static struct nand_ecclayout *brcmnand_create_layout(int ecc_level,
 				    idx2 >= MTD_MAX_OOBFREE_ENTRIES_LARGE - 1)
 				break;
 		}
-		goto out;
+
+		return layout;
 	}
 
 	/*
@@ -877,10 +878,7 @@ static struct nand_ecclayout *brcmnand_create_layout(int ecc_level,
 				idx2 >= MTD_MAX_OOBFREE_ENTRIES_LARGE - 1)
 			break;
 	}
-out:
-	/* Sum available OOB */
-	for (i = 0; i < MTD_MAX_OOBFREE_ENTRIES_LARGE; i++)
-		layout->oobavail += layout->oobfree[i].length;
+
 	return layout;
 }
 

@@ -173,4 +173,21 @@ config PCI_HISI
 	help
 	  Say Y here if you want PCIe controller support on HiSilicon HIP05 SoC
 
+config PCIE_MTK
+	depends on OF && ARCH_MEDIATEK
+	bool "Mediatek PCIe controller"
+	select PCIEPORTBUS
+	help
+	  Say Y here if you want PCIe controller support on Mediatek SoC
+	  platform
+
+config PCI_MT2701
+	bool "Mediatek MT2701 PCIe Controller"
+	depends on OF
+	depends on PCI
+	help
+	  Say Y here if you want to enable PCI controller support on Mediatek MT2701 and MT7623.
+	  MT2701 PCIe supports single Root complex (RC) with 3 Root Ports.
+	  Each port supports a Gen2 1-lan Link.
+	  PCIe include one Host/PCI bridge and 3 PCIe MAC.
 endmenu

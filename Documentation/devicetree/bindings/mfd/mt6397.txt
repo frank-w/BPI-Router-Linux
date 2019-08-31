@@ -21,6 +21,7 @@ Optional subnodes:
 
 - rtc
 	Required properties:
+		- compatible: "mediatek,mt6323-rtc"
 		- compatible: "mediatek,mt6397-rtc"
 - regulators
 	Required properties:

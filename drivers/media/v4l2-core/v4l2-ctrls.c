@@ -747,6 +747,7 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_MV_H_SEARCH_RANGE:		return "Horizontal MV Search Range";
 	case V4L2_CID_MPEG_VIDEO_MV_V_SEARCH_RANGE:		return "Vertical MV Search Range";
 	case V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER:		return "Repeat Sequence Header";
+	case V4L2_CID_MPEG_VIDEO_FORCE_KEY_FRAME:		return "Force Key Frame";
 
 	/* VPX controls */
 	case V4L2_CID_MPEG_VIDEO_VPX_NUM_PARTITIONS:		return "VPX Number of Partitions";
@@ -912,6 +913,15 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_DETECT_MD_GLOBAL_THRESHOLD: return "MD Global Threshold";
 	case V4L2_CID_DETECT_MD_THRESHOLD_GRID:	return "MD Threshold Grid";
 	case V4L2_CID_DETECT_MD_REGION_GRID:	return "MD Region Grid";
+
+	/* Mediatek control */
+	case V4L2_CID_MPEG_MTK_FRAME_INTERVAL:	return "Video frame interval";
+	case V4L2_CID_MPEG_MTK_ERRORMB_MAP:	return "Video error map";
+	case V4L2_CID_MPEG_MTK_DECODE_MODE:	return "Video decode mode";
+	case V4L2_CID_MPEG_MTK_FRAME_SIZE:	return "Video frame size";
+	case V4L2_CID_MPEG_MTK_FIXED_MAX_FRAME_BUFFER:	return "Video fixed maximum frame size";
+	case V4L2_CID_MPEG_MTK_CRC_PATH:	return "Video crc path";
+	case V4L2_CID_MPEG_MTK_GOLDEN_PATH:	return "Video golden path";
 	default:
 		return NULL;
 	}
@@ -925,6 +935,22 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	*flags = 0;
 
 	switch (id) {
+	case V4L2_CID_MPEG_MTK_FRAME_INTERVAL:
+	case V4L2_CID_MPEG_MTK_ERRORMB_MAP:
+		*type = V4L2_CTRL_TYPE_INTEGER;
+		*flags |= V4L2_CTRL_FLAG_READ_ONLY;
+		break;
+	case V4L2_CID_MPEG_MTK_DECODE_MODE:
+	case V4L2_CID_MPEG_MTK_FRAME_SIZE:
+	case V4L2_CID_MPEG_MTK_FIXED_MAX_FRAME_BUFFER:
+		*type = V4L2_CTRL_TYPE_INTEGER;
+		*flags |= V4L2_CTRL_FLAG_WRITE_ONLY;
+		break;
+	case V4L2_CID_MPEG_MTK_CRC_PATH:
+	case V4L2_CID_MPEG_MTK_GOLDEN_PATH:
+		*type = V4L2_CTRL_TYPE_STRING;
+		*flags |= V4L2_CTRL_FLAG_WRITE_ONLY;
+		break;
 	case V4L2_CID_AUDIO_MUTE:
 	case V4L2_CID_AUDIO_LOUDNESS:
 	case V4L2_CID_AUTO_WHITE_BALANCE:
@@ -985,6 +1011,7 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_MPEG_VIDEO_MV_V_SEARCH_RANGE:
 		*type = V4L2_CTRL_TYPE_INTEGER;
 		break;
+	case V4L2_CID_MPEG_VIDEO_FORCE_KEY_FRAME:
 	case V4L2_CID_PAN_RESET:
 	case V4L2_CID_TILT_RESET:
 	case V4L2_CID_FLASH_STROBE:

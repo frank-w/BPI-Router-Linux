@@ -31,28 +31,32 @@ enum rc_type {
 	RC_TYPE_RC6_MCE		= 16,	/* MCE (Philips RC6-6A-32 subtype) protocol */
 	RC_TYPE_SHARP		= 17,	/* Sharp protocol */
 	RC_TYPE_XMP		= 18,	/* XMP protocol */
+	RC_TYPE_CEC		= 19,	/* CEC protocol */
+	RC_TYPE_RCMM		= 20,	/* RCMM protocol */
 };
 
-#define RC_BIT_NONE		0
-#define RC_BIT_UNKNOWN		(1 << RC_TYPE_UNKNOWN)
-#define RC_BIT_OTHER		(1 << RC_TYPE_OTHER)
-#define RC_BIT_RC5		(1 << RC_TYPE_RC5)
-#define RC_BIT_RC5X		(1 << RC_TYPE_RC5X)
-#define RC_BIT_RC5_SZ		(1 << RC_TYPE_RC5_SZ)
-#define RC_BIT_JVC		(1 << RC_TYPE_JVC)
-#define RC_BIT_SONY12		(1 << RC_TYPE_SONY12)
-#define RC_BIT_SONY15		(1 << RC_TYPE_SONY15)
-#define RC_BIT_SONY20		(1 << RC_TYPE_SONY20)
-#define RC_BIT_NEC		(1 << RC_TYPE_NEC)
-#define RC_BIT_SANYO		(1 << RC_TYPE_SANYO)
-#define RC_BIT_MCE_KBD		(1 << RC_TYPE_MCE_KBD)
-#define RC_BIT_RC6_0		(1 << RC_TYPE_RC6_0)
-#define RC_BIT_RC6_6A_20	(1 << RC_TYPE_RC6_6A_20)
-#define RC_BIT_RC6_6A_24	(1 << RC_TYPE_RC6_6A_24)
-#define RC_BIT_RC6_6A_32	(1 << RC_TYPE_RC6_6A_32)
-#define RC_BIT_RC6_MCE		(1 << RC_TYPE_RC6_MCE)
-#define RC_BIT_SHARP		(1 << RC_TYPE_SHARP)
-#define RC_BIT_XMP		(1 << RC_TYPE_XMP)
+#define RC_BIT_NONE		0ULL
+#define RC_BIT_UNKNOWN		(1ULL << RC_TYPE_UNKNOWN)
+#define RC_BIT_OTHER		(1ULL << RC_TYPE_OTHER)
+#define RC_BIT_RC5		(1ULL << RC_TYPE_RC5)
+#define RC_BIT_RC5X		(1ULL << RC_TYPE_RC5X)
+#define RC_BIT_RC5_SZ		(1ULL << RC_TYPE_RC5_SZ)
+#define RC_BIT_JVC		(1ULL << RC_TYPE_JVC)
+#define RC_BIT_SONY12		(1ULL << RC_TYPE_SONY12)
+#define RC_BIT_SONY15		(1ULL << RC_TYPE_SONY15)
+#define RC_BIT_SONY20		(1ULL << RC_TYPE_SONY20)
+#define RC_BIT_NEC		(1ULL << RC_TYPE_NEC)
+#define RC_BIT_SANYO		(1ULL << RC_TYPE_SANYO)
+#define RC_BIT_MCE_KBD		(1ULL << RC_TYPE_MCE_KBD)
+#define RC_BIT_RC6_0		(1ULL << RC_TYPE_RC6_0)
+#define RC_BIT_RC6_6A_20	(1ULL << RC_TYPE_RC6_6A_20)
+#define RC_BIT_RC6_6A_24	(1ULL << RC_TYPE_RC6_6A_24)
+#define RC_BIT_RC6_6A_32	(1ULL << RC_TYPE_RC6_6A_32)
+#define RC_BIT_RC6_MCE		(1ULL << RC_TYPE_RC6_MCE)
+#define RC_BIT_SHARP		(1ULL << RC_TYPE_SHARP)
+#define RC_BIT_XMP		(1ULL << RC_TYPE_XMP)
+#define RC_BIT_CEC		(1ULL << RC_TYPE_CEC)
+#define RC_BIT_RCMM		(1ULL << RC_TYPE_RCMM)
 
 #define RC_BIT_ALL	(RC_BIT_UNKNOWN | RC_BIT_OTHER | \
 			 RC_BIT_RC5 | RC_BIT_RC5X | RC_BIT_RC5_SZ | \
@@ -61,7 +65,7 @@ enum rc_type {
 			 RC_BIT_NEC | RC_BIT_SANYO | RC_BIT_MCE_KBD | \
 			 RC_BIT_RC6_0 | RC_BIT_RC6_6A_20 | RC_BIT_RC6_6A_24 | \
 			 RC_BIT_RC6_6A_32 | RC_BIT_RC6_MCE | RC_BIT_SHARP | \
-			 RC_BIT_XMP)
+			 RC_BIT_XMP | RC_BIT_CEC | RC_BIT_RCMM)
 
 
 #define RC_SCANCODE_UNKNOWN(x)			(x)
@@ -123,6 +127,7 @@ void rc_map_init(void);
 #define RC_MAP_BEHOLD_COLUMBUS           "rc-behold-columbus"
 #define RC_MAP_BEHOLD                    "rc-behold"
 #define RC_MAP_BUDGET_CI_OLD             "rc-budget-ci-old"
+#define RC_MAP_CEC                       "rc-cec"
 #define RC_MAP_CINERGY_1400              "rc-cinergy-1400"
 #define RC_MAP_CINERGY                   "rc-cinergy"
 #define RC_MAP_DELOCK_61959              "rc-delock-61959"

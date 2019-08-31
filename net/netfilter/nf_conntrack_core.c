@@ -53,6 +53,8 @@
 #include <net/netfilter/nf_nat_core.h>
 #include <net/netfilter/nf_nat_helper.h>
 
+#include <net/ra_nat.h>
+
 #define NF_CONNTRACK_VERSION	"0.5.0"
 
 int (*nfnetlink_parse_nat_setup_hook)(struct nf_conn *ct,
@@ -1092,6 +1094,8 @@ nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 		struct sk_buff *skb)
 {
 	struct nf_conn *ct, *tmpl = NULL;
+	struct nf_conn_help *help;
+
 	enum ip_conntrack_info ctinfo;
 	struct nf_conntrack_l3proto *l3proto;
 	struct nf_conntrack_l4proto *l4proto;
@@ -1176,6 +1180,10 @@ nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 		ret = -ret;
 		goto out;
 	}
+	/*hw nat use*/
+	help = nfct_help(ct);
+	if (help && help->helper)
+		magic_tag_set_zero(skb);
 
 	if (set_reply && !test_and_set_bit(IPS_SEEN_REPLY_BIT, &ct->status))
 		nf_conntrack_event_cache(IPCT_REPLY, ct);

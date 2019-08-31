@@ -842,6 +842,7 @@ static int vop_update_plane_event(struct drm_plane *plane,
 
 	ret = drm_plane_helper_check_update(plane, crtc, fb,
 					    &src, &dest, &clip,
+					    state->rotation,
 					    min_scale,
 					    max_scale,
 					    can_position, false, &visible);
@@ -1478,7 +1479,7 @@ static int vop_create_crtc(struct vop *vop)
 					       0, &vop_plane_funcs,
 					       win_data->phy->data_formats,
 					       win_data->phy->nformats,
-					       win_data->type);
+					       win_data->type, NULL);
 		if (ret) {
 			DRM_ERROR("failed to initialize plane\n");
 			goto err_cleanup_planes;
@@ -1492,7 +1493,7 @@ static int vop_create_crtc(struct vop *vop)
 	}
 
 	ret = drm_crtc_init_with_planes(drm_dev, crtc, primary, cursor,
-					&vop_crtc_funcs);
+					&vop_crtc_funcs, NULL);
 	if (ret)
 		return ret;
 
@@ -1515,7 +1516,7 @@ static int vop_create_crtc(struct vop *vop)
 					       &vop_plane_funcs,
 					       win_data->phy->data_formats,
 					       win_data->phy->nformats,
-					       win_data->type);
+					       win_data->type, NULL);
 		if (ret) {
 			DRM_ERROR("failed to initialize overlay plane\n");
 			goto err_cleanup_crtc;

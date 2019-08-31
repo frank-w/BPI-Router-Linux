@@ -77,3 +77,7 @@ endif
 ifneq ($(CONFIG_NET_L3_MASTER_DEV),)
 obj-y				+= l3mdev/
 endif
+ifeq ($(CONFIG_RA_NAT_HW),y)
+obj-y                           += nat/foe_hook/
+endif
+obj-$(CONFIG_RA_HW_NAT)         += nat/hw_nat/

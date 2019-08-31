@@ -38,6 +38,12 @@ static struct led_trigger *led_feedback;
 
 /* Used to keep track of rc devices */
 static DEFINE_IDA(rc_ida);
+static int i4_ir_keypress_timeout = IR_KEYPRESS_TIMEOUT;
+void rc_set_keypress_timeout(int i4value)
+{
+	i4_ir_keypress_timeout = i4value;
+}
+EXPORT_SYMBOL_GPL(rc_set_keypress_timeout);
 
 static struct rc_map_list *seek_rc_map(const char *name)
 {
@@ -684,7 +690,8 @@ void rc_keydown(struct rc_dev *dev, enum rc_type protocol, u32 scancode, u8 togg
 	ir_do_keydown(dev, protocol, scancode, keycode, toggle);
 
 	if (dev->keypressed) {
-		dev->keyup_jiffies = jiffies + msecs_to_jiffies(IR_KEYPRESS_TIMEOUT);
+		/* dev->keyup_jiffies = jiffies + msecs_to_jiffies(IR_KEYPRESS_TIMEOUT); */
+		dev->keyup_jiffies = jiffies + msecs_to_jiffies(i4_ir_keypress_timeout);
 		mod_timer(&dev->timer_keyup, dev->keyup_jiffies);
 	}
 	spin_unlock_irqrestore(&dev->keylock, flags);
@@ -780,27 +787,29 @@ static struct class rc_class = {
 static struct {
 	u64	type;
 	char	*name;
+	const char	*module_name;
 } proto_names[] = {
-	{ RC_BIT_NONE,		"none"		},
-	{ RC_BIT_OTHER,		"other"		},
-	{ RC_BIT_UNKNOWN,	"unknown"	},
+	{ RC_BIT_NONE,		"none",		NULL			},
+	{ RC_BIT_OTHER,		"other",	NULL			},
+	{ RC_BIT_UNKNOWN,	"unknown",	NULL			},
 	{ RC_BIT_RC5 |
-	  RC_BIT_RC5X,		"rc-5"		},
-	{ RC_BIT_NEC,		"nec"		},
+	  RC_BIT_RC5X,		"rc-5",		"ir-rc5-decoder"	},
+	{ RC_BIT_NEC,		"nec",		"ir-nec-decoder"	},
 	{ RC_BIT_RC6_0 |
 	  RC_BIT_RC6_6A_20 |
 	  RC_BIT_RC6_6A_24 |
 	  RC_BIT_RC6_6A_32 |
-	  RC_BIT_RC6_MCE,	"rc-6"		},
-	{ RC_BIT_JVC,		"jvc"		},
+	  RC_BIT_RC6_MCE,	"rc-6",		"ir-rc6-decoder"	},
+	{ RC_BIT_JVC,		"jvc",		"ir-jvc-decoder"	},
 	{ RC_BIT_SONY12 |
 	  RC_BIT_SONY15 |
-	  RC_BIT_SONY20,	"sony"		},
-	{ RC_BIT_RC5_SZ,	"rc-5-sz"	},
-	{ RC_BIT_SANYO,		"sanyo"		},
-	{ RC_BIT_SHARP,		"sharp"		},
-	{ RC_BIT_MCE_KBD,	"mce_kbd"	},
-	{ RC_BIT_XMP,		"xmp"		},
+	  RC_BIT_SONY20,	"sony",		"ir-sony-decoder"	},
+	{ RC_BIT_RC5_SZ,	"rc-5-sz",	"ir-rc5-decoder"	},
+	{ RC_BIT_SANYO,		"sanyo",	"ir-sanyo-decoder"	},
+	{ RC_BIT_SHARP,		"sharp",	"ir-sharp-decoder"	},
+	{ RC_BIT_MCE_KBD,	"mce_kbd",	"ir-mce_kbd-decoder"	},
+	{ RC_BIT_XMP,		"xmp",		"ir-xmp-decoder"	},
+	{ RC_BIT_CEC,		"cec",		NULL			},
 };
 
 /**
@@ -979,6 +988,48 @@ static int parse_protocol_change(u64 *protocols, const char *buf)
 	return count;
 }
 
+static void ir_raw_load_modules(u64 *protocols)
+
+{
+	u64 available;
+	int i, ret;
+
+	for (i = 0; i < ARRAY_SIZE(proto_names); i++) {
+		if (proto_names[i].type == RC_BIT_NONE ||
+		    proto_names[i].type & (RC_BIT_OTHER | RC_BIT_UNKNOWN))
+			continue;
+
+		available = ir_raw_get_allowed_protocols();
+		if (!(*protocols & proto_names[i].type & ~available))
+			continue;
+
+		if (!proto_names[i].module_name) {
+			pr_err("Can't enable IR protocol %s\n",
+			       proto_names[i].name);
+			*protocols &= ~proto_names[i].type;
+			continue;
+		}
+
+		ret = request_module("%s", proto_names[i].module_name);
+		if (ret < 0) {
+			pr_err("Couldn't load IR protocol module %s\n",
+			       proto_names[i].module_name);
+			*protocols &= ~proto_names[i].type;
+			continue;
+		}
+		msleep(20);
+		available = ir_raw_get_allowed_protocols();
+		if (!(*protocols & proto_names[i].type & ~available))
+			continue;
+
+		pr_err("Loaded IR protocol module %s, \
+		       but protocol %s still not available\n",
+		       proto_names[i].module_name,
+		       proto_names[i].name);
+		*protocols &= ~proto_names[i].type;
+	}
+}
+
 /**
  * store_protocols() - changes the current/wakeup IR protocol(s)
  * @device:	the device descriptor
@@ -1044,6 +1095,9 @@ static ssize_t store_protocols(struct device *device,
 			   (long long)new_protocols);
 		goto out;
 	}
+
+	if (dev->driver_type == RC_DRIVER_IR_RAW)
+		ir_raw_load_modules(&new_protocols);
 
 	if (new_protocols != old_protocols) {
 		*current_protocols = new_protocols;

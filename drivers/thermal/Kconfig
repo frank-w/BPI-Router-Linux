@@ -60,6 +60,16 @@ choice
 	  This option sets which thermal governor shall be loaded at
 	  startup. If in doubt, select 'step_wise'.
 
+config THERMAL_DEFAULT_GOV_LEGACY
+	bool "legacy"
+	select THERMAL_GOV_LEGACY
+	help
+	  Use the legacy governor as default. This throttles the
+	  devices when the temperature is over each trip point.
+	  Legacy governor resembles the behaviors of thermal
+	  framework in Linux kernel 2.6. It sets cooler states whenever
+	  temperature is updated no meter cooler state change or not.
+
 config THERMAL_DEFAULT_GOV_STEP_WISE
 	bool "step_wise"
 	select THERMAL_GOV_STEP_WISE
@@ -91,6 +101,14 @@ config THERMAL_DEFAULT_GOV_POWER_ALLOCATOR
 	  operate on cooling devices that implement the power API.
 
 endchoice
+
+config THERMAL_GOV_LEGACY
+	bool "Legacy thermal governor"
+	help
+	  Enable this to manage platform thermals using legacy governor.
+	  Legacy governor resembles the behaviors of thermal
+	  framework in Linux kernel 2.6. It sets cooler states whenever
+	  temperature is updated no meter cooler state change or not.
 
 config THERMAL_GOV_FAIR_SHARE
 	bool "Fair-share thermal governor"
@@ -364,6 +382,17 @@ config INTEL_PCH_THERMAL
 	  Enable this to support thermal reporting on certain intel PCHs.
 	  Thermal reporting device will provide temperature reading,
 	  programmable trip points and other information.
+
+config MTK_THERMAL
+	tristate "Temperature sensor driver for mediatek SoCs"
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on HAS_IOMEM
+	depends on NVMEM || NVMEM=n
+	depends on RESET_CONTROLLER
+	default y
+	help
+	  Enable this option if you want to have support for thermal management
+	  controller present in Mediatek SoCs
 
 menu "Texas Instruments thermal drivers"
 depends on ARCH_HAS_BANDGAP || COMPILE_TEST

@@ -785,3 +785,6 @@ unsigned int __weak arch_dynirq_lower_bound(unsigned int from)
 {
 	return from;
 }
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(softirq_entry);
+EXPORT_TRACEPOINT_SYMBOL_GPL(softirq_exit);

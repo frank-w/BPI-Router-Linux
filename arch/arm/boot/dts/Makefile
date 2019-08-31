@@ -771,16 +771,31 @@ dtb-$(CONFIG_MACH_DOVE) += \
 	dove-dove-db.dtb \
 	dove-sbc-a510.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += \
+	auto2701evb2-ivi-boot.dtb \
+	auto2701evb2-ivi-recovery.dtb \
 	mt6580-evbp1.dtb \
 	mt6589-aquaris5.dtb \
 	mt6592-evb.dtb \
+	mt7623n-evb.dtb \
 	mt8127-moose.dtb \
-	mt8135-evbp1.dtb
+	mt8135-evbp1.dtb \
+	aud8521pevb2.dtb \
+	aud8521pevb2-nand.dtb
 dtb-$(CONFIG_ARCH_ZX) += zx296702-ad1.dtb
 endif
 
 dtstree		:= $(srctree)/$(src)
 dtb-$(CONFIG_OF_ALL_DTBS) := $(patsubst $(dtstree)/%.dts,%.dtb, $(wildcard $(dtstree)/*.dts))
 
-always		:= $(dtb-y)
+DTB_NAMES := $(subst $\",,$(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAMES))
+ifneq ($(DTB_NAMES),)
+DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES))
+else
+DTB_LIST := $(dtb-y)
+endif
+
+targets += dtbs dtbs_install
+targets += $(DTB_LIST)
+
+always		:= $(DTB_LIST)
 clean-files	:= *.dtb

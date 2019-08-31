@@ -65,7 +65,7 @@
 #include <linux/atomic.h>
 
 #include "l2tp_core.h"
-
+#include <net/ra_nat.h>
 #define L2TP_DRV_VERSION	"V2.0"
 
 /* L2TP header constants */
@@ -88,6 +88,12 @@
 
 /* Default trace flags */
 #define L2TP_DEFAULT_DEBUG_FLAGS	0
+
+/*hw nat l2tp fast path */
+u32 l2tp_fast_path;
+EXPORT_SYMBOL(l2tp_fast_path);
+u32 pptp_fast_path;
+EXPORT_SYMBOL(pptp_fast_path);
 
 /* Private data stored for received packets in the skb.
  */
@@ -1511,6 +1517,8 @@ int l2tp_tunnel_create(struct net *net, int fd, int version, u32 tunnel_id, u32 
 			goto err;
 		}
 	}
+	/*goto:l2tp fast path*/
+	hwnat_set_l2tp_fast_path(l2tp_fast_path, pptp_fast_path);
 
 	sk = sock->sk;
 
@@ -1649,6 +1657,8 @@ EXPORT_SYMBOL_GPL(l2tp_tunnel_create);
  */
 void l2tp_tunnel_delete(struct l2tp_tunnel *tunnel)
 {
+	hwnat_clear_l2tp_fast_path(l2tp_fast_path);
+
 	if (!test_and_set_bit(0, &tunnel->dead)) {
 		l2tp_tunnel_inc_refcount(tunnel);
 		queue_work(l2tp_wq, &tunnel->del_work);

@@ -24,7 +24,7 @@
 #include "clk-mtk.h"
 #include "clk-gate.h"
 
-struct clk_onecell_data * __init mtk_alloc_clk_data(unsigned int clk_num)
+struct clk_onecell_data *mtk_alloc_clk_data(unsigned int clk_num)
 {
 	int i;
 	struct clk_onecell_data *clk_data;
@@ -49,7 +49,7 @@ err_out:
 	return NULL;
 }
 
-void __init mtk_clk_register_fixed_clks(const struct mtk_fixed_clk *clks,
+void mtk_clk_register_fixed_clks(const struct mtk_fixed_clk *clks,
 		int num, struct clk_onecell_data *clk_data)
 {
 	int i;
@@ -72,7 +72,7 @@ void __init mtk_clk_register_fixed_clks(const struct mtk_fixed_clk *clks,
 	}
 }
 
-void __init mtk_clk_register_factors(const struct mtk_fixed_factor *clks,
+void mtk_clk_register_factors(const struct mtk_fixed_factor *clks,
 		int num, struct clk_onecell_data *clk_data)
 {
 	int i;
@@ -95,7 +95,7 @@ void __init mtk_clk_register_factors(const struct mtk_fixed_factor *clks,
 	}
 }
 
-int __init mtk_clk_register_gates(struct device_node *node,
+int mtk_clk_register_gates(struct device_node *node,
 		const struct mtk_gate *clks,
 		int num, struct clk_onecell_data *clk_data)
 {
@@ -135,7 +135,7 @@ int __init mtk_clk_register_gates(struct device_node *node,
 	return 0;
 }
 
-struct clk * __init mtk_clk_register_composite(const struct mtk_composite *mc,
+struct clk *mtk_clk_register_composite(const struct mtk_composite *mc,
 		void __iomem *base, spinlock_t *lock)
 {
 	struct clk *clk;
@@ -220,7 +220,7 @@ err_out:
 	return ERR_PTR(ret);
 }
 
-void __init mtk_clk_register_composites(const struct mtk_composite *mcs,
+void mtk_clk_register_composites(const struct mtk_composite *mcs,
 		int num, void __iomem *base, spinlock_t *lock,
 		struct clk_onecell_data *clk_data)
 {
@@ -240,5 +240,30 @@ void __init mtk_clk_register_composites(const struct mtk_composite *mcs,
 
 		if (clk_data)
 			clk_data->clks[mc->id] = clk;
+	}
+}
+
+void mtk_clk_register_dividers(const struct mtk_clk_divider *mcds,
+			int num, void __iomem *base, spinlock_t *lock,
+				struct clk_onecell_data *clk_data)
+{
+	struct clk *clk;
+	int i;
+
+	for (i = 0; i <  num; i++) {
+		const struct mtk_clk_divider *mcd = &mcds[i];
+
+		clk = clk_register_divider(NULL, mcd->name, mcd->parent_name,
+			mcd->flags, base +  mcd->div_reg, mcd->div_shift,
+			mcd->div_width, mcd->clk_divider_flags, lock);
+
+		if (IS_ERR(clk)) {
+			pr_err("Failed to register clk %s: %ld\n",
+				mcd->name, PTR_ERR(clk));
+			continue;
+		}
+
+		if (clk_data)
+			clk_data->clks[mcd->id] = clk;
 	}
 }

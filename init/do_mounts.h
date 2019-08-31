@@ -74,3 +74,26 @@ void md_run_setup(void);
 static inline void md_run_setup(void) {}
 
 #endif
+
+#ifdef CONFIG_BLK_DEV_DM
+
+void dm_run_setup(void);
+
+#else
+
+static inline void dm_run_setup(void) {}
+
+#endif
+
+#if defined(CONFIG_DM_NFSB)
+
+dev_t dm_mount_nfsb(dev_t dev);
+
+#else
+
+static inline dev_t dm_mount_nfsb(dev_t dev)
+{
+	return dev;
+}
+
+#endif

@@ -289,6 +289,24 @@ config CRYPTO_CBC
 	  CBC: Cipher Block Chaining mode
 	  This block cipher algorithm is required for IPSec.
 
+config CRYPTO_HEH
+	tristate "HEH support"
+	select CRYPTO_CMAC
+	select CRYPTO_ECB
+	select CRYPTO_GF128MUL
+	select CRYPTO_MANAGER
+	select CRYPTO_POLY_HASH_ARM64_CE if ARM64 && KERNEL_MODE_NEON
+	help
+	  HEH: Hash-Encrypt-Hash mode
+	  HEH is a proposed block cipher mode of operation which extends the
+	  strong pseudo-random permutation (SPRP) property of block ciphers to
+	  arbitrary-length input strings.  This provides a stronger notion of
+	  security than existing block cipher modes of operation (e.g. CBC, CTR,
+	  XTS), though it is usually less performant.  Applications include disk
+	  encryption and encryption of file names and contents.  Currently, this
+	  implementation only provides a symmetric cipher interface, so it can't
+	  yet be used as an AEAD.
+
 config CRYPTO_CTR
 	tristate "CTR support"
 	select CRYPTO_BLKCIPHER
@@ -613,6 +631,15 @@ config CRYPTO_SHA1_SSSE3
 	  using Supplemental SSE3 (SSSE3) instructions or Advanced Vector
 	  Extensions (AVX/AVX2) or SHA-NI(SHA Extensions New Instructions),
 	  when available.
+
+config CRYPTO_SHA256_ARM
+	tristate "SHA-224/256 digest algorithm (ARM-asm and NEON)"
+	select CRYPTO_HASH
+	help
+	  SHA-256 secure hash standard (DFIPS 180-2) implemented
+	  using optimized ARM assembler and NEON, when available.
+	  modules built sha256-arm, defined in arch/arm64/crypto/
+	  Kconfig.
 
 config CRYPTO_SHA256_SSSE3
 	tristate "SHA256 digest algorithm (SSSE3/AVX/AVX2/SHA-NI)"

@@ -1629,6 +1629,8 @@ information.</para>
     &sub-yuv420;
     &sub-yuv420m;
     &sub-yvu420m;
+    &sub-yuv422m;
+    &sub-yuv444m;
     &sub-yuv410;
     &sub-yuv422p;
     &sub-yuv411p;

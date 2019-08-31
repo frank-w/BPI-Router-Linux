@@ -142,6 +142,18 @@ config AHCI_CEVA
 
 	  If unsure, say N.
 
+config AHCI_MTK
+	tristate "MTK AHCI SATA support"
+	depends on OF
+	help
+	  This option enables support for Mediatek
+	  AHCI Serial ATA controllers.
+	  Its default value is no. Set the value to
+	  yes when support SATA device in Mediatek
+	  platform.
+
+	  If unsure, say N.
+
 config AHCI_MVEBU
 	tristate "Marvell EBU AHCI SATA support"
 	depends on ARCH_MVEBU

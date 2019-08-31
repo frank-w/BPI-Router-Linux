@@ -5,6 +5,7 @@ interrupt.
 
 Required properties:
 - compatible: should be one of:
+	"mediatek,mt8521p-sysirq"
 	"mediatek,mt8173-sysirq"
 	"mediatek,mt8135-sysirq"
 	"mediatek,mt8127-sysirq"
@@ -14,6 +15,8 @@ Required properties:
 	"mediatek,mt6582-sysirq"
 	"mediatek,mt6580-sysirq"
 	"mediatek,mt6577-sysirq"
+	"mediatek,mt7623-sysirq"
+	"mediatek,mt2701-sysirq"
 - interrupt-controller : Identifies the node as an interrupt controller
 - #interrupt-cells : Use the same format as specified by GIC in
   Documentation/devicetree/bindings/arm/gic.txt

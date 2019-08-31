@@ -25,8 +25,19 @@
 #define EINT_DBNC_SET_DBNC_BITS     4
 #define EINT_DBNC_RST_BIT           (0x1 << 1)
 #define EINT_DBNC_SET_EN            (0x1 << 0)
-
+#define MAX_IP_BASE			5
 #define MTK_PINCTRL_NOT_SUPPORT	(0xffff)
+enum {
+	GPIO_PULL_UNSUPPORTED = -1,
+	GPIO_PULL_DOWN = 0,
+	GPIO_PULL_UP = 1,
+	GPIO_NO_PULL = 2,
+};
+
+enum {
+	GPIO_PULL_DISABLE = 0,
+	GPIO_PULL_ENABLE = 1,
+};
 
 struct mtk_desc_function {
 	const char *name;
@@ -193,6 +204,50 @@ struct mtk_eint_offsets {
 };
 
 /**
+ * struct mt_pin_info - For all pins' setting.
+ * @pin: The pin number.
+ * @offset: The offset of pin setting register.
+ * @bit: The offset of setting value register.
+ * @width: The width of setting bit.
+ * @ip_num: The IP number of setting register use.
+ */
+struct mtk_pin_info {
+	unsigned int pin;
+	unsigned int offset;
+	unsigned char bit;
+	unsigned char width;
+	unsigned char ip_num;
+};
+
+#define MTK_PIN_INFO(_pin, _offset, _bit, _width, _ip_num)	\
+	{	\
+		.pin = _pin,	\
+		.offset = _offset,	\
+		.bit = _bit,	\
+		.width = _width,	\
+		.ip_num = _ip_num,	\
+	}
+
+struct mtk_pinctrl {
+	struct regmap	*regmap1;
+	struct regmap	*regmap2;
+	struct regmap	*regmap[MAX_IP_BASE];
+	struct pinctrl_desc pctl_desc;
+	struct device           *dev;
+	struct gpio_chip	*chip;
+	struct mtk_pinctrl_group	*groups;
+	unsigned			ngroups;
+	const char          **grp_names;
+	struct pinctrl_dev      *pctl_dev;
+	const struct mtk_pinctrl_devdata  *devdata;
+	void __iomem		*eint_reg_base;
+	struct irq_domain	*domain;
+	int			*eint_dual_edges;
+	u32 *wake_mask;
+	u32 *cur_mask;
+};
+
+/**
  * struct mtk_pinctrl_devdata - Provide HW GPIO related data.
  * @pins: An array describing all pins the pin controller affects.
  * @npins: The number of entries in @pins.
@@ -209,7 +264,14 @@ struct mtk_eint_offsets {
  * means when user set smt, input enable is set at the same time. So they
  * also need special control. If special control is success, this should
  * return 0, otherwise return non-zero value.
- *
+ * @spec_pinmux_set: In some cases, there are two pinmux functions share
+ * the same value in the same segment of pinmux control register. If user
+ * want to use one of the two functions, they need an extra bit setting to
+ * select the right one.
+ * @spec_dir_set: In very few SoCs, direction control registers are not
+ * arranged continuously, they may be cut to parts. So they need special
+ * dir setting.
+
  * @dir_offset: The direction register offset.
  * @pullen_offset: The pull-up/pull-down enable register offset.
  * @pinmux_offset: The pinmux register offset.
@@ -222,18 +284,63 @@ struct mtk_eint_offsets {
  * @port_shf: The shift between two registers.
  * @port_mask: The mask of register.
  * @port_align: Provide clear register and set register step.
+ * @regmap_num:chip regmap number.
  */
 struct mtk_pinctrl_devdata {
 	const struct mtk_desc_pin	*pins;
 	unsigned int				npins;
 	const struct mtk_drv_group_desc	*grp_desc;
 	unsigned int	n_grp_cls;
+	const struct mtk_pin_info	*pin_mode_grps;
+	unsigned int	n_pin_mode;
+	const struct mtk_pin_info	*pin_ies_grps;
+	unsigned int	n_pin_ies;
+	const struct mtk_pin_info	*pin_smt_grps;
+	unsigned int	n_pin_smt;
+	const struct mtk_pin_info	*pin_pu_grps;
+	unsigned int	n_pin_pu;
+	const struct mtk_pin_info	*pin_pd_grps;
+	unsigned int	n_pin_pd;
+	const struct mtk_pin_info	*pin_dout_grps;
+	unsigned int	n_pin_dout;
+	const struct mtk_pin_info	*pin_din_grps;
+	unsigned int	n_pin_din;
+	const struct mtk_pin_info	*pin_dir_grps;
+	unsigned int	n_pin_dir;
+	const struct mtk_pin_info	*pin_pupd_grps;
+	unsigned int	n_pin_pupd;
+	const struct mtk_pin_info	*pin_r0_grps;
+	unsigned int	n_pin_r0;
+	const struct mtk_pin_info	*pin_r1_grps;
+	unsigned int	n_pin_r1;
+	const struct mtk_pin_info	*pin_drv_grps;
+	unsigned int	n_pin_drv;
+	const struct mtk_pin_info	*pin_drve4_grps;
+	unsigned int	n_pin_drve4;
+	const struct mtk_pin_info	*pin_drve8_grps;
+	unsigned int	n_pin_drve8;
 	const struct mtk_pin_drv_grp	*pin_drv_grp;
 	unsigned int	n_pin_drv_grps;
 	int (*spec_pull_set)(struct regmap *reg, unsigned int pin,
 			unsigned char align, bool isup, unsigned int arg);
 	int (*spec_ies_smt_set)(struct regmap *reg, unsigned int pin,
 			unsigned char align, int value, enum pin_config_param arg);
+	void (*spec_pinmux_set)(struct regmap *reg, unsigned int pin,
+			unsigned int mode);
+	void (*spec_dir_set)(struct mtk_pinctrl *pctl, unsigned int *reg_addr,
+			unsigned int pin, bool input);
+	void (*spec_dir_get)(struct mtk_pinctrl *pctl, unsigned int *reg_addr,
+			unsigned int pin, unsigned int *reg_val);
+	int (*spec_pull_get)(struct regmap *reg, unsigned int pin);
+	int (*spec_ies_get)(struct regmap *reg, unsigned int pin);
+	int (*spec_smt_get)(struct regmap *reg, unsigned int pin);
+	unsigned int (*spec_debounce_select)(unsigned debounce);
+	int (*mtk_pctl_set_pull_sel)(struct mtk_pinctrl *pctl, unsigned int pin,
+			bool enable, bool isup, unsigned int arg);
+	int (*mtk_pctl_get_pull_sel)(struct mtk_pinctrl *pctl, unsigned int pin);
+	int (*mtk_pctl_set_gpio_drv)(struct mtk_pinctrl *pctl, unsigned int pin,
+			unsigned char drv);
+	int (*mtk_pctl_get_gpio_drv)(struct mtk_pinctrl *pctl, unsigned int pin);
 	unsigned int dir_offset;
 	unsigned int ies_offset;
 	unsigned int smt_offset;
@@ -248,27 +355,10 @@ struct mtk_pinctrl_devdata {
 	unsigned char  port_shf;
 	unsigned char  port_mask;
 	unsigned char  port_align;
+	unsigned int regmap_num;
 	struct mtk_eint_offsets eint_offsets;
 	unsigned int	ap_num;
 	unsigned int	db_cnt;
-};
-
-struct mtk_pinctrl {
-	struct regmap	*regmap1;
-	struct regmap	*regmap2;
-	struct pinctrl_desc pctl_desc;
-	struct device           *dev;
-	struct gpio_chip	*chip;
-	struct mtk_pinctrl_group	*groups;
-	unsigned			ngroups;
-	const char          **grp_names;
-	struct pinctrl_dev      *pctl_dev;
-	const struct mtk_pinctrl_devdata  *devdata;
-	void __iomem		*eint_reg_base;
-	struct irq_domain	*domain;
-	int			*eint_dual_edges;
-	u32 *wake_mask;
-	u32 *cur_mask;
 };
 
 int mtk_pctrl_init(struct platform_device *pdev,
@@ -283,6 +373,27 @@ int mtk_pctrl_spec_pull_set_samereg(struct regmap *regmap,
 int mtk_pconf_spec_set_ies_smt_range(struct regmap *regmap,
 		const struct mtk_pin_ies_smt_set *ies_smt_infos, unsigned int info_num,
 		unsigned int pin, unsigned char align, int value);
+
+int mtk_spec_pull_get_samereg(struct regmap *regmap,
+		const struct mtk_pin_spec_pupd_set_samereg *pupd_infos,
+		unsigned int info_num, unsigned int pin);
+
+int mtk_spec_get_ies_smt_range(struct regmap *regmap,
+		const struct mtk_pin_ies_smt_set *ies_smt_infos,
+		unsigned int info_num,
+		unsigned int pin);
+
+int mtk_pinctrl_get_gpio_value(struct mtk_pinctrl *pctl,
+	int pin, int size, const struct mtk_pin_info pin_info[]);
+
+int mtk_pinctrl_update_gpio_value(struct mtk_pinctrl *pctl, int pin,
+	unsigned char value, int size, const struct mtk_pin_info pin_info[]);
+
+int mtk_pinctrl_set_gpio_value(struct mtk_pinctrl *pctl, int pin,
+	bool value, int size, const struct mtk_pin_info pin_info[]);
+
+unsigned int mtk_gpio_debounce_select(const unsigned int *dbnc_infos, int dbnc_infos_num,
+	unsigned int debounce);
 
 extern const struct dev_pm_ops mtk_eint_pm_ops;
 

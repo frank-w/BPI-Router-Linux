@@ -19,6 +19,8 @@
 #include <net/dst.h>
 #include <net/xfrm.h>
 
+#include <net/ra_nat.h>
+
 static int xfrm_output2(struct net *net, struct sock *sk, struct sk_buff *skb);
 
 static int xfrm_skb_check_space(struct sk_buff *skb)
@@ -96,6 +98,8 @@ static int xfrm_output_one(struct sk_buff *skb, int err)
 		x->curlft.packets++;
 
 		spin_unlock_bh(&x->lock);
+
+		hwnat_magic_tag_set_zero(skb);
 
 		skb_dst_force(skb);
 

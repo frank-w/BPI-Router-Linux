@@ -1,5 +1,10 @@
-# MTK Platform Support
-obj-$(CONFIG_SND_SOC_MEDIATEK) += mtk-afe-pcm.o
-# Machine support
-obj-$(CONFIG_SND_SOC_MT8173_MAX98090) += mt8173-max98090.o
-obj-$(CONFIG_SND_SOC_MT8173_RT5650_RT5676) += mt8173-rt5650-rt5676.o
+subdir-ccflags-y += -Werror
+
+obj-$(CONFIG_SND_SOC_MEDIATEK) += common/
+obj-$(CONFIG_SND_SOC_MT7622) += mt7622/
+obj-$(CONFIG_SND_SOC_MT2701) += mt2701/
+obj-$(CONFIG_SND_SOC_MT8173) += mt8173/
+
+ifneq ($(CONFIG_MT_SND_SOC_8521P),)
+obj-$(CONFIG_MT_SND_SOC_8521P) += mt8521p/
+endif

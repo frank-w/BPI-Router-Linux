@@ -9,6 +9,18 @@ config PINCTRL_MTK_COMMON
 	select OF_GPIO
 
 # For ARMv7 SoCs
+config PINCTRL_MT2701
+	bool "Mediatek MT2701 pin control" if COMPILE_TEST && !MACH_MT2701 && !MACH_MT8521P 
+	depends on OF
+	default MACH_MT2701 || MACH_MT8521P 
+	select PINCTRL_MTK_COMMON
+
+config PINCTRL_MT7623
+	bool "Mediatek MT7623 pin control" if COMPILE_TEST && !MACH_MT7623
+	depends on OF
+	default MACH_MT7623
+	select PINCTRL_MTK_COMMON
+
 config PINCTRL_MT8135
 	bool "Mediatek MT8135 pin control" if COMPILE_TEST && !MACH_MT8135
 	depends on OF
@@ -22,6 +34,20 @@ config PINCTRL_MT8127
 	select PINCTRL_MTK_COMMON
 
 # For ARMv8 SoCs
+config PINCTRL_MT2712
+	bool "Mediatek MT2712 pin control"
+	depends on OF
+	depends on ARM64 || COMPILE_TEST
+	default ARM64 && ARCH_MEDIATEK
+	select PINCTRL_MTK_COMMON
+
+config PINCTRL_MT7622
+	bool "Mediatek MT7622 pin control"
+	depends on OF
+	depends on ARM64 || COMPILE_TEST
+	default ARM64 && ARCH_MEDIATEK
+	select PINCTRL_MTK_COMMON
+
 config PINCTRL_MT8173
 	bool "Mediatek MT8173 pin control"
 	depends on OF

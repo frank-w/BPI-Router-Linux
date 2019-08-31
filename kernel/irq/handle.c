@@ -197,3 +197,6 @@ irqreturn_t handle_irq_event(struct irq_desc *desc)
 	irqd_clear(&desc->irq_data, IRQD_IRQ_INPROGRESS);
 	return ret;
 }
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(irq_handler_entry);
+EXPORT_TRACEPOINT_SYMBOL_GPL(irq_handler_exit);

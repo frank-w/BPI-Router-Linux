@@ -12,6 +12,8 @@ menuconfig INPUT_KEYBOARD
 
 if INPUT_KEYBOARD
 
+source "drivers/input/keyboard/mediatek/Kconfig"
+
 config KEYBOARD_ADP5520
 	tristate "Keypad Support for ADP5520 PMIC"
 	depends on PMIC_ADP5520
@@ -718,5 +720,13 @@ config KEYBOARD_BCM
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called bcm-keypad.
+
+config KEYBOARD_MTK_PMIC
+	tristate "MediaTek PMIC key Support"
+	help
+	  Say Y here if you want to use the pmic keys. If unuse, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called pmic-keys.
 
 endif

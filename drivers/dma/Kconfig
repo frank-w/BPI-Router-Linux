@@ -470,6 +470,15 @@ config TIMB_DMA
 	help
 	  Enable support for the Timberdale FPGA DMA engine.
 
+config DMA_MTK_UART
+	tristate "MediaTek SoCs APDMA support for UART"
+	depends on OF
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support for the DMA engine found on MediaTek MTK SoCs.
+	  This DMA engine just only if used when 8250 mtk uart is enabled.
+
 config TI_CPPI41
 	tristate "AM33xx CPPI41 DMA support"
 	depends on ARCH_OMAP

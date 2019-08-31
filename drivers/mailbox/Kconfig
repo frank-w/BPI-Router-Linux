@@ -85,4 +85,13 @@ config MAILBOX_TEST
 	  Test client to help with testing new Controller driver
 	  implementations.
 
+config MTK_CMDQ_MBOX
+	bool "MediaTek CMDQ Mailbox Support"
+	depends on ARM64 && ( ARCH_MEDIATEK || COMPILE_TEST )
+	select MTK_INFRACFG
+	help
+	  Say yes here to add support for the MediaTek Command Queue (CMDQ)
+	  mailbox driver. The CMDQ is used to help read/write registers with
+	  critical time limitation, such as updating display configuration
+	  during the vblank.
 endif

@@ -9,6 +9,10 @@ menuconfig ARCH_MEDIATEK
 
 if ARCH_MEDIATEK
 
+config MACH_MT2701
+	bool "MediaTek MT2701 SoCs support"
+	default ARCH_MEDIATEK
+
 config MACH_MT6589
 	bool "MediaTek MT6589 SoCs support"
 	default ARCH_MEDIATEK
@@ -24,5 +28,13 @@ config MACH_MT8127
 config MACH_MT8135
 	bool "MediaTek MT8135 SoCs support"
 	default ARCH_MEDIATEK
+
+config MACH_MT8521P
+        bool "MediaTek MT8521p SoCs support"
+        default ARCH_MEDIATEK
+
+config MACH_MT7623
+        bool "MediaTek MT7623 SoCs support"
+        default ARCH_MEDIATEK
 
 endif

@@ -55,3 +55,9 @@ obj-$(CONFIG_VIDEO_AM437X_VPFE)		+= am437x/
 obj-$(CONFIG_VIDEO_XILINX)		+= xilinx/
 
 ccflags-y += -I$(srctree)/drivers/media/i2c
+
+obj-$(CONFIG_VIDEO_MEDIATEK_VCU)	+= mtk-vcu/
+
+obj-$(CONFIG_VIDEO_MEDIATEK_VCODEC)     += mtk-vcodec/
+obj-$(CONFIG_VIDEO_MEDIATEK_MDP)	+= mtk-mdp/
+obj-$(CONFIG_VIDEO_MEDIATEK_JPEG)	+= mtk-jpeg/

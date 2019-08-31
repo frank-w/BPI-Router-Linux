@@ -1,0 +1,255 @@
+config RAETH
+	tristate "Mediatek Ethernet GMAC"
+	---help---
+	  This driver supports Mediatek gigabit ethernet family of
+	  adapters.
+
+	  Note that the answer to this question doesn't directly affect the
+	  kernel: saying N will just cause the configurator to skip all
+	  the questions about Mediatek Ethernet devices. If you say Y,
+	  you will be asked for your specific card in the following questions.
+
+if RAETH
+
+choice
+	prompt "Network BottomHalves"
+	depends on RAETH
+	default RAETH_NAPI
+
+config RA_NETWORK_TASKLET_BH
+	bool "Tasklet"
+
+config RA_NETWORK_WORKQUEUE_BH
+	bool "Work Queue"
+
+config RAETH_NAPI
+	bool "NAPI"
+
+endchoice
+
+config RAETH_SPECIAL_TAG
+	bool "Mediatek Special Tag (0x810x)"
+	depends on RAETH
+
+config RAETH_CHECKSUM_OFFLOAD
+	bool
+	default y
+	depends on RAETH
+
+config RAETH_HW_IOCOHERENT
+	bool "HW IO-Coherent"
+	default y
+	depends on RAETH
+
+config RAETH_HW_LRO
+	bool "HW LRO"
+	default y
+	depends on RAETH
+
+config RAETH_HW_VLAN_TX
+	bool
+	default y
+	depends on RAETH
+	---help---
+	  Please disable HW_VLAN_TX if you need double vlan
+
+config RAETH_HW_VLAN_RX
+	bool
+	default y
+	depends on RAETH
+	---help---
+	  Please disable HW_VLAN_RX if you need double vlan
+
+config RAETH_TSO
+	bool
+	default y
+	depends on RAETH_HW_VLAN_TX
+
+config RAETH_ETHTOOL
+	bool
+	depends on RAETH
+
+config RAETH_QDMA
+	bool "Choose QDMA istead PDMA"
+	default y
+	depends on RAETH
+
+config RAETH_QDMATX_QDMARX
+	bool
+	depends on RAETH_QDMA
+
+config HW_SFQ
+	bool
+	depends on RAETH_QDMA
+
+config RT_3052_ESW
+	bool
+	default y
+	depends on RAETH
+
+config LAN_WAN_SUPPORT
+	bool "LAN/WAN Partition"
+	depends on RAETH
+
+choice
+	prompt "Switch Board Layout Type"
+	depends on LAN_WAN_SUPPORT || P5_RGMII_TO_MAC_MODE ||  GE1_RGMII_FORCE_1000 || GE1_TRGMII_FORCE_1200 || GE2_RGMII_FORCE_1000
+	default WAN_AT_P0
+
+config  WAN_AT_P4
+	bool "LLLL/W"
+
+config  WAN_AT_P0
+	bool "W/LLLL"
+
+endchoice
+
+config	ESW_DOUBLE_VLAN_TAG
+	bool
+	default y
+
+config  MAC_TO_GIGAPHY_MODE_ADDR2
+	hex "Port4 Phy Address"
+	default 0x4
+	depends on P4_MAC_TO_PHY_MODE
+
+config  RAETH_SGMII
+	bool "SGMII Support"
+
+choice
+	prompt "SGMII is connected to"
+	depends on RAETH_SGMII
+	default RAETH_GE2_SGMII
+
+config RAETH_GE1_SGMII
+	bool "GMAC1"
+
+config RAETH_GE2_SGMII
+	bool "GMAC2"
+
+endchoice
+
+choice
+	prompt "GMAC1 is connected to"
+	depends on RAETH
+	default GE1_RGMII_FORCE_1000
+
+config  RAETH_ESW
+	bool "Embedded 5-Port Switch"
+	depends on !RAETH_GE1_SGMII
+
+config  GE1_RGMII_FORCE_1000
+	bool "RGMII_FORCE_1000 (GigaSW, CPU)"
+	depends on !RAETH_GE1_SGMII
+
+config  GE1_TRGMII_FORCE_1200
+	bool "TRGMII_FORCE_1200 (GigaSW)"
+	depends on RALINK_MT7621
+
+config  GE1_TRGMII_FORCE_2000
+	bool "TRGMII_FORCE_2000 (Internal GigaSW)"
+	depends on MACH_MT7623
+
+config  GE1_TRGMII_FORCE_2600
+	bool "TRGMII_FORCE_2600 (Internal GigaSW)"
+	depends on MACH_MT7623
+
+config  GE1_RGMII_AN
+	bool "RGMII_AN (GigaPhy)"
+	depends on !RAETH_GE1_SGMII
+
+config  GE1_SGMII_AN
+	bool "SGMII_AN (GigaPhy)"
+	depends on RAETH_GE1_SGMII
+
+config  GE1_SGMII_FORCE_2500
+	bool "SGMII_FORCE_2500 (GigaSW)"
+	depends on RAETH_GE1_SGMII
+
+config  GE1_RGMII_NONE
+	bool "NONE (NO CONNECT)"
+
+endchoice
+
+config  MAC_TO_GIGAPHY_MODE_ADDR
+	hex "GE1 Phy Address"
+	default 0x1F
+	depends on GE1_MII_AN || GE1_RGMII_AN || GE1_SGMII_AN
+
+config  MAC_TO_GIGAPHY_MODE_ADDR
+	hex "Port5 Phy Address"
+	default 0x5
+	depends on P5_MAC_TO_PHY_MODE
+
+config RAETH_GMAC2
+	bool "GMAC2 Support"
+	depends on RAETH
+	default y if RAETH_GE2_SGMII
+
+choice
+	prompt "GMAC2 is connected to"
+	depends on RAETH_GMAC2
+	default GE2_RGMII_AN
+
+config  GE2_RGMII_FORCE_1000
+	bool "RGMII_FORCE_1000 (GigaSW, CPU)"
+	depends on RAETH_GMAC2 && !RAETH_GE2_SGMII
+	select RALINK_SPI
+
+config  GE2_RGMII_AN
+	bool "RGMII_AN (External GigaPhy)"
+	depends on RAETH_GMAC2 && !RAETH_GE2_SGMII
+
+config  GE2_INTERNAL_GPHY
+	bool "RGMII_AN (Internal GigaPhy)"
+	depends on RAETH_GMAC2
+	select LAN_WAN_SUPPORT
+
+config  GE2_SGMII_AN
+	bool "SGMII_AN (GigaPhy)"
+	depends on RAETH_GE2_SGMII
+
+config  GE2_SGMII_FORCE_2500
+	bool "SGMII_FORCE_2500 (GigaSW)"
+	depends on RAETH_GE2_SGMII
+
+endchoice
+
+config  GE_RGMII_INTERNAL_P0_AN
+	bool
+	depends on GE2_INTERNAL_GPHY
+	default y if WAN_AT_P0
+
+config  GE_RGMII_INTERNAL_P4_AN
+	bool
+	depends on GE2_INTERNAL_GPHY
+	default y if WAN_AT_P4
+
+config  MAC_TO_GIGAPHY_MODE_ADDR2
+	hex
+	default 0 if GE_RGMII_INTERNAL_P0_AN
+	default 4 if GE_RGMII_INTERNAL_P4_AN
+	depends on GE_RGMII_INTERNAL_P0_AN || GE_RGMII_INTERNAL_P4_AN
+
+config  MAC_TO_GIGAPHY_MODE_ADDR2
+	hex "GE2 Phy Address"
+	default 0x1E
+	depends on GE2_MII_AN || GE2_RGMII_AN || GE2_SGMII_AN
+
+config ETH_SKB_ALLOC_SELECT
+	bool "SKB Allocation API Select"
+
+choice
+	prompt "SKB Allocation API Selection"
+	depends on ETH_SKB_ALLOC_SELECT
+	default ETH_PAGE_ALLOC_SKB
+
+config  ETH_SLAB_ALLOC_SKB
+	bool "SLAB skb allocation"
+
+config  ETH_PAGE_ALLOC_SKB
+	bool "Page skb allocation"
+
+endchoice
+
+endif 	# RAETH

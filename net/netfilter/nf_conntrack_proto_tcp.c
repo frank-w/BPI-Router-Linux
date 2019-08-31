@@ -645,7 +645,7 @@ static bool tcp_in_window(const struct nf_conn *ct,
 		 (in_recv_win ? 1 : 0),
 		 before(sack, receiver->td_end + 1),
 		 after(sack, receiver->td_end - MAXACKWINDOW(sender) - 1));
-
+#if !defined(CONFIG_RA_NAT_HW)
 	if (before(seq, sender->td_maxend + 1) &&
 	    in_recv_win &&
 	    before(sack, receiver->td_end + 1) &&
@@ -724,7 +724,9 @@ static bool tcp_in_window(const struct nf_conn *ct,
 			: "SEQ is under the lower bound (already ACKed data retransmitted)"
 			: "SEQ is over the upper bound (over the window of the receiver)");
 	}
-
+#else
+	res = 1;
+#endif
 	pr_debug("tcp_in_window: res=%u sender end=%u maxend=%u maxwin=%u "
 		 "receiver end=%u maxend=%u maxwin=%u\n",
 		 res, sender->td_end, sender->td_maxend, sender->td_maxwin,

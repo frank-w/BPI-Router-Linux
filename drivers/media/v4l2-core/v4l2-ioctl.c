@@ -1019,9 +1019,12 @@ static int v4l_querycap(const struct v4l2_ioctl_ops *ops,
 				struct file *file, void *fh, void *arg)
 {
 	struct v4l2_capability *cap = (struct v4l2_capability *)arg;
+	struct video_device *vfd = video_devdata(file);
 	int ret;
 
 	cap->version = LINUX_VERSION_CODE;
+	cap->device_caps = vfd->device_caps;
+	cap->capabilities = vfd->device_caps | V4L2_CAP_DEVICE_CAPS;
 
 	ret = ops->vidioc_querycap(file, fh, cap);
 
@@ -1191,6 +1194,10 @@ static void v4l_fill_fmtdesc(struct v4l2_fmtdesc *fmt)
 	case V4L2_PIX_FMT_NV12MT_16X16:	descr = "Y/CbCr 4:2:0 (16x16 MB, N-C)"; break;
 	case V4L2_PIX_FMT_YUV420M:	descr = "Planar YUV 4:2:0 (N-C)"; break;
 	case V4L2_PIX_FMT_YVU420M:	descr = "Planar YVU 4:2:0 (N-C)"; break;
+	case V4L2_PIX_FMT_YUV422M:	descr = "Planar YUV 4:2:2 (N-C)"; break;
+	case V4L2_PIX_FMT_YVU422M:	descr = "Planar YVU 4:2:2 (N-C)"; break;
+	case V4L2_PIX_FMT_YUV444M:	descr = "Planar YUV 4:4:4 (N-C)"; break;
+	case V4L2_PIX_FMT_YVU444M:	descr = "Planar YVU 4:4:4 (N-C)"; break;
 	case V4L2_PIX_FMT_SBGGR8:	descr = "8-bit Bayer BGBG/GRGR"; break;
 	case V4L2_PIX_FMT_SGBRG8:	descr = "8-bit Bayer GBGB/RGRG"; break;
 	case V4L2_PIX_FMT_SGRBG8:	descr = "8-bit Bayer GRGR/BGBG"; break;
@@ -1268,6 +1275,25 @@ static void v4l_fill_fmtdesc(struct v4l2_fmtdesc *fmt)
 		case V4L2_PIX_FMT_JPGL:		descr = "JPEG Lite"; break;
 		case V4L2_PIX_FMT_SE401:	descr = "GSPCA SE401"; break;
 		case V4L2_PIX_FMT_S5C_UYVY_JPG:	descr = "S5C73MX interleaved UYVY/JPEG"; break;
+		case V4L2_PIX_FMT_DIVX3:	descr = "DIVX3"; break;
+		case V4L2_PIX_FMT_DIVX4:	descr = "DIVX4"; break;
+		case V4L2_PIX_FMT_DIVX5:	descr = "DIVX5"; break;
+		case V4L2_PIX_FMT_DIVX6:	descr = "DIVX6"; break;
+		case V4L2_PIX_FMT_H265:		descr = "H.265"; break;
+		case V4L2_PIX_FMT_S263:		descr = "S.263"; break;
+		case V4L2_PIX_FMT_VP9:		descr = "VP9"; break;
+		case V4L2_PIX_FMT_WMV1:		descr = "WMV1"; break;
+		case V4L2_PIX_FMT_WMV2:		descr = "WMV2"; break;
+		case V4L2_PIX_FMT_WMV3:		descr = "WMV3"; break;
+		case V4L2_PIX_FMT_WVC1:		descr = "WVC1"; break;
+		case V4L2_PIX_FMT_WMVA:		descr = "WMVA"; break;
+		case V4L2_PIX_FMT_RV30:		descr = "RealVideo 8"; break;
+		case V4L2_PIX_FMT_RV40:		descr = "RealVideo 9/10"; break;
+		case V4L2_PIX_FMT_MT21C:
+		case V4L2_PIX_FMT_MT21T:
+		case V4L2_PIX_FMT_MT21U:
+		case V4L2_PIX_FMT_MT2TU:
+			descr = "Mediatek Compressed Format"; break;
 		default:
 			WARN(1, "Unknown pixelformat 0x%08x\n", fmt->pixelformat);
 			if (fmt->description[0])

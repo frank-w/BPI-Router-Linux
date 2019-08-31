@@ -148,6 +148,72 @@ config VIDEO_CODA
 	   Coda is a range of video codec IPs that supports
 	   H.264, MPEG-4, and other video formats.
 
+config VIDEO_MEDIATEK_VCU
+	tristate "Mediatek Video Communication/Controller Unit"
+	depends on VIDEO_DEV && VIDEO_V4L2
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	---help---
+	  This driver provides downloading VCU firmware and
+	  communicating with VPU. This driver for hw video
+	  codec embedded in Mediatek's MT8173 SOCs. It is able
+	  to handle video decoding/encoding in a range of formats.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mtk-vcu.
+
+config VIDEO_MEDIATEK_VCODEC
+	tristate "Mediatek Video Codec driver"
+	depends on VIDEO_DEV && VIDEO_V4L2
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_MEM2MEM_DEV
+	select VIDEO_MEDIATEK_VCU
+	---help---
+	  Mediatek video codec driver provides HW capability to
+	  encode and decode in a range of video formats
+	  This driver rely on VCU driver to communicate with VPU.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mtk-vcodec
+
+config VIDEO_MEDIATEK_MDP
+	tristate "Mediatek Multimedia Data Process"
+	depends on VIDEO_DEV && VIDEO_V4L2 && ARCH_MEDIATEK
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_MEM2MEM_DEV
+	select VIDEO_MEDIATEK_VCU
+	select MTK_CMDQ
+	---help---
+	  Mediatek Multimedia Data Process for V4L2
+	  Default is disable
+	  Set y when V4L2 driver or DRM need to use it
+	  When it is enable, related mediatek mdp will be included
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mtk-mdp
+
+config VIDEO_MEDIATEK_MDP_FRVC
+	bool "Mediatek MDP Support Fast-RVC driver"
+	depends on VIDEO_MEDIATEK_MDP
+	---help---
+	  This driver is part of fast rear video camera feature.
+	  It provides support of fast rear video camera in MDP.
+	  Default is disable
+	  Set y when Fast-RVC is needed
+
+config VIDEO_MEDIATEK_JPEG
+	tristate "Mediatek JPEG Codec driver"
+	depends on VIDEO_DEV && VIDEO_V4L2
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_MEM2MEM_DEV
+	---help---
+	  Mediatek jpeg codec driver provides HW capability to decode
+	  JPEG format
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mtk-jpeg
+
 config VIDEO_MEM2MEM_DEINTERLACE
 	tristate "Deinterlace support"
 	depends on VIDEO_DEV && VIDEO_V4L2 && DMA_ENGINE

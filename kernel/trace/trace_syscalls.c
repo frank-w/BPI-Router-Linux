@@ -749,3 +749,6 @@ static int syscall_exit_register(struct trace_event_call *event,
 	}
 	return 0;
 }
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(sys_exit);
+EXPORT_TRACEPOINT_SYMBOL_GPL(sys_enter);

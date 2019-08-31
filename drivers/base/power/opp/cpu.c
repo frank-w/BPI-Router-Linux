@@ -229,6 +229,7 @@ int dev_pm_opp_of_get_sharing_cpus(struct device *cpu_dev, cpumask_var_t cpumask
 		dev_dbg(cpu_dev, "%s: Couldn't find cpu_dev node.\n", __func__);
 		return -ENOENT;
 	}
+	cpumask_set_cpu(cpu_dev->id, cpumask);
 
 	/* OPPs are shared ? */
 	if (!of_property_read_bool(np, "opp-shared"))
