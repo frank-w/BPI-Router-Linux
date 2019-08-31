@@ -112,3 +112,20 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+uImage*
+*.mod
+*.bak
+*asn1.[ch]
+*.log
+
+arch/arm/boot/compressed/piggy_data
+arch/arm/boot/zImage-dtb
+bpi-r2.dtb
+bpi-r64.dtb
+drivers/scsi/scsi_devinfo_tbl.c
+modules.builtin.modinfo
+net/wireless/shipped-certs.c
+scripts/bin2c
+scripts/kconfig/mconf-cfg
+utils/
