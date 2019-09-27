@@ -122,7 +122,6 @@ else
         # Furthermore an alignment to the register width reduces stack usage
         # and the number of alignment instructions.
         KBUILD_CFLAGS += $(call cc-option,$(cc_stack_align8))
->>>>>>> v4.4.165
 
 	# Use -mskip-rax-setup if supported.
 	KBUILD_CFLAGS += $(call cc-option,-mskip-rax-setup)
