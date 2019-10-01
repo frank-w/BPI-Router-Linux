@@ -12,6 +12,7 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <drm/drm_print.h>
 
 #include "mtk_drm_drv.h"
 #include "mtk_drm_plane.h"
