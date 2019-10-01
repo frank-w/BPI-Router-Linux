@@ -45,17 +45,14 @@ static const struct genl_ops mt753x_nl_ops[] = {
 	{
 		.cmd = MT753X_CMD_REQUEST,
 		.doit = mt753x_nl_response,
-		.policy = mt753x_nl_cmd_policy,
 		.flags = GENL_ADMIN_PERM,
 	}, {
 		.cmd = MT753X_CMD_READ,
 		.doit = mt753x_nl_response,
-		.policy = mt753x_nl_cmd_policy,
 		.flags = GENL_ADMIN_PERM,
 	}, {
 		.cmd = MT753X_CMD_WRITE,
 		.doit = mt753x_nl_response,
-		.policy = mt753x_nl_cmd_policy,
 		.flags = GENL_ADMIN_PERM,
 	},
 };
@@ -67,6 +64,7 @@ static struct genl_family mt753x_nl_family = {
 	.maxattr =	MT753X_NR_ATTR_TYPE,
 	.ops =		mt753x_nl_ops,
 	.n_ops =	ARRAY_SIZE(mt753x_nl_ops),
+	.policy = mt753x_nl_cmd_policy,
 };
 
 static int mt753x_nl_list_devs(char *buff, int size)
