@@ -268,6 +268,7 @@ p2pFuncSwitchOPMode(IN P_ADAPTER_T prAdapter,
 			switch (eOpMode) {
 			case OP_MODE_INFRASTRUCTURE:
 				DBGLOG(P2P, TRACE, "p2pFuncSwitchOPMode: Switch to Client.\n");
+				/* FALLTHRU */
 			case OP_MODE_ACCESS_POINT:
 /* if (!IS_BSS_ACTIVE(prP2pBssInfo)) { */
 /* SET_NET_ACTIVE(prAdapter, NETWORK_TYPE_P2P_INDEX); */
