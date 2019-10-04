@@ -186,7 +186,7 @@ static inline void pm_wakeup_dev_event(struct device *dev, unsigned int msec,
 static inline void wakeup_source_init(struct wakeup_source *ws,
 				      const char *name)
 {
-	wakeup_source_prepare(ws, name);
+	ws=wakeup_source_create(name);
 	wakeup_source_add(ws);
 }
 
