@@ -57,11 +57,7 @@
 #include <aee.h>
 #endif
 #include <linux/kfifo.h>
-#ifdef CONFIG_PM_WAKELOCKS
 #include <linux/pm_wakeup.h>
-#else
-#include <linux/wakelock.h>
-#endif
 #include <linux/log2.h>
 
 #ifndef _TYPEDEFS_H		/*fix redifine */
