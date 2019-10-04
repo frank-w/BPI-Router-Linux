@@ -1288,6 +1288,7 @@ mtk_p2p_cfg80211_change_iface(IN struct wiphy *wiphy,
 		switch (type) {
 		case NL80211_IFTYPE_P2P_CLIENT:
 			DBGLOG(P2P, TRACE, "NL80211_IFTYPE_P2P_CLIENT.\n");
+			/* FALLTHRU */
 		case NL80211_IFTYPE_STATION:
 			if (type == NL80211_IFTYPE_STATION)
 				DBGLOG(P2P, TRACE, "NL80211_IFTYPE_STATION.\n");
@@ -1295,6 +1296,7 @@ mtk_p2p_cfg80211_change_iface(IN struct wiphy *wiphy,
 			break;
 		case NL80211_IFTYPE_AP:
 			DBGLOG(P2P, TRACE, "NL80211_IFTYPE_AP.\n");
+			/* FALLTHRU */
 		case NL80211_IFTYPE_P2P_GO:
 			if (type == NL80211_IFTYPE_P2P_GO)
 				DBGLOG(P2P, TRACE, "NL80211_IFTYPE_P2P_GO not AP.\n");
