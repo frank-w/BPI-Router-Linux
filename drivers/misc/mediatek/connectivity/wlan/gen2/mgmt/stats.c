@@ -1172,6 +1172,7 @@ static VOID statsParsePktInfo(PUINT_8 pucPkt, UINT_8 status, UINT_8 eventType, P
 	}
 	case ETH_P_PRE_1X:
 		DBGLOG(RX, INFO, "pre-1x\n");
+		/* FALLTHRU */
 	case ETH_P_1X:
 	{
 		PUINT_8 pucEapol = pucEthBody;
