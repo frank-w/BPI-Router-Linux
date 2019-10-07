@@ -192,11 +192,7 @@ typedef struct _OSAL_LXOP_Q {
 } OSAL_OP_Q, *P_OSAL_OP_Q;
 
 typedef struct _OSAL_WAKE_LOCK_ {
-	#ifdef CONFIG_PM_WAKELOCKS
-	struct wakeup_source wake_lock;
-	#else
-	struct wake_lock wake_lock;
-	#endif
+	struct wakeup_source *wake_lock;
 	UINT8 name[MAX_WAKE_LOCK_NAME_LEN];
 } OSAL_WAKE_LOCK, *P_OSAL_WAKE_LOCK;
 #if 1
