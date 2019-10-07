@@ -517,11 +517,6 @@
 
 #define DRV_NAME "["CHIP_NAME"]: "
 
-#define CONFIG_ANDROID 1
-/* Define if target platform is Android.
- * It should already be defined in Android kernel source
- */
-
 /* for CFG80211 IE buffering mechanism */
 #define CFG_CFG80211_IE_BUF_LEN     (512)
 
@@ -536,10 +531,6 @@
 #include <linux/timer.h>	/* struct timer_list */
 #include <linux/jiffies.h>	/* jiffies */
 #include <linux/delay.h>	/* udelay and mdelay macro */
-
-#if CONFIG_ANDROID
-#include <linux/wakelock.h>
-#endif
 
 #include <linux/irq.h>		/* IRQT_FALLING */
 
