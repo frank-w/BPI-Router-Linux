@@ -353,7 +353,7 @@ char *read_file(char *name)
 		line[strlen(line) - 1] = '\0';
 
 	while (isspace(line[0]))
-		strncpy(&line[0], &line[1], sizeof(line));
+		memmove(&line[0], &line[1], sizeof(line)-1);
 
 	return strdup(line);
 }
