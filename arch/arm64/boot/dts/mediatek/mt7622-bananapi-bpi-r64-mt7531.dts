@@ -543,7 +543,7 @@
 
 &gsw {
 	mediatek,mdio = <&mdio>;
-	mediatek,portmap = "llllw";
+	mediatek,portmap = "wllll";
 	mediatek,mdio_master_pinmux = <0>;
 	reset-gpios = <&pio 54 0>;
 	interrupt-parent = <&pio>;
