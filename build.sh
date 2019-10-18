@@ -8,8 +8,12 @@ fi
 . build.conf
 
 r64newswver=1.0
-
 if [[ -z "$board" ]];then board="bpi-r2";fi
+
+kernver=$(make kernelversion | grep -v 'make')
+#echo $kernver
+
+DOTCONFIG=".config"
 
 clr_red=$'\e[1;31m'
 clr_green=$'\e[1;32m'
@@ -19,8 +23,9 @@ clr_reset=$'\e[0m'
 
 #Check Crosscompile
 crosscompile=0
-if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then #check needs to be done on r64...
+hostarch=$(uname -m) #r64:aarch64 r2: armv7l
 
+if [[ ! $hostarch =~ aarch64|armv ]];then
 	if [[ "$board" == "bpi-r64" ]];then
 		if [[ -z "$(which aarch64-linux-gnu-gcc)" ]];then echo "please install gcc-aarch64-linux-gnu";exit 1;fi
 		export ARCH=arm64;export CROSS_COMPILE='ccache aarch64-linux-gnu-'
@@ -36,12 +41,63 @@ if [[ -z $(cat /proc/cpuinfo | grep -i 'model name.*ArmV7') ]]; then #check need
 	crosscompile=1
 fi;
 
+if [[ "$builddir" != "" ]];
+then
+	if [[ ! "$builddir" =~ ^/ ]] || [[ "$builddir" == "/" ]];then
+		#make it absolute
+		builddir=$(realpath $(pwd)"/"$builddir)
+#		echo "absolute: $builddir"
+	fi
+
+	mkdir -p $builddir
+
+	if [[ "$ramdisksize" != "" ]];
+	then
+		mount | grep '\s'$builddir'\s' &>/dev/null #$?=0 found;1 not found
+		if [[ $? -ne 0 ]];then
+			#make sure directory is clean for mounting
+			if [[ "$(ls -A $builddir)" ]];then
+				rm -r $builddir/*
+			fi
+			echo "mounting tmpfs for building..."
+			sudo mount -t tmpfs -o size=$ramdisksize none $builddir
+		fi
+	fi
+
+	#if builddir is empty then run make mrproper to clean up sourcedir
+	if [[ ! "$(ls -A $builddir)" ]];then make mrproper;fi
+
+	DOTCONFIG="$builddir/$DOTCONFIG"
+	export KBUILD_OUTPUT=$builddir
+fi
+
+function edit()
+{
+	file=$1
+	EDITOR=nano
+	if [[ -e "$file" ]];then
+		if [[ -w "$file" ]];then
+			$EDITOR "$file"
+		else
+			echo "file $file not writable by user using sudo..."
+			sudo $EDITOR "$file"
+		fi
+	else
+		echo "file $file not found"
+	fi
+}
+
 #Check Dependencies
 
 function check_dep()
 {
 	PACKAGE_Error=0
 
+	grep -i 'ubuntu\|debian' /etc/issue &>/dev/null
+	if [[ $? -ne 0 ]];then
+		echo "depency-check currently only on debian/ubuntu..."
+		return 0;
+	fi
 	PACKAGES=$(dpkg -l | awk '{print $2}')
 
 	NEEDED_PKGS="make"
@@ -72,18 +128,21 @@ function check_dep()
 }
 
 function getuenvpath {
-	uenv=/media/${USER}/BPI-BOOT/bananapi/$board/linux/uEnv.txt
+	if [[ $crosscompile -ne 0 ]];then
+		uenv_base=/media/${USER}/BPI-BOOT/
+	else
+		uenv_base=/boot/
+	fi
+
+	uenv=${uenv_base}/bananapi/$board/linux/uEnv.txt
 	if [[ ! -e $uenv ]];then
-		uenv=/media/${USER}/BPI-BOOT/uEnv.txt
+		uenv=${uenv_base}/uEnv.txt
 		if [[ ! -e $uenv ]];then
 			uenv="";
 		fi
 	fi
-	echo "uenv: $uenv";
+	echo "$uenv";
 }
-
-kernver=$(make kernelversion)
-#echo $kernver
 
 function get_version()
 {
@@ -97,6 +156,21 @@ function get_version()
 	echo "kernbranch:$kernbranch,gitbranch:$gitbranch"
 }
 
+function get_r64_switch
+{
+	grep 'RTL8367S_GSW=y' $DOTCONFIG &>/dev/null
+	if [[ $? -eq 0 ]];then
+		echo "rtl8367"
+	else
+		grep 'MT753X_GSW=y' $DOTCONFIG &>/dev/null
+		if [[ $? -eq 0 ]];then
+			echo "mt7531"
+		else
+			echo "unknown"
+		fi
+	fi
+}
+
 function increase_kernel {
         #echo $kernver
         old_IFS=$IFS
@@ -105,6 +179,23 @@ function increase_kernel {
         IFS=','
         newkernver=${KV[0]}"."${KV[1]}"."$(( ${KV[2]} +1 ))
         echo $newkernver
+}
+
+function disable_option() {
+	echo "disable $1"
+	if [[ "$1" == "" ]];then echo "option missing ($1)";return;fi
+	#CFG=RTL8367S_GSW;
+	CFG=${1^^};
+	CFG=${CFG//CONFIG_/}
+	#echo "CFG:$CFG"
+	#grep -i 'mt753x\|rtl8367' .config
+	grep $CFG .config
+	if [[ $? -eq 0 ]]; then
+		sed -i 's:CONFIG_'$CFG'=y:# CONFIG_'$CFG' is not set:g' $DOTCONFIG
+		grep $CFG $DOTCONFIG
+	else
+		echo "option CONFIG_$CFG not found in .config"
+	fi
 }
 
 function update_kernel_source {
@@ -127,11 +218,14 @@ function update_kernel_source {
 
 function pack {
 	get_version
+	if [[ "$board" == "bpi-r64" ]];then
+		switch=$(get_r64_switch)"_"
+	fi
 	prepare_SD
 	echo "pack..."
 	olddir=$(pwd)
 	cd ../SD
-	fname=${board}_${kernver}${gitbranch}.tar.gz
+	fname=${board}_${switch}${kernver}${gitbranch}.tar.gz
 	tar -cz --owner=root --group=root -f $fname BPI-BOOT BPI-ROOT
 	md5sum $fname > $fname.md5
 	ls -lh $(pwd)"/"$fname
@@ -140,14 +234,17 @@ function pack {
 
 function upload {
 	get_version
-	imagename="uImage_${kernver}${gitbranch}"
+	if [[ "$board" == "bpi-r64" ]];then
+		switch="_"$(get_r64_switch)
+	fi
+	imagename="uImage_${kernver}${gitbranch}${switch}"
 	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
 
 	if [[ "$board" == "bpi-r64" ]];then
-		dtbname="${kernver}${gitbranch}.dtb"
+		dtbname="${kernver}${gitbranch}${switch}.dtb"
 		read -e -i $dtbname -p "dtb-filename: " input
 		dtbname="${input:-$dtbname}"
 
@@ -171,14 +268,18 @@ function install
 	echo "Name: $imagename"
 
 	if [[ $crosscompile -eq 0 ]]; then
-		kernelfile=/boot/bananapi/$board/linux/$imagename
-		if [[ -e $kernelfile ]];then
-			echo "backup of kernel: $kernelfile.bak"
-			cp $kernelfile $kernelfile.bak
-			cp ./uImage $kernelfile
+		kerneldir="/boot/bananapi/$board/linux"
+		kernelfile="$kerneldir/$imagename"
+		if [[ -d "$kerneldir" ]];then
+			if [[ -e "$kernelfile" ]];then
+				echo "backup of kernel: $kernelfile.bak"
+				sudo cp "$kernelfile" "$kernelfile.bak"
+			fi
+			echo "installing new kernel..."
+			sudo cp ./uImage "$kernelfile"
 			sudo make modules_install
 		else
-			echo "actual Kernel not found...is /boot mounted?"
+			echo "Kernel directory not found...is /boot mounted?"
 		fi
 	else
 		read -p "Press [enter] to copy data to SD-Card..."
@@ -216,7 +317,12 @@ function install
 				cp ./uImage_nodt ${kernelfile}${ndtsuffix}
 				if [[ $? -ne 0 ]];then exit 1;fi
 				mkdir -p $targetdir/dtb
-				dtbfile=$targetdir/dtb/${board}${kernver}${gitbranch}.dtb
+				dtbname=${kernver}${gitbranch}.dtb
+				read -e -i $dtbname -p "dtb-filename: " input
+				dtbname="${input:-$dtbname}"
+				echo "DTB Name: $dtbname"
+
+				dtbfile=$targetdir/dtb/${dtbname}
 				if [[ -e $dtbfile ]];then
 					echo "backup of dtb: $dtbfile.bak"
 					cp $dtbfile $dtbfile.bak
@@ -235,6 +341,7 @@ function install
 				echo "uImage:${kernelfile} / ${kernelfile}${ndtsuffix}"
 				echo "DTB: ${dtbfile}"
 				uenv=$(getuenvpath)
+				echo $uenv
 				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
 				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
 				grep '^kernel=' $uenv|tail -1
@@ -254,7 +361,7 @@ function install
 				fi
 
 				#sudo cp -r ../mod/lib/modules /media/$USER/BPI-ROOT/lib/
-				if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
+				if [[ -n "$(grep 'CONFIG_MT76=' $DOTCONFIG)" ]];then
 					echo "MT76 set,don't forget the firmware-files...";
 				fi
 			else
@@ -404,12 +511,13 @@ function build {
 	check_dep "build"
 	if [[ $? -ne 0 ]];then exit 1;fi
 	get_version
-	if [ -e ".config" ]; then
+
+	if [ -e $DOTCONFIG ]; then
 		echo Cleanup Kernel Build
 		rm arch/arm/boot/zImage 2>/dev/null
 		rm arch/arm/boot/zImage-dtb 2>/dev/null
 		rm arch/arm64/boot/Image 2>/dev/null
-		rm ./uImage 2>/dev/null
+		rm ./uImage* 2>/dev/null
 		rm ${board}.dtb 2>/dev/null
 
 		if [[ "$board" == "bpi-r64" ]];then
@@ -419,22 +527,35 @@ function build {
 				CFLAGS="${CFLAGS} CONFIG_RTL8367S_GSW=n" #disable old switch
 			fi
 		fi
+
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
-		make ${CFLAGS} 2>&3 #&& make modules_install 2>&3
+		#MAKEFLAGS="V=1"
+		make ${MAKEFLAGS} ${CFLAGS} 2>&3 #&& make modules_install 2>&3
 		ret=$?
 		exec 3>&-
 
-		if [[ "$board" == "bpi-r64" ]];then
-			#how to create zImage?? make zImage does not work here
-			mkimage -A arm -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage
-			if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
+		if [[ $ret == 0 ]]; then
+			if [[ "$board" == "bpi-r64" ]];then
+				if [[ "$builddir" != "" ]];
+				then
+					cp $builddir/arch/arm64/boot/Image arch/arm64/boot/Image
+					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb
+					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb
+				fi
+				#how to create zImage?? make zImage does not work here
+				mkimage -A arm -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
+				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
+					cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
+				else
+					cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb $board.dtb
+				fi
 			else
-				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb $board.dtb
-			fi
-		else
-			if [[ $ret == 0 ]]; then
+				if [[ "$builddir" != "" ]];
+				then
+					cp $builddir/arch/arm/boot/zImage arch/arm/boot/zImage
+					cp $builddir/arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb
+				fi
 				cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
 				mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
 
@@ -448,8 +569,6 @@ function build {
 				fi
 			fi
 		fi
-
-
 	else
 		echo "No Configfile found, Please Configure Kernel"
 	fi
@@ -481,6 +600,7 @@ function prepare_SD {
 	#Add CryptoDev Module if exists or Blacklist
 	CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
 	mkdir -p "${INSTALL_MOD_PATH}/etc/modules-load.d"
+	mkdir -p "${INSTALL_MOD_PATH}/etc/modprobe.d"
 
 	LOCALVERSION=$(find ../SD/BPI-ROOT/lib/modules/* -maxdepth 0 -type d |rev|cut -d"/" -f1 | rev)
 	EXTRA_MODUL_PATH="${SD}/BPI-ROOT/lib/modules/${LOCALVERSION}/kernel/extras"
@@ -495,7 +615,7 @@ function prepare_SD {
 		/sbin/depmod -b "${SD}/BPI-ROOT/" ${LOCALVERSION}
 	else
 		#Blacklist Cryptodev Module
-		echo "blacklist cryptodev" >${INSTALL_MOD_PATH}/etc/modules-load.d/cryptodev.conf
+		echo "blacklist cryptodev" >${INSTALL_MOD_PATH}/etc/modprobe.d/cryptodev.conf
 	fi
 
 	if [[ -e "utils/wmt/src/wmt_loader" ]];then
@@ -506,7 +626,7 @@ function prepare_SD {
 		echo "WMT-Tools not available"
 	fi
 
-	if [[ -n "$(grep 'CONFIG_MT76=' .config)" ]];then
+	if [[ -n "$(grep 'CONFIG_MT76=' $DOTCONFIG)" ]];then
 		echo "MT76 set, including the firmware-files...";
 		cp drivers/net/wireless/mediatek/mt76/firmware/* $SD/BPI-ROOT/lib/firmware/
 	fi
@@ -576,7 +696,7 @@ if [ -n "$kernver" ]; then
 			echo "edit uEnv.txt on sd-card"
 			uenv=$(getuenvpath)
 			if [[ -n "$uenv" ]];then
-				nano $uenv
+				edit $uenv
 			else
 				echo "uenv.txt not found"
 			fi
@@ -592,9 +712,9 @@ if [ -n "$kernver" ]; then
 		"defconfig")
 			echo "edit def config"
 			if [[ "$board" == "bpi-r64" ]];then
-				nano arch/arm64/configs/mt7622_bpi-r64_defconfig
+				edit arch/arm64/configs/mt7622_bpi-r64_defconfig
 			else
-				nano arch/arm/configs/mt7623n_evb_fwu_defconfig
+				edit arch/arm/configs/mt7623n_evb_fwu_defconfig
 			fi
 			;;
 		"deb")
@@ -604,20 +724,25 @@ if [ -n "$kernver" ]; then
 		"dtsi")
 			if [[ "$board" == "bpi-r64" ]];then
 				echo "edit mt7622.dtsi"
-				nano arch/arm64/boot/dts/mediatek/mt7622.dtsi
+				edit arch/arm64/boot/dts/mediatek/mt7622.dtsi
 			else
 				echo "edit mt7623.dtsi"
-				nano arch/arm/boot/dts/mt7623.dtsi
+				edit arch/arm/boot/dts/mt7623.dtsi
 			fi
 			;;
 
 		"dts")
 			if [[ "$board" == "bpi-r64" ]];then
-				echo "edit mt7622n-bpi.dts"
-				nano arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
+				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
+					echo "edit mt7622n-bpi.dts"
+					edit arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
+				else
+					echo "edit mt7622n-mt7531-bpi.dts"
+					edit arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dts
+				fi
 			else
 				echo "edit mt7623n-bpi.dts"
-				nano arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
+				edit arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
 			fi
 			;;
 
@@ -633,6 +758,11 @@ if [ -n "$kernver" ]; then
 				p=arm64
 				echo "Import r64 config"
 				f=mt7622_bpi-r64_defconfig
+				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
+					disable=mt753x_gsw
+				else
+					disable=rtl8367s_gsw
+				fi
 			else
 				p=arm
 				if [[ -z "$file" ]];then
@@ -645,6 +775,9 @@ if [ -n "$kernver" ]; then
 			fi
 			if [[ -e "arch/${p}/configs/${f}" ]];then
 				make ${f}
+				if [[ -n "$disable" ]];then
+					disable_option "$disable"
+				fi
 			else
 				echo "file not found"
 			fi
@@ -741,7 +874,7 @@ if [ -n "$kernver" ]; then
 			fi;
 			$0 build
 			#$0 cryptodev
-			if [ -e "./uImage" ]; then
+			if [ -e "./uImage" ] || [ -e "./uImage_nodt" ]; then
 				echo "==========================================="
 				echo "1) pack"
 				if [[ $crosscompile -eq 0 ]];then
