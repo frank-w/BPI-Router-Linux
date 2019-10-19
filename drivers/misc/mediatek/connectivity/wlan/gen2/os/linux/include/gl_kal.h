@@ -720,12 +720,16 @@ struct KAL_HALT_CTRL_T {
 /* Macros of wake_lock operations for using in Driver Layer                   */
 /*----------------------------------------------------------------------------*/
 #define KAL_WAKE_LOCK_INIT(_prAdapter, _prWakeLock, _pcName) \
-	if( (*(_prWakeLock) = wakeup_source_create(_pcName)) ) \
-		wakeup_source_add(*(_prWakeLock))
+	do { \
+		if( (*(_prWakeLock) = wakeup_source_create(_pcName)) ) \
+			wakeup_source_add(*(_prWakeLock)); \
+	} while (0)
 
 #define KAL_WAKE_LOCK_DESTROY(_prAdapter, _prWakeLock) \
-	{ wakeup_source_remove(*(_prWakeLock)); \
-	wakeup_source_destroy(*(_prWakeLock));}
+	do { \
+		wakeup_source_remove(*(_prWakeLock)); \
+		wakeup_source_destroy(*(_prWakeLock)); \
+	} while (0)
 
 #define KAL_WAKE_LOCK(_prAdapter, _prWakeLock) \
 	__pm_stay_awake(*(_prWakeLock))
