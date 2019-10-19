@@ -798,7 +798,7 @@ BOOLEAN secFsmEventPTKInstalled(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prSt
 		return TRUE;	/* Not PTK */
 
 #if DBG
-	DBGLOG(RSN, TRACE, "%pM Sec state %s\n", prSta->aucMacAdd),
+	DBGLOG(RSN, TRACE, "%pM Sec state %s\n", prSta->aucMacAddr,
 			    apucDebugSecState[prSecInfo->eCurrentState]);
 #else
 	DBGLOG(RSN, TRACE, "%pM Sec state [%d]\n", prSta->aucMacAddr, prSecInfo->eCurrentState);

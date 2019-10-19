@@ -95,7 +95,13 @@ endif
 
 ccflags-y += -D_HIF_SDIO=1
 
+# ----------------------------------------------------
+# Debug control: uncomment/comment to enable/disable
+# ----------------------------------------------------
 ccflags-y += -DDBG=0
+#ccflags-y += -DDBG=1
+# ----------------------------------------------------
+
 ccflags-y += -I$(src)/os -I$(src)/os/linux/include -I$(src)/os/linux/hif/ahb/include
 ccflags-y += -I$(src)/include -I$(src)/include/nic -I$(src)/include/mgmt
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/include

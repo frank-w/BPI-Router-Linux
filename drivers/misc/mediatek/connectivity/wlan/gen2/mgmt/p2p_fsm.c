@@ -2301,7 +2301,7 @@ VOID p2pFsmRunEventJoinComplete(IN P_ADAPTER_T prAdapter, IN P_MSG_HDR_T prMsgHd
 	P_SW_RFB_T prAssocRspSwRfb = (P_SW_RFB_T) NULL;
 	P_BSS_INFO_T prP2pBssInfo = (P_BSS_INFO_T) NULL;
 
-	ASSERT_BREAK((prAdapter != NULL) && (prMsgHdr != NULL));
+	ASSERT((prAdapter != NULL) && (prMsgHdr != NULL));
 	DBGLOG(P2P, TRACE, "P2P Join Complete\n");
 
 	prP2pFsmInfo = prAdapter->rWifiVar.prP2pFsmInfo;
@@ -2759,12 +2759,12 @@ VOID p2pFsmRunEventExtendListen(IN P_ADAPTER_T prAdapter, IN P_MSG_HDR_T prMsgHd
 	P_P2P_FSM_INFO_T prP2pFsmInfo = NULL;
 	struct _MSG_P2P_EXTEND_LISTEN_INTERVAL_T *prExtListenMsg = NULL;
 
-	ASSERT_BREAK((prAdapter != NULL) && (prMsgHdr != NULL));
+	ASSERT((prAdapter != NULL) && (prMsgHdr != NULL));
 
 	prExtListenMsg = (struct _MSG_P2P_EXTEND_LISTEN_INTERVAL_T *) prMsgHdr;
 
 	prP2pFsmInfo = prAdapter->rWifiVar.prP2pFsmInfo;
-	ASSERT_BREAK(prP2pFsmInfo);
+	ASSERT(prP2pFsmInfo);
 
 	if (!prExtListenMsg->wait) {
 		DBGLOG(P2P, INFO, "reset listen interval\n");
