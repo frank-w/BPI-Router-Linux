@@ -778,8 +778,7 @@ typedef enum _ENUM_WMTHWVER_TYPE_T {
 */
 VOID kalHifAhbKalWakeLockTimeout(IN P_GLUE_INFO_T prGlueInfo)
 {
-	//KAL_WAKE_LOCK_TIMEOUT(prGlueInfo->prAdapter, &(prGlueInfo->rAhbIsrWakeLock), (HZ / 10));	/* 100ms */
-	printk(KERN_CRIT "kalHifAhbKalWakeLockTimeout: prGlueInfo->rAhbIsrWakeLock = %px\n", prGlueInfo->rAhbIsrWakeLock);
+	KAL_WAKE_LOCK_TIMEOUT(prGlueInfo->prAdapter, &(prGlueInfo->rAhbIsrWakeLock), (HZ / 10));	/* 100ms */
 }
 
 #if CFG_ENABLE_FW_DOWNLOAD
