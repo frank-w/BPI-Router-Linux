@@ -274,7 +274,7 @@ static struct platform_driver wmt_detect_driver = {
 #endif
 
 /*module_platform_driver(wmt_detect_driver);*/
-static int wmt_detect_driver_init(void)
+static int __init wmt_detect_driver_init(void)
 {
 	dev_t devID = MKDEV(gWmtDetectMajor, 0);
 	int cdevErr = -1;
@@ -342,7 +342,7 @@ err1:
 	return -1;
 }
 
-static void wmt_detect_driver_exit(void)
+static void __exit wmt_detect_driver_exit(void)
 {
 	dev_t dev = MKDEV(gWmtDetectMajor, 0);
 
