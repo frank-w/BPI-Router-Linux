@@ -1697,6 +1697,7 @@ static void createWirelessDevice(void)
 	}
 #endif /* CFG_SUPPORT_PERSIST_NETDEV */
 	gprWdev = prWdev;
+	glP2pCreateWirelessDevice((P_GLUE_INFO_T) wiphy_priv(prWiphy));
 	DBGLOG(INIT, INFO, "create wireless device success\n");
 	return;
 
@@ -1719,6 +1720,7 @@ static void destroyWirelessDevice(void)
 	wiphy_unregister(gprWdev->wiphy);
 	wiphy_free(gprWdev->wiphy);
 	kfree(gprWdev);
+	glP2pDestroyWirelessDevice();
 	gprWdev = NULL;
 }
 
@@ -2328,9 +2330,12 @@ static struct lock_class_key rSpinKey[SPIN_LOCK_NUM];
 static struct wireless_dev *wlanNetCreate(PVOID pvData)
 {
 	P_GLUE_INFO_T prGlueInfo = NULL;
-	struct wireless_dev *prWdev = gprWdev;
+	struct wireless_dev *prWdev = NULL;
 	UINT_32 i;
 	struct device *prDev;
+
+	createWirelessDevice();
+	prWdev = gprWdev;
 
 	if (!prWdev) {
 		DBGLOG(INIT, ERROR, "Allocating memory to wireless_dev context failed\n");
@@ -3401,6 +3406,8 @@ static VOID wlanRemove(VOID)
 	DBGLOG(INIT, LOUD, "wlanUnregisterNotifier...\n");
 	wlanUnregisterNotifier();
 
+	destroyWirelessDevice();
+
 	DBGLOG(INIT, INFO, "wlanRemove ok\n");
 }				/* end of wlanRemove() */
 
@@ -3432,9 +3439,6 @@ static int initWlan(void)
 	/* memory pre-allocation */
 	kalInitIOBuffer();
 	procInitFs();
-	createWirelessDevice();
-	if (gprWdev)
-		glP2pCreateWirelessDevice((P_GLUE_INFO_T) wiphy_priv(gprWdev->wiphy));
 
 	ret = ((glRegisterBus(wlanProbe, wlanRemove) == WLAN_STATUS_SUCCESS) ? 0 : -EIO);
 
@@ -3473,8 +3477,6 @@ static VOID exitWlan(void)
 #if CFG_CHIP_RESET_SUPPORT
 	glResetUninit();
 #endif
-	destroyWirelessDevice();
-	glP2pDestroyWirelessDevice();
 
 	glUnregisterBus(wlanRemove);
 
