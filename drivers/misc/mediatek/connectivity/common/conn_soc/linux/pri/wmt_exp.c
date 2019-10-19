@@ -509,11 +509,13 @@ VOID mtk_wcn_wmt_exp_init(void)
 		.wmt_assert_cb = _mtk_wcn_wmt_assert
 	};
 
+	WMT_DBG_FUNC("call mtk_wcn_wmt_exp_cb_reg() to set callbacks\n");
 	mtk_wcn_wmt_exp_cb_reg(&wmtExpCb);
 }
 
 VOID mtk_wcn_wmt_exp_deinit(void)
 {
+	WMT_DBG_FUNC("calling mtk_wcn_wmt_exp_cb_unreg() to clear callbacks\n");
 	mtk_wcn_wmt_exp_cb_unreg();
 }
 #ifdef CONFIG_MTK_COMBO_ANT

@@ -68,9 +68,7 @@ int do_wlan_drv_init(int chip_id)
 	WMT_DETECT_INFO_FUNC("finish wlan module init\n");
 
 #else
-
 	WMT_DETECT_INFO_FUNC("CONFIG_MTK_COMBO_WIFI is not defined\n");
-
 #endif
 
 	return i_ret;
