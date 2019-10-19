@@ -1494,7 +1494,7 @@ INT32 wmt_dev_read_file(PUINT8 pName, const PPUINT8 ppBufPtr, INT32 offset, INT3
 		}
 
                 fs=get_fs();
-		read_len = vfs_read(fd, pBuf + padSzBuf, file_len, &fd->f_pos);
+		read_len = kernel_read(fd, pBuf + padSzBuf, file_len, &fd->f_pos);
                 set_fs(fs);
 		if (read_len != file_len)
 			WMT_WARN_FUNC("read abnormal: read_len(%d), file_len(%d)\n", read_len, file_len);

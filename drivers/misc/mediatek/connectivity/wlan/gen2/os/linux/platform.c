@@ -410,7 +410,7 @@ static int nvram_read(char *filename, char *buf, ssize_t len, int offset)
 			}
 		}
 
-		retLen = vfs_read(fd, buf, len, &fd->f_pos);
+		retLen = kernel_read(fd, buf, len, &fd->f_pos);
 
 	} while (FALSE);
 
@@ -474,7 +474,7 @@ static int nvram_write(char *filename, char *buf, ssize_t len, int offset)
 			}
 		}
 
-		retLen = vfs_write(fd, buf, len, &fd->f_pos);
+		retLen = kernel_write(fd, buf, len, &fd->f_pos);
 
 	} while (FALSE);
 

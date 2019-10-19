@@ -61,7 +61,7 @@ do { \
 #include <linux/of.h>
 #include <linux/of_irq.h>
 #include <mtk_wcn_cmb_stub.h>
-#include "wmt_detect.h"
+/* #include "wmt_detect.h" */
 
 
 /*******************************************************************************

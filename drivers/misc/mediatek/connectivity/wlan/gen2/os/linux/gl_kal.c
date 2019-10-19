@@ -944,7 +944,7 @@ WLAN_STATUS kalFirmwareLoad(IN P_GLUE_INFO_T prGlueInfo, OUT PVOID prBuf, IN UIN
 		goto error_read;
 	} else {
 		filp->f_pos = u4Offset;
-		*pu4Size = vfs_read(filp, prBuf, *pu4Size, &filp->f_pos);
+		*pu4Size = kernel_read(filp, prBuf, *pu4Size, &filp->f_pos);
 	}
 #endif
 
@@ -3845,7 +3845,7 @@ UINT_32 kalFileRead(struct file *file, UINT_64 offset, UINT_8 *data, UINT_32 siz
 	oldfs = get_fs();
 	set_fs(get_ds());
 
-	ret = vfs_read(file, data, size, &offset);
+	ret = kernel_read(file, data, size, &offset);
 
 	set_fs(oldfs);
 	return ret;
@@ -3859,7 +3859,7 @@ UINT_32 kalFileWrite(struct file *file, UINT_64 offset, UINT_8 *data, UINT_32 si
 	oldfs = get_fs();
 	set_fs(get_ds());
 
-	ret = vfs_write(file, data, size, &offset);
+	ret = kernel_write(file, data, size, &offset);
 
 	set_fs(oldfs);
 	return ret;
@@ -4525,16 +4525,24 @@ INT_32 kalHaltLock(UINT_32 waitMs)
 
 			wlanExportGlueInfo(&prGlueInfo);
 
+#ifdef MTK_WCN_BUILT_IN_DRIVER
 			DBGLOG(INIT, ERROR,
 				"kalIoctl was executed longer than %u ms, show backtrace of tx_thread!\n",
 				kalGetTimeTick() - rHaltCtrl.u4HoldStart);
 			if (prGlueInfo)
 				show_stack(prGlueInfo->main_thread, NULL);
+#else
+			DBGLOG(INIT, ERROR,
+				"kalIoctl was executed longer than %u ms!\n",
+				kalGetTimeTick() - rHaltCtrl.u4HoldStart);
+#endif
 		} else {
 			DBGLOG(INIT, ERROR, "halt lock held by %s pid %d longer than %u ms!\n",
 				rHaltCtrl.owner->comm, rHaltCtrl.owner->pid,
 				kalGetTimeTick() - rHaltCtrl.u4HoldStart);
+#ifdef MTK_WCN_BUILT_IN_DRIVER
 			show_stack(rHaltCtrl.owner, NULL);
+#endif
 		}
 		return i4Ret;
 	}

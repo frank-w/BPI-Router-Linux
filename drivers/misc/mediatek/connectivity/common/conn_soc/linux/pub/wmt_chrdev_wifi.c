@@ -46,6 +46,9 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 UINT32 gDbgLevel = WIFI_LOG_DBG;
 
+UINT32 g_IsNeedDoChipReset = 0;
+EXPORT_SYMBOL(g_IsNeedDoChipReset);
+
 #define WIFI_DBG_FUNC(fmt, arg...)\
 	do {if (gDbgLevel >= WIFI_LOG_DBG) printk(PFX "%s: " fmt, __func__ , ##arg); } while (0)
 #define WIFI_INFO_FUNC(fmt, arg...)\

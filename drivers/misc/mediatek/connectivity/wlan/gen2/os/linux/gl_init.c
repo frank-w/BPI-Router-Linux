@@ -1609,6 +1609,8 @@ static void createWirelessDevice(void)
 		goto free_wdev;
 	}
 
+	kalMemZero(wiphy_priv(prWiphy), sizeof(GLUE_INFO_T));
+
 	/* <1.3> configure wireless_dev & wiphy */
 	prWdev->iftype = NL80211_IFTYPE_STATION;
 	prWiphy->max_scan_ssids   = 1;    /* FIXME: for combo scan */

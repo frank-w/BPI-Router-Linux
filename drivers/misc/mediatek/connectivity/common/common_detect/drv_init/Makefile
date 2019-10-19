@@ -1,4 +1,4 @@
-ifeq ($(CONFIG_MTK_COMBO),y)
+ifneq ($(CONFIG_MTK_COMBO),)
 	ccflags-y += -I$(src)/inc/
 	ccflags-y += -I$(src)/../
 
