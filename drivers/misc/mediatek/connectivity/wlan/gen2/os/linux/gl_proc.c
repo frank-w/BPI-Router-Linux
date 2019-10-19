@@ -963,9 +963,10 @@ INT_32 procInitFs(VOID)
 
 INT_32 procUninitProcFs(VOID)
 {
+	remove_proc_entry(PROC_AUTO_PER_CFG, gprProcRoot);
+	remove_proc_entry(PROC_NEED_TX_DONE, gprProcRoot);
 	remove_proc_entry(PROC_DBG_LEVEL_NAME, gprProcRoot);
 	remove_proc_subtree(PROC_ROOT_NAME, init_net.proc_net);
-	remove_proc_entry(PROC_AUTO_PER_CFG, gprProcRoot);
 	return 0;
 }
 

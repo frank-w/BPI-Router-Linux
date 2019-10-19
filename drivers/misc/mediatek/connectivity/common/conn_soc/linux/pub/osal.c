@@ -308,7 +308,11 @@ _osal_inline_ UINT16 osal_crc16(const UINT8 *buffer, const UINT32 length)
 
 _osal_inline_ VOID osal_thread_show_stack(P_OSAL_THREAD pThread)
 {
+#ifdef MTK_WCN_BUILT_IN_DRIVER
 	return show_stack(pThread->pThread, NULL);
+#else
+	return;
+#endif
 }
 
 /*

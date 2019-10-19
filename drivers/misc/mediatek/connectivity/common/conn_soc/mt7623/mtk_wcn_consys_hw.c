@@ -90,7 +90,8 @@ static struct regmap *pmic_regmap;
 #define DYNAMIC_DUMP_GROUP_NUM 5
 
 static const struct of_device_id apwmt_of_ids[] = {
-	{.compatible = "mediatek,mt7623-consys",}
+	{.compatible = "mediatek,mt7623-consys"},
+	{}
 };
 MODULE_DEVICE_TABLE(of, apwmt_of_ids);
 
@@ -117,7 +118,7 @@ static INT32 mtk_wmt_probe(struct platform_device *pdev)
 		WMT_PLAT_ERR_FUNC("Wmt cannot find pinctrl!\n");
 		goto set_pin_exit;
 	}
-	mt6625_spi_default = pinctrl_lookup_state(mt6625_spi_pinctrl, "consys_pins_default");
+	mt6625_spi_default = pinctrl_lookup_state(mt6625_spi_pinctrl, "default");
 	if (IS_ERR(mt6625_spi_default)) {
 		ret = PTR_ERR(mt6625_spi_default);
 		WMT_PLAT_ERR_FUNC("Wmt Cannot find pinctrl default!\n");
@@ -508,6 +509,9 @@ INT32 mtk_wcn_consys_hw_wifi_paldo_ctrl(UINT32 enable)
 }
 
 #endif
+
+EXPORT_SYMBOL(mtk_wcn_consys_hw_wifi_paldo_ctrl);
+
 INT32 mtk_wcn_consys_hw_vcn28_ctrl(UINT32 enable)
 {
 	if (enable) {
