@@ -51,30 +51,34 @@ int do_connectivity_driver_init(int chip_id)
 		return i_ret;
 	}
 
+#if defined(CONFIG_MTK_COMBO_BT) || defined(CONFIG_MTK_COMBO_BT_MODULE)
 	tmp_ret = do_bluetooth_drv_init(chip_id);
 	i_ret += tmp_ret;
 	if (tmp_ret)
 		WMT_DETECT_ERR_FUNC("do common driver init failed, ret:%d\n", tmp_ret);
+#endif
 
-	tmp_ret = do_gps_drv_init(chip_id);
+/*	tmp_ret = do_gps_drv_init(chip_id);
 	i_ret += tmp_ret;
 	if (tmp_ret)
-		WMT_DETECT_ERR_FUNC("do common driver init failed, ret:%d\n", tmp_ret);
+		WMT_DETECT_ERR_FUNC("do common driver init failed, ret:%d\n", tmp_ret); */
 
-	tmp_ret = do_fm_drv_init(chip_id);
+/*	tmp_ret = do_fm_drv_init(chip_id);
 	i_ret += tmp_ret;
 	if (tmp_ret)
-		WMT_DETECT_ERR_FUNC("do fm module init failed, ret:%d\n", tmp_ret);
+		WMT_DETECT_ERR_FUNC("do fm module init failed, ret:%d\n", tmp_ret); */
 
+#if defined(CONFIG_MTK_COMBO_WIFI) || defined(CONFIG_MTK_COMBO_WIFI_MODULE)
 	tmp_ret = do_wlan_drv_init(chip_id);
 	i_ret += tmp_ret;
 	if (tmp_ret)
 		WMT_DETECT_ERR_FUNC("do wlan module init failed, ret:%d\n", tmp_ret);
+#endif
 
-	tmp_ret = do_ant_drv_init(chip_id);
+/*	tmp_ret = do_ant_drv_init(chip_id);
 	i_ret += tmp_ret;
 	if (tmp_ret)
-		WMT_DETECT_ERR_FUNC("do ANT module init failed, ret:%d\n", tmp_ret);
+		WMT_DETECT_ERR_FUNC("do ANT module init failed, ret:%d\n", tmp_ret); */
 
 	return i_ret;
 }

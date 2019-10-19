@@ -25,7 +25,7 @@ int do_wlan_drv_init(int chip_id)
 {
 	int i_ret = 0;
 
-#ifdef CONFIG_MTK_COMBO_WIFI
+#if defined(CONFIG_MTK_COMBO_WIFI) || defined(CONFIG_MTK_COMBO_WIFI_MODULE)
 	int ret = 0;
 
 	WMT_DETECT_INFO_FUNC("start to do wlan module init 0x%x\n", chip_id);
@@ -52,9 +52,12 @@ int do_wlan_drv_init(int chip_id)
 	default:
 #ifdef MTK_WCN_WLAN_GEN2
 		/* WLAN driver init */
+/* A call to mtk_wcn_wlan_gen2_init is only required if wifi support is not compiled as module */
+#if defined(CONFIG_MTK_COMBO_WIFI)
 		ret = mtk_wcn_wlan_gen2_init();
 		WMT_DETECT_INFO_FUNC("WLAN-GEN2 driver init, ret:%d\n", ret);
 		i_ret += ret;
+#endif
 #else
 		WMT_DETECT_ERR_FUNC("WLAN-GEN2 driver is not supported, please check CONFIG_MTK_COMBO_CHIP\n");
 		i_ret = -1;

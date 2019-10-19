@@ -505,6 +505,7 @@ bool mtk_wcn_btif_parser_wmt_evt(unsigned long u_id,
 
 	return b_ret;
 }
+EXPORT_SYMBOL(mtk_wcn_btif_parser_wmt_evt);
 
 /**********End of Debug Purpose API declearation**********/
 

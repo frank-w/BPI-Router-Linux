@@ -2262,6 +2262,7 @@ int mtk_btif_rxd_be_blocked_flag_get(void)
 	}
 	return ret;
 }
+EXPORT_SYMBOL(mtk_btif_rxd_be_blocked_flag_get);
 #endif
 static int btif_rx_thread(void *p_data)
 {

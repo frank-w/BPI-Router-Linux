@@ -6,7 +6,7 @@ ccflags-y += \
 	-I$(src)/../core/include \
 	-I$(src)/../include \
 	-I$(src)/../../common_detect \
-	-I$(srctree)/drivers/misc/mediatek/btif/common/inc \
+	-I$(srctree)/drivers/misc/mediatek/btif/common/inc
 
 obj-y += wmt_core.o \
          wmt_ctrl.o \
@@ -17,6 +17,8 @@ obj-y += wmt_core.o \
          btm_core.o \
          dbg_core.o \
          psm_core.o \
-         stp_core.o
+         stp_core.o \
+         mtk_wcn_stub_alps.o \
+         wmt_stp_exp.o
 
 endif
