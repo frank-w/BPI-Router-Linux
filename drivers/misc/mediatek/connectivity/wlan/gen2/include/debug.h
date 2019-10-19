@@ -276,13 +276,15 @@ typedef enum _ENUM_DBG_MODULE_T {
 extern PINT_16 g_wbuf_p;
 extern PINT_8 g_buf_p;
 
-    /* If __FUNCTION__ is already defined by compiler, we just use it. */
-#if defined(__func__)
 #define DEBUGFUNC(_Func)
-#else
-#define DEBUGFUNC(_Func) \
-	static const char __func__[] = _Func
-#endif
+
+#define WARNLOG(_Fmt) \
+{ \
+    if (aucDebugModule[DBG_INIT_IDX] & DBG_CLASS_WARN) { \
+        LOG_FUNC("**Warning[%s:%d]-", __FILE__, __LINE__); \
+        LOG_FUNC _Fmt; \
+    } \
+}
 
 #define DBGLOG_MEM8(_Module, _Class, _StartAddr, _Length) \
 	{ \
@@ -315,20 +317,26 @@ extern PINT_8 g_buf_p;
 #else
 #define ASSERT(_exp) \
 	{ \
+		_Pragma("GCC diagnostic push") \
+		_Pragma("GCC diagnostic ignored \"-Waddress\"") \
 	    if (!(_exp) && !fgIsBusAccessFailed) { \
 		LOG_FUNC("Assertion failed: %s:%d %s\n", __FILE__, __LINE__, #_exp); \
 		kalBreakPoint(); \
 	    } \
+	    _Pragma("GCC diagnostic pop") \
 	}
 #endif /* _lint */
 
 #define ASSERT_REPORT(_exp, _fmt) \
 	{ \
+		_Pragma("GCC diagnostic push") \
+		_Pragma("GCC diagnostic ignored \"-Waddress\"") \
 	    if (!(_exp) && !fgIsBusAccessFailed) { \
 		LOG_FUNC("Assertion failed: %s:%d %s\n", __FILE__, __LINE__, #_exp); \
 		LOG_FUNC _fmt; \
 		kalBreakPoint(); \
 	    } \
+	    _Pragma("GCC diagnostic pop") \
 	}
 
 #define DISP_STRING(_str)       _str
@@ -349,19 +357,25 @@ extern PINT_8 g_buf_p;
 #if defined(LINUX)		/* For debugging in Linux w/o GDB */
 #define ASSERT(_exp) \
 	{ \
+		_Pragma("GCC diagnostic push") \
+		_Pragma("GCC diagnostic ignored \"-Waddress\"") \
 		if (!(_exp) && !fgIsBusAccessFailed) { \
 			LOG_FUNC("Assertion failed: %s:%d (%s)\n", __FILE__, __LINE__, #_exp); \
 			kalBreakPoint(); \
 		} \
+	    _Pragma("GCC diagnostic pop") \
 	}
 
 #define ASSERT_REPORT(_exp, _fmt) \
 	{ \
+		_Pragma("GCC diagnostic push") \
+		_Pragma("GCC diagnostic ignored \"-Waddress\"") \
 		if (!(_exp) && !fgIsBusAccessFailed) { \
 			LOG_FUNC("Assertion failed: %s:%d (%s)\n", __FILE__, __LINE__, #_exp); \
 			LOG_FUNC _fmt; \
 			kalBreakPoint(); \
 		} \
+		_Pragma("GCC diagnostic pop") \
 	}
 #else
 #ifdef WINDOWS_CE
@@ -410,17 +424,23 @@ extern PINT_8 g_buf_p;
 #else
 #define ASSERT(_exp) \
 	{ \
+	    _Pragma("GCC diagnostic push") \
+	    _Pragma("GCC diagnostic ignored \"-Waddress\"") \
 	    if (!(_exp) && !fgIsBusAccessFailed) { \
 		LOG_FUNC("Warning at %s:%d (%s)\n", __func__, __LINE__, #_exp); \
 	    } \
+	    _Pragma("GCC diagnostic pop") \
 	}
 
 #define ASSERT_REPORT(_exp, _fmt) \
 	{ \
+	    _Pragma("GCC diagnostic push") \
+	    _Pragma("GCC diagnostic ignored \"-Waddress\"") \
 	    if (!(_exp) && !fgIsBusAccessFailed) { \
 		LOG_FUNC("Warning at %s:%d (%s)\n", __func__, __LINE__, #_exp); \
 		LOG_FUNC _fmt; \
 	    } \
+	    _Pragma("GCC diagnostic pop") \
 	}
 #endif /* BUILD_QA_DBG */
 

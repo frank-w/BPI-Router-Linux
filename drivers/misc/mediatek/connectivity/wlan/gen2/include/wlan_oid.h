@@ -221,9 +221,9 @@
 ********************************************************************************
 */
 #if DBG
-extern UINT_8 aucDebugModule[DBG_MODULE_NUM];
+extern UINT_8 aucDebugModule[];
 extern UINT_32 u4DebugModule;
-UINT_32 u4DebugModuleTemp;
+/* UINT_32 u4DebugModuleTemp; */
 #endif /* DBG */
 extern int sprintf(char *buf, const char *fmt, ...);
 

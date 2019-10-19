@@ -1281,7 +1281,7 @@ VOID kalUpdateRxCSUMOffloadParam(IN PVOID pvPacket, IN ENUM_CSUM_RESULT_T aeCSUM
 		else if (aeCSUM[CSUM_TYPE_UDP] == CSUM_RES_FAILED)
 			DBGLOG(RX, TRACE, "RX: \"bad UDP Checksum\" Packet\n");
 		else
-			/* Do nothing */
+			/* Do nothing */;
 #endif
 	}
 
