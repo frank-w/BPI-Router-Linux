@@ -308,7 +308,7 @@ static const struct of_device_id apwifi_of_ids[] = {
 };
 #endif
 
-struct platform_driver MtkPltmAhbDriver = {
+struct platform_driver MtkPltmAhb_driver = {
 	.driver = {
 	.name = "mt-wifi",
 	.owner = THIS_MODULE,
@@ -362,7 +362,7 @@ WLAN_STATUS glRegisterBus(probe_card pfProbe, remove_card pfRemove)
 		return Ret;
 	HifAhbProbe();
 #else
-	Ret = platform_driver_register(&MtkPltmAhbDriver);
+	Ret = platform_driver_register(&MtkPltmAhb_driver);
 #endif /* CONF_HIF_DEV_MISC */
 
 	return Ret;
@@ -391,7 +391,7 @@ VOID glUnregisterBus(remove_card pfRemove)
 		;
 #else
 
-	platform_driver_unregister(&MtkPltmAhbDriver);
+	platform_driver_unregister(&MtkPltmAhb_driver);
 #endif /* CONF_HIF_DEV_MISC */
 
 	return;
