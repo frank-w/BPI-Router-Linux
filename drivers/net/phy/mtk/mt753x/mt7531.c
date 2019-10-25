@@ -17,14 +17,20 @@
 #define SGMII_REG(p, r)			(SGMII_REG_BASE + \
 					(p) * SGMII_REG_PORT_BASE + (r))
 #define PCS_CONTROL_1(p)		SGMII_REG(p, 0x00)
+#define PCS_STATUS_2(p)			SGMII_REG(p, 0x10)
 #define SGMII_MODE(p)			SGMII_REG(p, 0x20)
 #define QPHY_PWR_STATE_CTRL(p)		SGMII_REG(p, 0xe8)
 #define PHYA_CTRL_SIGNAL3(p)		SGMII_REG(p, 0x128)
 
 /* Fields of PCS_CONTROL_1 */
+#define SGMII_PCS_FAULT			BIT(23)
 #define SGMII_LINK_STATUS		BIT(18)
 #define SGMII_AN_ENABLE			BIT(12)
 #define SGMII_AN_RESTART		BIT(9)
+
+/* Fields for PCS_STATUS_2 */
+#define SGMII_TX_FAULT_LATCH		BIT(11)
+#define SGMII_RX_FAULT_LATCH		BIT(10)
 
 /* Fields of SGMII_MODE */
 #define SGMII_REMOTE_FAULT_DIS		BIT(8)
@@ -283,10 +289,17 @@ static int mt7531_set_port_sgmii_force_mode(struct gsw_mt753x *gsw, u32 port,
 	timeout = ktime_add_us(ktime_get(), timeout_us);
 	while (1) {
 		val = mt753x_reg_read(gsw, PCS_CONTROL_1(port_base));
-		val &= SGMII_LINK_STATUS;
+		dev_info(gsw->dev,"%s:%d 0x%x",__FUNCTION__,__LINE__,val);
+		//val &= SGMII_LINK_STATUS;
 
-		if (val)
-			break;
+		if (val & SGMII_LINK_STATUS) break;
+		if (val & SGMII_PCS_FAULT) {
+			//read PCS_STATUS_2 (00005010) bit 10=rx empty bit 11=tx full
+			val = mt753x_reg_read(gsw, PCS_STATUS_2(port_base));
+			dev_info(gsw->dev,"%s:%d 0x%x TX:%lx RX:%lx",__FUNCTION__,__LINE__,val,val & SGMII_TX_FAULT_LATCH,val & SGMII_RX_FAULT_LATCH);
+			//mt753x_reg_write(gsw, PCS_CONTROL_1(port_base),val | SGMII_ISOLATE);
+			//timeout = ktime_add_us(ktime_get(), timeout_us);
+		}
 
 		if (ktime_compare(ktime_get(), timeout) > 0)
 			return -ETIMEDOUT;
@@ -392,6 +405,7 @@ static int mt7531_mac_port_setup(struct gsw_mt753x *gsw, u32 port,
 {
 	u32 pmcr;
 	u32 speed;
+	u32 val;
 
 	if (port < 5 || port >= MT753X_NUM_PORTS) {
 		dev_info(gsw->dev, "port %d is not a MAC port\n", port);
@@ -430,9 +444,10 @@ static int mt7531_mac_port_setup(struct gsw_mt753x *gsw, u32 port,
 		break;
 	case PHY_INTERFACE_MODE_SGMII:
 		if (port_cfg->force_link)
-			mt7531_set_port_sgmii_force_mode(gsw, port, port_cfg);
+			val=mt7531_set_port_sgmii_force_mode(gsw, port, port_cfg);
 		else
-			mt7531_set_port_sgmii_an_mode(gsw, port, port_cfg);
+			val=mt7531_set_port_sgmii_an_mode(gsw, port, port_cfg);
+		dev_info(gsw->dev,"%s:%d set-port-sgmii retval: %d",__FUNCTION__,__LINE__,val);
 		break;
 	default:
 		if (port_cfg->enabled)
@@ -443,7 +458,7 @@ static int mt7531_mac_port_setup(struct gsw_mt753x *gsw, u32 port,
 	}
 
 	mt753x_reg_write(gsw, PMCR(port), pmcr);
-
+	dev_info(gsw->dev,"%s:%d PMCR(%d):0x%x",__FUNCTION__,__LINE__,port,pmcr);
 	return 0;
 }
 
@@ -457,6 +472,7 @@ static void mt7531_core_pll_setup(struct gsw_mt753x *gsw)
 		return;
 
 	hwstrap = mt753x_reg_read(gsw, HWSTRAP);
+	dev_info(gsw->dev,"%s:%d hwstrap: 0x%x",__FUNCTION__,__LINE__,hwstrap);
 
 	switch ((hwstrap & XTAL_FSEL_M) >> XTAL_FSEL_S) {
 	case XTAL_25MHZ:
@@ -647,6 +663,7 @@ static void mt7531_phy_pll_setup(struct gsw_mt753x *gsw)
 	u32 val;
 
 	hwstrap = mt753x_reg_read(gsw, HWSTRAP);
+	dev_info(gsw->dev,"%s:%d hwstrap: 0x%x",__FUNCTION__,__LINE__,hwstrap);
 
 	switch ((hwstrap & XTAL_FSEL_M) >> XTAL_FSEL_S) {
 	case XTAL_25MHZ:
