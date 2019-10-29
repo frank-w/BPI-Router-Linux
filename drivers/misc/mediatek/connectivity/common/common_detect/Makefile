@@ -12,17 +12,17 @@ ifneq ($(filter "MT6630",$(CONFIG_MTK_COMBO_CHIP)),)
 endif
 ifeq ($(COMBO_CHIP_SUPPORT), true)
 	subdir-ccflags-y += -D MTK_WCN_COMBO_CHIP_SUPPORT
-	ccflags-y += -I$(src)/../combo/linux/include
+	ccflags-y += -I$(srctree)/$(src)/../combo/linux/include
 endif
 
 ifneq ($(filter "CONSYS_%",$(CONFIG_MTK_COMBO_CHIP)),)
 	subdir-ccflags-y += -D MTK_WCN_SOC_CHIP_SUPPORT
-	ccflags-y += -I$(src)/../conn_soc/linux/include
+	ccflags-y += -I$(srctree)/$(src)/../conn_soc/linux/include
 endif
 
 
 ifeq ($(CONFIG_MTK_COMBO),y)
-	ccflags-y += -I$(src)/drv_init/inc
+	ccflags-y += -I$(srctree)/$(src)/drv_init/inc
 	obj-y += wmt_gpio.o
 
 	obj-y += wmt_detect.o
@@ -33,8 +33,8 @@ ifeq ($(CONFIG_MTK_COMBO),y)
 endif
 
 ifeq ($(CONFIG_MTK_COMBO),m)
-	ccflags-y += -I$(src)/drv_init/inc
-	ccflags-y += -I$(src)
+	ccflags-y += -I$(srctree)/$(src)/drv_init/inc
+	ccflags-y += -I$(srctree)/$(src)
 
 ifneq ($(filter "MT6630",$(CONFIG_MTK_COMBO_CHIP)),)
 	ccflags-y += -D MTK_WCN_WLAN_GEN3
