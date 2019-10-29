@@ -1,12 +1,12 @@
 ifeq ($(CONFIG_MTK_COMBO), y)
 
 ccflags-y += \
-	-I$(src)/../../linux/include \
-	-I$(src)/../../linux/pri/include \
-	-I$(src)/../../core/include \
-	-I$(src)/../../include \
-	-I$(src)/../include \
-	-I$(src)/../../../common_detect \
+	-I$(srctree)/$(src)/../../linux/include \
+	-I$(srctree)/$(src)/../../linux/pri/include \
+	-I$(srctree)/$(src)/../../core/include \
+	-I$(srctree)/$(src)/../../include \
+	-I$(srctree)/$(src)/../include \
+	-I$(srctree)/$(src)/../../../common_detect \
 	-I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include/mach \
 	-DMTK_BT_HCI=1
 

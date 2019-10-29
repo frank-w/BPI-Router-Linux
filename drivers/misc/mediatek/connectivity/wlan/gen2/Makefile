@@ -102,8 +102,8 @@ ccflags-y += -DDBG=0
 #ccflags-y += -DDBG=1
 # ----------------------------------------------------
 
-ccflags-y += -I$(src)/os -I$(src)/os/linux/include -I$(src)/os/linux/hif/ahb/include
-ccflags-y += -I$(src)/include -I$(src)/include/nic -I$(src)/include/mgmt
+ccflags-y += -I$(srctree)/$(src)/os -I$(srctree)/$(src)/os/linux/include -I$(srctree)/$(src)/os/linux/hif/ahb/include
+ccflags-y += -I$(srctree)/$(src)/include -I$(srctree)/$(src)/include/nic -I$(srctree)/$(src)/include/mgmt
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/include
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
 
