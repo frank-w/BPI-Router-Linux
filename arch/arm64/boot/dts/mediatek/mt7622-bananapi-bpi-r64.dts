@@ -109,6 +109,10 @@
 
 &btif {
 	status = "okay";
+
+        bluetooth {
+                status = "okay";
+        };
 };
 
 &cir {
