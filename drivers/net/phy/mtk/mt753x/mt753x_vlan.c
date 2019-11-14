@@ -6,7 +6,7 @@
 #include "mt753x.h"
 #include "mt753x_regs.h"
 
-struct mt753x_mapping mt753x_def_mapping[] = {
+static struct mt753x_mapping mt753x_def_mapping[] = {
 	{
 		.name = "llllw",
 		.pvids = { 1, 1, 1, 1, 2, 2, 1 },
