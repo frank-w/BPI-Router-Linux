@@ -15,14 +15,14 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <eee.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/eee.h"
 #include <string.h>
 
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_eee.h>
-#include <rtl8367c_asicdrv_phy.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_eee.h"
+#include "include/rtl8367c_asicdrv_phy.h"
 
 /* Function Name:
  *      rtk_eee_init

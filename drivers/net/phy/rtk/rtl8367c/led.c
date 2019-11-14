@@ -15,13 +15,13 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <led.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/led.h"
 #include <string.h>
 
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_led.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_led.h"
 
 
 /* Function Name:

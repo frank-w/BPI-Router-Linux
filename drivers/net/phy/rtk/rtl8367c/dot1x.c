@@ -15,16 +15,16 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <dot1x.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/dot1x.h"
 #include <string.h>
-#include <vlan.h>
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_dot1x.h>
-#include <rtl8367c_asicdrv_rma.h>
-#include <rtl8367c_asicdrv_lut.h>
-#include <rtl8367c_asicdrv_vlan.h>
+#include "include/vlan.h"
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_dot1x.h"
+#include "include/rtl8367c_asicdrv_rma.h"
+#include "include/rtl8367c_asicdrv_lut.h"
+#include "include/rtl8367c_asicdrv_vlan.h"
 
 /* Function Name:
  *      rtk_dot1x_unauthPacketOper_set

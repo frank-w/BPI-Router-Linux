@@ -18,7 +18,7 @@
 #ifndef __RTK_SWITCH_H__
 #define __RTK_SWITCH_H__
 
-#include <rtk_types.h>
+#include "rtk_types.h"
 
 #define UNDEFINE_PHY_PORT   (0xFF)
 #define RTK_SWITCH_PORT_NUM (32)

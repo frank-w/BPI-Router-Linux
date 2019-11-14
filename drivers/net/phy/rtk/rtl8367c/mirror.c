@@ -15,12 +15,12 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <mirror.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/mirror.h"
 #include <string.h>
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_mirror.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_mirror.h"
 
 /* Function Name:
  *      rtk_mirror_portBased_set

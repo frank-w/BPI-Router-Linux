@@ -15,14 +15,14 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <igmp.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/igmp.h"
 #include <string.h>
 
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_igmp.h>
-#include <rtl8367c_asicdrv_lut.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_igmp.h"
+#include "include/rtl8367c_asicdrv_lut.h"
 
 
 /* Function Name:

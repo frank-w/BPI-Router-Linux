@@ -15,13 +15,13 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <cpu.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/cpu.h"
 #include <string.h>
 
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_cputag.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_cputag.h"
 
 /* Function Name:
  *      rtk_cpu_enable_set

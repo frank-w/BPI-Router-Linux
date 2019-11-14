@@ -15,14 +15,14 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <l2.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/l2.h"
 #include <string.h>
 
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_lut.h>
-#include <rtl8367c_asicdrv_port.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_lut.h"
+#include "include/rtl8367c_asicdrv_port.h"
 
 /* Function Name:
  *      rtk_l2_init

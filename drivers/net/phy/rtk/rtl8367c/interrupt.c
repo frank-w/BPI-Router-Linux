@@ -15,13 +15,13 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <interrupt.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/interrupt.h"
 #include <string.h>
 
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_interrupt.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_interrupt.h"
 
 /* Function Name:
  *      rtk_int_polarity_set
