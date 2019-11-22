@@ -1,0 +1,8 @@
+config MT7622
+	tristate "MediaTek MT7622 support"
+	select MT76_CORE
+	depends on MAC80211
+	depends on PCI
+	help
+	  This adds support for MT7622-SoC wireless devices.
+
