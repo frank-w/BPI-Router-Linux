@@ -554,3 +554,7 @@
 	pinctrl-0 = <&watchdog_pins>;
 	status = "okay";
 };
+
+&wmac {
+	status = "okay";
+};
