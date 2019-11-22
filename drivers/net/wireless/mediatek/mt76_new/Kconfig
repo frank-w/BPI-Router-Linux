@@ -20,6 +20,7 @@ config MT76x02_USB
 	select MT76_USB
 
 source "drivers/net/wireless/mediatek/mt76_new/mt76x0/Kconfig"
+source "drivers/net/wireless/mediatek/mt76_new/mt7622/Kconfig"
 source "drivers/net/wireless/mediatek/mt76_new/mt76x2/Kconfig"
 source "drivers/net/wireless/mediatek/mt76_new/mt7603/Kconfig"
 source "drivers/net/wireless/mediatek/mt76_new/mt7615/Kconfig"
