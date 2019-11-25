@@ -583,18 +583,21 @@ function prepare_SD {
 	for toDel in "$SD/BPI-BOOT/" "$SD/BPI-ROOT/"; do
 		rm -r ${toDel} 2>/dev/null
 	done
-	for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware" "$SD/BPI-ROOT/lib/firmware"; do
+
+	for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
 		mkdir -p ${createDir} >/dev/null 2>/dev/null
 	done
 
 	echo "copy..."
 	export INSTALL_MOD_PATH=$SD/BPI-ROOT/;
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-	cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
-	if [[ -e ./uImage_nodt ]];then
-    	cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
+	if [[ -e ./uImage ]];then
+		cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
 	fi
-    cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
+	if [[ -e ./uImage_nodt ]];then
+    		cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
+		cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
+	fi
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
@@ -618,17 +621,24 @@ function prepare_SD {
 		echo "blacklist cryptodev" >${INSTALL_MOD_PATH}/etc/modprobe.d/cryptodev.conf
 	fi
 
-	if [[ -e "utils/wmt/src/wmt_loader" ]];then
-		cp utils/wmt/config/* $SD/BPI-ROOT/system/etc/firmware/
-		cp utils/wmt/src/{wmt_loader,wmt_loopback,stp_uart_launcher} $SD/BPI-ROOT/usr/bin/
-		cp -r utils/wmt/firmware/* $SD/BPI-ROOT/etc/firmware/
-	else
-		echo "WMT-Tools not available"
-	fi
-
 	if [[ -n "$(grep 'CONFIG_MT76=' $DOTCONFIG)" ]];then
 		echo "MT76 set, including the firmware-files...";
 		cp drivers/net/wireless/mediatek/mt76/firmware/* $SD/BPI-ROOT/lib/firmware/
+	fi
+
+	if [[ "$board" == "bpi-r64" ]];then
+		mkdir -p $SD/BPI-ROOT/lib/firmware/mediatek
+		cp utils/firmware/mediatek/mt7622* $SD/BPI-ROOT/lib/firmware/mediatek/
+	else
+		if [[ -e "utils/wmt/src/wmt_loader" ]];then
+			mkdir -p "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware"
+
+			cp utils/wmt/config/* $SD/BPI-ROOT/system/etc/firmware/
+			cp utils/wmt/src/{wmt_loader,wmt_loopback,stp_uart_launcher} $SD/BPI-ROOT/usr/bin/
+			cp -r utils/wmt/firmware/* $SD/BPI-ROOT/etc/firmware/
+		else
+			echo "WMT-Tools not available"
+		fi
 	fi
 }
 
