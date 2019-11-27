@@ -252,9 +252,11 @@ function upload {
 	fi
 
 	echo "uploading to ${uploadserver}:${uploaddir}..."
-	scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 	if [[ "$board" == "bpi-r64" ]];then
+		scp uImage_nodt ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 		scp bpi-r64.dtb ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
+	else
+		scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 	fi
 }
 
