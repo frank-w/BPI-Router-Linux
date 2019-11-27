@@ -265,7 +265,7 @@
 	asm_sel {
 		gpio-hog;
 		gpios = <90 GPIO_ACTIVE_HIGH>;
-		output-high;
+		output-low;
 	};
 
 	/* eMMC is shared pin with parallel NAND */
@@ -534,11 +534,11 @@
 };
 
 &sata {
-	status = "disable";
+	status = "ok";
 };
 
 &sata_phy {
-	status = "disable";
+	status = "ok";
 };
 
 &spi0 {
