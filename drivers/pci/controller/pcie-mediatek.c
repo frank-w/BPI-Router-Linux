@@ -439,6 +439,7 @@ static int mtk_pcie_irq_domain_alloc(struct irq_domain *domain, unsigned int vir
 	unsigned long bit;
 
 	WARN_ON(nr_irqs != 1);
+	if (mutex_is_locked(&port->lock)) {printk(KERN_ALERT "DEBUG: %s mutex already locked\n",__FUNCTION__); mutex_unlock(&port->lock);}
 	mutex_lock(&port->lock);
 
 	bit = find_first_zero_bit(port->msi_irq_in_use, MTK_MSI_IRQS_NUM);
