@@ -643,6 +643,7 @@ static int mtk_pcie_setup_irq(struct mtk_pcie_port *port,
 	struct device *dev = pcie->dev;
 	struct platform_device *pdev = to_platform_device(dev);
 	int err;
+	char name[10];
 
 	err = mtk_pcie_init_irq_domain(port, node);
 	if (err) {
@@ -651,6 +652,12 @@ static int mtk_pcie_setup_irq(struct mtk_pcie_port *port,
 	}
 
 	port->irq = platform_get_irq(pdev, port->slot);
+
+	if (port->irq < 0) {
+		snprintf(name, sizeof(name), "pcie_irq%d", port->slot);
+		port->irq = platform_get_irq_byname(pdev, name);
+	}
+
 	irq_set_chained_handler_and_data(port->irq,
 					 mtk_pcie_intr_handler, port);
 
@@ -984,12 +991,14 @@ static int mtk_pcie_subsys_powerup(struct mtk_pcie *pcie)
 	struct device *dev = pcie->dev;
 	struct platform_device *pdev = to_platform_device(dev);
 	struct resource *regs;
+	resource_size_t size;
 	int err;
 
 	/* get shared registers, which are optional */
 	regs = platform_get_resource_byname(pdev, IORESOURCE_MEM, "subsys");
 	if (regs) {
-		pcie->base = devm_ioremap_resource(dev, regs);
+		size = resource_size(regs);
+		pcie->base = devm_ioremap(dev, regs->start, size);
 		if (IS_ERR(pcie->base)) {
 			dev_err(dev, "failed to map shared register\n");
 			return PTR_ERR(pcie->base);
