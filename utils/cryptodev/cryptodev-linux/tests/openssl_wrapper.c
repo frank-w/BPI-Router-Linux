@@ -4,7 +4,6 @@
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
-#include <openssl/opensslv.h>
 
 //#define DEBUG
 
@@ -24,17 +23,10 @@ enum ctx_type {
 	ctx_type_md,
 };
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-union openssl_ctx {
-	HMAC_CTX *hmac;
-	EVP_MD_CTX *md;
-};
-#else
 union openssl_ctx {
 	HMAC_CTX hmac;
 	EVP_MD_CTX md;
 };
-#endif
 
 struct ctx_mapping {
 	__u32 ses;
@@ -71,16 +63,6 @@ static void remove_mapping(__u32 ses)
 	switch (mapping->type) {
 	case ctx_type_none:
 		break;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-	case ctx_type_hmac:
-		dbgp("%s: calling HMAC_CTX_free\n", __func__);
-		HMAC_CTX_free(mapping->ctx.hmac);
-		break;
-	case ctx_type_md:
-		dbgp("%s: calling EVP_MD_CTX_free\n", __func__);
-		EVP_MD_CTX_free(mapping->ctx.md);
-		break;
-#else
 	case ctx_type_hmac:
 		dbgp("%s: calling HMAC_CTX_cleanup\n", __func__);
 		HMAC_CTX_cleanup(&mapping->ctx.hmac);
@@ -89,7 +71,6 @@ static void remove_mapping(__u32 ses)
 		dbgp("%s: calling EVP_MD_CTX_cleanup\n", __func__);
 		EVP_MD_CTX_cleanup(&mapping->ctx.md);
 		break;
-#endif
 	}
 	memset(mapping, 0, sizeof(*mapping));
 }
@@ -146,17 +127,10 @@ static int openssl_hmac(struct session_op *sess, struct crypt_op *cop)
 
 		mapping->ses = sess->ses;
 		mapping->type = ctx_type_hmac;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-		ctx = mapping->ctx.hmac;
-
-		dbgp("calling HMAC_CTX_new");
-		ctx = HMAC_CTX_new();
-#else
 		ctx = &mapping->ctx.hmac;
 
 		dbgp("calling HMAC_CTX_init");
 		HMAC_CTX_init(ctx);
-#endif
 		dbgp("calling HMAC_Init_ex");
 		if (!HMAC_Init_ex(ctx, sess->mackey, sess->mackeylen,
 				sess_to_evp_md(sess), NULL)) {
@@ -198,17 +172,10 @@ static int openssl_md(struct session_op *sess, struct crypt_op *cop)
 
 		mapping->ses = sess->ses;
 		mapping->type = ctx_type_md;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-		ctx = mapping->ctx.md;
-
-		dbgp("calling EVP_MD_CTX_new");
-		ctx = EVP_MD_CTX_new();
-#else
 		ctx = &mapping->ctx.md;
 
 		dbgp("calling EVP_MD_CTX_init");
 		EVP_MD_CTX_init(ctx);
-#endif
 		dbgp("calling EVP_DigestInit");
 		EVP_DigestInit(ctx, sess_to_evp_md(sess));
 	}

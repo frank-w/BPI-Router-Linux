@@ -1,6 +1,8 @@
 #ifndef ZC_H
 # define ZC_H
 
+#include "cryptodev_int.h"
+
 /* For zero copy */
 int __get_userbuf(uint8_t __user *addr, uint32_t len, int write,
 		unsigned int pgcount, struct page **pg, struct scatterlist *sg,

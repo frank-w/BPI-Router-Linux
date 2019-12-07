@@ -222,17 +222,17 @@ int crypto_run(struct fcrypt *fcr, struct kernel_crypt_op *kcop)
 	}
 
 	if (likely(cop->len)) {
-		if (!(cop->flags & COP_FLAG_NO_ZC)) {
-			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->src, ses_ptr->alignmask + 1))) {
+		if (cop->flags & COP_FLAG_NO_ZC) {
+			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->src, ses_ptr->alignmask))) {
 				dwarning(2, "source address %p is not %d byte aligned - disabling zero copy",
 						cop->src, ses_ptr->alignmask + 1);
-				cop->flags |= COP_FLAG_NO_ZC;
+				cop->flags &= ~COP_FLAG_NO_ZC;
 			}
 
-			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->dst, ses_ptr->alignmask + 1))) {
+			if (unlikely(ses_ptr->alignmask && !IS_ALIGNED((unsigned long)cop->dst, ses_ptr->alignmask))) {
 				dwarning(2, "destination address %p is not %d byte aligned - disabling zero copy",
 						cop->dst, ses_ptr->alignmask + 1);
-				cop->flags |= COP_FLAG_NO_ZC;
+				cop->flags &= ~COP_FLAG_NO_ZC;
 			}
 		}
 

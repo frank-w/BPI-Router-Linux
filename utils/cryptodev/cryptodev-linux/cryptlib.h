@@ -101,9 +101,6 @@ int cryptodev_hash_reset(struct hash_data *hdata);
 void cryptodev_hash_deinit(struct hash_data *hdata);
 int cryptodev_hash_init(struct hash_data *hdata, const char *alg_name,
 			int hmac_mode, void *mackey, size_t mackeylen);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29))
-int cryptodev_hash_copy(struct hash_data *dst, struct hash_data *src);
-#endif
 
 
 #endif
