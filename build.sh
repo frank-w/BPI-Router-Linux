@@ -854,7 +854,11 @@ if [ -n "$kernver" ]; then
 
 		"cryptodev")
 			echo "Build CryptoDev"
-			cryptodev/build.sh
+			if [[ -e "utils/cryptodev/build.sh" ]];then
+				utils/cryptodev/build.sh
+			else
+				echo "this branch has no cryptodev"
+			fi
 			;;
 
 		"utils")
