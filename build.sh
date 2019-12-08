@@ -546,7 +546,8 @@ function build {
 					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb
 				fi
 				#how to create zImage?? make zImage does not work here
-				mkimage -A arm -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
+				if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
+				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
 				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
 					cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
 				else
