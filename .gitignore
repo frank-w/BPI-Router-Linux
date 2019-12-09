@@ -11,7 +11,7 @@
 #
 .*
 *.a
-*.asn1.[ch]
+*asn1.[ch]
 *.bin
 *.bz2
 *.c.[012]*.*
@@ -146,3 +146,15 @@ x509.genkey
 
 # Clang's compilation database file
 /compile_commands.json
+
+#added by fwu
+*.log
+arch/arm/boot/compressed/piggy.gzip
+arch/arm/boot/zImage-dtb
+drivers/net/wireless/mediatek/mt76_old/
+firmware/
+kernel/config_data.h
+output/
+scripts/kconfig/zconf.hash.c
+uImage*
+*.bak
