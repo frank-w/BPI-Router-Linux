@@ -11,7 +11,7 @@
 #define MT7530_NUM_FDB_RECORDS		2048
 #define MT7530_ALL_MEMBERS		0xff
 
-enum {
+enum mt753x_id {
 	ID_MT7530 = 0,
 	ID_MT7621 = 1,
 };
@@ -428,6 +428,32 @@ static const char *p5_intf_modes(unsigned int p5_interface)
 	}
 }
 
+/* struct mt753x_info -	This is the main data structure for holding the specific
+ *			part for each supported device
+ * @setup:		Holding the handler to a device initialization
+ * @phy_read:		Holding the way reading PHY port
+ * @phy_write:		Holding the way writing PHY port
+ * @phy_supported:	Check if the PHY type is being supported on a certain
+ *			port
+ * @pad_setup:		Holding the way setting up the bus pad for a certain MAC
+ *			port
+ * @mac_setup:		Holding the way setting up the PHY attribute for a
+ *			certain MAC port
+ */
+struct mt753x_info {
+	enum mt753x_id id;
+
+	int (*setup)(struct dsa_switch *ds);
+	int (*phy_read)(struct dsa_switch *ds, int port, int regnum);
+	int (*phy_write)(struct dsa_switch *ds, int port, int regnum, u16 val);
+	bool (*phy_supported)(struct dsa_switch *ds, int port,
+			      const struct phylink_link_state *state);
+	int (*pad_setup)(struct dsa_switch *ds,
+			 const struct phylink_link_state *state);
+	int (*mac_setup)(struct dsa_switch *ds, int port, unsigned int mode,
+			 const struct phylink_link_state *state);
+};
+
 /* struct mt7530_priv -	This is the main data structure for holding the state
  *			of the driver
  * @dev:		The device pointer
@@ -455,6 +481,7 @@ struct mt7530_priv {
 	struct regulator	*core_pwr;
 	struct regulator	*io_pwr;
 	struct gpio_desc	*reset;
+	const struct mt753x_info *info;
 	unsigned int		id;
 	bool			mcm;
 	phy_interface_t		p6_interface;
