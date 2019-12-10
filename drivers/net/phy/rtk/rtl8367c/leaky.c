@@ -15,15 +15,15 @@
  *
  */
 
-#include <rtk_switch.h>
-#include <rtk_error.h>
-#include <leaky.h>
-#include <string.h>
+#include "include/rtk_switch.h"
+#include "include/rtk_error.h"
+#include "include/leaky.h"
+#include "include/string.h"
 
-#include <rtl8367c_asicdrv.h>
-#include <rtl8367c_asicdrv_portIsolation.h>
-#include <rtl8367c_asicdrv_rma.h>
-#include <rtl8367c_asicdrv_igmp.h>
+#include "include/rtl8367c_asicdrv.h"
+#include "include/rtl8367c_asicdrv_portIsolation.h"
+#include "include/rtl8367c_asicdrv_rma.h"
+#include "include/rtl8367c_asicdrv_igmp.h"
 
 
 /* Function Name:
