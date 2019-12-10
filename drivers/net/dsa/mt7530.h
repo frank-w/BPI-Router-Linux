@@ -14,6 +14,7 @@
 enum mt753x_id {
 	ID_MT7530 = 0,
 	ID_MT7621 = 1,
+	ID_MT7531 = 2,
 };
 
 #define	NUM_TRGMII_CTRL			5
@@ -201,6 +202,19 @@ enum mt7530_vlan_port_attr {
 #define  PMCR_FORCE_LNK			BIT(0)
 #define  PMCR_SPEED_MASK		(PMCR_FORCE_SPEED_100 | \
 					 PMCR_FORCE_SPEED_1000)
+#define  MT7531_FORCE_LNK		BIT(31)
+#define  MT7531_FORCE_SPD		BIT(30)
+#define  MT7531_FORCE_DPX		BIT(29)
+#define  MT7531_FORCE_RX_FC		BIT(28)
+#define  MT7531_FORCE_TX_FC		BIT(27)
+#define  MT7531_FORCE_MODE		(MT7531_FORCE_LNK | \
+					 MT7531_FORCE_SPD | \
+					 MT7531_FORCE_DPX | \
+					 MT7531_FORCE_RX_FC | \
+					 MT7531_FORCE_TX_FC)
+#define  PMCR_FORCE_MODE_ID(id)		(((id) == ID_MT7531) ? \
+					 MT7531_FORCE_MODE : \
+					 PMCR_FORCE_MODE)
 
 #define MT7530_PMSR_P(x)		(0x3008 + (x) * 0x100)
 #define  PMSR_EEE1G			BIT(7)
@@ -231,11 +245,110 @@ enum mt7530_vlan_port_attr {
 					 CCR_RX_OCT_CNT_BAD | \
 					 CCR_TX_OCT_CNT_GOOD | \
 					 CCR_TX_OCT_CNT_BAD)
+
+/* SGMII registers */
+#define MT7531_SGMII_REG_BASE		0x5000
+#define MT7531_SGMII_REG(p, r)		(MT7531_SGMII_REG_BASE + \
+					((p) - 5) * 0x1000 + (r))
+
+/* SGMII PCS_CONTROL_1 */
+#define MT7531_PCS_CONTROL_1(p)		MT7531_SGMII_REG(p, 0x00)
+#define  MT7531_SGMII_LINK_STATUS	BIT(18)
+#define  MT7531_SGMII_AN_ENABLE		BIT(12)
+#define  MT7531_SGMII_AN_RESTART	BIT(9)
+
+/* Fields of SGMII_MODE */
+#define MT7531_SGMII_MODE(p)		MT7531_SGMII_REG(p, 0x20)
+#define  MT7531_SGMII_REMOTE_FAULT_DIS	BIT(8)
+#define  MT7531_SGMII_FORCE_DUPLEX	BIT(4)
+#define  MT7531_SGMII_IF_MODE_MASK	GENMASK(5, 1)
+#define  MT7531_SGMII_FORCE_SPEED_10	0x0
+#define  MT7531_SGMII_FORCE_SPEED_100	BIT(2)
+#define  MT7531_SGMII_FORCE_SPEED_1000	BIT(3)
+
+/* Fields of QPHY_PWR_STATE_CTRL */
+#define MT7531_QPHY_PWR_STATE_CTRL(p)	MT7531_SGMII_REG(p, 0xe8)
+#define  MT7531_SGMII_PHYA_PWD		BIT(4)
+
+/* Values of SGMII SPEED */
+#define MT7531_PHYA_CTRL_SIGNAL3(p)	MT7531_SGMII_REG(p, 0x128)
+#define  MT7531_RG_TPHY_SPEED_MASK	(BIT(2) | BIT(3))
+#define  MT7531_RG_TPHY_SPEED_1_25G	0x0
+#define  MT7531_RG_TPHY_SPEED_3_125G	BIT(2)
+
 /* Register for system reset */
 #define MT7530_SYS_CTRL			0x7000
 #define  SYS_CTRL_PHY_RST		BIT(2)
 #define  SYS_CTRL_SW_RST		BIT(1)
 #define  SYS_CTRL_REG_RST		BIT(0)
+
+/* Register for PHY Indirect Access Control */
+#define MT7531_PHY_IAC			0x701C
+#define  PHY_ACS_ST			BIT(31)
+#define  MDIO_REG_ADDR_MASK		(0x1f << 25)
+#define  MDIO_PHY_ADDR_MASK		(0x1f << 20)
+#define  MDIO_CMD_MASK			(0x3 << 18)
+#define  MDIO_ST_MASK			(0x3 << 16)
+#define  MDIO_RW_DATA_MASK		(0xffff)
+#define  MDIO_REG_ADDR(x)		(((x) & 0x1f) << 25)
+#define  MDIO_DEV_ADDR(x)		(((x) & 0x1f) << 25)
+#define  MDIO_PHY_ADDR(x)		(((x) & 0x1f) << 20)
+#define  MDIO_CMD(x)			(((x) & 0x3) << 18)
+#define  MDIO_ST(x)			(((x) & 0x3) << 16)
+
+enum mt7531_phy_iac_cmd {
+	MT7531_MDIO_ADDR = 0,
+	MT7531_MDIO_WRITE = 1,
+	MT7531_MDIO_READ = 2,
+	MT7531_MDIO_READ_CL45 = 3,
+};
+
+/* MDIO_ST: MDIO start field */
+enum mt7531_mdio_st {
+	MT7531_MDIO_ST_CL45 = 0,
+	MT7531_MDIO_ST_CL22 = 1,
+};
+
+#define  MDIO_CL22_READ			(MDIO_ST(MT7531_MDIO_ST_CL22) | \
+					 MDIO_CMD(MT7531_MDIO_READ))
+#define  MDIO_CL22_WRITE		(MDIO_ST(MT7531_MDIO_ST_CL22) | \
+					 MDIO_CMD(MT7531_MDIO_WRITE))
+#define  MDIO_CL45_ADDR			(MDIO_ST(MT7531_MDIO_ST_CL45) | \
+					 MDIO_CMD(MT7531_MDIO_ADDR))
+#define  MDIO_CL45_READ			(MDIO_ST(MT7531_MDIO_ST_CL45) | \
+					 MDIO_CMD(MT7531_MDIO_READ))
+#define  MDIO_CL45_WRITE		(MDIO_ST(MT7531_MDIO_ST_CL45) | \
+					 MDIO_CMD(MT7531_MDIO_WRITE))
+
+#define MT7531_CLKGEN_CTRL		0x7500
+#define  CLK_SKEW_OUT(x)		(((x) & 0x3) << 8)
+#define  CLK_SKEW_OUT_MASK		(0x3 << 8)
+#define  CLK_SKEW_IN(x)			(((x) & 0x3) << 6)
+#define  CLK_SKEW_IN_MASK		(0x3 << 6)
+#define  RXCLK_NO_DELAY			BIT(5)
+#define  TXCLK_NO_REVERSE		BIT(4)
+#define  GP_MODE(x)			(((x) & 0x3) << 1)
+#define  GP_MODE_MASK			(0x3 << 1)
+#define  GP_CLK_EN			BIT(0)
+
+#define PHY_DEV1F			0x1f
+#define MT7531_PHY_DEV1F_REG_403	0x403
+
+#define MT7531_PHY_EN_BYPASS_MODE	BIT(4)
+#define MT7531_PHY_POWER_OFF		BIT(5)
+
+enum mt7531_gp_mode {
+	MT7531_GP_MODE_RGMII = 0,
+	MT7531_GP_MODE_MII = 1,
+	MT7531_GP_MODE_REV_MII = 2
+};
+
+enum mt7531_clk_skew {
+	MT7531_CLK_SKEW_NO_CHG = 0,
+	MT7531_CLK_SKEW_DLY_100PPS = 1,
+	MT7531_CLK_SKEW_DLY_200PPS = 2,
+	MT7531_CLK_SKEW_REVERSE = 3,
+};
 
 /* Register for hw trap status */
 #define MT7530_HWTRAP			0x7800
@@ -243,6 +356,11 @@ enum mt7530_vlan_port_attr {
 #define  HWTRAP_XTAL_25MHZ		(BIT(10) | BIT(9))
 #define  HWTRAP_XTAL_40MHZ		(BIT(10))
 #define  HWTRAP_XTAL_20MHZ		(BIT(9))
+
+#define MT7531_HWTRAP			0x7800
+#define  HWTRAP_XTAL_FSEL_MASK		BIT(7)
+#define  HWTRAP_XTAL_FSEL_25MHZ		BIT(7)
+#define  HWTRAP_XTAL_FSEL_40MHZ		0
 
 /* Register for hw trap modification */
 #define MT7530_MHWTRAP			0x7804
@@ -258,13 +376,33 @@ enum mt7530_vlan_port_attr {
 #define MT7530_TOP_SIG_CTRL		0x7808
 #define  TOP_SIG_CTRL_NORMAL		(BIT(17) | BIT(16))
 
+#define MT7531_TOP_SIG_SR		0x780c
+#define  PAD_DUAL_SGMII_EN		BIT(1)
+
 #define MT7530_IO_DRV_CR		0x7810
 #define  P5_IO_CLK_DRV(x)		((x) & 0x3)
 #define  P5_IO_DATA_DRV(x)		(((x) & 0x3) << 4)
 
+#define MT7531_PLLGP_EN			0x7820
+#define  EN_COREPLL			BIT(2)
+#define  SW_CLKSW			BIT(1)
+#define  SW_PLLGP			BIT(0)
+
+#define MT7531_PLLGP_CR0		0x78a8
+#define  RG_COREPLL_EN			BIT(22)
+#define  RG_COREPLL_POSDIV_S		23
+#define  RG_COREPLL_POSDIV_M		0x3800000
+#define  RG_COREPLL_SDM_PCW_S		1
+#define  RG_COREPLL_SDM_PCW_M		0x3ffffe
+#define  RG_COREPLL_SDM_PCW_CHG		BIT(0)
+
 #define MT7530_P6ECR			0x7830
 #define  P6_INTF_MODE_MASK		0x3
 #define  P6_INTF_MODE(x)		((x) & 0x3)
+
+/* RGMII and SGMII PLL clock */
+#define MT7531_ANA_PLLGP_CR2		0x78b0
+#define MT7531_ANA_PLLGP_CR5		0x78bc
 
 /* Registers for TRGMII on the both side */
 #define MT7530_TRGMII_RCK_CTRL		0x7a00
@@ -315,6 +453,9 @@ enum mt7530_vlan_port_attr {
 #define MT7530_CREV			0x7ffc
 #define  CHIP_NAME_SHIFT		16
 #define  MT7530_ID			0x7530
+
+#define MT7531_CREV			0x781C
+#define  MT7531_ID			0x7531
 
 /* Registers for core PLL access through mmd indirect */
 #define CORE_PLL_GROUP2			0x401
@@ -439,6 +580,8 @@ static const char *p5_intf_modes(unsigned int p5_interface)
  *			port
  * @mac_setup:		Holding the way setting up the PHY attribute for a
  *			certain MAC port
+ * @port_an_restart	Holding the way restarting 802.3z BaseX autonegotiation
+ *			for a certain MAC port
  */
 struct mt753x_info {
 	enum mt753x_id id;
@@ -452,6 +595,7 @@ struct mt753x_info {
 			 const struct phylink_link_state *state);
 	int (*mac_setup)(struct dsa_switch *ds, int port, unsigned int mode,
 			 const struct phylink_link_state *state);
+	void (*port_an_restart)(struct dsa_switch *ds, int port);
 };
 
 /* struct mt7530_priv -	This is the main data structure for holding the state
