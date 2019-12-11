@@ -353,7 +353,7 @@ function install
 				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
 				EXTRA_MODULE_PATH=$INSTALL_MOD_PATH"/lib/modules/"$kernelname"/kernel/extras"
 				#echo $kernelname" - "${EXTRA_MODULE_PATH}
-				CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
+				CRYPTODEV="utils/cryptodev/cryptodev-linux/cryptodev.ko"
 				if [ -e "${CRYPTODEV}" ]; then
 					echo Copy CryptoDev
 					sudo mkdir -p "${EXTRA_MODULE_PATH}"
@@ -604,7 +604,7 @@ function prepare_SD {
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
-	CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
+	CRYPTODEV="utils/cryptodev/cryptodev-linux/cryptodev.ko"
 	mkdir -p "${INSTALL_MOD_PATH}/etc/modules-load.d"
 	mkdir -p "${INSTALL_MOD_PATH}/etc/modprobe.d"
 
@@ -855,7 +855,10 @@ if [ -n "$kernver" ]; then
 
 		"cryptodev")
 			echo "Build CryptoDev"
-			cryptodev/build.sh
+			cdbuildscript=utils/cryptodev/build.sh
+			if [[ -e $cdbuildscript ]];then
+				$cdbuildscript
+			fi
 			;;
 
 		"utils")
