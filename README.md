@@ -1,6 +1,6 @@
 # Kernel 5.4 for BananaPi R2
 
-<a href="https://travis-ci.com/frank-w/BPI-R2-4.14" target="_blank"><img src="https://travis-ci.com/frank-w/BPI-R2-4.14.svg?branch=4.19-main" alt="Build status 4.19-main"></a>
+<a href="https://travis-ci.com/frank-w/BPI-R2-4.14" target="_blank"><img src="https://travis-ci.com/frank-w/BPI-R2-4.14.svg?branch=5.4-main" alt="Build status 5.4-main"></a>
 
 ## Requirements
 
@@ -55,8 +55,9 @@ docker rmi bpi-cross-compile:1 --force
 
 Kernel upstream + BPI-R2
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.9-main">4.9-main</a>
-* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-main">4.14-main</a>
-* 4.19-main
+* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.14-main">4.14-main</a>
+* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-main">4.19-main</a>
+* 5.4-main
 
 ## Kernel versions
 
