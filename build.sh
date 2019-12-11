@@ -148,6 +148,10 @@ function get_version()
 {
 	echo "generate branch vars..."
 	#kernbranch=$(git rev-parse --abbrev-ref HEAD)
+
+	echo "getting git branch: "
+	git branch --contains $(git log -n 1 --pretty='%h')
+
 	kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep '^*' | grep -v '(HEAD' | head -1 | sed 's/^..//')
 	kernbranch=${kernbranch//frank-w_/}
 
