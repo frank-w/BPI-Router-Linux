@@ -150,9 +150,16 @@ function get_version()
 	#kernbranch=$(git rev-parse --abbrev-ref HEAD)
 
 	echo "getting git branch: "
-	git branch --contains $(git log -n 1 --pretty='%h')
+	#find branches with actual commit and filter out detached head
+	branches=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD')
+	echo "$branches"
 
-	kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep '^*' | grep -v '(HEAD' | head -1 | sed 's/^..//')
+	kernbranch=$(echo $branches | grep '^*') #look for marked branch (local)
+	if [[ "$kernbranch" == "" ]];then #no marked branch (travis)
+		kernbranch=$(echo "$branches" | head -1) #use first one
+	fi
+	#kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep '^*' | grep -v '(HEAD' | head -1 | sed 's/^..//')
+	kernbranch=${kernbranch//^../}
 	kernbranch=${kernbranch//frank-w_/}
 
 	gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
