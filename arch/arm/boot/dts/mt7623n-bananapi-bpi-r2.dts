@@ -200,7 +200,6 @@
 		fixed-link {
 			speed = <1000>;
 			full-duplex;
-			pause;
 		};
 	};
 
@@ -262,7 +261,7 @@
 					reg = <6>;
 					label = "cpu";
 					ethernet = <&gmac0>;
-					phy-mode = "trgmii";
+					phy-mode = "rgmii";
 
 					fixed-link {
 						speed = <1000>;
