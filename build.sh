@@ -154,12 +154,12 @@ function get_version()
 	branches=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD')
 	echo "$branches"
 
-	kernbranch=$(echo $branches | grep '^*') #look for marked branch (local)
+	kernbranch=$(echo "$branches" | grep '^*') #look for marked branch (local)
 	if [[ "$kernbranch" == "" ]];then #no marked branch (travis)
 		kernbranch=$(echo "$branches" | head -1) #use first one
 	fi
 	#kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep '^*' | grep -v '(HEAD' | head -1 | sed 's/^..//')
-	kernbranch=${kernbranch//^../}
+	kernbranch=$(echo "$kernbranch" | sed 's/^..//')
 	kernbranch=${kernbranch//frank-w_/}
 
 	gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
