@@ -53,6 +53,12 @@ static __always_inline void uaccess_restore(unsigned int flags)
 extern int __get_user_bad(void);
 extern int __put_user_bad(void);
 
+/*
+ * Note that this is actually 0x1,0000,0000
+ */
+#define KERNEL_DS	0x00000000
+#define get_ds()	(KERNEL_DS)
+
 #ifdef CONFIG_MMU
 
 /*
