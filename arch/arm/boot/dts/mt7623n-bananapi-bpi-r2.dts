@@ -84,6 +84,18 @@
 		};
 	};
 
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		consys-reserve-memory {
+			compatible = "mediatek,consys-reserve-memory";
+			no-map;
+			size = <0 0x100000>;
+			alignment = <0 0x100000>;
+		};
+	};
+
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
@@ -257,6 +269,36 @@
 		label = "bpi-r2:isink:blue";
 		default-state = "off";
 	};
+};
+
+&pio {
+	consys_pins_default: consys_pins_default {
+		adie {
+			pinmux = <MT7623_PIN_60_WB_RSTB_FUNC_WB_RSTB>,
+				<MT7623_PIN_61_GPIO61_FUNC_TEST_FD>,
+				<MT7623_PIN_62_GPIO62_FUNC_TEST_FC>,
+				<MT7623_PIN_63_WB_SCLK_FUNC_WB_SCLK>,
+				<MT7623_PIN_64_WB_SDATA_FUNC_WB_SDATA>,
+				<MT7623_PIN_65_WB_SEN_FUNC_WB_SEN>,
+				<MT7623_PIN_66_WB_CRTL0_FUNC_WB_CRTL0>,
+				<MT7623_PIN_67_WB_CRTL1_FUNC_WB_CRTL1>,
+				<MT7623_PIN_68_WB_CRTL2_FUNC_WB_CRTL2>,
+				<MT7623_PIN_69_WB_CRTL3_FUNC_WB_CRTL3>,
+				<MT7623_PIN_70_WB_CRTL4_FUNC_WB_CRTL4>,
+				<MT7623_PIN_71_WB_CRTL5_FUNC_WB_CRTL5>;
+				bias-disable;
+		};
+	};
+};
+&consys {
+	mediatek,pwrap-regmap = <&pwrap>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&consys_pins_default>;
+	vcn18-supply = <&mt6323_vcn18_reg>;
+	vcn28-supply = <&mt6323_vcn28_reg>;
+	vcn33_bt-supply = <&mt6323_vcn33_bt_reg>;
+	vcn33_wifi-supply = <&mt6323_vcn33_wifi_reg>;
+	status = "okay";
 };
 
 &pcie {
