@@ -684,8 +684,7 @@ static int b53_switch_reset(struct b53_device *dev)
 	 * still use this driver as a library and need to perform the reset
 	 * earlier.
 	 */
-	if (dev->chip_id == BCM58XX_DEVICE_ID ||
-	    dev->chip_id == BCM583XX_DEVICE_ID) {
+	if (dev->chip_id == BCM58XX_DEVICE_ID) {
 		b53_read8(dev, B53_CTRL_PAGE, B53_SOFTRESET, &reg);
 		reg |= SW_RST | EN_SW_RST | EN_CH_RST;
 		b53_write8(dev, B53_CTRL_PAGE, B53_SOFTRESET, reg);
@@ -815,8 +814,8 @@ void b53_get_strings(struct dsa_switch *ds, int port, uint8_t *data)
 	unsigned int i;
 
 	for (i = 0; i < mib_size; i++)
-		strlcpy(data + i * ETH_GSTRING_LEN,
-			mibs[i].name, ETH_GSTRING_LEN);
+		memcpy(data + i * ETH_GSTRING_LEN,
+		       mibs[i].name, ETH_GSTRING_LEN);
 }
 EXPORT_SYMBOL(b53_get_strings);
 
@@ -1030,7 +1029,8 @@ int b53_vlan_filtering(struct dsa_switch *ds, int port, bool vlan_filtering)
 EXPORT_SYMBOL(b53_vlan_filtering);
 
 int b53_vlan_prepare(struct dsa_switch *ds, int port,
-		     const struct switchdev_obj_port_vlan *vlan)
+		     const struct switchdev_obj_port_vlan *vlan,
+		     struct switchdev_trans *trans)
 {
 	struct b53_device *dev = ds->priv;
 
@@ -1047,7 +1047,8 @@ int b53_vlan_prepare(struct dsa_switch *ds, int port,
 EXPORT_SYMBOL(b53_vlan_prepare);
 
 void b53_vlan_add(struct dsa_switch *ds, int port,
-		  const struct switchdev_obj_port_vlan *vlan)
+		  const struct switchdev_obj_port_vlan *vlan,
+		  struct switchdev_trans *trans)
 {
 	struct b53_device *dev = ds->priv;
 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
@@ -1494,7 +1495,8 @@ static bool b53_can_enable_brcm_tags(struct dsa_switch *ds, int port)
 	return false;
 }
 
-enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds, int port)
+static enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds,
+						  int port)
 {
 	struct b53_device *dev = ds->priv;
 
@@ -1515,7 +1517,6 @@ enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds, int port)
 
 	return DSA_TAG_PROTO_BRCM;
 }
-EXPORT_SYMBOL(b53_get_tag_protocol);
 
 int b53_mirror_add(struct dsa_switch *ds, int port,
 		   struct dsa_mall_mirror_tc_entry *mirror, bool ingress)
@@ -1861,18 +1862,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.dev_name = "BCM585xx/586xx/88312",
 		.vlans	= 4096,
 		.enabled_ports = 0x1ff,
-		.arl_entries = 4,
-		.cpu_port = B53_CPU_PORT,
-		.vta_regs = B53_VTA_REGS,
-		.duplex_reg = B53_DUPLEX_STAT_GE,
-		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
-		.jumbo_size_reg = B53_JUMBO_MAX_SIZE,
-	},
-	{
-		.chip_id = BCM583XX_DEVICE_ID,
-		.dev_name = "BCM583xx/11360",
-		.vlans = 4096,
-		.enabled_ports = 0x103,
 		.arl_entries = 4,
 		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
