@@ -3037,6 +3037,7 @@ static int mv88e6xxx_setup(struct dsa_switch *ds)
 
 	chip->ds = ds;
 	ds->slave_mii_bus = mv88e6xxx_default_mdio_bus(chip);
+	ds->vlan_bridge_vtu = true;
 
 	mv88e6xxx_reg_lock(chip);
 
