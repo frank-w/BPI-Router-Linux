@@ -203,25 +203,13 @@
 		};
 	};
 
-	gmac1: mac@1 {
-		compatible = "mediatek,eth-mac";
-		reg = <1>;
-		label = "wan";
-		phy-mode = "rgmii";
-		phy-handle = <&ephy0>;
-	};
-
 	mdio: mdio-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		ephy0: ethernet-phy@0 {
-			reg = <0>;
-		};
-
-		switch@1f {
+		switch@0 {
 			compatible = "mediatek,mt7530";
-			reg = <0x1f>;
+			reg = <0>;
 			reset-gpios = <&pio 33 0>;
 			core-supply = <&mt6323_vpa_reg>;
 			io-supply = <&mt6323_vemc3v3_reg>;
@@ -230,12 +218,10 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 
-/* Disabled, is now handled by gmac1 (eth1/wan) via phy-handle!
 				port@0 {
 					reg = <0>;
 					label = "wan";
 				};
-*/
 
 				port@1 {
 					reg = <1>;
