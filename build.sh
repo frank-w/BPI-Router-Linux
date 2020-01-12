@@ -177,7 +177,7 @@ function get_r64_switch
 		if [[ $? -eq 0 ]];then
 			echo "mt7531"
 		else
-			echo "unknown"
+			echo ""
 		fi
 	fi
 }
@@ -229,9 +229,9 @@ function update_kernel_source {
 
 function pack {
 	get_version
-	if [[ "$board" == "bpi-r64" ]];then
-		switch=$(get_r64_switch)"_"
-	fi
+	#if [[ "$board" == "bpi-r64" ]];then
+	#	switch=$(get_r64_switch)"_"
+	#fi
 	prepare_SD
 	echo "pack..."
 	olddir=$(pwd)
@@ -245,9 +245,9 @@ function pack {
 
 function upload {
 	get_version
-	if [[ "$board" == "bpi-r64" ]];then
-		switch="_"$(get_r64_switch)
-	fi
+	#if [[ "$board" == "bpi-r64" ]];then
+	#	switch="_"$(get_r64_switch)
+	#fi
 	imagename="uImage_${kernver}${gitbranch}${switch}"
 	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
