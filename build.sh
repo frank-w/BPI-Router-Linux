@@ -533,14 +533,6 @@ function build {
 		rm ./uImage* 2>/dev/null
 		rm ${board}.dtb 2>/dev/null
 
-		if [[ "$board" == "bpi-r64" ]];then
-			if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-				CFLAGS="${CFLAGS} CONFIG_MT753X_GSW=n" #disable new switch
-			else
-				CFLAGS="${CFLAGS} CONFIG_RTL8367S_GSW=n" #disable old switch
-			fi
-		fi
-
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
@@ -554,16 +546,11 @@ function build {
 				then
 					cp $builddir/arch/arm64/boot/Image arch/arm64/boot/Image
 					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb
-					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb
 				fi
 				#how to create zImage?? make zImage does not work here
 				if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
-				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-					cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
-				else
-					cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb $board.dtb
-				fi
+				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
 			else
 				if [[ "$builddir" != "" ]];
 				then
@@ -782,11 +769,6 @@ if [ -n "$kernver" ]; then
 				p=arm64
 				echo "Import r64 config"
 				f=mt7622_bpi-r64_defconfig
-				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-					disable=mt753x_gsw
-				else
-					disable=rtl8367s_gsw
-				fi
 			else
 				p=arm
 				if [[ -z "$file" ]];then
