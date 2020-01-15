@@ -22,8 +22,14 @@ install:
 script:
     - export PATH=/usr/lib/ccache:$PATH
     - bash build.sh importconfig
-    - bash build.sh build 
-    - bash build.sh cryptodev 
+    - bash build.sh build
+    - bash build.sh cryptodev
+    - bash build.sh deb
+    - bash build.sh pack
+    - sed -i 's/#\(board=bpi-r64\)/\1/' build.conf #change board to r64
+    - bash build.sh importconfig
+    - bash build.sh build
+    - bash build.sh cryptodev
     - bash build.sh deb
     - bash build.sh pack
 before_deploy:
