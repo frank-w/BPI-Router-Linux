@@ -414,12 +414,14 @@ function deb {
 	mkdir -p $targetdir/DEBIAN/
 
 	#sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
-	if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
-	cp ./uImage $targetdir/boot/bananapi/$board/linux/${uimagename}
-	if [[ -e ./uImage_nodt ]];then
-		cp ./uImage_nodt $targetdir/boot/bananapi/$board/linux/${uimagename}_nodt
+	if [[ -e ./uImage || -e ./uImage_nodt ]] && [[ -d ../SD/BPI-ROOT/lib/modules/${ver} ]]; then
+	if [[ -e ./uImage ]];then
+		cp ./uImage $targetdir/boot/bananapi/$board/linux/${uimagename}
 	fi
-	cp ./$board.dtb $targetdir/boot/bananapi/$board/linux/dtb/$board-${kernver}${gitbranch}.dtb
+	if [[ -e ./uImage_nodt && -e ./$board.dtb ]];then
+		cp ./uImage_nodt $targetdir/boot/bananapi/$board/linux/${uimagename}_nodt
+		cp ./$board.dtb $targetdir/boot/bananapi/$board/linux/dtb/$board-${kernver}${gitbranch}.dtb
+	fi
 #    pwd
 	cp -r ../SD/BPI-ROOT/lib/modules/${ver} $targetdir/lib/modules/
 	#rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
