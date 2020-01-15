@@ -15,6 +15,12 @@ If you build it directly on the BananaPi-R2/R64 (not recommended) you do not nee
 
 ## Issues
 
+### R2
+
+### R64
+* pcie-slot CN8 does not detect gen2-cards due to hardware-issue (missing capacitors)
+* some pcie-cards are not detected because of wrong memory-mapping of BAR0
+
 ## Usage
 
 if you want to build for R64, change "board" in build.conf first
@@ -61,7 +67,7 @@ docker rmi bpi-cross-compile:1 --force
 Kernel upstream + BPI-R2 / R64
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.9-main">4.9-main</a>
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.14-main">4.14-main</a>
-* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-main">4.19-main</a> <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-r64-main">4.19-r64-main</a>
+* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-main">4.19-main</a> | <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-r64-main">4.19-r64-main</a>
 * 5.4-main
 
 ## Kernel versions
@@ -87,9 +93,9 @@ Kernel features by version
 | IR (R2)            |  ?  |  N  |  N   |  Y   |  Y  |
 | Other options      |--|--|--|--|--|
 | OpenVPN            |  ?  |  Y  |  Y   |      |     |
-| iptables           |  ?  |  Y  |  Y   |  Y   |     |
-| nftables           |  ?  |  N  |  N   |  Y   |  Y  |
-| LXC / Docker       |  ?  |  ?  |  Y   |      |     |
+| iptables (R2)      |  ?  |  Y  |  Y   |  Y   |     |
+| nftables (R2)      |  ?  |  N  |  N   |  Y   |  Y  |
+| LXC / Docker (R2)  |  ?  |  ?  |  Y   |      |     |
 
 Symbols:
 
@@ -98,7 +104,7 @@ Symbols:
 |  ?   |Unsure |
 |  ()  |Testing|
 
-(Testing in seperate branch wlan/hdmi/hwnat/hwqos)
+(Testing in separate branch wlan/hdmi/hwnat/hwqos)
 
 * WIFI/BT on R2 needs WMT-tools called before
 * HW-NAT only works between LAN and WAN (bridge unclear, wifi not supported)
@@ -112,7 +118,7 @@ mainline-uboot: https://github.com/frank-w/u-boot
 
 ## Links
 
-* BPI-R2: http://www.banana-pi.org/r2.html BPI-R64: http://www.banana-pi.org/r64.html
+* BPI-R2: http://www.banana-pi.org/r2.html | BPI-R64: http://www.banana-pi.org/r64.html
 * Kernel: https://www.kernel.org/ , Stable-RC: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git/
 * linux-mediatek: https://patchwork.kernel.org/project/linux-mediatek/list/, Threaded: http://lists.infradead.org/pipermail/linux-mediatek/
 * kernelci: https://kernelci.org/boot/mt7623n-bananapi-bpi-r2/
