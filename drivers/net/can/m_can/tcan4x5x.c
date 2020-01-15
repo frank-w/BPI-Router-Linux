@@ -354,6 +354,8 @@ static int tcan4x5x_parse_config(struct m_can_classdev *cdev)
 	if (IS_ERR(tcan4x5x->reset_gpio))
 		tcan4x5x->reset_gpio = NULL;
 
+	usleep_range(700, 1000);
+
 	tcan4x5x->device_state_gpio = devm_gpiod_get_optional(cdev->dev,
 							      "device-state",
 							      GPIOD_IN);
@@ -442,6 +444,10 @@ static int tcan4x5x_can_probe(struct spi_device *spi)
 					&spi->dev, &tcan4x5x_regmap);
 
 	tcan4x5x_power_enable(priv->power, 1);
+
+	ret = tcan4x5x_init(mcan_class);
+	if (ret)
+		goto out_power;
 
 	ret = m_can_class_register(mcan_class);
 	if (ret)
