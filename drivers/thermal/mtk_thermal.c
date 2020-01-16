@@ -934,7 +934,7 @@ static int mtk_thermal_get_calibration_data(struct device *dev,
 
 	if (mt->conf->extract(mt, buf)) {
 		dev_info(dev, "Device not calibrated, using default calibration values\n");
-		ret = -EINVAL;
+//		ret = -EINVAL;
 	}
 
 out:
