@@ -6,6 +6,7 @@
 #include <linux/clk.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 
 #include "lima_device.h"
 #include "lima_gp.h"
@@ -288,10 +289,32 @@ static void lima_fini_pp_pipe(struct lima_device *dev)
 	lima_sched_pipe_fini(pipe);
 }
 
+void mtk_set_power(bool on)
+{
+	if (on) {
+		void __iomem *wakeup_register;
+		wakeup_register = ioremap(0x10003014 , 0x04);
+		writel(0x00000001,wakeup_register); // this may be wrong, may need bitbang 0th bit to 1
+		iounmap(wakeup_register);
+	}else {
+		void __iomem *powerdown_register;
+		powerdown_register = ioremap(0x1000300C , 0x04); // powerdown register
+		writel(0x00000001,powerdown_register); // this may be wrong, may need bitbang 0th bit to 1
+		iounmap(powerdown_register);
+	}
+}
+
 int lima_device_init(struct lima_device *ldev)
 {
 	int err, i;
 	struct resource *res;
+
+	#ifdef CONFIG_MTK_COMBO_CHIP_CONSYS_7623
+	mtk_set_power(true);
+	pm_runtime_enable(ldev->dev);
+	pm_runtime_set_active(ldev->dev);
+	pm_runtime_get_sync(ldev->dev);
+	#endif
 
 	dma_set_coherent_mask(ldev->dev, DMA_BIT_MASK(32));
 
@@ -386,4 +409,12 @@ void lima_device_fini(struct lima_device *ldev)
 	lima_regulator_fini(ldev);
 
 	lima_clk_fini(ldev);
+
+	#ifdef CONFIG_MTK_COMBO_CHIP_CONSYS_7623
+	pm_runtime_set_suspended(ldev->dev);
+	pm_runtime_put_noidle(ldev->dev);
+	pm_runtime_disable(ldev->dev);
+
+	mtk_set_power(false);
+	#endif
 }
