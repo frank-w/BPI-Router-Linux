@@ -148,7 +148,18 @@ function get_version()
 {
 	echo "generate branch vars..."
 	#kernbranch=$(git rev-parse --abbrev-ref HEAD)
-	kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD' | head -1 | sed 's/^..//')
+
+	echo "getting git branch: "
+	#find branches with actual commit and filter out detached head
+	branches=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD')
+	echo "$branches"
+
+	kernbranch=$(echo "$branches" | grep '^*') #look for marked branch (local)
+	if [[ "$kernbranch" == "" ]];then #no marked branch (travis)
+		kernbranch=$(echo "$branches" | head -1) #use first one
+	fi
+	#kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep '^*' | grep -v '(HEAD' | head -1 | sed 's/^..//')
+	kernbranch=$(echo "$kernbranch" | sed 's/^..//')
 	kernbranch=${kernbranch//frank-w_/}
 
 	gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
@@ -166,7 +177,7 @@ function get_r64_switch
 		if [[ $? -eq 0 ]];then
 			echo "mt7531"
 		else
-			echo "unknown"
+			echo ""
 		fi
 	fi
 }
@@ -218,9 +229,9 @@ function update_kernel_source {
 
 function pack {
 	get_version
-	if [[ "$board" == "bpi-r64" ]];then
-		switch=$(get_r64_switch)"_"
-	fi
+	#if [[ "$board" == "bpi-r64" ]];then
+	#	switch=$(get_r64_switch)"_"
+	#fi
 	prepare_SD
 	echo "pack..."
 	olddir=$(pwd)
@@ -234,9 +245,9 @@ function pack {
 
 function upload {
 	get_version
-	if [[ "$board" == "bpi-r64" ]];then
-		switch="_"$(get_r64_switch)
-	fi
+	#if [[ "$board" == "bpi-r64" ]];then
+	#	switch="_"$(get_r64_switch)
+	#fi
 	imagename="uImage_${kernver}${gitbranch}${switch}"
 	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
@@ -353,7 +364,7 @@ function install
 				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
 				EXTRA_MODULE_PATH=$INSTALL_MOD_PATH"/lib/modules/"$kernelname"/kernel/extras"
 				#echo $kernelname" - "${EXTRA_MODULE_PATH}
-				CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
+				CRYPTODEV="utils/cryptodev/cryptodev-linux/cryptodev.ko"
 				if [ -e "${CRYPTODEV}" ]; then
 					echo Copy CryptoDev
 					sudo mkdir -p "${EXTRA_MODULE_PATH}"
@@ -403,12 +414,14 @@ function deb {
 	mkdir -p $targetdir/DEBIAN/
 
 	#sudo mount --bind ../SD/BPI-ROOT/lib/modules debian/bananapi-r2-image/lib/modules/
-	if test -e ./uImage && test -d ../SD/BPI-ROOT/lib/modules/${ver}; then
-	cp ./uImage $targetdir/boot/bananapi/$board/linux/${uimagename}
-	if [[ -e ./uImage_nodt ]];then
-		cp ./uImage_nodt $targetdir/boot/bananapi/$board/linux/${uimagename}_nodt
+	if [[ -e ./uImage || -e ./uImage_nodt ]] && [[ -d ../SD/BPI-ROOT/lib/modules/${ver} ]]; then
+	if [[ -e ./uImage ]];then
+		cp ./uImage $targetdir/boot/bananapi/$board/linux/${uimagename}
 	fi
-	cp ./$board.dtb $targetdir/boot/bananapi/$board/linux/dtb/$board-${kernver}${gitbranch}.dtb
+	if [[ -e ./uImage_nodt && -e ./$board.dtb ]];then
+		cp ./uImage_nodt $targetdir/boot/bananapi/$board/linux/${uimagename}_nodt
+		cp ./$board.dtb $targetdir/boot/bananapi/$board/linux/dtb/$board-${kernver}${gitbranch}.dtb
+	fi
 #    pwd
 	cp -r ../SD/BPI-ROOT/lib/modules/${ver} $targetdir/lib/modules/
 	#rm debian/bananapi-r2-image/lib/modules/${ver}/{build,source}
@@ -522,14 +535,6 @@ function build {
 		rm ./uImage* 2>/dev/null
 		rm ${board}.dtb 2>/dev/null
 
-		if [[ "$board" == "bpi-r64" ]];then
-			if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-				CFLAGS="${CFLAGS} CONFIG_MT753X_GSW=n" #disable new switch
-			else
-				CFLAGS="${CFLAGS} CONFIG_RTL8367S_GSW=n" #disable old switch
-			fi
-		fi
-
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
@@ -543,16 +548,11 @@ function build {
 				then
 					cp $builddir/arch/arm64/boot/Image arch/arm64/boot/Image
 					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb
-					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb
 				fi
 				#how to create zImage?? make zImage does not work here
 				if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
-				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-					cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
-				else
-					cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dtb $board.dtb
-				fi
+				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
 			else
 				if [[ "$builddir" != "" ]];
 				then
@@ -604,7 +604,7 @@ function prepare_SD {
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
-	CRYPTODEV="cryptodev/cryptodev-linux/cryptodev.ko"
+	CRYPTODEV="utils/cryptodev/cryptodev-linux/cryptodev.ko"
 	mkdir -p "${INSTALL_MOD_PATH}/etc/modules-load.d"
 	mkdir -p "${INSTALL_MOD_PATH}/etc/modprobe.d"
 
@@ -771,11 +771,6 @@ if [ -n "$kernver" ]; then
 				p=arm64
 				echo "Import r64 config"
 				f=mt7622_bpi-r64_defconfig
-				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-					disable=mt753x_gsw
-				else
-					disable=rtl8367s_gsw
-				fi
 			else
 				p=arm
 				if [[ -z "$file" ]];then
@@ -855,7 +850,10 @@ if [ -n "$kernver" ]; then
 
 		"cryptodev")
 			echo "Build CryptoDev"
-			cryptodev/build.sh
+			cdbuildscript=utils/cryptodev/build.sh
+			if [[ -e $cdbuildscript ]];then
+				$cdbuildscript
+			fi
 			;;
 
 		"utils")
