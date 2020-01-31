@@ -56,6 +56,12 @@
 	leds {
 		compatible = "gpio-leds";
 
+		blue {
+			label = "bpi-r64:pio:blue";
+			gpios = <&pio 85 GPIO_ACTIVE_LOW>;
+			default-state = "keep";
+		};
+
 		green {
 			label = "bpi-r64:pio:green";
 			gpios = <&pio 89 GPIO_ACTIVE_HIGH>;
