@@ -23,6 +23,8 @@
 #include <linux/reset.h>
 #include <linux/types.h>
 
+#include "thermal_hwmon.h"
+
 /* AUXADC Registers */
 #define AUXADC_CON1_SET_V	0x008
 #define AUXADC_CON1_CLR_V	0x00c
@@ -862,6 +864,13 @@ static const struct of_device_id mtk_thermal_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, mtk_thermal_of_match);
 
+static void mtk_thermal_hwmon_action(void *data)
+{
+	struct thermal_zone_device *zone = data;
+
+	thermal_remove_hwmon_sysfs(zone);
+}
+
 static int mtk_thermal_probe(struct platform_device *pdev)
 {
 	int ret, i, ctrl_id;
@@ -956,6 +965,19 @@ static int mtk_thermal_probe(struct platform_device *pdev)
 	if (IS_ERR(tzdev)) {
 		ret = PTR_ERR(tzdev);
 		goto err_disable_clk_peri_therm;
+	}
+
+	tzdev->tzp->no_hwmon = false;
+	ret = thermal_add_hwmon_sysfs(tzdev);
+	if (ret)
+		dev_err(&pdev->dev,"error in thermal_add_hwmon_sysfs");
+		//goto err_disable_clk_peri_therm;
+
+	ret = devm_add_action(&pdev->dev, mtk_thermal_hwmon_action, tzdev);
+	if (ret) {
+		dev_err(&pdev->dev,"error in devm_add_action");
+		mtk_thermal_hwmon_action(tzdev);
+		//goto err_disable_clk_peri_therm;
 	}
 
 	return 0;
