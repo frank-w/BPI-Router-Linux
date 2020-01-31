@@ -746,15 +746,10 @@ if [ -n "$kernver" ]; then
 
 		"dts")
 			if [[ "$board" == "bpi-r64" ]];then
-				if (( $(echo "$boardversion < $r64newswver" |bc -l) ));then
-					echo "edit mt7622n-bpi.dts"
-					edit arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
-				else
-					echo "edit mt7622n-mt7531-bpi.dts"
-					edit arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-mt7531.dts
-				fi
+				echo "edit mt7622n-bpi-r64.dts"
+				edit arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
 			else
-				echo "edit mt7623n-bpi.dts"
+				echo "edit mt7623n-bpi-r2.dts"
 				edit arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
 			fi
 			;;
