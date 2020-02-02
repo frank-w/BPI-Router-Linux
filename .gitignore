@@ -131,3 +131,5 @@ DEBIAN/
 SD/
 patch-*
 mod/
+
+*.mod
