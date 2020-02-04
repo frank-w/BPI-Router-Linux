@@ -82,6 +82,19 @@ mkdir -m 755 -p "$tmpdir/DEBIAN"
 mkdir -p "$tmpdir/lib" "$tmpdir/boot"
 mkdir -p "$kernel_headers_dir/lib/modules/$version/"
 
+case $board in
+bpi-r64|bpi-r2)
+	mkdir -p "$tmpdir/boot/bananapi/$board/linux/dtb"
+	installed_image_path="boot/bananapi/$board/linux/uImage_nodt-$version"
+
+	cp ./$board.dtb "$tmpdir/boot/bananapi/$board/linux/dtb/$board-$version.dtb"
+	source_image_path="./uImage_nodt"
+	;;
+*)
+	source_image_path="$($MAKE -s -f $srctree/Makefile image_name)"
+	;;
+esac
+
 # Build and install the kernel
 if [ "$ARCH" = "um" ] ; then
 	mkdir -p "$tmpdir/usr/lib/uml/modules/$version" "$tmpdir/usr/bin" "$tmpdir/usr/share/doc/$packagename"
@@ -93,7 +106,7 @@ else
 	cp System.map "$tmpdir/boot/System.map-$version"
 	cp $KCONFIG_CONFIG "$tmpdir/boot/config-$version"
 fi
-cp "$($MAKE -s -f $srctree/Makefile image_name)" "$tmpdir/$installed_image_path"
+cp "$source_image_path" "$tmpdir/$installed_image_path"
 
 if is_enabled CONFIG_OF_EARLY_FLATTREE; then
 	# Only some architectures with OF support have this target
