@@ -243,6 +243,15 @@ function pack {
 	cd $olddir
 }
 
+function pack_debs {
+	get_version
+	echo "pack linux-headers, linux-image, linux-libc-dev debs..."
+    echo "LOCALVERSION=${gitbranch} board=$board ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
+	LOCALVERSION="${gitbranch}" board="$board" make bindeb-pkg
+	ls ../*.deb
+}
+
+
 function upload {
 	get_version
 	#if [[ "$board" == "bpi-r64" ]];then
@@ -817,6 +826,11 @@ if [ -n "$kernver" ]; then
 		"pack")
 			echo "Pack Kernel to Archive"
 			pack
+			;;
+
+		"pack_debs")
+			echo "Pack Kernel to linux-*.deb"
+			pack_debs
 			;;
 
 		"install")
