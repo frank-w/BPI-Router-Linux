@@ -85,10 +85,15 @@ mkdir -p "$kernel_headers_dir/lib/modules/$version/"
 case $board in
 bpi-r64|bpi-r2)
 	mkdir -p "$tmpdir/boot/bananapi/$board/linux/dtb"
-	installed_image_path="boot/bananapi/$board/linux/uImage_nodt-$version"
-
+	if [ "$board" = "bpi-r64" ] ; then
+		source_image_path="./uImage_nodt"
+		installed_image_path="boot/bananapi/$board/linux/uImage_nodt-$version"
+	else
+		source_image_path="./uImage"
+		installed_image_path="boot/bananapi/$board/linux/uImage-$version"
+		cp ./uImage_nodt "$tmpdir/boot/bananapi/$board/linux/uImage_nodt-$version"
+	fi
 	cp ./$board.dtb "$tmpdir/boot/bananapi/$board/linux/dtb/$board-$version.dtb"
-	source_image_path="./uImage_nodt"
 	;;
 *)
 	source_image_path="$($MAKE -s -f $srctree/Makefile image_name)"
