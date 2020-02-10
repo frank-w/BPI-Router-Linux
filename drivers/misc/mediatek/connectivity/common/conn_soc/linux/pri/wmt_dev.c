@@ -1288,10 +1288,9 @@ static ssize_t wmt_dev_dbg_write(struct file *filp, const char __user *buffer, s
 
 INT32 wmt_dev_dbg_setup(VOID)
 {
-	static const struct file_operations wmt_dbg_fops = {
-		.owner = THIS_MODULE,
-		.read = wmt_dev_dbg_read,
-		.write = wmt_dev_dbg_write,
+	static const struct proc_ops wmt_dbg_fops = {
+		.proc_read = wmt_dev_dbg_read,
+		.proc_write = wmt_dev_dbg_write,
 	};
 	gWmtDbgEntry = proc_create(WMT_DBG_PROCNAME, 0664, NULL, &wmt_dbg_fops);
 	if (gWmtDbgEntry == NULL) {
@@ -1374,10 +1373,9 @@ static ssize_t wmt_dev_proc_for_aee_write(struct file *filp, const char __user *
 
 INT32 wmt_dev_proc_for_aee_setup(VOID)
 {
-	static const struct file_operations wmt_aee_fops = {
-		.owner = THIS_MODULE,
-		.read = wmt_dev_proc_for_aee_read,
-		.write = wmt_dev_proc_for_aee_write,
+	static const struct proc_ops wmt_aee_fops = {
+		.proc_read = wmt_dev_proc_for_aee_read,
+		.proc_write = wmt_dev_proc_for_aee_write,
 	};
 
 	gWmtDbgEntry = proc_create(WMT_AEE_PROCNAME, 0664, NULL, &wmt_aee_fops);
