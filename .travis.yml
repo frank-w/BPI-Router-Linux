@@ -24,13 +24,13 @@ script:
     - bash build.sh importconfig
     - bash build.sh build
     - bash build.sh cryptodev
-    - bash build.sh deb
+    - bash build.sh pack_debs
     - bash build.sh pack
     - sed -i 's/#\(board=bpi-r64\)/\1/' build.conf #change board to r64
     - bash build.sh importconfig
     - bash build.sh build
     - bash build.sh cryptodev
-    - bash build.sh deb
+    - bash build.sh pack_debs
     - bash build.sh pack
 before_deploy:
     # Set up git user name and tag this commit
@@ -43,8 +43,8 @@ deploy:
     api_key: $GITHUB_TOKEN
     file_glob: true
     file:
-    - "debian/*"
     - "../SD/*"
+    - "../*.deb"
     name: $TRAVIS_BRANCH-$(date +'%Y%m%d%H%M%S')
     skip_cleanup: true
     on:
