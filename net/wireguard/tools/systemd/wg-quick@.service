@@ -1,0 +1,20 @@
+[Unit]
+Description=WireGuard via wg-quick(8) for %I
+After=network-online.target nss-lookup.target
+Wants=network-online.target nss-lookup.target
+Documentation=man:wg-quick(8)
+Documentation=man:wg(8)
+Documentation=https://www.wireguard.com/
+Documentation=https://www.wireguard.com/quickstart/
+Documentation=https://git.zx2c4.com/WireGuard/about/src/tools/man/wg-quick.8
+Documentation=https://git.zx2c4.com/WireGuard/about/src/tools/man/wg.8
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/wg-quick up %i
+ExecStop=/usr/bin/wg-quick down %i
+Environment=WG_ENDPOINT_RESOLUTION_RETRIES=infinity
+
+[Install]
+WantedBy=multi-user.target
