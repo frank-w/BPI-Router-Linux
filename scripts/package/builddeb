@@ -196,12 +196,6 @@ if is_enabled CONFIG_GCC_PLUGINS; then
 fi
 destdir=$kernel_headers_dir/usr/src/linux-headers-$version
 mkdir -p "$destdir"
-mkdir -p "$destdir"/net/wireguard; 
-		touch "$destdir"/net/wireguard/{Kconfig,Makefile} # workaround for Wireguard
-mkdir -p "$destdir"/net/wireguard; 
-mkdir -p "$destdir"/net/wireguard; 
-		touch "$destdir"/net/wireguard/{Kconfig,Makefile} # workaround for Wireguard
-		touch "$destdir"/net/wireguard/{Kconfig,Makefile} # workaround for Wireguard
 (cd $srctree; tar -c -f - -T -) < "$objtree/debian/hdrsrcfiles" | (cd $destdir; tar -xf -)
 (cd $objtree; tar -c -f - -T -) < "$objtree/debian/hdrobjfiles" | (cd $destdir; tar -xf -)
 (cd $objtree; cp $KCONFIG_CONFIG $destdir/.config) # copy .config manually to be where it's expected to be
