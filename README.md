@@ -92,10 +92,10 @@ Kernel features by version
 | ACPI (R2)          |  ?  |  N  |  Y   |  Y   |  Y  |
 | IR (R2)            |  ?  |  N  |  N   |  Y   |  Y  |
 | Other options      |--|--|--|--|--|
-| OpenVPN            |  ?  |  Y  |  Y   |      |     |
+| OpenVPN            |  ?  |  Y  |  Y   |  Y   |     |
 | iptables (R2)      |  ?  |  Y  |  Y   |  Y   |     |
 | nftables (R2)      |  ?  |  N  |  N   |  Y   |  Y  |
-| LXC / Docker (R2)  |  ?  |  ?  |  Y   |      |     |
+| LXC / Docker (R2)  |  ?  |  ?  |  Y   |  Y   |     |
 
 Symbols:
 
