@@ -206,7 +206,7 @@ function update_kernel_source {
         if [[ $ret -eq 0 ]];then
                 newkernver=$(increase_kernel)
 		kernmajorver=$(make kernelversion | sed -e 's/\.[0-9]\+$//')
-		maxkernver=$(git describe --match "v${kernmajorver}.*" --abbrev=0)
+		maxkernver=$(git for-each-ref --sort=-taggerdate --count=1  refs/tags/v${kernmajorver}.*| sed 's/^.*refs\/tags\/v//')
                 echo "newkernver:$newkernver (max:$maxkernver)"
                 git merge --no-edit v$newkernver
         elif [[ $ret -eq 128 ]];then
