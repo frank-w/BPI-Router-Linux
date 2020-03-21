@@ -205,8 +205,10 @@ function update_kernel_source {
         ret=$?
         if [[ $ret -eq 0 ]];then
                 newkernver=$(increase_kernel)
-                echo "newkernver:$newkernver"
-                git merge v$newkernver
+		kernmajorver=$(make kernelversion | sed -e 's/\.[0-9]\+$//')
+		maxkernver=$(git describe --match "v${kernmajorver}.*" --abbrev=0)
+                echo "newkernver:$newkernver (max:$maxkernver)"
+                git merge --no-edit v$newkernver
         elif [[ $ret -eq 128 ]];then
                 #repo not found
                 git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
