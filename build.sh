@@ -360,17 +360,29 @@ function install
 				export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 				echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
 				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH modules_install
-				echo "syncing sd-card...this will take a while"
 
-				echo "uImage:${kernelfile} / ${kernelfile}${ndtsuffix}"
-				echo "DTB: ${dtbfile}"
+				echo "uImage:"
+				if [[ "$dtinput" == "y" ]];then
+					echo "${kernelfile}"
+				fi
+				if [[ "$ndtinput" == "y" ]];then
+					echo "${kernelfile}${ndtsuffix}"
+					echo "DTB: ${dtbfile}"
+				fi
 				uenv=$(getuenvpath)
 				echo $uenv
 				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
 				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
-				grep '^kernel=' $uenv|tail -1
-				grep '^fdt=' $uenv|tail -1
-				sync
+				curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
+				curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
+				echo "kernel: " $curkernel
+				echo "dtb: " $curfdt
+
+				openuenv=n
+				if [[ "$curkernel" == "${kernelfile}" || "$curkernel" == "${kernelfile}${ndtsuffix}" ]];then
+					echo "no change needed!"
+					openuenv=n
+				fi
 
 				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
 				EXTRA_MODULE_PATH=$INSTALL_MOD_PATH"/lib/modules/"$kernelname"/kernel/extras"
@@ -392,6 +404,13 @@ function install
 				echo "install of modules skipped because no kernel was installed";
 			fi
 
+			echo "syncing sd-card...this will take a while"
+			sync
+
+			read -e -i "$openuenv" -p "open uenv-file [yn]? " input
+			if [[ "$input" == "y" ]];then
+				$0 uenv
+			fi
 			read -e -i "y" -p "umount SD card [yn]? " input
 			if [[ "$input" == "y" ]];then
 				$0 umount
