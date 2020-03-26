@@ -2189,10 +2189,10 @@ static int mtk_btif_rxd_be_blocked_by_timer(void)
 		if (now.tv_sec >= btif_rxd_time_stamp[i].tv_sec) {
 			time_gap[i] = now.tv_sec - btif_rxd_time_stamp[i].tv_sec;
 			time_gap[i] *= 1000000; /*second*/
-			if ((now.tv_nsec/1000) >= (btif_rxd_time_stamp[i].tv_nsec/1000))
-				time_gap[i] += now.tv_nsec/1000 - btif_rxd_time_stamp[i].tv_nsec/1000;
+			if (now.tv_nsec >= btif_rxd_time_stamp[i].tv_nsec)
+				time_gap[i] += (now.tv_nsec - btif_rxd_time_stamp[i].tv_nsec)/1000;
 			else
-				time_gap[i] += 1000000 - now.tv_nsec/1000 + btif_rxd_time_stamp[i].tv_nsec/1000;
+				time_gap[i] += 1000000 - (now.tv_nsec + btif_rxd_time_stamp[i].tv_nsec)/1000;
 
 			if (time_gap[i] > 1000000)
 				counter++;
