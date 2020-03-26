@@ -1708,7 +1708,7 @@ long wmt_dev_tm_temp_query(void)
 
 	static INT32 temp_table[HISTORY_NUM] = { 99 };	/* not query yet. */
 	static INT32 idx_temp_table;
-	static struct timeval query_time, now_time;
+	static struct timespec64 query_time, now_time;
 
 	INT8 query_cond = 0;
 	INT32 current_temp = 0;
@@ -1724,7 +1724,7 @@ long wmt_dev_tm_temp_query(void)
 		}
 	}
 
-	do_gettimeofday(&now_time);
+	ktime_get_real_ts64(&now_time);
 #if 1
 	/* Query condition 2: */
 	/* Moniter the ahb bus activity to decide if we have the need to query temperature. */
@@ -1774,7 +1774,7 @@ long wmt_dev_tm_temp_query(void)
 		mtk_wcn_wmt_therm_ctrl(WMTTHERM_DISABLE);
 		idx_temp_table = (idx_temp_table + 1) % HISTORY_NUM;
 		temp_table[idx_temp_table] = current_temp;
-		do_gettimeofday(&query_time);
+		ktime_get_real_ts64(&query_time);
 
 		WMT_INFO_FUNC("[Thermal] current_temp = 0x%x\n", (current_temp & 0xFF));
 	} else {

@@ -1121,9 +1121,9 @@ INT32 osal_udelay(UINT32 us)
 INT32 osal_gettimeofday(PINT32 sec, PINT32 usec)
 {
 	INT32 ret = 0;
-	struct timeval now;
+	struct timespec64 now;
 
-	do_gettimeofday(&now);
+	ktime_get_real_ts64(&now);
 
 	if (sec != NULL)
 		*sec = now.tv_sec;
@@ -1131,7 +1131,7 @@ INT32 osal_gettimeofday(PINT32 sec, PINT32 usec)
 		ret = -1;
 
 	if (usec != NULL)
-		*usec = now.tv_usec;
+		*usec = now.tv_nsec/1000;
 	else
 		ret = -1;
 

@@ -182,7 +182,7 @@ typedef void (*MTK_BTIF_RX_NOTIFY) (void);
 
 typedef struct _btif_log_buf_t_ {
 	unsigned int len;
-	struct timeval timer;
+	struct timespec64 timer;
 	unsigned char buffer[BTIF_LOG_SZ];
 } BTIF_LOG_BUF_T, *P_BTIF_LOG_BUF_T;
 
