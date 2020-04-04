@@ -1710,14 +1710,6 @@ mt7530_pad_setup(struct dsa_switch *ds, const struct phylink_link_state *state)
 	/* Setup TX circuit incluing relevant PAD and driving */
 	mt7530_pad_clk_setup(ds, state->interface);
 
-	if (priv->id == ID_MT7530) {
-		/* Setup RX circuit, relevant PAD and driving on the
-		 * host which must be placed after the setup on the
-		 * device side is all finished.
-		 */
-		mt7623_pad_clk_setup(ds);
-	}
-
 	return 0;
 }
 
