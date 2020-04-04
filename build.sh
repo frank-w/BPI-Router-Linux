@@ -379,7 +379,7 @@ function install
 				echo "dtb: " $curfdt
 
 				openuenv=n
-				if [[ "$curkernel" == "${kernelfile}" || "$curkernel" == "${kernelfile}${ndtsuffix}" ]];then
+				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" ]];then
 					echo "no change needed!"
 					openuenv=n
 				fi
