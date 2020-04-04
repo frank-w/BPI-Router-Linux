@@ -97,7 +97,7 @@ static inline void wg_reset_packet(struct sk_buff *skb)
 	skb->dev = NULL;
 #ifdef CONFIG_NET_SCHED
 	skb->tc_index = 0;
-	skb_reset_tc(skb);
+	skb_reset_redirect(skb);
 #endif
 	skb->hdr_len = skb_headroom(skb);
 	skb_reset_mac_header(skb);
