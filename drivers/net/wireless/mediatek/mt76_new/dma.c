@@ -132,6 +132,12 @@ mt76_dma_sync_idx(struct mt76_dev *dev, struct mt76_queue *q)
 	writel(q->ndesc, &q->regs->ring_size);
 	q->head = readl(&q->regs->dma_idx);
 	q->tail = q->head;
+}
+
+static void
+mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
+{
+	wmb();
 	writel(q->head, &q->regs->cpu_idx);
 }
 
@@ -193,8 +199,10 @@ mt76_dma_tx_cleanup(struct mt76_dev *dev, enum mt76_txq_id qid, bool flush)
 		dev->q_tx[__MT_TXQ_MAX + i].swq_queued -= n_swq_queued[4 + i];
 	}
 
-	if (flush)
+	if (flush) {
 		mt76_dma_sync_idx(dev, q);
+		mt76_dma_kick_queue(dev, q);
+	}
 
 	wake = wake && q->stopped &&
 	       qid < IEEE80211_NUM_ACS && q->queued < q->ndesc - 8;
@@ -246,19 +254,15 @@ mt76_dma_dequeue(struct mt76_dev *dev, struct mt76_queue *q, bool flush,
 	if (!q->queued)
 		return NULL;
 
-	if (!flush && !(q->desc[idx].ctrl & cpu_to_le32(MT_DMA_CTL_DMA_DONE)))
+	if (flush)
+		q->desc[idx].ctrl |= cpu_to_le32(MT_DMA_CTL_DMA_DONE);
+	else if (!(q->desc[idx].ctrl & cpu_to_le32(MT_DMA_CTL_DMA_DONE)))
 		return NULL;
 
 	q->tail = (q->tail + 1) % q->ndesc;
 	q->queued--;
 
 	return mt76_dma_get_buf(dev, q, idx, len, info, more);
-}
-
-static void
-mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
-{
-	writel(q->head, &q->regs->cpu_idx);
 }
 
 static int
@@ -269,10 +273,13 @@ mt76_dma_tx_queue_skb_raw(struct mt76_dev *dev, enum mt76_txq_id qid,
 	struct mt76_queue_buf buf;
 	dma_addr_t addr;
 
+	if (q->queued + 1 >= q->ndesc - 1)
+		goto error;
+
 	addr = dma_map_single(dev->dev, skb->data, skb->len,
 			      DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(dev->dev, addr)))
-		return -ENOMEM;
+		goto error;
 
 	buf.addr = addr;
 	buf.len = skb->len;
@@ -283,6 +290,10 @@ mt76_dma_tx_queue_skb_raw(struct mt76_dev *dev, enum mt76_txq_id qid,
 	spin_unlock_bh(&q->lock);
 
 	return 0;
+
+error:
+	dev_kfree_skb(skb);
+	return -ENOMEM;
 }
 
 static int
@@ -457,10 +468,13 @@ mt76_add_fragment(struct mt76_dev *dev, struct mt76_queue *q, void *data,
 	struct page *page = virt_to_head_page(data);
 	int offset = data - page_address(page);
 	struct sk_buff *skb = q->rx_head;
+	struct skb_shared_info *shinfo = skb_shinfo(skb);
 
-	offset += q->buf_offset;
-	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, page, offset, len,
-			q->buf_size);
+	if (shinfo->nr_frags < ARRAY_SIZE(shinfo->frags)) {
+		offset += q->buf_offset;
+		skb_add_rx_frag(skb, shinfo->nr_frags, page, offset, len,
+				q->buf_size);
+	}
 
 	if (more)
 		return;

@@ -279,9 +279,11 @@ mt76_phy_init(struct mt76_dev *dev, struct ieee80211_hw *hw)
 	SET_IEEE80211_PERM_ADDR(hw, dev->macaddr);
 
 	wiphy->features |= NL80211_FEATURE_ACTIVE_MONITOR;
+	wiphy->flags |= WIPHY_FLAG_HAS_CHANNEL_SWITCH;
 
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_CQM_RSSI_LIST);
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_AIRTIME_FAIRNESS);
+	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_AQL);
 
 	wiphy->available_antennas_tx = dev->phy.antenna_mask;
 	wiphy->available_antennas_rx = dev->phy.antenna_mask;
@@ -293,7 +295,6 @@ mt76_phy_init(struct mt76_dev *dev, struct ieee80211_hw *hw)
 
 	ieee80211_hw_set(hw, SIGNAL_DBM);
 	ieee80211_hw_set(hw, PS_NULLFUNC_STACK);
-	ieee80211_hw_set(hw, HOST_BROADCAST_PS_BUFFERING);
 	ieee80211_hw_set(hw, AMPDU_AGGREGATION);
 	ieee80211_hw_set(hw, SUPPORTS_RC_TABLE);
 	ieee80211_hw_set(hw, SUPPORT_FAST_XMIT);
@@ -419,6 +420,10 @@ mt76_alloc_device(struct device *pdev, unsigned int size,
 	init_waitqueue_head(&dev->tx_wait);
 	skb_queue_head_init(&dev->status_list);
 
+	skb_queue_head_init(&dev->mcu.res_q);
+	init_waitqueue_head(&dev->mcu.wait);
+	mutex_init(&dev->mcu.mutex);
+
 	INIT_LIST_HEAD(&dev->txwi_cache);
 
 	for (i = 0; i < ARRAY_SIZE(dev->q_rx); i++)
@@ -470,7 +475,8 @@ void mt76_unregister_device(struct mt76_dev *dev)
 {
 	struct ieee80211_hw *hw = dev->hw;
 
-	mt76_led_cleanup(dev);
+	if (IS_ENABLED(CONFIG_MT76_LEDS))
+		mt76_led_cleanup(dev);
 	mt76_tx_status_check(dev, NULL, true);
 	ieee80211_unregister_hw(hw);
 }
@@ -744,10 +750,18 @@ mt76_airtime_report(struct mt76_dev *dev, struct mt76_rx_status *status,
 		    int len)
 {
 	struct mt76_wcid *wcid = status->wcid;
+	struct ieee80211_rx_status info = {
+		.enc_flags = status->enc_flags,
+		.rate_idx = status->rate_idx,
+		.encoding = status->encoding,
+		.band = status->band,
+		.nss = status->nss,
+		.bw = status->bw,
+	};
 	struct ieee80211_sta *sta;
 	u32 airtime;
 
-	airtime = mt76_calc_rx_airtime(dev, status, len);
+	airtime = ieee80211_calc_rx_airtime(dev->hw, &info, len);
 	spin_lock(&dev->cc_lock);
 	dev->cur_cc_bss_rx += airtime;
 	spin_unlock(&dev->cc_lock);
@@ -973,9 +987,6 @@ void __mt76_sta_remove(struct mt76_dev *dev, struct ieee80211_vif *vif,
 	struct mt76_wcid *wcid = (struct mt76_wcid *)sta->drv_priv;
 	int i, idx = wcid->idx;
 
-	rcu_assign_pointer(dev->wcid[idx], NULL);
-	synchronize_rcu();
-
 	for (i = 0; i < ARRAY_SIZE(wcid->aggr); i++)
 		mt76_rx_aggr_stop(dev, wcid, i);
 
@@ -1025,30 +1036,27 @@ int mt76_sta_state(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 }
 EXPORT_SYMBOL_GPL(mt76_sta_state);
 
+void mt76_sta_pre_rcu_remove(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+			     struct ieee80211_sta *sta)
+{
+	struct mt76_phy *phy = hw->priv;
+	struct mt76_dev *dev = phy->dev;
+	struct mt76_wcid *wcid = (struct mt76_wcid *)sta->drv_priv;
+
+	mutex_lock(&dev->mutex);
+	rcu_assign_pointer(dev->wcid[wcid->idx], NULL);
+	mutex_unlock(&dev->mutex);
+}
+EXPORT_SYMBOL_GPL(mt76_sta_pre_rcu_remove);
+
 int mt76_get_txpower(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		     int *dbm)
 {
 	struct mt76_phy *phy = hw->priv;
 	int n_chains = hweight8(phy->antenna_mask);
+	int delta = mt76_tx_power_nss_delta(n_chains);
 
-	*dbm = DIV_ROUND_UP(phy->txpower_cur, 2);
-
-	/* convert from per-chain power to combined
-	 * output power
-	 */
-	switch (n_chains) {
-	case 4:
-		*dbm += 6;
-		break;
-	case 3:
-		*dbm += 4;
-		break;
-	case 2:
-		*dbm += 3;
-		break;
-	default:
-		break;
-	}
+	*dbm = DIV_ROUND_UP(phy->txpower_cur + delta, 2);
 
 	return 0;
 }

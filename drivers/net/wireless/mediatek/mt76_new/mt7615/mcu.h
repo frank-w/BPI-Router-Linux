@@ -23,6 +23,57 @@ struct mt7615_mcu_txd {
 	u32 reserved[5];
 } __packed __aligned(4);
 
+/**
+ * struct mt7615_uni_txd - mcu command descriptor for firmware v3
+ * @txd: hardware descriptor
+ * @len: total length not including txd
+ * @cid: command identifier
+ * @pkt_type: must be 0xa0 (cmd packet by long format)
+ * @frag_n: fragment number
+ * @seq: sequence number
+ * @checksum: 0 mean there is no checksum
+ * @s2d_index: index for command source and destination
+ *  Definition              | value | note
+ *  CMD_S2D_IDX_H2N         | 0x00  | command from HOST to WM
+ *  CMD_S2D_IDX_C2N         | 0x01  | command from WA to WM
+ *  CMD_S2D_IDX_H2C         | 0x02  | command from HOST to WA
+ *  CMD_S2D_IDX_H2N_AND_H2C | 0x03  | command from HOST to WA and WM
+ *
+ * @option: command option
+ *  BIT[0]: UNI_CMD_OPT_BIT_ACK
+ *          set to 1 to request a fw reply
+ *          if UNI_CMD_OPT_BIT_0_ACK is set and UNI_CMD_OPT_BIT_2_SET_QUERY
+ *          is set, mcu firmware will send response event EID = 0x01
+ *          (UNI_EVENT_ID_CMD_RESULT) to the host.
+ *  BIT[1]: UNI_CMD_OPT_BIT_UNI_CMD
+ *          0: original command
+ *          1: unified command
+ *  BIT[2]: UNI_CMD_OPT_BIT_SET_QUERY
+ *          0: QUERY command
+ *          1: SET command
+ */
+struct mt7615_uni_txd {
+	__le32 txd[8];
+
+	/* DW1 */
+	__le16 len;
+	__le16 cid;
+
+	/* DW2 */
+	u8 reserved;
+	u8 pkt_type;
+	u8 frag_n;
+	u8 seq;
+
+	/* DW3 */
+	__le16 checksum;
+	u8 s2d_index;
+	u8 option;
+
+	/* DW4 */
+	u8 reserved2[4];
+} __packed __aligned(4);
+
 /* event table */
 enum {
 	MCU_EVENT_TARGET_ADDRESS_LEN = 0x01,
@@ -30,7 +81,10 @@ enum {
 	MCU_EVENT_GENERIC = 0x01,
 	MCU_EVENT_ACCESS_REG = 0x02,
 	MCU_EVENT_MT_PATCH_SEM = 0x04,
+	MCU_EVENT_SCAN_DONE = 0x0d,
+	MCU_EVENT_BSS_ABSENCE  = 0x11,
 	MCU_EVENT_CH_PRIVILEGE = 0x18,
+	MCU_EVENT_SCHED_SCAN_DONE = 0x23,
 	MCU_EVENT_EXT = 0xed,
 	MCU_EVENT_RESTART_DL = 0xef,
 };
@@ -43,6 +97,62 @@ enum {
 	MCU_EXT_EVENT_ASSERT_DUMP = 0x23,
 	MCU_EXT_EVENT_RDD_REPORT = 0x3a,
 	MCU_EXT_EVENT_CSA_NOTIFY = 0x4f,
+};
+
+enum {
+    MT_SKU_CCK_1_2 = 0,
+    MT_SKU_CCK_55_11,
+    MT_SKU_OFDM_6_9,
+    MT_SKU_OFDM_12_18,
+    MT_SKU_OFDM_24_36,
+    MT_SKU_OFDM_48,
+    MT_SKU_OFDM_54,
+    MT_SKU_HT20_0_8,
+    MT_SKU_HT20_32,
+    MT_SKU_HT20_1_2_9_10,
+    MT_SKU_HT20_3_4_11_12,
+    MT_SKU_HT20_5_13,
+    MT_SKU_HT20_6_14,
+    MT_SKU_HT20_7_15,
+    MT_SKU_HT40_0_8,
+    MT_SKU_HT40_32,
+    MT_SKU_HT40_1_2_9_10,
+    MT_SKU_HT40_3_4_11_12,
+    MT_SKU_HT40_5_13,
+    MT_SKU_HT40_6_14,
+    MT_SKU_HT40_7_15,
+    MT_SKU_VHT20_0,
+    MT_SKU_VHT20_1_2,
+    MT_SKU_VHT20_3_4,
+    MT_SKU_VHT20_5_6,
+    MT_SKU_VHT20_7,
+    MT_SKU_VHT20_8,
+    MT_SKU_VHT20_9,
+    MT_SKU_VHT40_0,
+    MT_SKU_VHT40_1_2,
+    MT_SKU_VHT40_3_4,
+    MT_SKU_VHT40_5_6,
+    MT_SKU_VHT40_7,
+    MT_SKU_VHT40_8,
+    MT_SKU_VHT40_9,
+    MT_SKU_VHT80_0,
+    MT_SKU_VHT80_1_2,
+    MT_SKU_VHT80_3_4,
+    MT_SKU_VHT80_5_6,
+    MT_SKU_VHT80_7,
+    MT_SKU_VHT80_8,
+    MT_SKU_VHT80_9,
+    MT_SKU_VHT160_0,
+    MT_SKU_VHT160_1_2,
+    MT_SKU_VHT160_3_4,
+    MT_SKU_VHT160_5_6,
+    MT_SKU_VHT160_7,
+    MT_SKU_VHT160_8,
+    MT_SKU_VHT160_9,
+    MT_SKU_1SS_DELTA,
+    MT_SKU_2SS_DELTA,
+    MT_SKU_3SS_DELTA,
+    MT_SKU_4SS_DELTA,
 };
 
 struct mt7615_mcu_rxd {
@@ -123,22 +233,29 @@ enum {
 	MCU_S2D_H2CN
 };
 
+#define MCU_FW_PREFIX		BIT(31)
+#define MCU_UNI_PREFIX		BIT(30)
+#define MCU_CE_PREFIX		BIT(29)
+#define MCU_CMD_MASK		~(MCU_FW_PREFIX | MCU_UNI_PREFIX |	\
+				  MCU_CE_PREFIX)
+
 enum {
-	MCU_CMD_TARGET_ADDRESS_LEN_REQ = 0x01,
-	MCU_CMD_FW_START_REQ = 0x02,
+	MCU_CMD_TARGET_ADDRESS_LEN_REQ = MCU_FW_PREFIX | 0x01,
+	MCU_CMD_FW_START_REQ = MCU_FW_PREFIX | 0x02,
 	MCU_CMD_INIT_ACCESS_REG = 0x3,
 	MCU_CMD_PATCH_START_REQ = 0x05,
-	MCU_CMD_PATCH_FINISH_REQ = 0x07,
-	MCU_CMD_PATCH_SEM_CONTROL = 0x10,
+	MCU_CMD_PATCH_FINISH_REQ = MCU_FW_PREFIX | 0x07,
+	MCU_CMD_PATCH_SEM_CONTROL = MCU_FW_PREFIX | 0x10,
 	MCU_CMD_EXT_CID = 0xED,
-	MCU_CMD_FW_SCATTER = 0xEE,
-	MCU_CMD_RESTART_DL_REQ = 0xEF,
+	MCU_CMD_FW_SCATTER = MCU_FW_PREFIX | 0xEE,
+	MCU_CMD_RESTART_DL_REQ = MCU_FW_PREFIX | 0xEF,
 };
 
 enum {
 	MCU_EXT_CMD_PM_STATE_CTRL = 0x07,
 	MCU_EXT_CMD_CHANNEL_SWITCH = 0x08,
 	MCU_EXT_CMD_SET_TX_POWER_CTRL = 0x11,
+	MCU_EXT_CMD_FW_LOG_2_HOST = 0x13,
 	MCU_EXT_CMD_EFUSE_BUFFER_MODE = 0x21,
 	MCU_EXT_CMD_STA_REC_UPDATE = 0x25,
 	MCU_EXT_CMD_BSS_INFO_UPDATE = 0x26,
@@ -152,7 +269,164 @@ enum {
 	MCU_EXT_CMD_MAC_INIT_CTRL = 0x46,
 	MCU_EXT_CMD_BCN_OFFLOAD = 0x49,
 	MCU_EXT_CMD_SET_RX_PATH = 0x4e,
+	MCU_EXT_CMD_TX_POWER_FEATURE_CTRL = 0x58,
+	MCU_EXT_CMD_RXDCOC_CAL = 0x59,
+	MCU_EXT_CMD_TXDPD_CAL = 0x60,
+	MCU_EXT_CMD_SET_RDD_TH = 0x7c,
 	MCU_EXT_CMD_SET_RDD_PATTERN = 0x7d,
+};
+
+enum {
+	MCU_UNI_CMD_DEV_INFO_UPDATE = MCU_UNI_PREFIX | 0x01,
+	MCU_UNI_CMD_BSS_INFO_UPDATE = MCU_UNI_PREFIX | 0x02,
+	MCU_UNI_CMD_STA_REC_UPDATE = MCU_UNI_PREFIX | 0x03,
+};
+
+struct mt7615_mcu_scan_ssid {
+	__le32 ssid_len;
+	u8 ssid[IEEE80211_MAX_SSID_LEN];
+} __packed;
+
+struct mt7615_mcu_scan_channel {
+	u8 band; /* 1: 2.4GHz
+		  * 2: 5.0GHz
+		  * Others: Reserved
+		  */
+	u8 channel_num;
+} __packed;
+
+struct mt7615_mcu_scan_match {
+	__le32 rssi_th;
+	u8 ssid[IEEE80211_MAX_SSID_LEN];
+	u8 ssid_len;
+	u8 rsv[3];
+} __packed;
+
+struct mt7615_hw_scan_req {
+	u8 seq_num;
+	u8 bss_idx;
+	u8 scan_type; /* 0: PASSIVE SCAN
+		       * 1: ACTIVE SCAN
+		       */
+	u8 ssid_type; /* BIT(0) wildcard SSID
+		       * BIT(1) P2P wildcard SSID
+		       * BIT(2) specified SSID
+		       */
+	u8 ssids_num;
+	u8 probe_req_num; /* Number of probe request for each SSID */
+	u8 scan_func; /* BIT(0) Enable random MAC scan
+		       * BIT(1) Disable DBDC scan type 1~3.
+		       * BIT(2) Use DBDC scan type 3 (dedicated one RF to scan).
+		       */
+	u8 version; /* 0: Not support fields after ies.
+		     * 1: Support fields after ies.
+		     */
+	struct mt7615_mcu_scan_ssid ssids[4];
+	__le16 probe_delay_time;
+	__le16 channel_dwell_time; /* channel Dwell interval */
+	__le16 timeout_value;
+	u8 channel_type; /* 0: Full channels
+			  * 1: Only 2.4GHz channels
+			  * 2: Only 5GHz channels
+			  * 3: P2P social channel only (channel #1, #6 and #11)
+			  * 4: Specified channels
+			  * Others: Reserved
+			  */
+	u8 channels_num; /* valid when channel_type is 4 */
+	/* valid when channels_num is set */
+	struct mt7615_mcu_scan_channel channels[32];
+	__le16 ies_len;
+	u8 ies[MT7615_SCAN_IE_LEN];
+	/* following fields are valid if version > 0 */
+	u8 ext_channels_num;
+	u8 ext_ssids_num;
+	__le16 channel_min_dwell_time;
+	struct mt7615_mcu_scan_channel ext_channels[32];
+	struct mt7615_mcu_scan_ssid ext_ssids[6];
+	u8 bssid[ETH_ALEN];
+	u8 random_mac[ETH_ALEN]; /* valid when BIT(1) in scan_func is set. */
+	u8 pad[64];
+} __packed;
+
+#define SCAN_DONE_EVENT_MAX_CHANNEL_NUM	64
+struct mt7615_hw_scan_done {
+	u8 seq_num;
+	u8 sparse_channel_num;
+	struct mt7615_mcu_scan_channel sparse_channel;
+	u8 complete_channel_num;
+	u8 current_state;
+	u8 version;
+	u8 pad;
+	__le32 beacon_scan_num;
+	u8 pno_enabled;
+	u8 pad2[3];
+	u8 sparse_channel_valid_num;
+	u8 pad3[3];
+	u8 channel_num[SCAN_DONE_EVENT_MAX_CHANNEL_NUM];
+	/* idle format for channel_idle_time
+	 * 0: first bytes: idle time(ms) 2nd byte: dwell time(ms)
+	 * 1: first bytes: idle time(8ms) 2nd byte: dwell time(8ms)
+	 * 2: dwell time (16us)
+	 */
+	__le16 channel_idle_time[SCAN_DONE_EVENT_MAX_CHANNEL_NUM];
+	/* beacon and probe response count */
+	u8 beacon_probe_num[SCAN_DONE_EVENT_MAX_CHANNEL_NUM];
+	u8 mdrdy_count[SCAN_DONE_EVENT_MAX_CHANNEL_NUM];
+	__le32 beacon_2g_num;
+	__le32 beacon_5g_num;
+} __packed;
+
+struct mt7615_sched_scan_req {
+	u8 version;
+	u8 seq_num;
+	u8 stop_on_match;
+	u8 ssids_num;
+	u8 match_num;
+	u8 pad;
+	__le16 ie_len;
+	struct mt7615_mcu_scan_ssid ssids[MT7615_MAX_SCHED_SCAN_SSID];
+	struct mt7615_mcu_scan_match match[MT7615_MAX_SCAN_MATCH];
+	u8 channel_type;
+	u8 channels_num;
+	u8 intervals_num;
+	u8 scan_func;
+	struct mt7615_mcu_scan_channel channels[64];
+	__le16 intervals[MT7615_MAX_SCHED_SCAN_INTERVAL];
+	u8 pad2[64];
+} __packed;
+
+struct nt7615_sched_scan_done {
+	u8 seq_num;
+	u8 status; /* 0: ssid found */
+	__le16 pad;
+} __packed;
+
+struct mt7615_mcu_bss_event {
+	u8 bss_idx;
+	u8 is_absent;
+	u8 free_quota;
+	u8 pad;
+} __packed;
+
+/* offload mcu commands */
+enum {
+	MCU_CMD_START_HW_SCAN = MCU_CE_PREFIX | 0x03,
+	MCU_CMD_SET_CHAN_DOMAIN = MCU_CE_PREFIX | 0x0f,
+	MCU_CMD_CANCEL_HW_SCAN = MCU_CE_PREFIX | 0x1b,
+	MCU_CMD_SCHED_SCAN_ENABLE = MCU_CE_PREFIX | 0x61,
+	MCU_CMD_SCHED_SCAN_REQ = MCU_CE_PREFIX | 0x62,
+};
+
+#define MCU_CMD_ACK		BIT(0)
+#define MCU_CMD_UNI		BIT(1)
+#define MCU_CMD_QUERY		BIT(2)
+
+#define MCU_CMD_UNI_EXT_ACK	(MCU_CMD_ACK | MCU_CMD_UNI | MCU_CMD_QUERY)
+
+enum {
+	UNI_BSS_INFO_BASIC = 0,
+	UNI_BSS_INFO_RLM = 2,
+	UNI_BSS_INFO_BCN_CONTENT = 7,
 };
 
 enum {
@@ -214,6 +488,11 @@ enum {
 	DBDC_TYPE_PTA,
 	__DBDC_TYPE_MAX,
 };
+
+struct tlv {
+	__le16 tag;
+	__le16 len;
+} __packed;
 
 struct bss_info_omac {
 	__le16 tag;
@@ -424,18 +703,28 @@ struct wtbl_raw {
 	__le32 val;
 } __packed;
 
-#define MT7615_WTBL_UPDATE_MAX_SIZE (sizeof(struct wtbl_req_hdr) + \
-				     sizeof(struct wtbl_generic) + \
-				     sizeof(struct wtbl_rx) + \
-				     sizeof(struct wtbl_ht) + \
-				     sizeof(struct wtbl_vht) + \
-				     sizeof(struct wtbl_tx_ps) + \
-				     sizeof(struct wtbl_hdr_trans) + \
-				     sizeof(struct wtbl_ba) + \
-				     sizeof(struct wtbl_bf) + \
-				     sizeof(struct wtbl_smps) + \
-				     sizeof(struct wtbl_pn) + \
-				     sizeof(struct wtbl_spe))
+#define MT7615_WTBL_UPDATE_MAX_SIZE	(sizeof(struct wtbl_req_hdr) +	\
+					 sizeof(struct wtbl_generic) +	\
+					 sizeof(struct wtbl_rx) +	\
+					 sizeof(struct wtbl_ht) +	\
+					 sizeof(struct wtbl_vht) +	\
+					 sizeof(struct wtbl_tx_ps) +	\
+					 sizeof(struct wtbl_hdr_trans) +\
+					 sizeof(struct wtbl_ba) +	\
+					 sizeof(struct wtbl_bf) +	\
+					 sizeof(struct wtbl_smps) +	\
+					 sizeof(struct wtbl_pn) +	\
+					 sizeof(struct wtbl_spe))
+
+#define MT7615_STA_UPDATE_MAX_SIZE	(sizeof(struct sta_req_hdr) +	\
+					 sizeof(struct sta_rec_basic) +	\
+					 sizeof(struct sta_rec_ht) +	\
+					 sizeof(struct sta_rec_vht) +	\
+					 sizeof(struct tlv) +	\
+					 MT7615_WTBL_UPDATE_MAX_SIZE)
+
+#define MT7615_WTBL_UPDATE_BA_SIZE	(sizeof(struct wtbl_req_hdr) +	\
+					 sizeof(struct wtbl_ba))
 
 enum {
 	WTBL_GENERIC,
@@ -458,6 +747,11 @@ enum {
 	WTBL_MAX_NUM
 };
 
+struct sta_ntlv_hdr {
+	u8 rsv[2];
+	__le16 tlv_num;
+} __packed;
+
 struct sta_req_hdr {
 	u8 bss_idx;
 	u8 wlan_idx;
@@ -465,6 +759,15 @@ struct sta_req_hdr {
 	u8 is_tlv_append;
 	u8 muar_idx;
 	u8 rsv[2];
+} __packed;
+
+struct sta_rec_state {
+	__le16 tag;
+	__le16 len;
+	u8 state;
+	__le32 flags;
+	u8 vhtop;
+	u8 pad[2];
 } __packed;
 
 struct sta_rec_basic {
@@ -506,10 +809,6 @@ struct sta_rec_ba {
 	__le16 winsize;
 } __packed;
 
-#define MT7615_STA_REC_UPDATE_MAX_SIZE (sizeof(struct sta_rec_basic) + \
-					sizeof(struct sta_rec_ht) + \
-					sizeof(struct sta_rec_vht))
-
 enum {
 	STA_REC_BASIC,
 	STA_REC_RA,
@@ -518,11 +817,12 @@ enum {
 	STA_REC_BF,
 	STA_REC_AMSDU, /* for CR4 */
 	STA_REC_BA,
-	STA_REC_RED, /* not used */
+	STA_REC_STATE,
 	STA_REC_TX_PROC, /* for hdr trans and CSO in CR4 */
 	STA_REC_HT,
 	STA_REC_VHT,
 	STA_REC_APPS,
+	STA_REC_WTBL = 13,
 	STA_REC_MAX_NUM
 };
 
@@ -546,12 +846,5 @@ enum {
 	CH_SWITCH_BACKGROUND_SCAN_STOP = 8,
 	CH_SWITCH_SCAN_BYPASS_DPD = 9
 };
-
-static inline struct sk_buff *
-mt7615_mcu_msg_alloc(const void *data, int len)
-{
-	return mt76_mcu_msg_alloc(data, sizeof(struct mt7615_mcu_txd),
-				  len, 0);
-}
 
 #endif

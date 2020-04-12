@@ -9,7 +9,7 @@
 
 #include "mt76x02.h"
 #include "mt76x02_mcu.h"
-#include "mt76x02_trace.h"
+#include "trace.h"
 
 static void mt76x02_pre_tbtt_tasklet(unsigned long arg)
 {
@@ -270,7 +270,7 @@ irqreturn_t mt76x02_irq_handler(int irq, void *dev_instance)
 	if (!test_bit(MT76_STATE_INITIALIZED, &dev->mphy.state))
 		return IRQ_NONE;
 
-	trace_dev_irq(dev, intr, dev->mt76.mmio.irqmask);
+	trace_dev_irq(&dev->mt76, intr, dev->mt76.mmio.irqmask);
 
 	intr &= dev->mt76.mmio.irqmask;
 
@@ -426,6 +426,8 @@ static void mt76x02_reset_state(struct mt76x02_dev *dev)
 		if (!wcid)
 			continue;
 
+		rcu_assign_pointer(dev->mt76.wcid[i], NULL);
+
 		priv = msta = container_of(wcid, struct mt76x02_sta, wcid);
 		sta = container_of(priv, struct ieee80211_sta, drv_priv);
 
@@ -458,6 +460,7 @@ static void mt76x02_watchdog_reset(struct mt76x02_dev *dev)
 
 	mutex_lock(&dev->mt76.mutex);
 
+	dev->mcu_timeout = 0;
 	if (restart)
 		mt76x02_reset_state(dev);
 
@@ -516,6 +519,7 @@ static void mt76x02_watchdog_reset(struct mt76x02_dev *dev)
 	}
 
 	if (restart) {
+		set_bit(MT76_RESTART, &dev->mphy.state);
 		mt76x02_mcu_function_select(dev, Q_SELECT, 1);
 		ieee80211_restart_hw(dev->mt76.hw);
 	} else {
@@ -524,8 +528,23 @@ static void mt76x02_watchdog_reset(struct mt76x02_dev *dev)
 	}
 }
 
+void mt76x02_reconfig_complete(struct ieee80211_hw *hw,
+			       enum ieee80211_reconfig_type reconfig_type)
+{
+	struct mt76x02_dev *dev = hw->priv;
+
+	if (reconfig_type != IEEE80211_RECONFIG_TYPE_RESTART)
+		return;
+
+	clear_bit(MT76_RESTART, &dev->mphy.state);
+}
+EXPORT_SYMBOL_GPL(mt76x02_reconfig_complete);
+
 static void mt76x02_check_tx_hang(struct mt76x02_dev *dev)
 {
+	if (test_bit(MT76_RESTART, &dev->mphy.state))
+		return;
+
 	if (mt76x02_tx_hang(dev)) {
 		if (++dev->tx_hang_check >= MT_TX_HANG_TH)
 			goto restart;
@@ -540,10 +559,6 @@ static void mt76x02_check_tx_hang(struct mt76x02_dev *dev)
 
 restart:
 	mt76x02_watchdog_reset(dev);
-
-	mutex_lock(&dev->mt76.mmio.mcu.mutex);
-	dev->mcu_timeout = 0;
-	mutex_unlock(&dev->mt76.mmio.mcu.mutex);
 
 	dev->tx_hang_reset++;
 	dev->tx_hang_check = 0;

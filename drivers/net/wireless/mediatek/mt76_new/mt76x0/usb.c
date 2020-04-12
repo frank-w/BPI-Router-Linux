@@ -32,6 +32,7 @@ static struct usb_device_id mt76x0_device_table[] = {
 	{ USB_DEVICE(0x20f4, 0x806b) },	/* TRENDnet TEW-806UBH  */
 	{ USB_DEVICE(0x7392, 0xc711) }, /* Devolo Wifi ac Stick */
 	{ USB_DEVICE(0x0df6, 0x0079) }, /* Sitecom Europe B.V. ac  Stick */
+	{ USB_DEVICE(0x2357, 0x0123) }, /* TP-LINK T2UHP */
 	/* TP-LINK Archer T1U */
 	{ USB_DEVICE(0x2357, 0x0105), .driver_info = 1, },
 	/* MT7630U */
@@ -125,6 +126,7 @@ static const struct ieee80211_ops mt76x0u_ops = {
 	.configure_filter = mt76x02_configure_filter,
 	.bss_info_changed = mt76x02_bss_info_changed,
 	.sta_state = mt76_sta_state,
+	.sta_pre_rcu_remove = mt76_sta_pre_rcu_remove,
 	.set_key = mt76x02_set_key,
 	.conf_tx = mt76x02_conf_tx,
 	.sw_scan_start = mt76_sw_scan,
@@ -171,7 +173,13 @@ static int mt76x0u_init_hardware(struct mt76x02_dev *dev, bool reset)
 static int mt76x0u_register_device(struct mt76x02_dev *dev)
 {
 	struct ieee80211_hw *hw = dev->mt76.hw;
+	struct mt76_usb *usb = &dev->mt76.usb;
 	int err;
+
+	usb->mcu.data = devm_kmalloc(dev->mt76.dev, MCU_RESP_URB_SIZE,
+				     GFP_KERNEL);
+	if (!usb->mcu.data)
+		return -ENOMEM;
 
 	err = mt76u_alloc_queues(&dev->mt76);
 	if (err < 0)
@@ -181,15 +189,11 @@ static int mt76x0u_register_device(struct mt76x02_dev *dev)
 	if (err < 0)
 		goto out_err;
 
+	/* check hw sg support in order to enable AMSDU */
+	hw->max_tx_fragments = dev->mt76.usb.sg_en ? MT_TX_SG_MAX_SIZE : 1;
 	err = mt76x0_register_device(dev);
 	if (err < 0)
 		goto out_err;
-
-	/* check hw sg support in order to enable AMSDU */
-	if (dev->mt76.usb.sg_en)
-		hw->max_tx_fragments = MT_TX_SG_MAX_SIZE;
-	else
-		hw->max_tx_fragments = 1;
 
 	set_bit(MT76_STATE_INITIALIZED, &dev->mphy.state);
 
@@ -239,7 +243,7 @@ static int mt76x0u_probe(struct usb_interface *usb_intf,
 	usb_set_intfdata(usb_intf, dev);
 
 	mt76x02u_init_mcu(mdev);
-	ret = mt76u_init(mdev, usb_intf);
+	ret = mt76u_init(mdev, usb_intf, false);
 	if (ret)
 		goto err;
 
