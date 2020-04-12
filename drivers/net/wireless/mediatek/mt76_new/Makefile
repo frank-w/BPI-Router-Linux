@@ -23,3 +23,7 @@ mt76x02-lib-y := mt76x02_util.o mt76x02_mac.o mt76x02_mcu.o \
 		 mt76x02_dfs.o mt76x02_beacon.o
 
 mt76x02-usb-y := mt76x02_usb_mcu.o mt76x02_usb_core.o
+
+CFLAGS_trace.o := -I$(src)
+CFLAGS_usb_trace.o := -I$(src)
+CFLAGS_mt76x02_trace.o := -I$(src)
