@@ -247,7 +247,7 @@ static int scpsys_sram_enable(struct scp_domain *scpd, void __iomem *ctl_addr)
 		 * MT7622_POWER_DOMAIN_WB and thus just a trivial setup
 		 * is applied here.
 		 */
-		usleep_range(12000, 12100);
+		msleep(50);
 	} else {
 		/* Either wait until SRAM_PDN_ACK all 1 or 0 */
 		int ret = readl_poll_timeout(ctl_addr, tmp,
