@@ -1271,13 +1271,8 @@ mt7530_port_vlan_add(struct dsa_switch *ds, int port,
 	/* The port is kept as VLAN-unaware if bridge with vlan_filtering not
 	 * being set.
 	 */
-	if (!dsa_port_is_vlan_filtering(&ds->ports[port])){
-		/* Enable VLAN tagged in port-based vlan setting. */
-		if ((vlan->vid_begin != 0) && (vlan->vid_end != 0))
-			mt7530_rmw(priv, MT7530_PCR_P(port), EG_TAG(3),
-				   EG_TAG(2));
+	if (!dsa_port_is_vlan_filtering(&ds->ports[port]))
 		return;
-	}
 
 	mutex_lock(&priv->reg_mutex);
 
@@ -1307,13 +1302,8 @@ mt7530_port_vlan_del(struct dsa_switch *ds, int port,
 	/* The port is kept as VLAN-unaware if bridge with vlan_filtering not
 	 * being set.
 	 */
-	if (!dsa_port_is_vlan_filtering(&ds->ports[port])) {
-		/* Disable VLAN tagged in port-based vlan setting. */
-		if ((vlan->vid_begin != 0) && (vlan->vid_end != 0))
-			mt7530_rmw(priv, MT7530_PCR_P(port), EG_TAG(3),
-				   EG_TAG(0));
+	if (!dsa_port_is_vlan_filtering(&ds->ports[port]))
 		return 0;
-	}
 
 	mutex_lock(&priv->reg_mutex);
 
