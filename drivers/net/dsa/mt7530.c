@@ -1705,8 +1705,6 @@ static bool mt753x_phy_supported(struct dsa_switch *ds, int port,
 static int
 mt7530_pad_setup(struct dsa_switch *ds, const struct phylink_link_state *state)
 {
-	struct mt7530_priv *priv = ds->priv;
-
 	/* Setup TX circuit incluing relevant PAD and driving */
 	mt7530_pad_clk_setup(ds, state->interface);
 
