@@ -234,12 +234,12 @@
 	};
 };
 
-&pcie {
+&pcie0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie0_pins>;
 	status = "okay";
 
-	pcie@0,0 {
+	slot0 {
 		status = "okay";
 	};
 };
