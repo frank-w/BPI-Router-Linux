@@ -2784,6 +2784,23 @@ static int mtk_ethtool_set_pauseparam(struct net_device *dev,
 	return phylink_ethtool_set_pauseparam(mac->phylink, pause);
 }
 
+static int
+mtk_ethtool_set_link_ksettings(struct net_device *dev,
+			       const struct ethtool_link_ksettings *cmd)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+
+	return phylink_ethtool_ksettings_set(mac->phylink, cmd);
+}
+
+static int mtk_ethtool_get_link_ksettings(struct net_device *dev,
+					  struct ethtool_link_ksettings *cmd)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+
+	return phylink_ethtool_ksettings_get(mac->phylink, cmd);
+}
+
 static const struct ethtool_ops mtk_ethtool_ops = {
 	.get_link_ksettings	= mtk_get_link_ksettings,
 	.set_link_ksettings	= mtk_set_link_ksettings,
@@ -2799,6 +2816,8 @@ static const struct ethtool_ops mtk_ethtool_ops = {
 	.set_rxnfc              = mtk_set_rxnfc,
 	.get_pauseparam		= mtk_ethtool_get_pauseparam,
 	.set_pauseparam		= mtk_ethtool_set_pauseparam,
+	.get_link_ksettings	= mtk_ethtool_get_link_ksettings,
+	.set_link_ksettings	= mtk_ethtool_set_link_ksettings,
 };
 
 static const struct net_device_ops mtk_netdev_ops = {
