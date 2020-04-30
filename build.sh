@@ -553,18 +553,19 @@ EOF
 }
 
 function build {
+	echo Cleanup Kernel Build
+	rm arch/arm/boot/zImage 2>/dev/null
+	rm arch/arm/boot/zImage-dtb 2>/dev/null
+	rm arch/arm64/boot/Image 2>/dev/null
+	rm ./uImage* 2>/dev/null
+	rm ${board}.dtb 2>/dev/null
+
 	check_dep "build"
 	if [[ $? -ne 0 ]];then exit 1;fi
+
 	get_version
 
 	if [ -e $DOTCONFIG ]; then
-		echo Cleanup Kernel Build
-		rm arch/arm/boot/zImage 2>/dev/null
-		rm arch/arm/boot/zImage-dtb 2>/dev/null
-		rm arch/arm64/boot/Image 2>/dev/null
-		rm ./uImage* 2>/dev/null
-		rm ${board}.dtb 2>/dev/null
-
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
