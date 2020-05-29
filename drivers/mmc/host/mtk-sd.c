@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
+#include <linux/reset.h>
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/core.h>
@@ -432,6 +433,7 @@ struct msdc_host {
 	struct msdc_save_para save_para; /* used when gate HCLK */
 	struct msdc_tune_para def_tune_para; /* default tune setting */
 	struct msdc_tune_para saved_tune_para; /* tune result of CMD21/CMD19 */
+	struct reset_control *reset;
 };
 
 static const struct mtk_mmc_compatible mt8135_compat = {
@@ -2208,6 +2210,10 @@ static int msdc_drv_probe(struct platform_device *pdev)
 			host->top_base = NULL;
 	}
 
+	host->reset = devm_reset_control_get_optional_exclusive(&pdev->dev, "hrst");
+	if (PTR_ERR(host->reset) == -EPROBE_DEFER)
+		return PTR_ERR(host->reset);
+
 	ret = mmc_regulator_get_supply(mmc);
 	if (ret)
 		goto host_free;
@@ -2318,6 +2324,12 @@ static int msdc_drv_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, mmc);
 	msdc_ungate_clock(host);
+
+	if (!IS_ERR(host->reset)) {
+		reset_control_assert(host->reset);
+		usleep_range(10, 50);
+		reset_control_deassert(host->reset);
+	}
 	msdc_init_hw(host);
 
 	ret = devm_request_irq(&pdev->dev, host->irq, msdc_irq,
