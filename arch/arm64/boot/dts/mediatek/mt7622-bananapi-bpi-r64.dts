@@ -261,23 +261,16 @@
 	};
 };
 
-&pcie0 {
+&pcie {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pcie0_pins>;
+	pinctrl-0 = <&pcie0_pins>, <&pcie1_pins>;
 	status = "okay";
 
-	slot0 {
+	pcie@0,0 {
 		status = "okay";
 	};
 
-};
-
-&pcie1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pcie1_pins>;
-	status = "okay";
-
-	slot1 {
+	pcie@1,0 {
 		status = "okay";
 	};
 };
