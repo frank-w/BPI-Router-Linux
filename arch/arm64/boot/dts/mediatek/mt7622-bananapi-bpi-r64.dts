@@ -570,7 +570,7 @@
 &spi1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spic1_pins>;
-	status = "okay";
+	//status = "okay";
 };
 
 &ssusb {
@@ -592,7 +592,7 @@
 &uart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart2_pins>;
-	status = "okay";
+	//status = "okay";
 };
 
 &watchdog {
