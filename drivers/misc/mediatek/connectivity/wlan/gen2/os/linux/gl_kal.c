@@ -4530,7 +4530,7 @@ INT_32 kalHaltLock(UINT_32 waitMs)
 				"kalIoctl was executed longer than %u ms, show backtrace of tx_thread!\n",
 				kalGetTimeTick() - rHaltCtrl.u4HoldStart);
 			if (prGlueInfo)
-				show_stack(prGlueInfo->main_thread, NULL);
+				show_stack(prGlueInfo->main_thread, NULL,KERN_DEFAULT);
 #else
 			DBGLOG(INIT, ERROR,
 				"kalIoctl was executed longer than %u ms!\n",
@@ -4541,7 +4541,7 @@ INT_32 kalHaltLock(UINT_32 waitMs)
 				rHaltCtrl.owner->comm, rHaltCtrl.owner->pid,
 				kalGetTimeTick() - rHaltCtrl.u4HoldStart);
 #ifdef MTK_WCN_BUILT_IN_DRIVER
-			show_stack(rHaltCtrl.owner, NULL);
+			show_stack(rHaltCtrl.owner, NULL, KERN_DEFAULT);
 #endif
 		}
 		return i4Ret;
