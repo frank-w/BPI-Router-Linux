@@ -907,7 +907,7 @@ static struct cfg80211_ops mtk_wlan_ops = {
 	.cancel_remain_on_channel = mtk_cfg80211_cancel_remain_on_channel,
 	.mgmt_tx = mtk_cfg80211_mgmt_tx,
 /* .mgmt_tx_cancel_wait        = mtk_cfg80211_mgmt_tx_cancel_wait, */
-	.mgmt_frame_register = mtk_cfg80211_mgmt_frame_register,
+	.update_mgmt_frame_registrations = mtk_cfg80211_update_mgmt_frame_register,
 #ifdef CONFIG_NL80211_TESTMODE
 	.testmode_cmd = mtk_cfg80211_testmode_cmd,
 #endif

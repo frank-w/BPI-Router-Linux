@@ -1365,9 +1365,9 @@ int mtk_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device *ndev)
 	return 0;
 }
 
-void mtk_cfg80211_mgmt_frame_register(IN struct wiphy *wiphy,
+void mtk_cfg80211_update_mgmt_frame_register(IN struct wiphy *wiphy,
 				      IN struct wireless_dev *wdev,
-				      IN u16 frame_type, IN bool reg)
+				      IN struct mgmt_frame_regs *upd)
 {
 #if 0
 	P_MSG_P2P_MGMT_FRAME_REGISTER_T prMgmtFrameRegister = (P_MSG_P2P_MGMT_FRAME_REGISTER_T) NULL;
@@ -1376,10 +1376,25 @@ void mtk_cfg80211_mgmt_frame_register(IN struct wiphy *wiphy,
 
 	do {
 
-		DBGLOG(REQ, LOUD, "mtk_cfg80211_mgmt_frame_register\n");
+		DBGLOG(REQ, LOUD, "mtk_cfg80211_update_mgmt_frame_register\n");
 
 		prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
 
+		/*
+		MAC_FRAME_PROBE_REQ = IEEE80211_STYPE_PROBE_REQ = 0x40
+		MAC_FRAME_ACTION = IEEE80211_STYPE_ACTION = 0xd0
+		*/
+
+
+		if (upd->interface_stypes & BIT(IEEE80211_STYPE_PROBE_REQ >> 4))
+			prGlueInfo->u4OsMgmtFrameFilter |= PARAM_PACKET_FILTER_PROBE_REQ;
+		else if (upd->interface_stypes & BIT(IEEE80211_STYPE_ACTION >> 4))
+			prGlueInfo->u4OsMgmtFrameFilter |= PARAM_PACKET_FILTER_ACTION_FRAME;
+		else if (! upd->interface_stypes) { //unregister should be empty
+			prGlueInfo->u4OsMgmtFrameFilter &= ~PARAM_PACKET_FILTER_PROBE_REQ;
+			prGlueInfo->u4OsMgmtFrameFilter &= ~PARAM_PACKET_FILTER_ACTION_FRAME;
+		}
+/*
 		switch (frame_type) {
 		case MAC_FRAME_PROBE_REQ:
 			if (reg) {
@@ -1403,6 +1418,9 @@ void mtk_cfg80211_mgmt_frame_register(IN struct wiphy *wiphy,
 			DBGLOG(REQ, TRACE, "Ask frog to add code for mgmt:%x\n", frame_type);
 			break;
 		}
+*/
+
+		printk(KERN_ALERT "DEBUG: Passed %s %d frame-filter:0x%x \n",__FUNCTION__,__LINE__,prGlueInfo->u4OsMgmtFrameFilter);
 
 		if (prGlueInfo->prAdapter != NULL) {
 			/* prGlueInfo->ulFlag |= GLUE_FLAG_FRAME_FILTER_AIS; */

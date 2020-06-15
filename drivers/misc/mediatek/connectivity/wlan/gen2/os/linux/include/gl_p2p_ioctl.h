@@ -549,7 +549,7 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, st
 
 int mtk_p2p_cfg80211_set_channel(struct wiphy *wiphy, struct cfg80211_chan_def *chandef);
 
-void mtk_p2p_cfg80211_mgmt_frame_register(struct wiphy *wiphy, struct wireless_dev *wdev, u16 frame_type, bool reg);
+void mtk_p2p_cfg80211_update_mgmt_frame_register(struct wiphy *wiphy, struct wireless_dev *wdev, struct mgmt_frame_regs *upd);
 
 int
 mtk_p2p_cfg80211_set_bitrate_mask(IN struct wiphy *wiphy,
