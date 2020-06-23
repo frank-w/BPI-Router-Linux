@@ -1,0 +1,19 @@
+name: build
+
+on:
+  push
+      
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/cache@v2
+    - uses: actions/checkout@v2
+    - name: Install Dependencies
+      run: apt install apt install gcc-arm-linux-gnueabihf libc6-armhf-cross u-boot-tools bc make gcc libc6-dev libncurses5-dev libssl-dev bison flex 
+    - name: Import Config
+      run: ./build.sh importconfig
+    - name: Compile Kernel
+      run: ./build.sh build
