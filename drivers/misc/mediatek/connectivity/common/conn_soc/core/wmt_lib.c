@@ -177,7 +177,7 @@ INT32 wmt_lib_init(VOID)
 	iRet = wmt_conf_read_file();
 	if (iRet) {
 		WMT_ERR_FUNC("read wmt config file fail(%d)\n", iRet);
-		return -1;
+		//return -1;
 	}
 
 	pThraed = &gDevWmt.thread;
