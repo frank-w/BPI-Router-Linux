@@ -4,7 +4,7 @@ subdir-ccflags-y += \
 	-I$(srctree)/$(src)/core/include \
 	-I$(srctree)/$(src)/include \
 	-I$(srctree)/drivers/misc/mediatek/btif/common/inc \
-	-I$(srctree)/$(src)/$(subst ",,$(CONFIG_MTK_PLATFORM))/include
+	-I$(srctree)/$(src)/$(MTK_PLATFORM)/include
 
 EXT_FLAG=_soc
 COMMON_SRC_PATH := $(src)
@@ -73,8 +73,8 @@ mtk_stp_wmt$(EXT_FLAG)-objs	:= 	$(CORE_OBJS) \
 	 	 	 	 	 	 	 	$(LINUX_PRI_OBJS) \
 								$(LINUX_PUB_OBJS)
 
-mtk_stp_wmt$(EXT_FLAG)-objs += $(subst ",,$(CONFIG_MTK_PLATFORM))/wmt_plat_alps.o
-mtk_stp_wmt$(EXT_FLAG)-objs += $(subst ",,$(CONFIG_MTK_PLATFORM))/mtk_wcn_consys_hw.o
+mtk_stp_wmt$(EXT_FLAG)-objs += $(MTK_PLATFORM)/wmt_plat_alps.o
+mtk_stp_wmt$(EXT_FLAG)-objs += $(MTK_PLATFORM)/mtk_wcn_consys_hw.o
 
 # WMT LIBRARY BT CONTROL DRIVER
 obj-$(CONFIG_MTK_COMBO_BT) 	+= mtk_stp_bt$(EXT_FLAG).o
@@ -90,5 +90,5 @@ ifeq ($(CONFIG_MTK_COMBO), y)
 subdir-ccflags-y += -DMTK_WCN_BUILT_IN_DRIVER
 obj-y += core/
 obj-y += linux/
-obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
+obj-y += $(MTK_PLATFORM)/
 endif
