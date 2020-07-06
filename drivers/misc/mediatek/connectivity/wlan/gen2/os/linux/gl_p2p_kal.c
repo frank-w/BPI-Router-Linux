@@ -1067,7 +1067,7 @@ kalP2PGCIndicateConnectionStatus(IN P_GLUE_INFO_T prGlueInfo,
 			/* Disconnect, what if u2StatusReason == 0? */
 			cfg80211_disconnected(prGlueP2pInfo->prDevHandler,	/* struct net_device * dev, */
 					      u2StatusReason, pucRxIEBuf, u2RxIELen, 
-					      eStatus == WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY ? true : false,
+					      eStatus == WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY,
 					      GFP_KERNEL);
 		}
 

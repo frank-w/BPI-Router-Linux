@@ -403,7 +403,7 @@ int mtk_wcn_btif_loopback_ctrl(unsigned long u_id, ENUM_BTIF_LPBK_MODE enable)
 	if (p_btif == NULL)
 		return E_BTIF_INVAL_PARAM;
 	i_ret =
-	    btif_lpbk_ctrl(p_btif, enable == BTIF_LPBK_ENABLE ? true : false);
+	    btif_lpbk_ctrl(p_btif, enable == BTIF_LPBK_ENABLE);
 
 	return i_ret;
 }
@@ -589,7 +589,7 @@ int btif_loopback_ctrl_no_id(ENUM_BTIF_LPBK_MODE enable)
 	p_mtk_btif p_btif = &g_btif[0];
 
 	i_ret =
-	    btif_lpbk_ctrl(p_btif, enable == BTIF_LPBK_ENABLE ? true : false);
+	    btif_lpbk_ctrl(p_btif, enable == BTIF_LPBK_ENABLE);
 
 	return i_ret;
 }
