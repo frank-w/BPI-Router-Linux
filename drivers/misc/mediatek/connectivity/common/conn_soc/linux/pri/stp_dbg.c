@@ -1998,7 +1998,7 @@ MTKSTP_DBG_T *stp_dbg_init(void *btm_half)
 	stp_dbg = kzalloc(sizeof(MTKSTP_DBG_T), GFP_KERNEL);
 	if (stp_dbg == NULL)
 		goto ERR_EXIT1;
-	if (IS_ERR(stp_dbg)) {
+	if (!stp_dbg) {
 		STP_DBG_ERR_FUNC("-ENOMEM\n");
 		goto ERR_EXIT1;
 	}
