@@ -2347,7 +2347,6 @@ int
 mtk_p2p_wext_invitation_request(IN struct net_device *prDev,
 				IN struct iw_request_info *info, IN OUT union iwreq_data *wrqu, IN OUT char *extra)
 {
-	int i4Status = 0;
 #if 0
 	P_ADAPTER_T prAdapter = (P_ADAPTER_T) NULL;
 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) NULL;
@@ -2408,7 +2407,7 @@ mtk_p2p_wext_invitation_request(IN struct net_device *prDev,
 	} while (FALSE);
 #endif
 
-	return i4Status;
+	return 0;
 
 }
 
@@ -2432,7 +2431,6 @@ int
 mtk_p2p_wext_invitation_abort(IN struct net_device *prDev,
 			      IN struct iw_request_info *info, IN OUT union iwreq_data *wrqu, IN OUT char *extra)
 {
-	int i4Status = 0;
 #if 0
 	P_ADAPTER_T prAdapter = (P_ADAPTER_T) NULL;
 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) NULL;
@@ -2487,7 +2485,7 @@ mtk_p2p_wext_invitation_abort(IN struct net_device *prDev,
 	} while (FALSE);
 #endif
 
-	return i4Status;
+	return 0;
 
 }
 

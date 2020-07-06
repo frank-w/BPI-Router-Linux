@@ -390,7 +390,6 @@ int hal_btif_dma_clk_ctrl(P_MTK_DMA_INFO_STR p_dma_info, ENUM_CLOCK_CTRL flag)
 
 int hal_btif_dma_hw_init(P_MTK_DMA_INFO_STR p_dma_info)
 {
-	int i_ret = 0;
 	unsigned int dat = 0;
 	unsigned long base = p_dma_info->base;
 	unsigned long addr_h = 0;
@@ -465,7 +464,7 @@ int hal_btif_dma_hw_init(P_MTK_DMA_INFO_STR p_dma_info)
 		hal_btif_dma_ier_ctrl(p_dma_info, false);
 	}
 
-	return i_ret;
+	return 0;
 }
 
 /*****************************************************************************
@@ -584,7 +583,6 @@ int btif_rx_dma_ctrl(P_MTK_DMA_INFO_STR p_dma_info, ENUM_DMA_CTRL ctrl_id)
 *****************************************************************************/
 int hal_btif_vfifo_reset(P_MTK_DMA_INFO_STR p_dma_info)
 {
-	unsigned int i_ret = -1;
 	P_DMA_VFIFO p_vfifo = p_dma_info->p_vfifo;
 	P_MTK_BTIF_DMA_VFIFO p_mtk_dma_vfifo = container_of(p_vfifo,
 							    MTK_BTIF_DMA_VFIFO,
@@ -596,7 +594,7 @@ int hal_btif_vfifo_reset(P_MTK_DMA_INFO_STR p_dma_info)
 	p_mtk_dma_vfifo->wpt = 0;
 	p_mtk_dma_vfifo->last_wpt_wrap = 0;
 	BTIF_TRC_FUNC();
-	return i_ret;
+	return -1;
 }
 
 /*****************************************************************************
@@ -1372,9 +1370,7 @@ int hal_dma_pm_ops(P_MTK_DMA_INFO_STR p_dma_info, MTK_BTIF_PM_OPID opid)
 int hal_dma_receive_data(P_MTK_DMA_INFO_STR p_dma_info,
 			 unsigned char *p_buf, const unsigned int max_len)
 {
-	unsigned int i_ret = -1;
-
-	return i_ret;
+	return -1;
 }
 #endif
 

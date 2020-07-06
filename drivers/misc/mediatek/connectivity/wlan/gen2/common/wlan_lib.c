@@ -1686,7 +1686,6 @@ wlanAdapterStart(IN P_ADAPTER_T prAdapter,
 WLAN_STATUS wlanAdapterStop(IN P_ADAPTER_T prAdapter)
 {
 	UINT_32 i, u4Value = 0;
-	WLAN_STATUS u4Status = WLAN_STATUS_SUCCESS;
 
 	ASSERT(prAdapter);
 
@@ -1772,7 +1771,7 @@ WLAN_STATUS wlanAdapterStop(IN P_ADAPTER_T prAdapter)
 	nicRestoreSpiDefMode(prAdapter);
 #endif
 
-	return u4Status;
+	return WLAN_STATUS_SUCCESS;
 }				/* wlanAdapterStop */
 
 #if 0

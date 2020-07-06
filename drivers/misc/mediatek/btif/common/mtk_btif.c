@@ -955,7 +955,6 @@ int _btif_irq_reg(P_MTK_BTIF_IRQ_STR p_irq,
 
 int _btif_irq_free(P_MTK_BTIF_IRQ_STR p_irq, void *data)
 {
-	int i_ret = 0;
 	unsigned int eint_num = p_irq->irq_id;
 
 	if ((p_irq->is_irq_sup) && (p_irq->reg_flag)) {
@@ -964,7 +963,7 @@ int _btif_irq_free(P_MTK_BTIF_IRQ_STR p_irq, void *data)
 		p_irq->reg_flag = false;
 	}
 /*do nothing for this operation*/
-	return i_ret;
+	return 0;
 }
 
 int _btif_irq_ctrl(P_MTK_BTIF_IRQ_STR p_irq, bool en)
@@ -2079,10 +2078,8 @@ static ENUM_BTIF_STATE _btif_state_get(p_mtk_btif p_btif)
 
 static int _btif_state_release(p_mtk_btif p_btif)
 {
-	int i_ret = 0;
-
 	BTIF_MUTEX_UNLOCK(&(p_btif->state_mtx));
-	return i_ret;
+	return 0;
 }
 
 static int _btif_state_deinit(p_mtk_btif p_btif)
@@ -2427,8 +2424,6 @@ btm_init_err:
 
 static int _btif_tx_ctx_deinit(p_mtk_btif p_btif)
 {
-	int i_ret = 0;
-
 	if (p_btif->tx_ctx == BTIF_TX_SINGLE_CTX) {
 		if (p_btif->p_tx_wq) {
 			destroy_workqueue(p_btif->p_tx_wq);
@@ -2441,7 +2436,7 @@ static int _btif_tx_ctx_deinit(p_mtk_btif p_btif)
 			p_btif->p_tx_fifo = NULL;
 		}
 	}
-	return i_ret;
+	return 0;
 }
 
 static int _btif_rx_btm_init(p_mtk_btif p_btif)

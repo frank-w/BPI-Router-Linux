@@ -349,7 +349,6 @@ err:
 
 INT32 wmt_gpio_deinit(VOID)
 {
-	INT32 iret = 0;
 	UINT32 i;
 	UINT32 j;
 
@@ -367,5 +366,5 @@ INT32 wmt_gpio_deinit(VOID)
 		gpio_ctrl_info.pinctrl_info = NULL;
 	}
 
-	return iret;
+	return 0;
 }

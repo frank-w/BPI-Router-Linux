@@ -3009,8 +3009,6 @@ WLAN_STATUS p2pRunEventAAAComplete(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T p
 /*----------------------------------------------------------------------------*/
 WLAN_STATUS p2pRunEventAAASuccess(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
 {
-	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
-
 	do {
 		ASSERT_BREAK((prAdapter != NULL) && (prStaRec != NULL));
 
@@ -3019,7 +3017,7 @@ WLAN_STATUS p2pRunEventAAASuccess(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T pr
 
 	} while (FALSE);
 
-	return rStatus;
+	return WLAN_STATUS_SUCCESS;
 }				/* p2pRunEventAAASuccess */
 
 /*----------------------------------------------------------------------------*/
@@ -3033,7 +3031,6 @@ WLAN_STATUS p2pRunEventAAASuccess(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T pr
 /*----------------------------------------------------------------------------*/
 WLAN_STATUS p2pRxPublicActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 {
-	WLAN_STATUS rWlanStatus = WLAN_STATUS_SUCCESS;
 	P_P2P_PUBLIC_ACTION_FRAME_T prPublicActionFrame = (P_P2P_PUBLIC_ACTION_FRAME_T) NULL;
 	P_P2P_FSM_INFO_T prP2pFsmInfo = (P_P2P_FSM_INFO_T) NULL;
 
@@ -3046,7 +3043,7 @@ WLAN_STATUS p2pRxPublicActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwR
 	DBGLOG(P2P, TRACE, "RX Public Action Frame Token:%d.\n", prPublicActionFrame->ucDialogToken);
 
 	if (prPublicActionFrame->ucCategory != CATEGORY_PUBLIC_ACTION)
-		return rWlanStatus;
+		return WLAN_STATUS_SUCCESS;
 
 	switch (prPublicActionFrame->ucAction) {
 	case ACTION_PUBLIC_WIFI_DIRECT:
@@ -3060,12 +3057,11 @@ WLAN_STATUS p2pRxPublicActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwR
 		break;
 	}
 
-	return rWlanStatus;
+	return WLAN_STATUS_SUCCESS;
 }				/* p2pRxPublicActionFrame */
 
 WLAN_STATUS p2pRxActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 {
-	WLAN_STATUS rWlanStatus = WLAN_STATUS_SUCCESS;
 	P_P2P_ACTION_FRAME_T prP2pActionFrame = (P_P2P_ACTION_FRAME_T) NULL;
 	UINT_8 aucOui[3] = VENDOR_OUI_WFA_SPECIFIC;
 
@@ -3088,7 +3084,7 @@ WLAN_STATUS p2pRxActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 
 	} while (FALSE);
 
-	return rWlanStatus;
+	return WLAN_STATUS_SUCCESS;
 }				/* p2pRxActionFrame */
 
 VOID

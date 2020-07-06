@@ -467,10 +467,8 @@ INT32 osal_wait_for_event_timeout(P_OSAL_EVENT pEvent, INT32(*condition) (PVOID)
 
 INT32 osal_trigger_event(P_OSAL_EVENT pEvent)
 {
-	INT32 ret = 0;
-
 	wake_up_interruptible(&pEvent->waitQueue);
-	return ret;
+	return 0;
 }
 
 INT32 osal_event_deinit(P_OSAL_EVENT pEvent)

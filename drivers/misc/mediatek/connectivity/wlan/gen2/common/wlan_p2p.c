@@ -1256,7 +1256,6 @@ WLAN_STATUS
 wlanoidGetSecCheckResponse(IN P_ADAPTER_T prAdapter,
 			   IN PVOID pvQueryBuffer, IN UINT_32 u4QueryBufferLen, OUT PUINT_32 pu4QueryInfoLen)
 {
-	WLAN_STATUS rWlanStatus = WLAN_STATUS_SUCCESS;
 	/* P_WLAN_MAC_HEADER_T prWlanHdr = (P_WLAN_MAC_HEADER_T)NULL; */
 	P_GLUE_INFO_T prGlueInfo;
 
@@ -1279,7 +1278,7 @@ wlanoidGetSecCheckResponse(IN P_ADAPTER_T prAdapter,
 	kalMemCopy((PUINT_8) (pvQueryBuffer + OFFSET_OF(IW_P2P_TRANSPORT_STRUCT, aucBuffer)),
 		   prGlueInfo->prP2PInfo->aucSecCheckRsp, u4QueryBufferLen);
 
-	return rWlanStatus;
+	return WLAN_STATUS_SUCCESS;
 }				/* end of wlanoidGetSecCheckResponse() */
 #endif
 

@@ -191,11 +191,9 @@ static int _get_btif_tx_fifo_room(P_MTK_BTIF_INFO_STR p_btif_info)
 
 static int _btif_tx_fifo_reset(P_MTK_BTIF_INFO_STR p_btif_info)
 {
-	int i_ret = 0;
-
 	if (p_btif_info->p_tx_fifo != NULL)
 		kfifo_reset(p_btif_info->p_tx_fifo);
-	return i_ret;
+	return 0;
 }
 
 #endif
@@ -630,7 +628,6 @@ int btif_sleep_ctrl(P_MTK_BTIF_INFO_STR p_btif, bool en)
 
 static int btif_tx_thr_set(P_MTK_BTIF_INFO_STR p_btif, unsigned int thr_count)
 {
-	int i_ret = -1;
 	unsigned long base = p_btif->base;
 	unsigned int value = 0;
 
@@ -643,7 +640,7 @@ static int btif_tx_thr_set(P_MTK_BTIF_INFO_STR p_btif, unsigned int thr_count)
 /*write back to BTIF_TRI_LVL*/
 	btif_reg_sync_writel(value, BTIF_TRI_LVL(base));
 
-	return i_ret;
+	return -1;
 }
 
 /*****************************************************************************
@@ -1137,8 +1134,6 @@ int hal_btif_raise_wak_sig(P_MTK_BTIF_INFO_STR p_btif)
 *****************************************************************************/
 int hal_btif_dump_reg(P_MTK_BTIF_INFO_STR p_btif, ENUM_BTIF_REG_ID flag)
 {
-/*Chaozhong: To be implement*/
-	int i_ret = -1;
 	int idx = 0;
 	/*unsigned long irq_flag = 0;*/
 	unsigned long base = p_btif->base;
@@ -1152,7 +1147,7 @@ int hal_btif_dump_reg(P_MTK_BTIF_INFO_STR p_btif, ENUM_BTIF_REG_ID flag)
 		/*spin_unlock_irqrestore(&(g_clk_cg_spinlock), irq_flag);*/
 		BTIF_ERR_FUNC("%s: clock is off, this should never happen!!!\n",
 			      __FILE__);
-		return i_ret;
+		return -1;
 	}
 #endif
 	lsr = BTIF_READ32(BTIF_LSR(base));
@@ -1203,7 +1198,7 @@ int hal_btif_dump_reg(P_MTK_BTIF_INFO_STR p_btif, ENUM_BTIF_REG_ID flag)
 	BTIF_INFO_FUNC("Tx data is %s\n",
 		       (lsr & BTIF_LSR_TEMT_BIT) ? "empty" : "not empty");
 
-	return i_ret;
+	return -1;
 }
 
 /*****************************************************************************

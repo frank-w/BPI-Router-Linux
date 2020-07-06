@@ -1298,7 +1298,6 @@ WLAN_STATUS
 p2pFuncTxMgmtFrame(IN P_ADAPTER_T prAdapter,
 		   IN P_P2P_MGMT_TX_REQ_INFO_T prMgmtTxReqInfo, IN P_MSDU_INFO_T prMgmtTxMsdu, IN UINT_64 u8Cookie)
 {
-	WLAN_STATUS rWlanStatus = WLAN_STATUS_SUCCESS;
 	P_MSDU_INFO_T prTxMsduInfo = (P_MSDU_INFO_T) NULL;
 	P_WLAN_MAC_HEADER_T prWlanHdr = (P_WLAN_MAC_HEADER_T) NULL;
 	P_STA_RECORD_T prStaRec = (P_STA_RECORD_T) NULL;
@@ -1370,7 +1369,7 @@ p2pFuncTxMgmtFrame(IN P_ADAPTER_T prAdapter,
 
 	} while (FALSE);
 
-	return rWlanStatus;
+	return WLAN_STATUS_SUCCESS;
 }				/* p2pFuncTxMgmtFrame */
 
 VOID p2pFuncSetChannel(IN P_ADAPTER_T prAdapter, IN P_RF_CHANNEL_INFO_T prRfChannelInfo)
@@ -2053,7 +2052,6 @@ BOOLEAN p2pFuncParseCheckForP2PInfoElem(IN P_ADAPTER_T prAdapter, IN PUINT_8 puc
 /*----------------------------------------------------------------------------*/
 BOOLEAN p2pFuncValidateProbeReq(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb, OUT PUINT_32 pu4ControlFlags)
 {
-	BOOLEAN fgIsReplyProbeRsp = FALSE;
 	P_P2P_FSM_INFO_T prP2pFsmInfo = (P_P2P_FSM_INFO_T) NULL;
 
 	DEBUGFUNC("p2pFuncValidateProbeReq");
@@ -2074,7 +2072,7 @@ BOOLEAN p2pFuncValidateProbeReq(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb,
 
 	} while (FALSE);
 
-	return fgIsReplyProbeRsp;
+	return FALSE;
 
 }				/* end of p2pFuncValidateProbeReq() */
 

@@ -5221,10 +5221,9 @@ wlanoidSetMcrWrite(IN P_ADAPTER_T prAdapter,
 #if 1
 		/* low power test special command */
 		if (prMcrWrInfo->u4McrOffset == 0x11111110) {
-			WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
 			/* DbgPrint("Enter test mode\n"); */
 			prAdapter->fgTestMode = TRUE;
-			return rStatus;
+			return WLAN_STATUS_SUCCESS;
 		}
 		if (prMcrWrInfo->u4McrOffset == 0x11111111) {
 			/* DbgPrint("nicpmSetAcpiPowerD3\n"); */
@@ -5256,10 +5255,9 @@ wlanoidSetMcrWrite(IN P_ADAPTER_T prAdapter,
 #if 1
 		/* low power test special command */
 		if (prMcrWrInfo->u4McrOffset == 0x11111110) {
-			WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
 			/* DbgPrint("Enter test mode\n"); */
 			prAdapter->fgTestMode = TRUE;
-			return rStatus;
+			return WLAN_STATUS_SUCCESS;
 		}
 		if (prMcrWrInfo->u4McrOffset == 0x11111111) {
 			/* DbgPrint("nicpmSetAcpiPowerD3\n"); */

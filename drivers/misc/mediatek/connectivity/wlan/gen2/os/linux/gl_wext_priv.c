@@ -2646,8 +2646,6 @@ static WLAN_STATUS
 reqExtSetAcpiDevicePowerState(IN P_GLUE_INFO_T prGlueInfo,
 			      IN PVOID pvSetBuffer, IN UINT_32 u4SetBufferLen, OUT PUINT_32 pu4SetInfoLen)
 {
-	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
-
 	ASSERT(prGlueInfo);
 	ASSERT(pvSetBuffer);
 	ASSERT(pu4SetInfoLen);
@@ -2659,7 +2657,7 @@ reqExtSetAcpiDevicePowerState(IN P_GLUE_INFO_T prGlueInfo,
 	/* pvSetBuffer, */
 	/* u4SetBufferLen, */
 	/* pu4SetInfoLen); */
-	return rStatus;
+	return WLAN_STATUS_SUCCESS;
 }
 
 int priv_driver_set_chip_config(IN struct net_device *prNetDev, IN char *pcCommand, IN int i4TotalLen)

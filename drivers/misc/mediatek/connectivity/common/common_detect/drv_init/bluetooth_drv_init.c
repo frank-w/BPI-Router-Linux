@@ -22,7 +22,6 @@
 
 int do_bluetooth_drv_init(int chip_id)
 {
-	int i_ret = -1;
 #if 0
 #if defined(CONFIG_MTK_COMBO_BT) || defined(CONFIG_MTK_COMBO_BT_HCI)
 	WMT_DETECT_INFO_FUNC("start to do bluetooth driver init\n");
@@ -32,5 +31,5 @@ int do_bluetooth_drv_init(int chip_id)
 	WMT_DETECT_INFO_FUNC("CONFIG_MTK_COMBO_BT is not defined\n");
 #endif
 #endif
-	return i_ret;
+	return -1;
 }

@@ -4942,7 +4942,6 @@ WLAN_STATUS
 aisFuncTxMgmtFrame(IN P_ADAPTER_T prAdapter,
 		   IN P_AIS_MGMT_TX_REQ_INFO_T prMgmtTxReqInfo, IN P_MSDU_INFO_T prMgmtTxMsdu, IN UINT_64 u8Cookie)
 {
-	WLAN_STATUS rWlanStatus = WLAN_STATUS_SUCCESS;
 	P_MSDU_INFO_T prTxMsduInfo = (P_MSDU_INFO_T) NULL;
 	P_WLAN_MAC_HEADER_T prWlanHdr = (P_WLAN_MAC_HEADER_T) NULL;
 	P_STA_RECORD_T prStaRec = (P_STA_RECORD_T) NULL;
@@ -5000,7 +4999,7 @@ aisFuncTxMgmtFrame(IN P_ADAPTER_T prAdapter,
 
 	} while (FALSE);
 
-	return rWlanStatus;
+	return WLAN_STATUS_SUCCESS;
 }				/* aisFuncTxMgmtFrame */
 
 /*----------------------------------------------------------------------------*/
