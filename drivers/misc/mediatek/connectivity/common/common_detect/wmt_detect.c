@@ -266,7 +266,6 @@ static struct platform_driver wmt_detect_driver = {
 	.probe = wmt_detect_probe,
 	.remove = wmt_detect_remove,
 	.driver = {
-		.owner = THIS_MODULE,
 		.name = "mediatek,connectivity-combo",
 		.of_match_table = wmt_detect_match,
 	},

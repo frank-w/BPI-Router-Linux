@@ -100,7 +100,6 @@ static struct platform_driver mtk_wmt_dev_drv = {
 	.remove = mtk_wmt_remove,
 	.driver = {
 		   .name = "mt7623consys",
-		   .owner = THIS_MODULE,
 		   .of_match_table = of_match_ptr(apwmt_of_ids),
 		   },
 };
