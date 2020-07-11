@@ -289,6 +289,20 @@ enum mt7530_vlan_port_attr {
 #define MT7531_DBG_CNT(x)		(0x3018 + (x) * 0x100)
 #define  MT7531_DIS_CLR			BIT(31)
 
+/* Register for global mac control register */
+#define  MT7530_GMACCR                  0x30e0
+#define  GMACCR_MAX_RX_PKT_LEN_MASK	GENMASK(1, 0)
+#define  GMACCR_MAX_RX_JUMBO(x)		((x) << 2)
+#define  GMACCR_MAX_RX_JUMBO_MASK	GENMASK(5, 2)
+#define  MT7530_MAX_JUMBO_LEN		15000
+
+enum mt7530_rx_pkt_len_cfg {
+	mt7530_rx_len_1518 = 0,
+	mt7530_rx_len_1536 = 1,
+	mt7530_rx_len_1552 = 2,
+	mt7530_jumbo_frame = 3,
+};
+
 /* Register for MIB */
 #define MT7530_PORT_MIB_COUNTER(x)	(0x4000 + (x) * 0x100)
 #define MT7530_MIB_CCR			0x4fe0

@@ -66,6 +66,8 @@ static const struct mt7530_mib_desc mt7530_mib[] = {
 	MIB_DESC(1, 0xb8, "RxArlDrop"),
 };
 
+static int mt7530_rx_pkt_len[] = {1518, 1536, 1552, MT7530_MAX_JUMBO_LEN};
+
 static int
 core_read_mmd_indirect(struct mt7530_priv *priv, int prtad, int devad)
 {
@@ -1529,6 +1531,40 @@ static void mt753x_port_mirror_del(struct dsa_switch *ds, int port,
 	}
 }
 
+static int
+mt753x_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+{
+       struct mt7530_priv *priv = ds->priv;
+       int maxlen = new_mtu + ETH_HLEN + ETH_FCS_LEN;
+       int len_cfg;
+       int jumbo_cfg;
+
+       if (maxlen > MT7530_MAX_JUMBO_LEN)
+               return -EINVAL;
+
+       for (len_cfg = 0; len_cfg < ARRAY_SIZE(mt7530_rx_pkt_len); len_cfg++)
+               if (maxlen <= mt7530_rx_pkt_len[len_cfg])
+                       break;
+
+       /* set jumbo frame size which is the multiple of 1000 */
+       if (len_cfg == mt7530_jumbo_frame) {
+               maxlen = roundup(maxlen, 1000);
+               jumbo_cfg = maxlen / 1000;
+               mt7530_rmw(priv, MT7530_GMACCR, GMACCR_MAX_RX_JUMBO_MASK,
+                          GMACCR_MAX_RX_JUMBO(jumbo_cfg));
+       }
+
+       mt7530_rmw(priv, MT7530_GMACCR, GMACCR_MAX_RX_PKT_LEN_MASK, len_cfg);
+
+       return 0;
+}
+
+static int
+mt753x_get_max_mtu(struct dsa_switch *ds, int port)
+{
+       return MT7530_MAX_JUMBO_LEN - ETH_HLEN - ETH_FCS_LEN;
+}
+
 static enum dsa_tag_protocol
 mtk_get_tag_protocol(struct dsa_switch *ds, int port,
 		     enum dsa_tag_protocol mp)
@@ -2514,6 +2550,8 @@ static const struct dsa_switch_ops mt7530_switch_ops = {
 	.port_vlan_del		= mt7530_port_vlan_del,
 	.port_mirror_add	= mt753x_port_mirror_add,
 	.port_mirror_del	= mt753x_port_mirror_del,
+	.port_change_mtu	= mt753x_port_change_mtu,
+	.port_max_mtu		= mt753x_get_max_mtu,
 	.phylink_validate	= mt753x_phylink_validate,
 	.phylink_mac_link_state	= mt753x_phylink_mac_link_state,
 	.phylink_mac_config	= mt753x_phylink_mac_config,
