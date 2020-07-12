@@ -1715,7 +1715,7 @@ WLAN_STATUS wlanAdapterStop(IN P_ADAPTER_T prAdapter)
 			i = 0;
 			while (i < CFG_IST_LOOP_COUNT && nicProcessIST(prAdapter) != WLAN_STATUS_NOT_INDICATING) {
 				i++;
-			};
+			}
 
 			/* 3. Wait til RDY bit has been cleaerd */
 			i = 0;
@@ -2642,7 +2642,7 @@ WLAN_STATUS wlanSendNicPowerCtrlCmd(IN P_ADAPTER_T prAdapter, IN UINT_8 ucPowerM
 		}
 
 		break;
-	};
+	}
 
 	/* 4. Free CMD Info Packet. */
 	cmdBufFreeCmdInfo(prAdapter, prCmdInfo);
@@ -2912,7 +2912,7 @@ wlanImageSectionDownload(IN P_ADAPTER_T prAdapter,
 		}
 
 		break;
-	};
+	}
 
 #if CFG_ENABLE_FW_DOWNLOAD_ACK
 	/* 7. Wait for INIT_EVENT_ID_CMD_RESULT */
@@ -2990,7 +2990,7 @@ WLAN_STATUS wlanImageQueryStatus(IN P_ADAPTER_T prAdapter)
 		}
 
 		break;
-	};
+	}
 
 	/* 6. Wait for INIT_EVENT_ID_PENDING_ERROR */
 	do {
@@ -3169,7 +3169,7 @@ WLAN_STATUS wlanConfigWifiFunc(IN P_ADAPTER_T prAdapter, IN BOOLEAN fgEnable, IN
 		}
 
 		break;
-	};
+	}
 
 	/* 6. Free CMD Info Packet. */
 	cmdBufFreeCmdInfo(prAdapter, prCmdInfo);

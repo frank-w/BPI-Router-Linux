@@ -647,7 +647,7 @@ BOOLEAN nicpmSetAcpiPowerD3(IN P_ADAPTER_T prAdapter)
 	i = 0;
 	while (i < CFG_IST_LOOP_COUNT && nicProcessIST(prAdapter) != WLAN_STATUS_NOT_INDICATING) {
 		i++;
-	};
+	}
 
 	/* 5. Remove pending TX */
 	nicTxRelease(prAdapter);

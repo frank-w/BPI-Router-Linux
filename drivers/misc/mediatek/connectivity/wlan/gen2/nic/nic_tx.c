@@ -1126,7 +1126,7 @@ VOID nicTxReturnMsduInfoProfiling(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prM
 		}
 
 		prMsduInfo = prNextMsduInfo;
-	};
+	}
 
 #if CFG_PRINT_RTP_PROFILE
 	/* 4 4. record the lifetime of current round last pkt */
@@ -1952,7 +1952,7 @@ VOID nicTxReturnMsduInfo(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfoLi
 		QUEUE_INSERT_TAIL(&prTxCtrl->rFreeMsduInfoList, (P_QUE_ENTRY_T) prMsduInfo);
 		KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_TX_MSDU_INFO_LIST);
 		prMsduInfo = prNextMsduInfo;
-	};
+	}
 
 }
 
