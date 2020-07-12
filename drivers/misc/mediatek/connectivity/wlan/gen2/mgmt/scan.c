@@ -2059,7 +2059,7 @@ WLAN_STATUS scanAddScanResult(IN P_ADAPTER_T prAdapter, IN P_BSS_DESC_T prBssDes
 	/* NOTE(Kevin): Set unused entries, if any, at the end of the array to 0.
 	 * from OID_802_11_BSSID_LIST
 	 */
-	for (i = ucRateLen; i < sizeof(aucRatesEx) / sizeof(aucRatesEx[0]); i++)
+	for (i = ucRateLen; i < ARRAY_SIZE(aucRatesEx); i++)
 		aucRatesEx[i] = 0;
 
 	switch (prBssDesc->eBSSType) {

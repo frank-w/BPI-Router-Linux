@@ -607,7 +607,7 @@ VOID mboxInitMsgMap(VOID)
 	UINT_32 i, idx;
 	MSG_HNDL_ENTRY_T rTempEntry;
 
-	ASSERT((sizeof(arMsgMapTable) / sizeof(MSG_HNDL_ENTRY_T)) == MID_TOTAL_NUM);
+	ASSERT((ARRAY_SIZE(arMsgMapTable)) == MID_TOTAL_NUM);
 
 	for (i = 0; i < MID_TOTAL_NUM; i++) {
 		if (arMsgMapTable[i].eMsgId == (ENUM_MSG_ID_T) i)

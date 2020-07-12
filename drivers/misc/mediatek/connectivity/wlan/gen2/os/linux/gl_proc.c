@@ -896,7 +896,7 @@ static ssize_t procfile_write(struct file *filp, const char __user *buffer, size
 	DBGLOG(INIT, TRACE, " x(0x%08x), y(0x%08x), z(0x%08x)\n\r", x, y, z);
 #endif
 
-	if (((sizeof(wlan_dev_dbg_func) / sizeof(wlan_dev_dbg_func[0])) > x) && NULL != wlan_dev_dbg_func[x])
+	if (((ARRAY_SIZE(wlan_dev_dbg_func)) > x) && NULL != wlan_dev_dbg_func[x])
 		(*wlan_dev_dbg_func[x]) ();
 	else
 		DBGLOG(INIT, ERROR, "no handler defined for command id(0x%08x)\n\r", x);

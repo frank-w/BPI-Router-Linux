@@ -678,7 +678,7 @@ static INT_EVENT_MAP_T arIntEventMapTable[] = {
 	{(WHISR_RX0_DONE_INT | WHISR_RX1_DONE_INT), INT_EVENT_RX}
 };
 
-static const UINT_8 ucIntEventMapSize = (sizeof(arIntEventMapTable) / sizeof(INT_EVENT_MAP_T));
+static const UINT_8 ucIntEventMapSize = (ARRAY_SIZE(arIntEventMapTable));
 
 static IST_EVENT_FUNCTION apfnEventFuncTable[] = {
 	nicProcessAbnormalInterrupt,	/*!< INT_EVENT_ABNORMAL */

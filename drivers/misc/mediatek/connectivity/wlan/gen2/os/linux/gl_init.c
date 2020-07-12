@@ -796,9 +796,9 @@ static struct ieee80211_rate mtk_rates[] = {
 };
 
 #define mtk_a_rates         (mtk_rates + 4)
-#define mtk_a_rates_size    (sizeof(mtk_rates) / sizeof(mtk_rates[0]) - 4)
+#define mtk_a_rates_size    (ARRAY_SIZE(mtk_rates) - 4)
 #define mtk_g_rates         (mtk_rates + 0)
-#define mtk_g_rates_size    (sizeof(mtk_rates) / sizeof(mtk_rates[0]) - 0)
+#define mtk_g_rates_size    (ARRAY_SIZE(mtk_rates) - 0)
 
 #define WLAN_MCS_INFO                                 \
 {                                                       \

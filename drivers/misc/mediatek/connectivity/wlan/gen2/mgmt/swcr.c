@@ -944,7 +944,7 @@ VOID swCtrlSwCr(P_ADAPTER_T prAdapter, UINT_8 ucRead, UINT_16 u2Addr, UINT_32 *p
 
 			u4Cmd = g_au4SwCr[0];
 			ucCate = (UINT_8) (u4Cmd >> 24);
-			if (ucCate < sizeof(g_arSwCtrlCmd) / sizeof(g_arSwCtrlCmd[0])) {
+			if (ucCate < ARRAY_SIZE(g_arSwCtrlCmd)) {
 				if (g_arSwCtrlCmd[ucCate] != NULL) {
 					g_arSwCtrlCmd[ucCate] (prAdapter, ucCate, (UINT_8) (u4Cmd >> 16 & 0xFF),
 							       (UINT_8) ((u4Cmd >> 8) & 0xFF), (UINT_8) (u4Cmd & 0xFF));
@@ -967,7 +967,7 @@ VOID swCrReadWriteCmd(P_ADAPTER_T prAdapter, UINT_8 ucRead, UINT_16 u2Addr, UINT
 	DEBUGFUNC("swCrReadWriteCmd");
 	DBGLOG(SW4, TRACE, "%u addr 0x%x data 0x%x\n", ucRead, u2Addr, *pu4Data);
 
-	if (ucMod < (sizeof(g_arSwCrModHandle) / sizeof(g_arSwCrModHandle[0]))) {
+	if (ucMod < (ARRAY_SIZE(g_arSwCrModHandle))) {
 
 		if (g_arSwCrModHandle[ucMod] != NULL)
 			g_arSwCrModHandle[ucMod] (prAdapter, ucRead, u2Addr, pu4Data);

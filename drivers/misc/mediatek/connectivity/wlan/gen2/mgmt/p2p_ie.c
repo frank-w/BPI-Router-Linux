@@ -469,7 +469,7 @@ wfdFuncCalculateWfdIELenForAssocRsp(IN P_ADAPTER_T prAdapter,
 					 eNetTypeIndex,
 					 prStaRec,
 					 txAssocRspWFDAttributesTable,
-					 sizeof(txAssocRspWFDAttributesTable) / sizeof(APPEND_VAR_ATTRI_ENTRY_T));
+					 ARRAY_SIZE(txAssocRspWFDAttributesTable));
 
 #else
 	return 0;
@@ -504,7 +504,7 @@ VOID wfdFuncGenerateWfdIEForAssocRsp(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T 
 					      prMsduInfo->prPacket,
 					      1500,
 					      txAssocRspWFDAttributesTable,
-					      sizeof(txAssocRspWFDAttributesTable) / sizeof(APPEND_VAR_ATTRI_ENTRY_T));
+					      ARRAY_SIZE(txAssocRspWFDAttributesTable));
 		}
 	} while (FALSE);
 

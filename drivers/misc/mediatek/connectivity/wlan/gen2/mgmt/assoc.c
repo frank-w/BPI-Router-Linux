@@ -1546,7 +1546,7 @@ WLAN_STATUS assocProcessRxAssocReqFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T 
 #endif
 			break;
 		default:
-			for (i = 0; i < (sizeof(rxAssocReqIETable) / sizeof(VERIFY_IE_ENTRY_T)); i++) {
+			for (i = 0; i < (ARRAY_SIZE(rxAssocReqIETable)); i++) {
 
 				if ((IE_ID(pucIE)) == rxAssocReqIETable[i].ucElemID) {
 					rxAssocReqIETable[i].pfnVarifyIE(prAdapter, prSwRfb, (P_IE_HDR_T) pucIE,

@@ -2673,10 +2673,10 @@ BOOLEAN wlanIsHandlerAllowedInRFTest(IN PFN_OID_HANDLER_FUNC pfnOidHandler, IN B
 
 	if (fgSetInfo) {
 		apfnOidHandlerAllowedInRFTest = apfnOidSetHandlerAllowedInRFTest;
-		u4NumOfElem = sizeof(apfnOidSetHandlerAllowedInRFTest) / sizeof(PFN_OID_HANDLER_FUNC);
+		u4NumOfElem = ARRAY_SIZE(apfnOidSetHandlerAllowedInRFTest);
 	} else {
 		apfnOidHandlerAllowedInRFTest = apfnOidQueryHandlerAllowedInRFTest;
-		u4NumOfElem = sizeof(apfnOidQueryHandlerAllowedInRFTest) / sizeof(PFN_OID_HANDLER_FUNC);
+		u4NumOfElem = ARRAY_SIZE(apfnOidQueryHandlerAllowedInRFTest);
 	}
 
 	for (i = 0; i < u4NumOfElem; i++) {
@@ -3357,7 +3357,7 @@ BOOLEAN wlanoidTimeoutCheck(IN P_ADAPTER_T prAdapter, IN PFN_OID_HANDLER_FUNC pf
 	UINT_32 u4NumOfElem;
 
 	apfnOidHandlerWOTimeoutCheck = apfnOidWOTimeoutCheck;
-	u4NumOfElem = sizeof(apfnOidWOTimeoutCheck) / sizeof(PFN_OID_HANDLER_FUNC);
+	u4NumOfElem = ARRAY_SIZE(apfnOidWOTimeoutCheck);
 
 	/* skip some OID timeout checks ? */
 	for (i = 0; i < u4NumOfElem; i++) {
@@ -4248,7 +4248,7 @@ static INT_32 wlanChangeCodeWord(INT_32 au4Input)
 	};
 #endif
 
-	for (i = 0; i < sizeof(arCodeTable) / sizeof(CODE_MAPPING_T); i++) {
+	for (i = 0; i < ARRAY_SIZE(arCodeTable); i++) {
 
 		if (arCodeTable[i].u4RegisterValue == au4Input)
 			return arCodeTable[i].i4TxpowerOffset;

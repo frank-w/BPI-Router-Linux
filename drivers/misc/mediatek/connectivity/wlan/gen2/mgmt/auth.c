@@ -386,7 +386,7 @@ WLAN_STATUS authSendAuthFrame(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaR
 	/* + Extra IE Length */
 	u2EstimatedExtraIELen = 0;
 
-	for (i = 0; i < sizeof(txAuthIETable) / sizeof(APPEND_IE_ENTRY_T); i++)
+	for (i = 0; i < ARRAY_SIZE(txAuthIETable); i++)
 		u2EstimatedExtraIELen += txAuthIETable[i].u2EstimatedIELen;
 
 	u2EstimatedFrameLen += u2EstimatedExtraIELen;
@@ -423,7 +423,7 @@ WLAN_STATUS authSendAuthFrame(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaR
 	prMsduInfo->fgIsBasicRate = TRUE;
 
 	/* 4 <4> Compose IEs in MSDU_INFO_T */
-	for (i = 0; i < sizeof(txAuthIETable) / sizeof(APPEND_IE_ENTRY_T); i++) {
+	for (i = 0; i < ARRAY_SIZE(txAuthIETable); i++) {
 		if (txAuthIETable[i].pfnAppendIE)
 			txAuthIETable[i].pfnAppendIE(prAdapter, prMsduInfo);
 	}
@@ -480,7 +480,7 @@ authSendAuthFrame(IN P_ADAPTER_T prAdapter,
 	/* + Extra IE Length */
 	u2EstimatedExtraIELen = 0;
 
-	for (i = 0; i < sizeof(txAuthIETable) / sizeof(APPEND_IE_ENTRY_T); i++)
+	for (i = 0; i < ARRAY_SIZE(txAuthIETable); i++)
 		u2EstimatedExtraIELen += txAuthIETable[i].u2EstimatedIELen;
 
 	u2EstimatedFrameLen += u2EstimatedExtraIELen;
@@ -556,7 +556,7 @@ authSendAuthFrame(IN P_ADAPTER_T prAdapter,
 	prMsduInfo->fgIsBasicRate = TRUE;
 
 	/* 4 <4> Compose IEs in MSDU_INFO_T */
-	for (i = 0; i < sizeof(txAuthIETable) / sizeof(APPEND_IE_ENTRY_T); i++) {
+	for (i = 0; i < ARRAY_SIZE(txAuthIETable); i++) {
 		if (txAuthIETable[i].pfnAppendIE)
 			txAuthIETable[i].pfnAppendIE(prAdapter, prMsduInfo);
 	}
@@ -817,7 +817,7 @@ WLAN_STATUS authProcessRxAuth2_Auth4Frame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_
 	IE_FOR_EACH(pucIEsBuffer, u2IEsLen, u2Offset) {
 		ucIEID = IE_ID(pucIEsBuffer);
 
-		for (i = 0; i < (sizeof(rxAuthIETable) / sizeof(HANDLE_IE_ENTRY_T)); i++) {
+		for (i = 0; i < (ARRAY_SIZE(rxAuthIETable)); i++) {
 
 			if (ucIEID == rxAuthIETable[i].ucElemID)
 				rxAuthIETable[i].pfnHandleIE(prAdapter, prSwRfb, (P_IE_HDR_T) pucIEsBuffer);

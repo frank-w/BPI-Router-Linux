@@ -2922,7 +2922,7 @@ P_MSDU_INFO_T p2pFuncProcessP2pProbeRsp(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO
 
 		u2EstimatedExtraIELen = 0;
 
-		u4IeArraySize = sizeof(txProbeRspIETable) / sizeof(APPEND_VAR_IE_ENTRY_T);
+		u4IeArraySize = ARRAY_SIZE(txProbeRspIETable);
 		for (u4Idx = 0; u4Idx < u4IeArraySize; u4Idx++) {
 			if (txProbeRspIETable[u4Idx].u2EstimatedFixedIELen) {
 				u2EstimatedExtraIELen += txProbeRspIETable[u4Idx].u2EstimatedFixedIELen;
@@ -3171,7 +3171,7 @@ p2pFuncCalculateP2p_IELenForAssocRsp(IN P_ADAPTER_T prAdapter,
 					 eNetTypeIndex,
 					 prStaRec,
 					 txAssocRspAttributesTable,
-					 sizeof(txAssocRspAttributesTable) / sizeof(APPEND_VAR_ATTRI_ENTRY_T));
+					 ARRAY_SIZE(txAssocRspAttributesTable));
 
 }				/* p2pFuncCalculateP2p_IELenForAssocRsp */
 
@@ -3207,7 +3207,7 @@ VOID p2pFuncGenerateP2p_IEForAssocRsp(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T
 					      prMsduInfo->prPacket,
 					      1500,
 					      txAssocRspAttributesTable,
-					      sizeof(txAssocRspAttributesTable) / sizeof(APPEND_VAR_ATTRI_ENTRY_T));
+					      ARRAY_SIZE(txAssocRspAttributesTable));
 		} else {
 
 			DBGLOG(P2P, TRACE, "Legacy device, no P2P IE.\n");

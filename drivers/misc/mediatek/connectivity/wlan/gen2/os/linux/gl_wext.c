@@ -409,7 +409,7 @@ const long channel_freq[] = {
 };
 
 
-#define NUM_CHANNELS (sizeof(channel_freq) / sizeof(channel_freq[0]))
+#define NUM_CHANNELS (ARRAY_SIZE(channel_freq))
 
 #define MAX_SSID_LEN    32
 
