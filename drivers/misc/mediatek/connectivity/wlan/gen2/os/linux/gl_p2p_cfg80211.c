@@ -996,7 +996,7 @@ int mtk_p2p_cfg80211_mgmt_tx(struct wiphy *wiphy,
 	PUINT_8 pucFrameBuf = (PUINT_8) NULL;
 
 	do {
-		if ((wiphy == NULL) || (wdev == NULL) || (params == 0) || (cookie == NULL))
+		if ((wiphy == NULL) || (wdev == NULL) || (params == NULL) || (cookie == NULL))
 			break;
 		/* DBGLOG(P2P, TRACE, ("mtk_p2p_cfg80211_mgmt_tx\n")); */
 

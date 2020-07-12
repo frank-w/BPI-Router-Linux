@@ -1602,7 +1602,7 @@ mtk_cfg80211_mgmt_tx(struct wiphy *wiphy,
 		DBGLOG(REQ, TRACE, "--> %s()\n", __func__);
 #endif
 
-		if ((wiphy == NULL) || (wdev == NULL) || (params == 0) || (cookie == NULL))
+		if ((wiphy == NULL) || (wdev == NULL) || (params == NULL) || (cookie == NULL))
 			break;
 
 		prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
