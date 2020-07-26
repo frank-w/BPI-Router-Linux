@@ -121,7 +121,7 @@ NIC_DIR     := nic/
 MGMT_DIR    := mgmt/
 DMA_DIR     := ../../../../platform/$(call lc,$(MTK_PLATFORM))/kernel/drivers/wifi/
 PLAT_DIR    := os/linux/plat/$(MTK_PLATFORM)/
-HIF_AHB_PDMA := $(HIF_DIR)$(MTK_PLATFORM)/
+#HIF_AHB_PDMA := $(HIF_DIR)$(MTK_PLATFORM)/
 #$(call lc,$(MTK_PLATFORM))
 
 
@@ -225,7 +225,7 @@ endif
 
 #$(warning $(CONFIG_MACH_MT7623))
 
-ifeq ($(CONFIG_MACH_MT7623), y)
+ifeq ($(MTK_PLATFORM), mt7623)
 HIF_AHB_PDMA = $(HIF_DIR)mt8127/
 endif
 HIF_OBJS :=  $(HIF_DIR)arm.o \
