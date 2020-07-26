@@ -7,10 +7,8 @@ ccflags-y += \
 	-I$(srctree)/$(src)/../../common_detect
 
   ifeq ($(CONFIG_MTK_CLKMGR),y)
-  	ccflags-y +=	-I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include/mach
 	endif
   #ifeq ($(CONFIG_MTK_EMI_MPU),y)
-  	ccflags-y +=	-I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include/mach
   	#endif
 
 subdir-ccflags-y += -D MTK_WCN_WMT_STP_EXP_SYMBOL_ABSTRACT

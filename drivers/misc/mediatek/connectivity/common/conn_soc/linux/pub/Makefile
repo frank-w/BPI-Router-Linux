@@ -7,7 +7,6 @@ ccflags-y += \
 	-I$(srctree)/$(src)/../../include \
 	-I$(srctree)/$(src)/../include \
 	-I$(srctree)/$(src)/../../../common_detect \
-	-I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include/mach \
 	-DMTK_BT_HCI=1
 
 ccflags-y += -DWMT_CREATE_NODE_DYNAMIC=1

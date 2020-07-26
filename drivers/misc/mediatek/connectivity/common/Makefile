@@ -1,4 +1,3 @@
-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
 subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
 
 #ifneq ($(filter "MT6620E3",$(CONFIG_MTK_COMBO_CHIP)),)
