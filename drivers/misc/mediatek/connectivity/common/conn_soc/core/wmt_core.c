@@ -153,7 +153,7 @@ static const UINT8 WMT_SLEEP_EVT[] = { 0x02, 0x03, 0x02, 0x00, 0x00, 0x01 };
 static const UINT8 WMT_HOST_AWAKE_CMD[] = { 0x01, 0x03, 0x01, 0x00, 0x02 };
 static const UINT8 WMT_HOST_AWAKE_EVT[] = { 0x02, 0x03, 0x02, 0x00, 0x00, 0x02 };
 
-static const UINT8 WMT_WAKEUP_CMD[] = { 0xFF };
+//static const UINT8 WMT_WAKEUP_CMD[] = { 0xFF };
 static const UINT8 WMT_WAKEUP_EVT[] = { 0x02, 0x03, 0x02, 0x00, 0x00, 0x03 };
 
 static UINT8 WMT_THERM_CMD[] = { 0x01, 0x11, 0x01, 0x00,
@@ -350,7 +350,7 @@ INT32 wmt_core_rx(PUINT8 pBuf, UINT32 bufLen, UINT32 *readSize)
 	return iRet;
 }
 
-INT32 wmt_core_rx_flush(UINT32 type)
+static INT32 wmt_core_rx_flush(UINT32 type)
 {
 	INT32 iRet;
 	WMT_CTRL_DATA ctrlData;
@@ -448,7 +448,7 @@ INT32 wmt_core_func_ctrl_cmd(ENUM_WMTDRV_TYPE_T type, MTK_WCN_BOOL fgEn)
 	return -3;
 }
 
-INT32 wmt_core_opid_handler(P_WMT_OP pWmtOp)
+static INT32 wmt_core_opid_handler(P_WMT_OP pWmtOp)
 {
 	UINT32 opId;
 	INT32 ret;

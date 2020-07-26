@@ -497,7 +497,7 @@ static MTK_WCN_BOOL wmt_lib_ps_action(MTKSTP_PSM_ACTION_T action)
 {
 	P_OSAL_OP lxop;
 	MTK_WCN_BOOL bRet;
-	UINT32 u4Wait;
+//	UINT32 u4Wait;
 	P_OSAL_SIGNAL pSignal;
 
 	lxop = wmt_lib_get_free_op();
@@ -510,7 +510,7 @@ static MTK_WCN_BOOL wmt_lib_ps_action(MTKSTP_PSM_ACTION_T action)
 	lxop->op.opId = WMT_OPID_PWR_SV;
 	lxop->op.au4OpData[0] = action;
 	lxop->op.au4OpData[1] = (SIZE_T) mtk_wcn_stp_psm_notify_stp;
-	u4Wait = 0;
+	//u4Wait = 0;
 	bRet = wmt_lib_put_act_op(lxop);
 	return bRet;
 }
@@ -813,7 +813,7 @@ VOID wmt_lib_ps_set_sdio_psop(PF_WMT_SDIO_PSOP own_cb)
 #endif
 }
 
-UINT32 wmt_lib_wait_event_checker(P_OSAL_THREAD pThread)
+static UINT32 wmt_lib_wait_event_checker(P_OSAL_THREAD pThread)
 {
 	P_DEV_WMT pDevWmt;
 
@@ -1137,16 +1137,16 @@ static VOID wmt_lib_clear_chip_id(VOID)
 
 /* TODO: [FixMe][GeorgeKuo]: change this API to report real chip id, hw_ver, and */
 /* fw_ver instead of WMT-translated WMTHWVER */
-ENUM_WMTHWVER_TYPE_T wmt_lib_get_hwver(VOID)
+/*static ENUM_WMTHWVER_TYPE_T wmt_lib_get_hwver(VOID)
 {
-/*
-    P_WMT_CMB_CHIP_INFO_S pChipInfo = NULL;
-    P_DEV_WMT pWmtDev = gpDevWmt;
-       pChipInfo = wmt_lib_get_chip_info(pWmtDev);
-    return pChipInfo != NULL ? pChipInfo->eHwVersion : WMTHWVER_INVALID;
-    */
+
+//    P_WMT_CMB_CHIP_INFO_S pChipInfo = NULL;
+//    P_DEV_WMT pWmtDev = gpDevWmt;
+//       pChipInfo = wmt_lib_get_chip_info(pWmtDev);
+//    return pChipInfo != NULL ? pChipInfo->eHwVersion : WMTHWVER_INVALID;
+
 	return gDevWmt.eWmtHwVer;
-}
+}*/
 
 UINT32 wmt_lib_get_icinfo(ENUM_WMT_CHIPINFO_TYPE_T index)
 {
@@ -1163,11 +1163,11 @@ UINT32 wmt_lib_get_icinfo(ENUM_WMT_CHIPINFO_TYPE_T index)
 
 }
 
-PUINT8 wmt_lib_def_patch_name(VOID)
+/*static PUINT8 wmt_lib_def_patch_name(VOID)
 {
 	WMT_INFO_FUNC("wmt-lib: use default patch name (%s)\n", gDevWmt.cPatchName);
 	return gDevWmt.cPatchName;
-}
+}*/
 
 MTK_WCN_BOOL wmt_lib_is_therm_ctrl_support(VOID)
 {
@@ -1415,7 +1415,7 @@ MTK_WCN_BOOL wmt_lib_btm_cb(MTKSTP_BTM_WMT_OP_T op)
 	return bRet;
 }
 
-MTK_WCN_BOOL wmt_cdev_rstmsg_snd(ENUM_WMTRSTMSG_TYPE_T msg)
+static MTK_WCN_BOOL wmt_cdev_rstmsg_snd(ENUM_WMTRSTMSG_TYPE_T msg)
 {
 
 	INT32 i = 0;
@@ -1443,7 +1443,7 @@ MTK_WCN_BOOL wmt_cdev_rstmsg_snd(ENUM_WMTRSTMSG_TYPE_T msg)
 	return MTK_WCN_BOOL_TRUE;
 }
 
-VOID wmt_lib_state_init(VOID)
+static VOID wmt_lib_state_init(VOID)
 {
 	/* UINT32 i = 0; */
 	P_DEV_WMT pDevWmt = &gDevWmt;

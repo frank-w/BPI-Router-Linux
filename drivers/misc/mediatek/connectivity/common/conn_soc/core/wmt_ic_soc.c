@@ -975,7 +975,7 @@ static INT32 mtk_wcn_soc_sw_init(P_WMT_HIF_CONF pWmtHifConf)
 	INT32 iRet = -1;
 	unsigned long ctrlPa1;
 	unsigned long ctrlPa2;
-	UINT32 hw_ver;
+//	UINT32 hw_ver;
 	WMT_CTRL_DATA ctrlData;
 #ifdef CFG_WMT_READ_EFUSE_VCN33
 	UINT32 efuse_d3_vcn33 = 2; /*default voltage is 3.5V*/
@@ -1001,7 +1001,7 @@ static INT32 mtk_wcn_soc_sw_init(P_WMT_HIF_CONF pWmtHifConf)
 		return -1;
 	}
 
-	hw_ver = gp_soc_info->u4HwVer;
+	//hw_ver = gp_soc_info->u4HwVer;
 
 	/* 4 <3.2> start init for BTIF */
 	if (WMT_HIF_BTIF == pWmtHifConf->hifType) {

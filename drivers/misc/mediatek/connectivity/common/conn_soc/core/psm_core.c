@@ -357,7 +357,7 @@ static INT32 _stp_psm_put_op(MTKSTP_PSM_T *stp_psm, P_OSAL_OP_Q pOpQ, P_OSAL_OP 
 
 }
 
-P_OSAL_OP _stp_psm_get_free_op(MTKSTP_PSM_T *stp_psm)
+static P_OSAL_OP _stp_psm_get_free_op(MTKSTP_PSM_T *stp_psm)
 {
 	P_OSAL_OP pOp;
 
@@ -372,7 +372,7 @@ P_OSAL_OP _stp_psm_get_free_op(MTKSTP_PSM_T *stp_psm)
 
 }
 
-INT32 _stp_psm_put_act_op(MTKSTP_PSM_T *stp_psm, P_OSAL_OP pOp)
+static INT32 _stp_psm_put_act_op(MTKSTP_PSM_T *stp_psm, P_OSAL_OP pOp)
 {
 	INT32 bRet = 0;		/* MTK_WCN_BOOL_FALSE; */
 	INT32 bCleanup = 0;	/* MTK_WCN_BOOL_FALSE; */
@@ -593,7 +593,7 @@ static inline INT32 _stp_psm_stop_monitor(MTKSTP_PSM_T *stp_psm)
 	return STP_PSM_OPERATION_SUCCESS;
 }
 
-INT32 _stp_psm_hold_data(MTKSTP_PSM_T *stp_psm, const UINT8 *buffer, const UINT32 len, const UINT8 type)
+static INT32 _stp_psm_hold_data(MTKSTP_PSM_T *stp_psm, const UINT8 *buffer, const UINT32 len, const UINT8 type)
 {
 	INT32 available_space = 0;
 	INT32 needed_space = 0;
@@ -628,7 +628,7 @@ INT32 _stp_psm_hold_data(MTKSTP_PSM_T *stp_psm, const UINT8 *buffer, const UINT3
 
 }
 
-INT32 _stp_psm_has_pending_data(MTKSTP_PSM_T *stp_psm)
+static INT32 _stp_psm_has_pending_data(MTKSTP_PSM_T *stp_psm)
 {
 	return osal_fifo_len(&stp_psm->hold_fifo);
 }
@@ -637,7 +637,7 @@ INT32 _stp_psm_release_data(MTKSTP_PSM_T *stp_psm)
 {
 
 	INT32 i = 20;		/*Max buffered packet number */
-	INT32 ret = 0;
+//	INT32 ret = 0;
 	UINT8 type = 0;
 	UINT32 len = 0;
 	UINT8 delimiter[2];
@@ -647,18 +647,18 @@ INT32 _stp_psm_release_data(MTKSTP_PSM_T *stp_psm)
 		/* acquire spinlock */
 		osal_lock_sleepable_lock(&stp_psm->hold_fifo_spinlock_global);
 
-		ret = osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) &type, sizeof(UINT8));
-		ret = osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) &len, sizeof(UINT32));
+		osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) &type, sizeof(UINT8));
+		osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) &len, sizeof(UINT32));
 
 		if (len > STP_PSM_PACKET_SIZE_MAX) {
 			STP_PSM_ERR_FUNC("***psm packet's length too Long!****\n");
 			STP_PSM_INFO_FUNC("***reset psm's fifo***\n");
 		} else {
 			osal_memset(stp_psm->out_buf, 0, STP_PSM_TX_SIZE);
-			ret = osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) stp_psm->out_buf, len);
+			osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) stp_psm->out_buf, len);
 		}
 
-		ret = osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) delimiter, 2);
+		osal_fifo_out(&stp_psm->hold_fifo, (PUINT8) delimiter, 2);
 
 		if (delimiter[0] == 0xbb && delimiter[1] == 0xbb) {
 			/* osal_buffer_dump(stp_psm->out_buf, "psm->out_buf", len, 32); */

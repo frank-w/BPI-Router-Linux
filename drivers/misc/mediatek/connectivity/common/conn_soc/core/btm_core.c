@@ -332,7 +332,7 @@ INT32 _stp_trigger_firmware_assert_via_emi(VOID)
 	return status;
 }
 #else
-INT32 _stp_trigger_firmware_assert_via_emi(VOID)
+static INT32 _stp_trigger_firmware_assert_via_emi(VOID)
 {
 	INT32 status = -1;
 	INT32 j = 0;
@@ -373,7 +373,7 @@ UINT8 g_paged_trace_buffer[STP_DBG_PAGED_TRACE_SIZE] = { 0 };
 
 UINT32 g_paged_dump_len = 0;
 UINT32 g_paged_trace_len = 0;
-VOID _stp_dump_emi_dump_buffer(UINT8 *buffer, UINT32 len)
+static VOID _stp_dump_emi_dump_buffer(UINT8 *buffer, UINT32 len)
 {
 	UINT32 i = 0;
 
@@ -656,7 +656,6 @@ paged_dump_end:
 			ENUM_CHIP_DUMP_STATE chip_state;
 			UINT32 dump_phy_addr = 0;
 			UINT8 *dump_vir_addr = NULL;
-			UINT32 dump_len = 0;
 			UINT32 isFail = 0;
 
 			while (1) {
@@ -689,7 +688,7 @@ paged_dump_end:
 				ret = -2;
 				break;
 			}
-			dump_len = wmt_plat_get_dump_info(p_ecsi->p_ecso->emi_apmem_ctrl_chip_sync_len);
+			wmt_plat_get_dump_info(p_ecsi->p_ecso->emi_apmem_ctrl_chip_sync_len);
 			/*move dump info according to dump_addr & dump_len */
 			wmt_plat_update_host_sync_num();
 			wmt_plat_set_host_dump_state(STP_HOST_DUMP_GET_DONE);
@@ -863,7 +862,7 @@ static INT32 _stp_btm_put_op(MTKSTP_BTM_T *stp_btm, P_OSAL_OP_Q pOpQ, P_OSAL_OP 
 
 }
 
-P_OSAL_OP _stp_btm_get_free_op(MTKSTP_BTM_T *stp_btm)
+static P_OSAL_OP _stp_btm_get_free_op(MTKSTP_BTM_T *stp_btm)
 {
 	P_OSAL_OP pOp;
 
@@ -877,7 +876,7 @@ P_OSAL_OP _stp_btm_get_free_op(MTKSTP_BTM_T *stp_btm)
 		return NULL;
 }
 
-INT32 _stp_btm_put_act_op(MTKSTP_BTM_T *stp_btm, P_OSAL_OP pOp)
+static INT32 _stp_btm_put_act_op(MTKSTP_BTM_T *stp_btm, P_OSAL_OP pOp)
 {
 	INT32 bRet = 0;
 	INT32 bCleanup = 0;
