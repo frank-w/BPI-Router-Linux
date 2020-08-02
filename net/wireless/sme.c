@@ -664,6 +664,7 @@ void __cfg80211_connect_result(struct net_device *dev, const u8 *bssid,
 	union iwreq_data wrqu;
 #endif
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d bss:0x%08x\n",__FUNCTION__,__LINE__,(int)bss);
 	ASSERT_WDEV_LOCK(wdev);
 
 	if (WARN_ON(wdev->iftype != NL80211_IFTYPE_STATION &&
