@@ -581,6 +581,8 @@ function build {
 				if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
 				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
+				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
+				mkimage -f ${board}.its.tmp ${board}-$kernver$gitbranch.itb
 			else
 				if [[ "$builddir" != "" ]];
 				then
