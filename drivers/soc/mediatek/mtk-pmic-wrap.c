@@ -2019,7 +2019,7 @@ static const struct of_device_id of_pwrap_match_tbl[] = {
 };
 MODULE_DEVICE_TABLE(of, of_pwrap_match_tbl);
 
-struct regmap *pwrap_node_to_regmap(struct device_node *np)
+static struct regmap *pwrap_node_to_regmap(struct device_node *np)
 {
 	struct platform_device *pdev;
 	struct pmic_wrapper *wrp;
