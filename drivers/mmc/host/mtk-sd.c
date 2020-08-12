@@ -1518,7 +1518,7 @@ static void msdc_init_hw(struct msdc_host *host)
 	u32 val;
 	u32 tune_reg = host->dev_comp->pad_tune_reg;
 
-	if (!IS_ERR(host->reset)) {
+	if (host->reset) {
 		reset_control_assert(host->reset);
 		usleep_range(10, 50);
 		reset_control_deassert(host->reset);
@@ -2283,7 +2283,7 @@ static int msdc_drv_probe(struct platform_device *pdev)
 
 	host->reset = devm_reset_control_get_optional_exclusive(&pdev->dev,
 								"hrst");
-	if (PTR_ERR(host->reset) == -EPROBE_DEFER)
+	if (IS_ERR(host->reset))
 		return PTR_ERR(host->reset);
 
 	host->irq = platform_get_irq(pdev, 0);
