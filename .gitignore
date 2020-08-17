@@ -167,3 +167,5 @@ scripts/conmakehash
 scripts/sortextable
 utils/cryptodev/
 vmlinux.symvers
+*.itb
+mod/
