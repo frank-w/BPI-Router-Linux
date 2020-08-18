@@ -43,7 +43,10 @@ fi;
 
 if [[ "$builddir" != "" ]];
 then
-	KBUILD_OUTPUT= make mrproper
+	if [[ "$1" == "importconfig" ]];
+	then
+		KBUILD_OUTPUT= make mrproper
+	fi
 	if [[ ! "$builddir" =~ ^/ ]] || [[ "$builddir" == "/" ]];then
 		#make it absolute
 		builddir=$(realpath $(pwd)"/"$builddir)
@@ -262,7 +265,7 @@ function upload {
 	#if [[ "$board" == "bpi-r64" ]];then
 	#	switch="_"$(get_r64_switch)
 	#fi
-	imagename="uImage_${kernver}${board//bpi/}${gitbranch}${switch}"
+	imagename="uImage_${kernver}${gitbranch}${board//bpi/}${switch}"
 	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
 
