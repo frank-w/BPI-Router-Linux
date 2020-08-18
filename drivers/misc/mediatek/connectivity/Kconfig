@@ -264,14 +264,14 @@ config MTK_CONN_LTE_IDC_SUPPORT
 menuconfig GPS
         tristate "GPS drivers"
         #default y
-        ---help---
+        help
           Say Y here for supporting GPS.
 
 if GPS
 config MTK_GPS
         tristate "MediaTek GPS driver"
         #default y
-        ---help---
+        help
           MTK GPS driver
           To switch gps nmea port driver.
           Set "yes" to turn on.
