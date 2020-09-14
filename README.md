@@ -85,17 +85,17 @@ Kernel features by version
 | VLAN-aware Bridge  |     |     |  N   |  Y   |  Y  |
 | HW NAT (R2)        |     |  Y  |  Y   |      |     |
 | HW QOS (R2)        |     |  Y  |  ?   |      |     |
-| Crypto             |  Y  |  Y  |  Y   |      |     |
+| Crypto             |  Y  |  Y  |  Y   |      |  Y  |
 | WIFI (internal)    |     |  Y  |  Y   |  Y   |  Y  |
 | BT                 |  N  |  N  |  Y   |  Y   |  Y  |
 | VIDEO (R2 only)    |  Y  |  N  |  Y   |  Y   |  Y  |
 | ACPI (R2)          |  ?  |  N  |  Y   |  Y   |  Y  |
 | IR (R2)            |  ?  |  N  |  N   |  Y   |  Y  |
 | Other options      |--|--|--|--|--|
-| OpenVPN            |  ?  |  Y  |  Y   |  Y   |     |
-| iptables (R2)      |  ?  |  Y  |  Y   |  Y   |     |
+| OpenVPN            |  ?  |  Y  |  Y   |  Y   |  Y  |
+| iptables (R2)      |  ?  |  Y  |  Y   |  Y   |  Y  |
 | nftables (R2)      |  ?  |  N  |  N   |  Y   |  Y  |
-| LXC / Docker (R2)  |  ?  |  ?  |  Y   |  Y   |     |
+| LXC / Docker (R2)  |  ?  |  ?  |  Y   |  Y   |  Y  |
 
 Symbols:
 
