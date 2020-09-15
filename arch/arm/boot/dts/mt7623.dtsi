@@ -522,16 +522,17 @@
 		status = "disabled";
 	};
 
-	btif_tx: btif_tx@11000780 {
-		compatible = "mediatek,btif_tx";
-		reg = <0 0x11000780 0 0x80>;
-		interrupts = <GIC_SPI 71 IRQ_TYPE_LEVEL_LOW>;
-		status = "okay";
-	};
 	btif_rx: btif_rx@11000800 {
 		compatible = "mediatek,btif_rx";
 		reg = <0 0x11000800 0 0x80>;
 		interrupts = <GIC_SPI 72 IRQ_TYPE_LEVEL_LOW>;
+		status = "okay";
+	};
+
+	btif_tx: btif_tx@11000780 {
+		compatible = "mediatek,btif_tx";
+		reg = <0 0x11000780 0 0x80>;
+		interrupts = <GIC_SPI 71 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 	};
 
