@@ -365,7 +365,7 @@ function install
 				echo "copy modules (root needed because of ext-fs permission)"
 				export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 				echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH modules_install
+				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH KBUILD_OUTPUT=$KBUILD_OUTPUT modules_install
 
 				echo "uImage:"
 				if [[ "$dtinput" == "y" ]];then
@@ -575,7 +575,7 @@ function build {
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
-		make ${MAKEFLAGS} ${CFLAGS} 2>&3 #&& make modules_install 2>&3
+		make ${MAKEFLAGS} ${CFLAGS} 2>&3
 		ret=$?
 		exec 3>&-
 
