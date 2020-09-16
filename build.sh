@@ -43,6 +43,10 @@ fi;
 
 if [[ "$builddir" != "" ]];
 then
+	if [[ "$1" == "importconfig" ]];
+	then
+		KBUILD_OUTPUT= make mrproper
+	fi
 	if [[ ! "$builddir" =~ ^/ ]] || [[ "$builddir" == "/" ]];then
 		#make it absolute
 		builddir=$(realpath $(pwd)"/"$builddir)
@@ -107,10 +111,7 @@ function check_dep()
 	if [[ $# -ge 1 ]];
 	then
 		if [[ $@ =~ "build" ]];then
-			NEEDED_PKGS+=" u-boot-tools bc gcc libc6-dev libncurses5-dev ccache"
-		fi
-		if [[ $@ =~ "ssl" ]];then
-			NEEDED_PKGS+=" libssl-dev"
+			NEEDED_PKGS+=" u-boot-tools bc gcc libc6-dev libncurses5-dev ccache libssl-dev"
 		fi
 		if [[ $@ =~ "deb" ]];then
 			NEEDED_PKGS+=" fakeroot"
@@ -151,7 +152,8 @@ function get_version()
 
 	echo "getting git branch: "
 	#find branches with actual commit and filter out detached head
-	branches=$(git branch --contains $(git log -n 1 --pretty='%h') | grep -v '(HEAD')
+	commit=$(git log -n 1 --pretty='%h')
+	branches=$(git branch --contains $commit | grep -v '(HEAD')
 	echo "$branches"
 
 	kernbranch=$(echo "$branches" | grep '^*') #look for marked branch (local)
@@ -161,6 +163,10 @@ function get_version()
 	#kernbranch=$(git branch --contains $(git log -n 1 --pretty='%h') | grep '^*' | grep -v '(HEAD' | head -1 | sed 's/^..//')
 	kernbranch=$(echo "$kernbranch" | sed 's/^..//')
 	kernbranch=${kernbranch//frank-w_/}
+	#if no branch is selected (e.g. bisect)
+	if [[ "${kernbranch}" =~ ^\(.* ]]; then
+		kernbranch="-$commit";
+	fi
 
 	gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
 
@@ -259,14 +265,14 @@ function upload {
 	#if [[ "$board" == "bpi-r64" ]];then
 	#	switch="_"$(get_r64_switch)
 	#fi
-	imagename="uImage_${kernver}${gitbranch}${switch}"
+	imagename="uImage_${kernver}${gitbranch}${board//bpi/}${switch}"
 	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
 
 	if [[ "$board" == "bpi-r64" ]];then
-		dtbname="${kernver}${gitbranch}${switch}.dtb"
+		dtbname="${kernver}${board//bpi/}${gitbranch}${switch}.dtb"
 		read -e -i $dtbname -p "dtb-filename: " input
 		dtbname="${input:-$dtbname}"
 
@@ -359,7 +365,7 @@ function install
 				echo "copy modules (root needed because of ext-fs permission)"
 				export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 				echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH modules_install
+				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH KBUILD_OUTPUT=$KBUILD_OUTPUT modules_install
 
 				echo "uImage:"
 				if [[ "$dtinput" == "y" ]];then
@@ -553,22 +559,23 @@ EOF
 }
 
 function build {
+	echo Cleanup Kernel Build
+	rm arch/arm/boot/zImage 2>/dev/null
+	rm arch/arm/boot/zImage-dtb 2>/dev/null
+	rm arch/arm64/boot/Image 2>/dev/null
+	rm ./uImage* 2>/dev/null
+	rm ${board}.dtb 2>/dev/null
+
 	check_dep "build"
 	if [[ $? -ne 0 ]];then exit 1;fi
+
 	get_version
 
 	if [ -e $DOTCONFIG ]; then
-		echo Cleanup Kernel Build
-		rm arch/arm/boot/zImage 2>/dev/null
-		rm arch/arm/boot/zImage-dtb 2>/dev/null
-		rm arch/arm64/boot/Image 2>/dev/null
-		rm ./uImage* 2>/dev/null
-		rm ${board}.dtb 2>/dev/null
-
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
-		make ${MAKEFLAGS} ${CFLAGS} 2>&3 #&& make modules_install 2>&3
+		make ${MAKEFLAGS} ${CFLAGS} 2>&3
 		ret=$?
 		exec 3>&-
 
@@ -583,6 +590,8 @@ function build {
 				if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
 				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
+				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
+				mkimage -f ${board}.its.tmp ${board}-$kernver$gitbranch.itb
 			else
 				if [[ "$builddir" != "" ]];
 				then
