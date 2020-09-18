@@ -200,7 +200,8 @@ mt76_calc_legacy_rate_duration(const struct ieee80211_rate *rate, bool short_pre
 		duration = 20 + 16; /* premable + SIFS */
 		break;
 	default:
-		WARN_ON_ONCE(1);
+		//WARN_ON_ONCE(1);
+		printk_once(KERN_ALERT "DEBUG: %s %s %d: rate->hw_value:%x (%x,%x)\n",__FILE__,__FUNCTION__,__LINE__,rate->hw_value >> 8,MT_PHY_TYPE_CCK,MT_PHY_TYPE_OFDM);
 		return 0;
 	}
 
