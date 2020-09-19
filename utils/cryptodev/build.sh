@@ -4,8 +4,14 @@ cd $(dirname $0)
 kerneldir=$(dirname $(dirname $(pwd)))
 kernelver=$(cd ../..;make kernelversion)
 cd cryptodev-linux
+if [[ -z "$CROSS_COMPILE" ]];then
+  export CROSS_COMPILE=arm-linux-gnueabihf-
+fi
+if [[ -z "$ARCH" ]];then
+  export ARCH=arm
+fi
 make KERNEL_DIR=$kerneldir clean
-make KERNEL_DIR=$kerneldir CROSS_COMPILE=arm-linux-gnueabihf- ARCH=arm
+make KERNEL_DIR=$kerneldir
 if [[ $? == 0 ]];then
   echo "build successful"
   #cp cryptodev.ko $kerneldir/../SD/BPI-ROOT/lib/modules/
