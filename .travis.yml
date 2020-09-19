@@ -29,7 +29,7 @@ script:
     - sed -i 's/#\(board=bpi-r64\)/\1/' build.conf #change board to r64
     - bash build.sh importconfig
     - bash build.sh build
-    - bash build.sh cryptodev
+#    - bash build.sh cryptodev
     - bash build.sh pack_debs
     - bash build.sh pack
 before_deploy:
