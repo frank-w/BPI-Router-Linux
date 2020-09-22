@@ -388,6 +388,9 @@ function install
 				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" ]];then
 					echo "no change needed!"
 					openuenv=n
+				else
+					echo "change needed to boot new kernel (kernel=${kernelfile})!"
+					openuenv=y
 				fi
 
 				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
