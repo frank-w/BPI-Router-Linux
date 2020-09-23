@@ -7,18 +7,19 @@ cache: ccache
 git:
   depth: 10
   quiet: false
-  
+
 if: tag IS blank
 
 branches:
   only:
     - /^.*-main$/
+    - /^.*-rc$/
     - /^.*-travis$/
 
 install:
     - sudo apt-add-repository 'deb http://archive.ubuntu.com/ubuntu focal main'
     - sudo apt-get update -qq
-    - sudo apt-get install -qq ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make
+    - sudo apt-get install -qq ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler
 script:
     - export PATH=/usr/lib/ccache:$PATH
     - bash build.sh importconfig
@@ -39,13 +40,14 @@ before_deploy:
     - export TRAVIS_TAG=${TRAVIS_TAG:-"CI-BUILD-$(date +'%Y%m%d_%H%M%S')-$(git log --format=%h -1)"}
     - git tag $TRAVIS_TAG
 deploy:
+    on:
+      branch: /^.*-main$/
+#     all_branches: true
     provider: releases
     token: $GITHUB_TOKEN
-#    file_glob: true
-#    file:
-#    - "../SD/*"
-#    - "../*.deb"
-#    name: $TRAVIS_BRANCH-$(date +'%Y%m%d%H%M%S')
+    file_glob: true
+    file:
+    - "../SD/*"
+    - "../*.deb"
+    name: $TRAVIS_BRANCH-$(date +'%Y%m%d%H%M%S')
     cleanup: false
-    on:
-        all_branches: true
