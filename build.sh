@@ -881,7 +881,10 @@ if [ -n "$kernver" ]; then
 			build
 			#$0 cryptodev
 			;;
-
+		"clean")
+			echo clean
+			make clean
+			;;
 		"spidev")
 			echo "Build SPIDEV-Test"
 			(
