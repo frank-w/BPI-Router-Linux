@@ -1280,7 +1280,22 @@ static const struct mtk_base_memif_data memif_data[MT2701_MEMIF_NUM] = {
 		.agent_disable_reg = AUDIO_TOP_CON5,
 		.agent_disable_shift = 16,
 		.msb_reg = -1,
-	},
+	}, /*{
+		.name = "HDMI",
+		.id = MT2701_MEMIF_HDMI,
+		.reg_ofs_base = AFE_HDMI_OUT_BASE,
+		.reg_ofs_cur = AFE_HDMI_OUT_CUR,
+		.fs_reg = -1,
+		.fs_shift = -1,
+		.fs_maskbit = -1,
+		.mono_reg = -1,
+		.mono_shift = -1,
+		.hd_reg = -1,
+		.enable_reg = -1,
+		.msb_reg = AFE_MEMIF_MSB,
+		.msb_shift = 8,
+		.agent_disable_reg = -1,
+	},*/
 };
 
 static const struct mtk_base_irq_data irq_data[MT2701_IRQ_ASYS_END] = {
@@ -1322,7 +1337,18 @@ static const struct mtk_base_irq_data irq_data[MT2701_IRQ_ASYS_END] = {
 		.irq_en_shift = 31,
 		.irq_clr_reg = ASYS_IRQ_CLR,
 		.irq_clr_shift = 2,
-	}
+	}, /*{
+		.id = MT2701_AFE_IRQ_HDMI,
+		.irq_cnt_reg = AFE_IRQ_CNT5,
+		.irq_cnt_shift = 0,
+		.irq_cnt_maskbit = 0x3ffff,
+		.irq_en_reg = AFE_IRQ_MCU_CON,
+		.irq_en_shift = 12,
+		.irq_fs_reg = -1,
+		.irq_fs_maskbit = -1,
+		.irq_clr_reg = AFE_IRQ_CLR,
+		.irq_clr_shift = 4,
+	}*/
 };
 
 static const struct mt2701_i2s_data mt2701_i2s_data[][2] = {
