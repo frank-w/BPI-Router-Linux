@@ -144,6 +144,19 @@
 		device_type = "memory";
 		reg = <0 0x80000000 0 0x80000000>;
 	};
+
+	sound {
+		compatible = "mediatek,mt2701-hdmi-machine";
+		mediatek,platform = <&afe>;
+		audio-routing =
+			"Headphone", "HP_L",
+			"Headphone", "HP_R",
+			"LINPUT1", "AMIC",
+			"RINPUT1", "AMIC";
+		mediatek,audio-codec = <&hdmi0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&i2s0_pins_a>;
+	};
 };
 
 &bls {
