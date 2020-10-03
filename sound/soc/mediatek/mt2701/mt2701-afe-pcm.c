@@ -510,6 +510,25 @@ static int mt2701_irq_fs(struct snd_pcm_substream *substream, unsigned int rate)
 	return mt2701_afe_i2s_fs(rate);
 }
 
+static int mt2701_afe_hdmi_startup(struct snd_pcm_substream *substream,
+				   struct snd_soc_dai *dai)
+{
+	return 0;
+}
+static void mt2701_afe_hdmi_shutdown(struct snd_pcm_substream *substream,
+				     struct snd_soc_dai *dai)
+{}
+static int mt2701_afe_hdmi_prepare(struct snd_pcm_substream *substream,
+				   struct snd_soc_dai *dai)
+{
+	return 0;
+}
+static int mt2701_afe_hdmi_trigger(struct snd_pcm_substream *substream, int cmd,
+				   struct snd_soc_dai *dai)
+{
+	return 0;
+}
+
 /* FE DAIs */
 static const struct snd_soc_dai_ops mt2701_single_memif_dai_ops = {
 	.startup	= mt2701_simple_fe_startup,
@@ -542,6 +561,13 @@ static const struct snd_soc_dai_ops mt2701_btmrg_ops = {
 	.startup = mt2701_btmrg_startup,
 	.shutdown = mt2701_btmrg_shutdown,
 	.hw_params = mt2701_btmrg_hw_params,
+};
+
+static const struct snd_soc_dai_ops mt2701_afe_hdmi_ops = {
+	.startup	= mt2701_afe_hdmi_startup,
+	.shutdown	= mt2701_afe_hdmi_shutdown,
+	.prepare	= mt2701_afe_hdmi_prepare,
+	.trigger	= mt2701_afe_hdmi_trigger,
 };
 
 static struct snd_soc_dai_driver mt2701_afe_pcm_dais[] = {
@@ -753,6 +779,40 @@ static struct snd_soc_dai_driver mt2701_afe_pcm_dais[] = {
 	}
 };
 
+static struct snd_soc_dai_driver mt2701_afe_hdmi_dais[] = {
+	/* FE DAIs */
+	{
+		.name = "HDMI",
+		.id = MT2701_MEMIF_HDMI,
+		.playback = {
+			.stream_name = "HDMI",
+			.channels_min = 2,
+			.channels_max = 8,
+			.rates = SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		},
+		.ops = &mtk_afe_fe_ops,
+	}, {
+	/* BE DAIs */
+		.name = "HDMIO",
+		.id = MT2701_IO_HDMI,
+		.playback = {
+			.stream_name = "HDMIO Playback",
+			.channels_min = 2,
+			.channels_max = 8,
+			.rates = SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		},
+		.ops = &mt2701_afe_hdmi_ops,
+	},
+};
+
 static const struct snd_kcontrol_new mt2701_afe_o00_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I00 Switch", AFE_CONN0, 0, 1, 0),
 };
@@ -954,6 +1014,10 @@ static const struct snd_soc_dapm_route mt2701_afe_pcm_routes[] = {
 	{ "O31", "I35 Switch", "I35" },
 };
 
+static const struct snd_soc_dapm_route mt2701_afe_hdmi_routes[] = {
+	{"HDMIO Playback", NULL, "HDMI"},
+};
+
 static int mt2701_afe_pcm_probe(struct snd_soc_component *component)
 {
 	struct mtk_base_afe *afe = snd_soc_component_get_drvdata(component);
@@ -970,6 +1034,14 @@ static const struct snd_soc_component_driver mt2701_afe_pcm_dai_component = {
 	.num_dapm_widgets = ARRAY_SIZE(mt2701_afe_pcm_widgets),
 	.dapm_routes = mt2701_afe_pcm_routes,
 	.num_dapm_routes = ARRAY_SIZE(mt2701_afe_pcm_routes),
+	.suspend = mtk_afe_suspend,
+	.resume = mtk_afe_resume,
+};
+
+static const struct snd_soc_component_driver mt2701_afe_hdmi_dai_component = {
+	.name = "mt2701-afe-hdmi-dai",
+	.dapm_routes = mt2701_afe_hdmi_routes,
+	.num_dapm_routes = ARRAY_SIZE(mt2701_afe_hdmi_routes),
 	.suspend = mtk_afe_suspend,
 	.resume = mtk_afe_resume,
 };
@@ -1415,8 +1487,18 @@ static int mt2701_afe_pcm_dev_probe(struct platform_device *pdev)
 
 	ret = devm_snd_soc_register_component(&pdev->dev, &mtk_afe_pcm_platform,
 					      NULL, 0);
+
 	if (ret) {
 		dev_warn(dev, "err_platform\n");
+		goto err_platform;
+	}
+
+	ret = devm_snd_soc_register_component(&pdev->dev,
+					 &mt2701_afe_hdmi_dai_component,
+					 mt2701_afe_hdmi_dais,
+					 ARRAY_SIZE(mt2701_afe_hdmi_dais));
+	if (ret) {
+		dev_warn(dev, "err_platform (hdmi)\n");
 		goto err_platform;
 	}
 
