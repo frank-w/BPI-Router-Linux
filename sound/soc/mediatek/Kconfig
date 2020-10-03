@@ -33,6 +33,16 @@ config SND_SOC_MT2701_WM8960
 	  Select Y if you have such device.
 	  If unsure select "N".
 
+config SND_SOC_MT2701_HDMI
+	tristate "ASoc Audio driver for MT2701 with hdmi codec"
+	depends on SND_SOC_MT2701 && I2C
+	select SND_SOC_HDMI_CODEC
+	help
+	  This adds ASoC driver for Mediatek MT2701 boards
+	  with the hdmi codec.
+	  Select Y if you have such device.
+	  If unsure select "N".
+
 config SND_SOC_MT6797
 	tristate "ASoC support for Mediatek MT6797 chip"
 	depends on ARCH_MEDIATEK
