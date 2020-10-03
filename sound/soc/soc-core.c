@@ -815,12 +815,13 @@ struct snd_soc_dai *snd_soc_find_dai(
 	struct snd_soc_dai *dai;
 
 	lockdep_assert_held(&client_mutex);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* Find CPU DAI from registered DAIs */
 	for_each_component(component) {
 		if (!snd_soc_is_matching_component(dlc, component))
 			continue;
 		for_each_component_dais(component, dai) {
+printk(KERN_ALERT "DEBUG_new: Passed %s %d %s==%s||%s==%s\n",__FUNCTION__,__LINE__,dai->name,dlc->dai_name,dai->driver->name,dlc->dai_name);
 			if (dlc->dai_name && strcmp(dai->name, dlc->dai_name)
 			    && (!dai->driver->name
 				|| strcmp(dai->driver->name, dlc->dai_name)))
@@ -993,37 +994,42 @@ int snd_soc_add_pcm_runtime(struct snd_soc_card *card,
 	int i, ret;
 
 	lockdep_assert_held(&client_mutex);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/*
 	 * Notify the machine driver for extra initialization
 	 */
 	ret = snd_soc_card_add_dai_link(card, dai_link);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		return ret;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (dai_link->ignore)
 		return 0;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	dev_dbg(card->dev, "ASoC: binding %s\n", dai_link->name);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = soc_dai_link_sanity_check(card, dai_link);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		return ret;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	rtd = soc_new_pcm_runtime(card, dai_link);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (!rtd)
 		return -ENOMEM;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	for_each_link_cpus(dai_link, i, cpu) {
 		asoc_rtd_to_cpu(rtd, i) = snd_soc_find_dai(cpu);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		if (!asoc_rtd_to_cpu(rtd, i)) {
 			dev_info(card->dev, "ASoC: CPU DAI %s not registered\n",
 				 cpu->dai_name);
 			goto _err_defer;
 		}
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		snd_soc_rtd_add_component(rtd, asoc_rtd_to_cpu(rtd, i)->component);
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* Find CODEC from registered CODECs */
 	for_each_link_codecs(dai_link, i, codec) {
 		asoc_rtd_to_codec(rtd, i) = snd_soc_find_dai(codec);
@@ -1032,16 +1038,16 @@ int snd_soc_add_pcm_runtime(struct snd_soc_card *card,
 				 codec->dai_name);
 			goto _err_defer;
 		}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		snd_soc_rtd_add_component(rtd, asoc_rtd_to_codec(rtd, i)->component);
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* Find PLATFORM from registered PLATFORMs */
 	for_each_link_platforms(dai_link, i, platform) {
 		for_each_component(component) {
 			if (!snd_soc_is_matching_component(platform, component))
 				continue;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 			snd_soc_rtd_add_component(rtd, component);
 		}
 	}
@@ -1813,97 +1819,113 @@ static int snd_soc_bind_card(struct snd_soc_card *card)
 	struct snd_soc_component *component;
 	struct snd_soc_dai_link *dai_link;
 	int ret, i;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	mutex_lock(&client_mutex);
 	mutex_lock_nested(&card->mutex, SND_SOC_CARD_CLASS_INIT);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	snd_soc_dapm_init(&card->dapm, card, NULL);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* check whether any platform is ignore machine FE and using topology */
 	soc_check_tplg_fes(card);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* bind aux_devs too */
 	ret = soc_bind_aux_dev(card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		goto probe_end;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* add predefined DAI links to the list */
 	card->num_rtd = 0;
 	for_each_card_prelinks(card, i, dai_link) {
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		ret = snd_soc_add_pcm_runtime(card, dai_link);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		if (ret < 0)
 			goto probe_end;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* card bind complete so register a sound card */
 	ret = snd_card_new(card->dev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
 			card->owner, 0, &card->snd_card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0) {
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		dev_err(card->dev,
 			"ASoC: can't create sound card for card %s: %d\n",
 			card->name, ret);
 		goto probe_end;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	soc_init_card_debugfs(card);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	soc_resume_init(card);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = snd_soc_dapm_new_controls(&card->dapm, card->dapm_widgets,
 					card->num_dapm_widgets);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		goto probe_end;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = snd_soc_dapm_new_controls(&card->dapm, card->of_dapm_widgets,
 					card->num_of_dapm_widgets);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		goto probe_end;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* initialise the sound card only once */
 	ret = snd_soc_card_probe(card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		goto probe_end;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* probe all components used by DAI links on this card */
 	ret = soc_probe_link_components(card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0) {
 		dev_err(card->dev,
 			"ASoC: failed to instantiate card %d\n", ret);
 		goto probe_end;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* probe auxiliary components */
 	ret = soc_probe_aux_devices(card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0) {
 		dev_err(card->dev,
 			"ASoC: failed to probe aux component %d\n", ret);
 		goto probe_end;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* probe all DAI links on this card */
 	ret = soc_probe_link_dais(card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0) {
 		dev_err(card->dev,
 			"ASoC: failed to instantiate card %d\n", ret);
 		goto probe_end;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	for_each_card_rtds(card, rtd) {
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		ret = soc_init_pcm_runtime(card, rtd);
 		if (ret < 0)
 			goto probe_end;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	snd_soc_dapm_link_dai_widgets(card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	snd_soc_dapm_connect_dai_link_widgets(card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 
 	ret = snd_soc_add_card_controls(card, card->controls,
 					card->num_controls);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		goto probe_end;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = snd_soc_dapm_add_routes(&card->dapm, card->dapm_routes,
 				      card->num_dapm_routes);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0) {
 		if (card->disable_route_checks) {
 			dev_info(card->dev,
@@ -1916,52 +1938,57 @@ static int snd_soc_bind_card(struct snd_soc_card *card)
 			goto probe_end;
 		}
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = snd_soc_dapm_add_routes(&card->dapm, card->of_dapm_routes,
 				      card->num_of_dapm_routes);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0)
 		goto probe_end;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* try to set some sane longname if DMI is available */
 	snd_soc_set_dmi_name(card, NULL);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	soc_setup_card_name(card->snd_card->shortname,
 			    card->name, NULL, 0);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	soc_setup_card_name(card->snd_card->longname,
 			    card->long_name, card->name, 0);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	soc_setup_card_name(card->snd_card->driver,
 			    card->driver_name, card->name, 1);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (card->components) {
 		/* the current implementation of snd_component_add() accepts */
 		/* multiple components in the string separated by space, */
 		/* but the string collision (identical string) check might */
 		/* not work correctly */
 		ret = snd_component_add(card->snd_card, card->components);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		if (ret < 0) {
 			dev_err(card->dev, "ASoC: %s snd_component_add() failed: %d\n",
 				card->name, ret);
 			goto probe_end;
 		}
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = snd_soc_card_late_probe(card);
 	if (ret < 0)
 		goto probe_end;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	snd_soc_dapm_new_widgets(card);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = snd_card_register(card->snd_card);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret < 0) {
 		dev_err(card->dev, "ASoC: failed to register soundcard %d\n",
 				ret);
 		goto probe_end;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	card->instantiated = 1;
 	dapm_mark_endpoints_dirty(card);
 	snd_soc_dapm_sync(&card->dapm);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* deactivate pins to sleep state */
 	for_each_card_components(card, component)
 		if (!snd_soc_component_active(component))
@@ -1970,10 +1997,10 @@ static int snd_soc_bind_card(struct snd_soc_card *card)
 probe_end:
 	if (ret < 0)
 		soc_cleanup_card_resources(card);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	mutex_unlock(&card->mutex);
 	mutex_unlock(&client_mutex);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	return ret;
 }
 
@@ -1981,21 +2008,21 @@ probe_end:
 static int soc_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/*
 	 * no card, so machine driver should be registering card
 	 * we should not be here in that case so ret error
 	 */
 	if (!card)
 		return -EINVAL;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	dev_warn(&pdev->dev,
 		 "ASoC: machine %s should use snd_soc_register_card()\n",
 		 card->name);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	/* Bodge while we unpick instantiation */
 	card->dev = &pdev->dev;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	return snd_soc_register_card(card);
 }
 
@@ -2185,9 +2212,9 @@ int snd_soc_register_card(struct snd_soc_card *card)
 {
 	if (!card->name || !card->dev)
 		return -EINVAL;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	dev_set_drvdata(card->dev, card);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	INIT_LIST_HEAD(&card->widgets);
 	INIT_LIST_HEAD(&card->paths);
 	INIT_LIST_HEAD(&card->dapm_list);
@@ -2197,13 +2224,13 @@ int snd_soc_register_card(struct snd_soc_card *card)
 	INIT_LIST_HEAD(&card->rtd_list);
 	INIT_LIST_HEAD(&card->dapm_dirty);
 	INIT_LIST_HEAD(&card->dobj_list);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	card->instantiated = 0;
 	mutex_init(&card->mutex);
 	mutex_init(&card->dapm_mutex);
 	mutex_init(&card->pcm_mutex);
 	spin_lock_init(&card->dpcm_lock);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	return snd_soc_bind_card(card);
 }
 EXPORT_SYMBOL_GPL(snd_soc_register_card);

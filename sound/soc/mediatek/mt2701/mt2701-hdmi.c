@@ -206,7 +206,7 @@ static int mt2701_hdmi_machine_probe(struct platform_device *pdev)
 			     GFP_KERNEL);
 	struct device *dev = &pdev->dev;
 	struct snd_soc_dai_link *dai_link;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (!priv)
 		return -ENOMEM;
 
@@ -217,6 +217,7 @@ static int mt2701_hdmi_machine_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 	for_each_card_prelinks(card, i, dai_link) {
+printk(KERN_ALERT "DEBUG: Passed %s %d DAI-LINK:%s\n",__FUNCTION__,__LINE__,dai_link->name);
 		if (dai_link->platforms->name)
 			continue;
 		dai_link->platforms->of_node = platform_node;
