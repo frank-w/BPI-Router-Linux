@@ -222,21 +222,24 @@ printk(KERN_ALERT "DEBUG: Passed %s %d DAI-LINK:%s\n",__FUNCTION__,__LINE__,dai_
 			continue;
 		dai_link->platforms->of_node = platform_node;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	card->dev = dev;
 
 	codec_node = of_parse_phandle(pdev->dev.of_node,
 				      "mediatek,audio-codec", 0);
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (!codec_node) {
 		dev_err(&pdev->dev,
 			"Property 'audio-codec' missing or invalid\n");
 		return -EINVAL;
 	}
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	for_each_card_prelinks(card, i, dai_link) {
 		if (dai_link->codecs->name)
 			continue;
 		dai_link->codecs->of_node = codec_node;
 	}
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 /*
 	codec_node_bt_mrg = of_parse_phandle(pdev->dev.of_node,
 					     "mediatek,audio-codec-bt-mrg", 0);
@@ -247,36 +250,39 @@ printk(KERN_ALERT "DEBUG: Passed %s %d DAI-LINK:%s\n",__FUNCTION__,__LINE__,dai_
 	};
 */
 	ret = snd_soc_of_parse_audio_routing(card, "audio-routing");
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to parse audio-routing: %d\n", ret);
 		return ret;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	priv->i2s1_in_mux_gpio_sel_1 =
 		of_get_named_gpio(dev->of_node, "i2s1-in-sel-gpio1", 0);
 	if (gpio_is_valid(priv->i2s1_in_mux_gpio_sel_1)) {
 		ret = devm_gpio_request(dev, priv->i2s1_in_mux_gpio_sel_1,
 					"i2s1_in_mux_gpio_sel_1");
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		if (ret)
 			dev_warn(&pdev->dev, "%s devm_gpio_request fail %d\n",
 				 __func__, ret);
 		gpio_direction_output(priv->i2s1_in_mux_gpio_sel_1, 0);
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	priv->i2s1_in_mux_gpio_sel_2 =
 		of_get_named_gpio(dev->of_node, "i2s1-in-sel-gpio2", 0);
 	if (gpio_is_valid(priv->i2s1_in_mux_gpio_sel_2)) {
 		ret = devm_gpio_request(dev, priv->i2s1_in_mux_gpio_sel_2,
 					"i2s1_in_mux_gpio_sel_2");
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 		if (ret)
 			dev_warn(&pdev->dev, "%s devm_gpio_request fail2 %d\n",
 				 __func__, ret);
 		gpio_direction_output(priv->i2s1_in_mux_gpio_sel_2, 0);
 	}
 	snd_soc_card_set_drvdata(card, priv);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
 	if (ret)
 		dev_err(&pdev->dev, "%s snd_soc_register_card fail %d\n",
 			__func__, ret);
