@@ -90,6 +90,12 @@
 #define AFE_DAI_BASE 0x1370
 #define AFE_DAI_CUR 0x137c
 
+#define AFE_HDMI_OUT_CON0	0x0370
+#define AFE_HDMI_OUT_BASE	0x0374
+#define AFE_HDMI_OUT_CUR	0x0378
+#define AFE_HDMI_OUT_END	0x037c
+#define AFE_HDMI_CONN0		0x0390
+
 /* AFE_DAIBT_CON0 (0x001c) */
 #define AFE_DAIBT_CON0_DAIBT_EN		(0x1 << 0)
 #define AFE_DAIBT_CON0_BT_FUNC_EN	(0x1 << 1)
@@ -114,6 +120,17 @@
 
 /* AFE_DAC_CON0 (0x1200) */
 #define AFE_DAC_CON0_AFE_ON		(0x1 << 0)
+
+/* AFE_HDMI_CONN0 (0x0390) */
+#define AFE_HDMI_CONN0_O37_I37		(0x7 << 21)
+#define AFE_HDMI_CONN0_O36_I36		(0x6 << 18)
+#define AFE_HDMI_CONN0_O35_I33		(0x3 << 15)
+#define AFE_HDMI_CONN0_O34_I32		(0x2 << 12)
+#define AFE_HDMI_CONN0_O33_I35		(0x5 << 9)
+#define AFE_HDMI_CONN0_O32_I34		(0x4 << 6)
+#define AFE_HDMI_CONN0_O31_I31		(0x1 << 3)
+#define AFE_HDMI_CONN0_O30_I30		(0x0 << 0)
+
 
 /* AFE_MEMIF_PBUF_SIZE (0x1238) */
 #define AFE_MEMIF_PBUF_SIZE_DLM_MASK		(0x1 << 29)

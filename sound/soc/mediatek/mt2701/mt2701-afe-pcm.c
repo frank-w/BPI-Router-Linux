@@ -78,6 +78,9 @@ static const unsigned int mt2701_afe_backup_list[] = {
 	AFE_CONN21,
 	AFE_CONN22,
 	AFE_DAC_CON0,
+	AFE_HDMI_OUT_BASE,
+	AFE_HDMI_OUT_END,
+	AFE_HDMI_CONN0,
 	AFE_MEMIF_PBUF_SIZE,
 };
 
@@ -510,14 +513,88 @@ static int mt2701_irq_fs(struct snd_pcm_substream *substream, unsigned int rate)
 	return mt2701_afe_i2s_fs(rate);
 }
 
+static int mt2701_afe_dais_enable_clks(struct mtk_base_afe *afe,
+				       struct clk *m_ck, struct clk *b_ck)
+{
+	int ret;
+
+	if (m_ck) {
+		ret = clk_prepare_enable(m_ck);
+		if (ret) {
+			dev_err(afe->dev, "Failed to enable m_ck\n");
+			return ret;
+		}
+	}
+
+	if (b_ck) {
+		ret = clk_prepare_enable(b_ck);
+		if (ret) {
+			dev_err(afe->dev, "Failed to enable b_ck\n");
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static int mt2701_afe_dais_set_clks(struct mtk_base_afe *afe,
+				    struct clk *m_ck, unsigned int mck_rate,
+				    struct clk *b_ck, unsigned int bck_rate)
+{
+	int ret;
+
+	if (m_ck) {
+		ret = clk_set_rate(m_ck, mck_rate);
+		if (ret) {
+			dev_err(afe->dev, "Failed to set m_ck rate\n");
+			return ret;
+		}
+	}
+
+	if (b_ck) {
+		ret = clk_set_rate(b_ck, bck_rate);
+		if (ret) {
+			dev_err(afe->dev, "Failed to set b_ck rate\n");
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static void mt2701_afe_dais_disable_clks(struct mtk_base_afe *afe,
+					 struct clk *m_ck, struct clk *b_ck)
+{
+	if (m_ck)
+		clk_disable_unprepare(m_ck);
+	if (b_ck)
+		clk_disable_unprepare(b_ck);
+}
+
+
 static int mt2701_afe_hdmi_startup(struct snd_pcm_substream *substream,
 				   struct snd_soc_dai *dai)
 {
+	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+	struct mt2701_afe_private *afe_priv = afe->platform_priv;
+
+	if (snd_soc_dai_active(dai))
+		return 0;
+
+	//mt2701_afe_dais_enable_clks(afe, afe_priv->clocks[MT2701_CLK_I2S3_M],
+	//			    afe_priv->clocks[MT2701_CLK_I2S3_B]);
 	return 0;
 }
 static void mt2701_afe_hdmi_shutdown(struct snd_pcm_substream *substream,
 				     struct snd_soc_dai *dai)
-{}
+{
+	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+	struct mt2701_afe_private *afe_priv = afe->platform_priv;
+
+	if (snd_soc_dai_active(dai))
+		return;
+
+	//mt2701_afe_dais_disable_clks(afe, afe_priv->clocks[MT2701_CLK_I2S3_M],
+	//			     afe_priv->clocks[MT2701_CLK_I2S3_B]);
+}
 static int mt2701_afe_hdmi_prepare(struct snd_pcm_substream *substream,
 				   struct snd_soc_dai *dai)
 {
