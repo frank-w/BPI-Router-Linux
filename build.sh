@@ -595,6 +595,7 @@ function build {
 				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
 				mkimage -f ${board}.its.tmp ${board}-$kernver$gitbranch.itb
+				rm ${board}.its.tmp
 			else
 				if [[ "$builddir" != "" ]];
 				then
