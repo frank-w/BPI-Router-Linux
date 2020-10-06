@@ -1357,7 +1357,7 @@ static const struct mtk_base_memif_data memif_data[MT2701_MEMIF_NUM] = {
 		.agent_disable_reg = AUDIO_TOP_CON5,
 		.agent_disable_shift = 16,
 		.msb_reg = -1,
-	}, /*{
+	}, {
 		.name = "HDMI",
 		.id = MT2701_MEMIF_HDMI,
 		.reg_ofs_base = AFE_HDMI_OUT_BASE,
@@ -1369,10 +1369,10 @@ static const struct mtk_base_memif_data memif_data[MT2701_MEMIF_NUM] = {
 		.mono_shift = -1,
 		.hd_reg = -1,
 		.enable_reg = -1,
-		.msb_reg = AFE_MEMIF_MSB,
+		.msb_reg = -1,
 		.msb_shift = 8,
 		.agent_disable_reg = -1,
-	},*/
+	},
 };
 
 static const struct mtk_base_irq_data irq_data[MT2701_IRQ_ASYS_END] = {

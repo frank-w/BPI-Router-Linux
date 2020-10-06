@@ -10,10 +10,14 @@
 #define _MT2701_REG_H_
 
 #define AUDIO_TOP_CON0 0x0000
+//#define AUDIO_TOP_CON1 0x0004
+//#define AUDIO_TOP_CON2 0x0008
+//#define AUDIO_TOP_CON3 0x000C
 #define AUDIO_TOP_CON4 0x0010
 #define AUDIO_TOP_CON5 0x0014
 #define AFE_DAIBT_CON0 0x001c
 #define AFE_MRGIF_CON 0x003c
+//#define AFE_MEMIF_MSB 0x00cc
 #define ASMI_TIMING_CON1 0x0100
 #define ASMO_TIMING_CON1 0x0104
 #define PWR1_ASM_CON1 0x0108
@@ -95,6 +99,15 @@
 #define AFE_HDMI_OUT_CUR	0x0378
 #define AFE_HDMI_OUT_END	0x037c
 #define AFE_HDMI_CONN0		0x0390
+
+#define AFE_IRQ_MCU_CON		0x03a0
+#define AFE_IRQ_STATUS		0x03a4
+#define AFE_IRQ_CLR		0x03a8
+#define AFE_IRQ_CNT1		0x03ac
+#define AFE_IRQ_CNT2		0x03b0
+#define AFE_IRQ_MCU_EN		0x03b4
+#define AFE_IRQ_CNT5		0x03bc
+#define AFE_IRQ_CNT7		0x03dc
 
 /* AFE_DAIBT_CON0 (0x001c) */
 #define AFE_DAIBT_CON0_DAIBT_EN		(0x1 << 0)
