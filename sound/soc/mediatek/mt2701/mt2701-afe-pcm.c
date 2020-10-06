@@ -1414,7 +1414,7 @@ static const struct mtk_base_irq_data irq_data[MT2701_IRQ_ASYS_END] = {
 		.irq_en_shift = 31,
 		.irq_clr_reg = ASYS_IRQ_CLR,
 		.irq_clr_shift = 2,
-	}, /*{
+	}, {
 		.id = MT2701_AFE_IRQ_HDMI,
 		.irq_cnt_reg = AFE_IRQ_CNT5,
 		.irq_cnt_shift = 0,
@@ -1425,7 +1425,7 @@ static const struct mtk_base_irq_data irq_data[MT2701_IRQ_ASYS_END] = {
 		.irq_fs_maskbit = -1,
 		.irq_clr_reg = AFE_IRQ_CLR,
 		.irq_clr_shift = 4,
-	}*/
+	}
 };
 
 static const struct mt2701_i2s_data mt2701_i2s_data[][2] = {
