@@ -389,7 +389,7 @@ function install
 					echo "no change needed!"
 					openuenv=n
 				else
-					echo "change needed to boot new kernel (kernel=${kernelfile})!"
+					echo "change needed to boot new kernel (kernel=${imagename})!"
 					openuenv=y
 				fi
 
