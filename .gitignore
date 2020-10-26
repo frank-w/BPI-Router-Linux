@@ -12,7 +12,7 @@
 #
 .*
 *.a
-*.asn1.[ch]
+*asn1.[ch]
 *.bin
 *.bz2
 *.c.[012]*.*
@@ -44,7 +44,6 @@
 *.tab.[ch]
 *.tar
 *.xz
-*.zst
 Module.symvers
 modules.builtin
 modules.order
@@ -57,7 +56,6 @@ modules.order
 /linux
 /vmlinux
 /vmlinux.32
-/vmlinux.symvers
 /vmlinux-gdb.py
 /vmlinuz
 /System.map
@@ -144,14 +142,31 @@ x509.genkey
 /allrandom.config
 /allyes.config
 
-# Kconfig savedefconfig output
-/defconfig
-
 # Kdevelop4
 *.kdev4
 
 # Clang's compilation database file
 /compile_commands.json
 
-# Documentation toolchain
-sphinx_*/
+#added by fwu
+*.log
+arch/arm/boot/compressed/piggy.gzip
+arch/arm/boot/zImage-dtb
+drivers/net/wireless/mediatek/mt76_*/
+firmware/
+kernel/config_data.h
+output/
+scripts/kconfig/zconf.hash.c
+uImage*
+*.bak
+*.diff
+arch/arm/boot/compressed/fdt.h
+arch/arm/boot/compressed/libfdt_internal.h
+net/wireguard/
+scripts/conmakehash
+scripts/sortextable
+utils/cryptodev/
+vmlinux.symvers
+*.itb
+mod/
+scripts/pnmtologo
