@@ -10,6 +10,35 @@
 #include "mt76.h"
 
 static int
+mt76_get_of_file(struct mt76_dev *dev, int len)
+{
+	char path[64]="";
+	struct file *fp;
+	loff_t pos=0;
+	int ret;
+
+	ret = snprintf(path,sizeof(path),"/lib/firmware/mediatek/%s_rf.bin",dev->dev->driver->name);
+	if(ret < 0)
+		return -EINVAL;
+	dev_info(dev->dev,"Load firmware : %s\n",path);
+	fp = filp_open(path, O_RDONLY, 0);
+	if (IS_ERR(fp)) {
+		dev_info(dev->dev,"Load firmware Failed : %s\n",path);
+		return -ENOENT;
+	}
+	ret = kernel_read(fp, dev->eeprom.data, len, &pos);
+	if(ret < len){
+		dev_info(dev->dev,"Load firmware ERR, count %d byte (%d)\n",ret,len);
+		ret = -ENOENT;
+	}else{
+		dev_info(dev->dev,"Load firmware OK, count %d byte\n",ret);
+		ret = 0;
+	}
+	filp_close(fp, 0);
+	return ret;
+}
+
+static int
 mt76_get_of_eeprom(struct mt76_dev *dev, int len)
 {
 #if defined(CONFIG_OF) && defined(CONFIG_MTD)
@@ -104,6 +133,6 @@ mt76_eeprom_init(struct mt76_dev *dev, int len)
 	if (!dev->eeprom.data)
 		return -ENOMEM;
 
-	return !mt76_get_of_eeprom(dev, len);
+	return (!mt76_get_of_file(dev, len)) || (!mt76_get_of_eeprom(dev, len));//mtd priority mt76
 }
 EXPORT_SYMBOL_GPL(mt76_eeprom_init);
