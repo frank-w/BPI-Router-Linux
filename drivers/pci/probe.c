@@ -890,6 +890,9 @@ static int pci_register_host_bridge(struct pci_host_bridge *bridge)
 	if (!bus)
 		return -ENOMEM;
 
+	if (bridge->no_msi)
+		bus->bus_flags |= PCI_BUS_FLAGS_NO_MSI;
+
 	bridge->bus = bus;
 
 	/* Temporarily move resources off the list */
