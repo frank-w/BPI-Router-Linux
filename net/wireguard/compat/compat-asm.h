@@ -40,7 +40,7 @@
 #undef pull
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 76)
 #define SYM_FUNC_START ENTRY
 #define SYM_FUNC_END ENDPROC
 #endif
