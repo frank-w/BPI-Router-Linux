@@ -388,6 +388,9 @@ function install
 				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" ]];then
 					echo "no change needed!"
 					openuenv=n
+				else
+					echo "change needed to boot new kernel (kernel=${imagename})!"
+					openuenv=y
 				fi
 
 				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
@@ -590,11 +593,9 @@ function build {
 				if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
 				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
-				set -x
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
-				cat ${board}.its.tmp
-				#mkimage -f ${board}.its.tmp ${board}-$kernver$gitbranch.itb
-				set +x
+				mkimage -f ${board}.its.tmp ${board}-$kernver$gitbranch.itb
+				rm ${board}.its.tmp
 			else
 				if [[ "$builddir" != "" ]];
 				then
@@ -881,7 +882,10 @@ if [ -n "$kernver" ]; then
 			build
 			#$0 cryptodev
 			;;
-
+		"clean")
+			echo clean
+			make clean
+			;;
 		"spidev")
 			echo "Build SPIDEV-Test"
 			(
