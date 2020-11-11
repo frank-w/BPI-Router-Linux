@@ -108,7 +108,7 @@ static void mt7615_mac_init(struct mt7615_dev *dev)
 
 static int mt7615_init_hardware(struct mt7615_dev *dev)
 {
-	int ret, idx;
+	int ret, idx, i;
 
 	mt76_wr(dev, MT_INT_SOURCE_CSR, ~0);
 
@@ -126,6 +126,11 @@ static int mt7615_init_hardware(struct mt7615_dev *dev)
 	set_bit(MT76_STATE_INITIALIZED, &dev->mt76.state);
 
 	ret = mt7615_mcu_init(dev);
+	for (i = 0; (ret == -EAGAIN) && (i < 10); i++) {
+		msleep(200);
+		ret = mt7615_mcu_init(dev);
+	}
+
 	if (ret)
 		return ret;
 
