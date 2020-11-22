@@ -47,6 +47,6 @@ deploy:
     - "../*.deb"
     - "*.itb"
     name: $TRAVIS_BRANCH-$(date +'%Y%m%d%H%M%S')
-    cleanup: false
+    skip_cleanup: true
     on:
         all_branches: true
