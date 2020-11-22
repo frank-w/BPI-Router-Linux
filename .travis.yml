@@ -18,7 +18,7 @@ branches:
 install:
     - sudo apt-add-repository 'deb http://archive.ubuntu.com/ubuntu focal main'
     - sudo apt-get update -qq
-    - sudo apt-get install -qq ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make
+    - sudo apt-get install -qq ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler
 script:
     - export PATH=/usr/lib/ccache:$PATH
     - bash build.sh importconfig
@@ -48,5 +48,6 @@ deploy:
     - "*.itb"
     name: $TRAVIS_BRANCH-$(date +'%Y%m%d%H%M%S')
     skip_cleanup: true
+    cleanup: false
     on:
         all_branches: true
