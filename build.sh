@@ -312,14 +312,29 @@ function install
 			echo "Kernel directory not found...is /boot mounted?"
 		fi
 	else
+		itbinput=n
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
 			targetdir=/media/$USER/BPI-BOOT/bananapi/$board/linux
+			mkdir -p $targetdir
 			kernelfile=$targetdir/$imagename
 
+			dtinput=n
+			ndtinput=y
 			if [[ "$board" == "bpi-r64" ]];then
-				dtinput=n
-				ndtinput=y
+				read -e -i "y" -p "install FIT kernel (itb) [yn]? " itbinput
+				if [[ "$itbinput" == "y" ]];then
+					itbname=${imagename//uImage_/}.itb
+					itbfile=$targetdir/$itbname
+					if [[ -e $itbfile ]];then
+						echo "backup of kernel: $kernelfile.bak"
+						cp $itbfile $itbfile.bak
+					fi
+					echo "copy new kernel"
+					cp ./${board}.itb $itbfile
+					if [[ $? -ne 0 ]];then exit 1;fi
+					ndtinput=n
+				fi
 			else
 				read -e -i "y" -p "install kernel with DT [yn]? " dtinput
 				if [[ "$dtinput" == "y" ]];then
@@ -361,7 +376,7 @@ function install
 				cp ./$board.dtb $dtbfile
 			fi
 
-			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]];then
+			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]] || [[ "$itbinput" == "y" ]];then
 				echo "copy modules (root needed because of ext-fs permission)"
 				export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 				echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
@@ -594,7 +609,8 @@ function build {
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
 				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
-				mkimage -f ${board}.its.tmp ${board}-$kernver$gitbranch.itb
+				mkimage -f ${board}.its.tmp ${board}.itb
+				cp ${board}.itb ${board}-$kernver$gitbranch.itb
 				rm ${board}.its.tmp
 			else
 				if [[ "$builddir" != "" ]];
