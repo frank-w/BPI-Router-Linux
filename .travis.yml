@@ -13,7 +13,6 @@ if: tag IS blank
 branches:
   only:
     - /^.*-main$/
-    - /^.*-rc$/
     - /^.*-travis$/
 
 install:
@@ -40,14 +39,15 @@ before_deploy:
     - export TRAVIS_TAG=${TRAVIS_TAG:-"CI-BUILD-$(date +'%Y%m%d_%H%M%S')-$(git log --format=%h -1)"}
     - git tag $TRAVIS_TAG
 deploy:
-    on:
-      branch: /^.*-main$/
-#     all_branches: true
     provider: releases
     token: $GITHUB_TOKEN
     file_glob: true
     file:
     - "../SD/*"
     - "../*.deb"
+    - "bpi-r64-*.itb"
     name: $TRAVIS_BRANCH-$(date +'%Y%m%d%H%M%S')
+    skip_cleanup: true
     cleanup: false
+    on:
+        all_branches: true
