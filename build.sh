@@ -41,7 +41,7 @@ if [[ ! $hostarch =~ aarch64|armv ]];then
 	crosscompile=1
 fi;
 
-if [[ "$builddir" != "" ]];
+if [[ "$builddir" != "" && ! "$1" =~ ^(updatesrc|uenv|defconfig|dts*)$ ]];
 then
 	if [[ "$1" == "importconfig" ]];
 	then
@@ -61,7 +61,7 @@ then
 		if [[ $? -ne 0 ]];then
 			#make sure directory is clean for mounting
 			if [[ "$(ls -A $builddir)" ]];then
-				rm -r $builddir/*
+				rm -rf $builddir/*
 			fi
 			echo "mounting tmpfs for building..."
 			sudo mount -t tmpfs -o size=$ramdisksize none $builddir
