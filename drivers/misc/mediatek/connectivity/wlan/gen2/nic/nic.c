@@ -1210,7 +1210,7 @@ VOID nicMCRInit(IN P_ADAPTER_T prAdapter)
 	/* 4 <0> Initial value */
 }
 
-VOID nicHifInit(IN P_ADAPTER_T prAdapter)
+static VOID nicHifInit(IN P_ADAPTER_T prAdapter)
 {
 
 	ASSERT(prAdapter);
@@ -1313,7 +1313,7 @@ VOID nicProcessAbnormalInterrupt(IN P_ADAPTER_T prAdapter)
 * @return (none)
 */
 /*----------------------------------------------------------------------------*/
-VOID nicProcessFwOwnBackInterrupt(IN P_ADAPTER_T prAdapter)
+static VOID __maybe_unused nicProcessFwOwnBackInterrupt(IN P_ADAPTER_T prAdapter)
 {
 
 }				/* end of nicProcessFwOwnBackInterrupt() */
@@ -2608,7 +2608,7 @@ WLAN_STATUS nicSetAutoTxPower(IN P_ADAPTER_T prAdapter, IN P_CMD_AUTO_POWER_PARA
 *         WLAN_STATUS_FAILURE
 */
 /*----------------------------------------------------------------------------*/
-WLAN_STATUS nicSetAutoTxPowerControl(IN P_ADAPTER_T prAdapter, IN P_CMD_TX_PWR_T prTxPwrParam)
+static WLAN_STATUS __maybe_unused nicSetAutoTxPowerControl(IN P_ADAPTER_T prAdapter, IN P_CMD_TX_PWR_T prTxPwrParam)
 {
 	DEBUGFUNC("nicUpdateTxPower");
 

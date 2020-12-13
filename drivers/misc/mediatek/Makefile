@@ -20,7 +20,7 @@ endif
 
 export MTK_PLATFORM = $(subst ",,$(CONFIG_MTK_PLATFORM))
 
-subdir-ccflags-y += -Werror
+#subdir-ccflags-y += -Werror
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
 
 obj-$(CONFIG_MTK_COMBO) += connectivity/

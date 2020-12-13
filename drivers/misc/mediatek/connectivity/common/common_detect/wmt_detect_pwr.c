@@ -60,7 +60,7 @@ int _wmt_detect_output_low(unsigned int id)
 	return 0;
 }
 
-int _wmt_detect_output_high(unsigned int id)
+static int _wmt_detect_output_high(unsigned int id)
 {
 	if (INVALID_PIN_ID != gpio_ctrl_info.gpio_ctrl_state[id].gpio_num) {
 		gpio_direction_output(gpio_ctrl_info.gpio_ctrl_state[id].gpio_num, 1);
@@ -72,7 +72,7 @@ int _wmt_detect_output_high(unsigned int id)
 	return 0;
 }
 
-int _wmt_detect_read_gpio_input(unsigned int id)
+static int _wmt_detect_read_gpio_input(unsigned int id)
 {
 	int retval = 0;
 

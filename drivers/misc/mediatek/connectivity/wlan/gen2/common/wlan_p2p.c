@@ -525,7 +525,7 @@ wlanoidSetRemoveP2PKey(IN P_ADAPTER_T prAdapter,
 * \return WLAN_STATUS_INVALID_LENGTH
 */
 /*----------------------------------------------------------------------------*/
-WLAN_STATUS
+static WLAN_STATUS __maybe_unused
 wlanoidSetP2pNetworkAddress(IN P_ADAPTER_T prAdapter,
 			    IN PVOID pvSetBuffer, IN UINT_32 u4SetBufferLen, OUT PUINT_32 pu4SetInfoLen)
 {

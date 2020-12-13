@@ -72,7 +72,7 @@ static ssize_t wmt_detect_read(struct file *filp, char __user *buf, size_t count
 	return 0;
 }
 
-ssize_t wmt_detect_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
+static ssize_t wmt_detect_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
 	WMT_DETECT_INFO_FUNC(" ++\n");
 	WMT_DETECT_INFO_FUNC(" --\n");

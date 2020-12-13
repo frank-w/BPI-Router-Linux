@@ -519,7 +519,7 @@ static int btif_chrdev_init(void)
 	return 0;
 }
 
-void btif_rx_notify_cb(void)
+static void btif_rx_notify_cb(void)
 {
 	BTIF_DBG_FUNC("++\n");
 	rx_notify_flag = 1;

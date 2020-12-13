@@ -125,7 +125,7 @@ typedef signed short INT16, *PINT16;
 typedef signed int INT32, *PINT32;
 typedef unsigned char UINT8, *PUINT8;
 typedef unsigned short UINT16, *PUINT16;
-typedef unsigned int UINT32, *PUINT32;
+//typedef unsigned int UINT32, *PUINT32;
 #endif
 
 /* Type definition of large integer (64bits) union to be comptaible with

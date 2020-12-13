@@ -988,7 +988,7 @@ nicTxLifetimePrintCheckSnOrder(IN P_MSDU_INFO_T prPrevProfileMsduInfo,
 }
 #endif
 
-VOID nicTxReturnMsduInfoProfiling(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfoListHead)
+static VOID nicTxReturnMsduInfoProfiling(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfoListHead)
 {
 	P_MSDU_INFO_T prMsduInfo = prMsduInfoListHead, prNextMsduInfo;
 	P_PKT_PROFILE_T prPktProfile;
@@ -1148,7 +1148,7 @@ VOID nicTxReturnMsduInfoProfiling(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prM
 
 }
 
-VOID nicTxLifetimeRecordEn(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN P_NATIVE_PACKET prPacket)
+static VOID nicTxLifetimeRecordEn(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN P_NATIVE_PACKET prPacket)
 {
 	P_PKT_PROFILE_T prPktProfile = &prMsduInfo->rPktProfile;
 
@@ -1275,7 +1275,7 @@ nicTxLifetimeCheckRTP(IN P_ADAPTER_T prAdapter,
 }
 #endif
 #if CFG_ENABLE_PER_STA_STATISTICS
-VOID
+static VOID
 nicTxLifetimeCheckByAC(IN P_ADAPTER_T prAdapter,
 		       IN P_MSDU_INFO_T prMsduInfo, IN P_NATIVE_PACKET prPacket, IN UINT_8 ucPriorityParam)
 {
@@ -1304,7 +1304,7 @@ nicTxLifetimeCheckByAC(IN P_ADAPTER_T prAdapter,
 
 #endif
 
-VOID
+static VOID
 nicTxLifetimeCheck(IN P_ADAPTER_T prAdapter,
 		   IN P_MSDU_INFO_T prMsduInfo,
 		   IN P_NATIVE_PACKET prPacket,

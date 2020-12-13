@@ -4115,7 +4115,7 @@ WLAN_STATUS wlanQueryDebugCode(IN P_ADAPTER_T prAdapter)
 *         WLAN_STATUS_FAILURE
 */
 /*----------------------------------------------------------------------------*/
-WLAN_STATUS wlanQueryCompileFlag(IN P_ADAPTER_T prAdapter, IN UINT_32 u4QueryID, OUT PUINT_32 pu4CompilerFlag)
+static WLAN_STATUS wlanQueryCompileFlag(IN P_ADAPTER_T prAdapter, IN UINT_32 u4QueryID, OUT PUINT_32 pu4CompilerFlag)
 {
 	UINT_8 ucCmdSeqNum;
 	P_CMD_INFO_T prCmdInfo;
@@ -5735,7 +5735,7 @@ struct WLAN_CFG_PARSE_STATE_S {
 	UINT_32 maxSize;
 };
 
-INT_32 wlanCfgFindNextToken(struct WLAN_CFG_PARSE_STATE_S *state)
+static INT_32 wlanCfgFindNextToken(struct WLAN_CFG_PARSE_STATE_S *state)
 {
 	CHAR *x = state->ptr;
 	CHAR *s;
@@ -5893,7 +5893,7 @@ exit:
 	return WLAN_STATUS_SUCCESS;
 }
 
-WLAN_STATUS
+static WLAN_STATUS
 wlanCfgParseAddEntry(IN P_ADAPTER_T prAdapter,
 		     PUINT_8 pucKeyHead, PUINT_8 pucKeyTail, PUINT_8 pucValueHead, PUINT_8 pucValueTail)
 {
@@ -5951,7 +5951,7 @@ enum {
 	WAIT_COMMENT_TAIL
 };
 
-WLAN_STATUS wlanCfgParse(IN P_ADAPTER_T prAdapter, PUINT_8 pucConfigBuf, UINT_32 u4ConfigBufLen)
+static WLAN_STATUS wlanCfgParse(IN P_ADAPTER_T prAdapter, PUINT_8 pucConfigBuf, UINT_32 u4ConfigBufLen)
 {
 
 	struct WLAN_CFG_PARSE_STATE_S state;
