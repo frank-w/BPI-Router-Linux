@@ -10,6 +10,47 @@
 #include "mt76.h"
 
 static int
+mt76_get_eeprom_file(struct mt76_dev *dev, int len)
+{
+	char path[64]="";
+	struct file *fp;
+	loff_t pos=0;
+	int ret;
+	struct inode *inode = NULL;
+	loff_t size;
+
+	ret = snprintf(path,sizeof(path),"/lib/firmware/mediatek/%s_rf.bin",dev->dev->driver->name);
+	if(ret<0)
+		return -EINVAL;
+	dev_info(dev->dev,"Load eeprom: %s\n",path);
+	fp = filp_open(path, O_RDONLY, 0);
+	if (IS_ERR(fp)) {
+		dev_info(dev->dev,"Open eeprom file failed: %s\n",path);
+		return -ENOENT;
+	}
+
+	inode = file_inode(fp);
+	if ((!S_ISREG(inode->i_mode) && !S_ISBLK(inode->i_mode))) {
+		printk(KERN_ALERT "invalid file type: %s\n", path);
+		return -ENOENT;
+	}
+	size = i_size_read(inode->i_mapping->host);
+	if (size < 0)
+	{
+		printk(KERN_ALERT "failed getting size of %s size:%lld \n",path,size);
+		return -ENOENT;
+	}
+	ret = kernel_read(fp, dev->eeprom.data, len, &pos);
+	if(ret < size){
+		dev_info(dev->dev,"Load eeprom ERR, count %d byte (len:%d)\n",ret,len);
+		return -ENOENT;
+	}
+	filp_close(fp, 0);
+	dev_info(dev->dev,"Load eeprom OK, count %d byte\n",ret);
+
+	return 0;
+}
+static int
 mt76_get_of_eeprom(struct mt76_dev *dev, int len)
 {
 #if defined(CONFIG_OF) && defined(CONFIG_MTD)
@@ -119,6 +160,6 @@ mt76_eeprom_init(struct mt76_dev *dev, int len)
 	if (!dev->eeprom.data)
 		return -ENOMEM;
 
-	return !mt76_get_of_eeprom(dev, len);
+	return (!mt76_get_eeprom_file(dev, len)) || (!mt76_get_of_eeprom(dev, len));
 }
 EXPORT_SYMBOL_GPL(mt76_eeprom_init);
