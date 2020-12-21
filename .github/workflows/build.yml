@@ -24,11 +24,13 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 10
       - name: Install depencies
         run: sudo apt-get install ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler
 
       # Runs a set of commands using the runners shell
-      - name: Run build script
+      - name: build for bananapi-r2
         run: |
           #./build.sh
           export PATH=/usr/lib/ccache:$PATH
@@ -37,20 +39,21 @@ jobs:
           bash build.sh cryptodev
           bash build.sh pack_debs
           bash build.sh pack
+      - name: build for bananapi-r64
+        run: | 
           sed -i 's/#\(board=bpi-r64\)/\1/' build.conf #change board to r64
           bash build.sh importconfig
           bash build.sh build
           bash build.sh cryptodev
           bash build.sh pack_debs
           bash build.sh pack
-
       - name: Upload binaries to release
         uses: marvinpinto/action-automatic-releases@latest
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "${GITHUB_REF##*/}-$(date +'%Y-%m-%d %H:%M:%S')"
           prerelease: true
-          title: "Development Build for ${GITHUB_REF##*/}"
+          title: "Build for ${GITHUB_REF##*/}"
           files: |
             "../SD/*"
             "../*.deb"
