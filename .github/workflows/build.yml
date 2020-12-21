@@ -28,19 +28,21 @@ jobs:
       - name: Install depencies
         run: sudo apt-get install ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler
 
-      # Runs a set of commands using the runners shell
-      - name: build for bananapi-r2
+      - name: setup env
         run: |
-          #./build.sh
-          export PATH=/usr/lib/ccache:$PATH
-          bash build.sh importconfig
-          bash build.sh build
-          bash build.sh cryptodev
-      - name: pack for bananapi-r2
-        run: |
-          #./build.sh
-          bash build.sh pack_debs
-          bash build.sh pack
+          echo "buildtime=$(date +'%Y-%m-%d_%H:%M')" >> $GITHUB_ENV
+          echo "kernelversion=$(make kernelversion)" >> $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+#      - name: build for bananapi-r2
+#        run: |
+#          export PATH=/usr/lib/ccache:$PATH
+#          bash build.sh importconfig
+#          bash build.sh build
+#          bash build.sh cryptodev
+#      - name: pack for bananapi-r2
+#        run: |
+#          bash build.sh pack_debs
+#          bash build.sh pack
       - name: build for bananapi-r64
         run: | 
           sed -i 's/#\(board=bpi-r64\)/\1/' build.conf #change board to r64
@@ -49,16 +51,15 @@ jobs:
           bash build.sh cryptodev
       - name: pack for bananapi-r64
         run: |
-          #./build.sh
           bash build.sh pack_debs
           bash build.sh pack
       - name: Upload binaries to release
         uses: marvinpinto/action-automatic-releases@latest
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${GITHUB_REF##*/}"
+          automatic_release_tag: "$BRANCH-$kernelversion-$buildtime"
           prerelease: true
-          title: "Build for ${GITHUB_REF##*/}"
+          title: "Build for $BRANCH"
           files: |
             "../SD/*"
             "../*.deb"
