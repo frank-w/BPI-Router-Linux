@@ -64,9 +64,9 @@ jobs:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
           prerelease: true
-          title: "Build for ${{ env.BRANCH }}"
+          title: "Build for branch ${{ env.BRANCH }} (${{ env.KERNELVER }})"
           files: |
             ../SD/*
             ../*.deb
-            *.itb"
+            *.itb
 #            *.its
