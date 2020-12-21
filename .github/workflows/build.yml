@@ -28,17 +28,24 @@ jobs:
       - name: Install depencies
         run: sudo apt-get install ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler
 
-      # Runs a set of commands using the runners shell
+      - name: setup env
+        run: |
+          echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
+          echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+      - name: print env
+        run: |
+          echo $BRANCH $KERNELVER $DT
+          
       - name: build for bananapi-r2
         run: |
-          #./build.sh
           export PATH=/usr/lib/ccache:$PATH
           bash build.sh importconfig
           bash build.sh build
           bash build.sh cryptodev
       - name: pack for bananapi-r2
         run: |
-          #./build.sh
           bash build.sh pack_debs
           bash build.sh pack
       - name: build for bananapi-r64
@@ -49,29 +56,17 @@ jobs:
           bash build.sh cryptodev
       - name: pack for bananapi-r64
         run: |
-          #./build.sh
           bash build.sh pack_debs
           bash build.sh pack
       - name: Upload binaries to release
         uses: marvinpinto/action-automatic-releases@latest
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${GITHUB_REF##*/}"
+          automatic_release_tag: "${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
           prerelease: true
-          title: "Build for ${GITHUB_REF##*/}"
+          title: "Build for ${{ env.BRANCH }}"
           files: |
-            "../SD/*"
-            "../*.deb"
-            "*.itb"
-
-#        uses: svenstaro/upload-release-action@v2
-#        with:
-#          #repo_name: frank-w/buildroot
-#          # A personal access token for the GitHub repository in which the release will be created and edited.
-#          # It is recommended to create the access token with the following scopes: `repo, user, admin:repo_hook`.
-#          repo_token: ${{ secrets.GITHUB_TOKEN }}
-#          file: rootfs*.cpio.gz
-#          tag: ${{ github.ref }}
-#          overwrite: true
-#          body: "release for bpi-r2 + bpi-r64"
-#          file_glob: true
+            ../SD/*
+            ../*.deb
+            *.itb"
+#            *.its
