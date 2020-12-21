@@ -36,6 +36,9 @@ jobs:
           bash build.sh importconfig
           bash build.sh build
           bash build.sh cryptodev
+      - name: pack for bananapi-r2
+        run: |
+          #./build.sh
           bash build.sh pack_debs
           bash build.sh pack
       - name: build for bananapi-r64
@@ -44,13 +47,16 @@ jobs:
           bash build.sh importconfig
           bash build.sh build
           bash build.sh cryptodev
+      - name: pack for bananapi-r64
+        run: |
+          #./build.sh
           bash build.sh pack_debs
           bash build.sh pack
       - name: Upload binaries to release
         uses: marvinpinto/action-automatic-releases@latest
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${GITHUB_REF##*/}-$(date +'%Y-%m-%d %H:%M:%S')"
+          automatic_release_tag: "${GITHUB_REF##*/}"
           prerelease: true
           title: "Build for ${GITHUB_REF##*/}"
           files: |
