@@ -38,6 +38,14 @@ jobs:
         run: |
           echo $BRANCH $KERNELVER $DT
           
+      - name: Cache
+        id: cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('hashFile.txt') }}
+          restore-keys: ${{ runner.os }}-ccache-
+
       - name: build for bananapi-r2
         run: |
           export PATH=/usr/lib/ccache:$PATH
