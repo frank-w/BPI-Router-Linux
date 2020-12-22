@@ -44,8 +44,10 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${{ hashFiles('hashFile.txt') }}
-          restore-keys: ${{ runner.os }}-ccache-
+          key: ${{ runner.os }}-ccache
+          restore-keys: |
+            ${{ runner.os }}-ccache
+            ${{ runner.os }}-ccache-
 
       - name: Build for bananapi-r2
         run: |
