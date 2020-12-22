@@ -57,7 +57,7 @@ jobs:
           bash build.sh cryptodev
       - name: Pack for bananapi-r2
         run: |
-          bash build.sh pack_debs
+          bash build.sh deb
           bash build.sh pack
 
       - name: Upload binaries to release
@@ -69,5 +69,5 @@ jobs:
 #          prerelease: true
           title: "Build for branch ${{ env.BRANCH }} (${{ env.KERNELVER }})"
           files: |
+            debian/*.deb
             ../SD/*
-            ../*.deb
