@@ -63,8 +63,8 @@ jobs:
         uses: marvinpinto/action-automatic-releases@latest
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "CI-BUILD ${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
-          prerelease: true
+          automatic_release_tag: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
+#          prerelease: true
           title: "Build for branch ${{ env.BRANCH }} (${{ env.KERNELVER }})"
           files: |
             ../SD/*
