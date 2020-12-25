@@ -245,6 +245,8 @@ struct mtd_info {
 	 * information below if they desire
 	 */
 	uint32_t erasesize;
+	/* "Minor" (smallest) erase size supported by the whole device */
+	uint32_t erasesize_minor;
 	/* Minimal writable flash unit size. In case of NOR flash it is 1 (even
 	 * though individual bits can be cleared), in case of NAND flash it is
 	 * one NAND page (or half, or one-fourths of it), in case of ECC-ed NOR

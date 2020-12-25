@@ -45,6 +45,7 @@ static struct mtd_info *allocate_partition(struct mtd_info *parent,
 	struct mtd_info *master = mtd_get_master(parent);
 	int wr_alignment = (parent->flags & MTD_NO_ERASE) ?
 			   master->writesize : master->erasesize;
+	int wr_alignment_minor = 0;
 	u64 parent_size = mtd_is_partition(parent) ?
 			  parent->part.size : parent->size;
 	struct mtd_info *child;
@@ -169,6 +170,7 @@ static struct mtd_info *allocate_partition(struct mtd_info *parent,
 	} else {
 		/* Single erase size */
 		child->erasesize = master->erasesize;
+		child->erasesize_minor = master->erasesize_minor;
 	}
 
 	/*
@@ -176,26 +178,39 @@ static struct mtd_info *allocate_partition(struct mtd_info *parent,
 	 * exposes several regions with different erasesize. Adjust
 	 * wr_alignment accordingly.
 	 */
-	if (!(child->flags & MTD_NO_ERASE))
+	if (!(child->flags & MTD_NO_ERASE)) {
 		wr_alignment = child->erasesize;
+		wr_alignment_minor = child->erasesize_minor;
+	}
 
 	tmp = mtd_get_master_ofs(child, 0);
 	remainder = do_div(tmp, wr_alignment);
 	if ((child->flags & MTD_WRITEABLE) && remainder) {
-		/* Doesn't start on a boundary of major erase size */
-		/* FIXME: Let it be writable if it is on a boundary of
-		 * _minor_ erase size though */
-		child->flags &= ~MTD_WRITEABLE;
-		printk(KERN_WARNING"mtd: partition \"%s\" doesn't start on an erase/write block boundary -- force read-only\n",
-			part->name);
+		if (wr_alignment_minor) {
+			/* rely on minor being a factor of major erasesize */
+			tmp = remainder;
+			remainder = do_div(tmp, wr_alignment_minor);
+		}
+		if (remainder) {
+			child->flags &= ~MTD_WRITEABLE;
+			printk(KERN_WARNING"mtd: partition \"%s\" doesn't start on an erase/write block boundary -- force read-only\n",
+				part->name);
+		}
 	}
 
 	tmp = mtd_get_master_ofs(child, 0) + child->part.size;
 	remainder = do_div(tmp, wr_alignment);
 	if ((child->flags & MTD_WRITEABLE) && remainder) {
-		child->flags &= ~MTD_WRITEABLE;
-		printk(KERN_WARNING"mtd: partition \"%s\" doesn't end on an erase/write block -- force read-only\n",
-			part->name);
+		if (wr_alignment_minor) {
+			tmp = remainder;
+			remainder = do_div(tmp, wr_alignment_minor);
+		}
+
+		if (remainder) {
+			child->flags &= ~MTD_WRITEABLE;
+			printk(KERN_WARNING"mtd: partition \"%s\" doesn't end on an erase/write block -- force read-only\n",
+				part->name);
+		}
 	}
 
 	child->size = child->part.size;
