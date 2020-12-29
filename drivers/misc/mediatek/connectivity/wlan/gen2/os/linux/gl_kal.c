@@ -4369,7 +4369,8 @@ int kalMetInitProcfs(IN P_GLUE_INFO_T prGlueInfo)
 	/*
 	 * Directory: Root (/proc/net/wlan0)
 	 */
-	pMetProcDir = proc_mkdir("wlan0", init_net.proc_net);
+	//how to read interface-name from drivers/misc/mediatek/connectivity/wlan/gen2/os/linux/gl_init.c??
+	pMetProcDir = proc_mkdir("wlan_ap", init_net.proc_net);
 	if (pMetProcDir == NULL)
 		return -ENOENT;
 	/*
@@ -4396,7 +4397,7 @@ int kalMetRemoveProcfs(void)
 	remove_proc_entry(PROC_MET_PROF_CTRL, pMetProcDir);
 	remove_proc_entry(PROC_MET_PROF_PORT, pMetProcDir);
 	/* remove root directory (proc/net/wlan0) */
-	remove_proc_entry("wlan0", init_net.proc_net);
+	remove_proc_entry("wlan_ap", init_net.proc_net);
 	/* clear MetGlobalData */
 	pMetGlobalData = NULL;
 

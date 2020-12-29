@@ -75,7 +75,7 @@ enum {
 };
 static INT32 wlan_mode = WLAN_MODE_HALT;
 static INT32 powered;
-static INT8 *ifname = WLAN_IFACE_NAME;
+static INT8 *ifname = WLAN_IFACE_NAME;//how to get wlan-inteface name created by register_netdev
 #if CFG_TC1_FEATURE
 volatile INT32 wlan_if_changed = 0;
 EXPORT_SYMBOL(wlan_if_changed);
@@ -178,6 +178,22 @@ do { \
 	} \
 } while (0)
 
+static struct net_device * get_netdev(void)
+{
+	struct net_device *netdev;
+	char tmpifname[6]="";
+	int i;
+
+	for (i = 9; i>=0; i--) {
+		snprintf(tmpifname,sizeof(tmpifname),"wlan%d",i);
+		netdev = dev_get_by_name(&init_net, tmpifname); //crash if wlan1
+		if (netdev) break;
+	}
+	//if (netdev) strcpy(ifname,tmpifname); //causes page fault, maybe type mismatch
+
+	return netdev;
+}
+
 /*******************************************************************
  *  WHOLE CHIP RESET PROCEDURE:
  *
@@ -200,7 +216,7 @@ INT32 wifi_reset_start(VOID)
 	down(&wr_mtx);
 
 	if (powered == 1) {
-		netdev = dev_get_by_name(&init_net, ifname);
+		netdev = get_netdev();
 		if (netdev == NULL) {
 			WIFI_ERR_FUNC("Fail to get %s net device\n", ifname);
 		} else {
@@ -257,12 +273,12 @@ INT32 wifi_reset_end(ENUM_RESET_STATUS_T status)
 				goto done;
 			}
 
-			netdev = dev_get_by_name(&init_net, ifname);
+			netdev = get_netdev();
 			while (netdev == NULL && wait_cnt < 10) {
 				WIFI_ERR_FUNC("Fail to get %s net device, sleep 300ms\n", ifname);
 				msleep(300);
 				wait_cnt++;
-				netdev = dev_get_by_name(&init_net, ifname);
+				netdev = get_netdev();
 			}
 			if (wait_cnt >= 10) {
 				WIFI_ERR_FUNC("Get %s net device timeout\n", ifname);
@@ -343,7 +359,7 @@ ssize_t WIFI_write(struct file *filp, const char __user *buf, size_t count, loff
 				goto done;
 			}
 
-			netdev = dev_get_by_name(&init_net, ifname);
+			netdev = get_netdev();
 			if (netdev == NULL) {
 				WIFI_ERR_FUNC("Fail to get %s net device\n", ifname);
 			} else {
@@ -463,25 +479,24 @@ ssize_t WIFI_write(struct file *filp, const char __user *buf, size_t count, loff
 				goto done;
 			}
 
-			netdev = dev_get_by_name(&init_net, ifname);
+			netdev = get_netdev();//dev_get_by_name(&init_net, ifname);//maybe this is the problem as ifname is fixed to wlan0 (WLAN_IFACE_NAME)
+printk(KERN_ALERT "DEBUG: Passed %s %d %s\n",__FUNCTION__,__LINE__,netdev->name);
 			while (netdev == NULL && wait_cnt < 10) {
 				WIFI_ERR_FUNC("Fail to get %s net device, sleep 300ms\n", ifname);
 				msleep(300);
 				wait_cnt++;
-				netdev = dev_get_by_name(&init_net, ifname);
+				netdev = get_netdev();
 			}
 			if (wait_cnt >= 10) {
 				WIFI_ERR_FUNC("Get %s net device timeout\n", ifname);
 				goto done;
 			}
-
 			if ((wlan_mode == WLAN_MODE_STA_P2P && (local[0] == 'S' || local[0] == 'P')) ||
 			    (wlan_mode == WLAN_MODE_AP && (local[0] == 'A'))) {
 				WIFI_INFO_FUNC("WIFI is already in mode %d!\n", wlan_mode);
 				retval = count;
 				goto done;
 			}
-
 			if ((wlan_mode == WLAN_MODE_AP && (local[0] == 'S' || local[0] == 'P')) ||
 			    (wlan_mode == WLAN_MODE_STA_P2P && (local[0] == 'A'))) {
 				p2pmode.u4Enable = 0;
@@ -539,7 +554,7 @@ ssize_t WIFI_write(struct file *filp, const char __user *buf, size_t count, loff
 #endif
 				p2pmode.u4Enable = 1;
 				p2pmode.u4Mode = 1;
-				if (pf_set_p2p_mode(netdev, p2pmode) != 0) {
+				if (pf_set_p2p_mode(netdev, p2pmode) != 0) { //hangs if interface not bound to this driver
 					WIFI_ERR_FUNC("Set wlan mode fail\n");
 				} else {
 					WIFI_INFO_FUNC("Set wlan mode %d --> %d\n", wlan_mode, WLAN_MODE_AP);
