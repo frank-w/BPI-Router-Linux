@@ -1131,6 +1131,7 @@ BOOLEAN kalInitBowDevice(IN P_GLUE_INFO_T prGlueInfo, IN const char *prDevName)
 #if (MTK_WCN_HIF_SDIO == 0)
 		SET_NETDEV_DEV(prGlueInfo->rBowInfo.prDevHandler, prHif->Dev);
 #endif
+printk(KERN_ALERT "DEBUG: Passed %s %d devname:%s\n",__FUNCTION__,__LINE__,prDevName);
 		register_netdev(prGlueInfo->rBowInfo.prDevHandler);
 		/* 2. net device initialize */
 		netif_carrier_off(prGlueInfo->rBowInfo.prDevHandler);

@@ -667,9 +667,9 @@
 *                    E X T E R N A L   R E F E R E N C E S
 ********************************************************************************
 */
-#include "gl_os.h"
+#include "gl_os.h" //also in gl_kal.c //drivers/misc/mediatek/connectivity/wlan/gen2/os/linux/include/gl_os.h
 #include "wlan_lib.h"
-#include "gl_wext.h"
+#include "gl_wext.h" //also in gl_kal.c
 #include "gl_cfg80211.h"
 #include "precomp.h"
 #if CFG_SUPPORT_AGPS_ASSIST
@@ -1593,7 +1593,6 @@ static void createWirelessDevice(void)
 #if CFG_SUPPORT_PERSIST_NETDEV
 	struct net_device *prNetDev = NULL;
 #endif
-
 	/* <1.1> Create wireless_dev */
 	prWdev = kzalloc(sizeof(struct wireless_dev), GFP_KERNEL);
 	if (!prWdev) {
@@ -2259,13 +2258,19 @@ static INT_32 wlanNetRegister(struct wireless_dev *prWdev)
 		}
 
 #if !CFG_SUPPORT_PERSIST_NETDEV
+//struct net_device *alloc_netdev_mqs( /net/core/dev.c )
+//netdev name is done register_netdevice with dev_get_valid_name => __dev_alloc_name (return int) and written to dev->name
+//https://elixir.bootlin.com/linux/latest/source/net/core/dev.c#L1197
+printk(KERN_ALERT "DEBUG: Passed %s %d devname:%s\n",__FUNCTION__,__LINE__,prWdev->netdev->name);//wlan%s
 		if (register_netdev(prWdev->netdev) < 0) {
 			DBGLOG(INIT, ERROR, "wlanNetRegister: net_device context is not registered.\n");
 
 			wiphy_unregister(prWdev->wiphy);
 			wlanClearDevIdx(prWdev->netdev);
 			i4DevIdx = -1;
-		}
+			break;
+		} else
+			printk(KERN_ALERT "DEBUG: Passed %s %d devname:%s (need to be used everywhere \"wlan0\" is used)\n",__FUNCTION__,__LINE__,prWdev->netdev->name); //wlan0, driver->name causes null pointer dereference
 #endif
 		if (i4DevIdx != -1)
 			prGlueInfo->fgIsRegistered = TRUE;
@@ -2842,6 +2847,7 @@ static void set_dbg_level_handler(unsigned char dbg_lvl[DBG_MODULE_NUM])
 static INT_32 wlanProbe(PVOID pvData)
 {
 	struct wireless_dev *prWdev = NULL;
+	//maybe define wireless_dev static global
 	enum probe_fail_reason {
 		BUS_INIT_FAIL,
 		NET_CREATE_FAIL,
@@ -2859,6 +2865,7 @@ static INT_32 wlanProbe(PVOID pvData)
 	BOOLEAN bRet = FALSE;
 
 	eFailReason = FAIL_REASON_NUM;
+
 	do {
 		/* 4 <1> Initialize the IO port of the interface */
 		/*  GeorgeKuo: pData has different meaning for _HIF_XXX:
