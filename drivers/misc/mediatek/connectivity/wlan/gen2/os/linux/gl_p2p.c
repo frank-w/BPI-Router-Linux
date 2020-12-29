@@ -1108,7 +1108,7 @@ BOOLEAN p2pNetRegister(P_GLUE_INFO_T prGlueInfo, BOOLEAN fgIsRtnlLockAcquired)
 	/* net device initialize */
 	netif_carrier_off(prGlueInfo->prP2PInfo->prDevHandler);
 	netif_tx_stop_all_queues(prGlueInfo->prP2PInfo->prDevHandler);
-
+printk(KERN_ALERT "DEBUG: Passed %s %d,devname: %s\n",__FUNCTION__,__LINE__,prGlueInfo->prP2PInfo->prDevHandler->name);//is called (with name ap%s)!!
 	/* register for net device */
 	if (register_netdev(prGlueInfo->prP2PInfo->prDevHandler) < 0) {
 		DBGLOG(P2P, WARN, "unable to register netdevice for p2p\n");
