@@ -549,11 +549,11 @@
 };
 
 &sata {
-	status = "ok";
+	status = "okay";
 };
 
 &sata_phy {
-	status = "ok";
+	status = "okay";
 };
 
 &spi0 {
