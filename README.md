@@ -36,8 +36,6 @@ you can also install direct to sd-card which makes a backup of kernelfile, here 
 
 ### Usage with docker
 
-not yet in 5.4
-
 The Dockerfile in `utils/docker/` provides a build environment without installing the native compilers on the local system.
 
 The local directory will be mounted into the docker container. All changes will also be present in the respository folder.
@@ -69,6 +67,7 @@ Kernel upstream + BPI-R2 / R64
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.14-main">4.14-main</a>
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-main">4.19-main</a> | <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-r64-main">4.19-r64-main</a>
 * 5.4-main
+* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/5.10-main">5.10-main</a>
 
 ## Kernel versions
 
