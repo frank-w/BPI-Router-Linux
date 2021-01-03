@@ -1423,7 +1423,7 @@ void mtk_p2p_cfg80211_update_mgmt_frame_register(IN struct wiphy *wiphy,
 			break;
 		}
 */
-		printk(KERN_ALERT "DEBUG: Passed %s %d frame-filter:0x%x \n",__FUNCTION__,__LINE__,prGlueInfo->u4OsMgmtFrameFilter);
+		//printk(KERN_ALERT "DEBUG: Passed %s %d frame-filter:0x%x \n",__FUNCTION__,__LINE__,prGlueInfo->u4OsMgmtFrameFilter);
 
 		if ((prGlueInfo->prAdapter != NULL) && (prGlueInfo->prAdapter->fgIsP2PRegistered == TRUE)) {
 
