@@ -232,10 +232,11 @@
 	bus-width = <4>;
 	max-frequency = <50000000>;
 	cap-sd-highspeed;
+	mmc-hs200-1_8v;
 	r_smpl = <1>;
 	cd-gpios = <&pio 81 GPIO_ACTIVE_LOW>;
 	vmmc-supply = <&reg_3p3v>;
-	vqmmc-supply = <&reg_3p3v>;
+	vqmmc-supply = <&reg_1p8v>;
 	assigned-clocks = <&topckgen CLK_TOP_MSDC30_1_SEL>;
 	assigned-clock-parents = <&topckgen CLK_TOP_UNIV48M>;
 };
