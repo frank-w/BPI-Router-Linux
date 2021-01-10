@@ -383,6 +383,9 @@ function install
 				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH KBUILD_OUTPUT=$KBUILD_OUTPUT modules_install
 
 				echo "uImage:"
+				if [[ "$itbinput" == "y" ]];then
+					echo "${itbfile}"
+				fi
 				if [[ "$dtinput" == "y" ]];then
 					echo "${kernelfile}"
 				fi
@@ -394,17 +397,21 @@ function install
 				echo $uenv
 				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
 				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
-				curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
-				curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
-				echo "kernel: " $curkernel
-				echo "dtb: " $curfdt
 
 				openuenv=n
-				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" ]];then
+				if [[ "$itbinput" == "y" ]];then
+					curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
+				else
+					curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
+					curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
+				fi
+				echo "kernel: " $curkernel
+				echo "dtb: " $curfdt
+				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
 					echo "no change needed!"
 					openuenv=n
 				else
-					echo "change needed to boot new kernel (kernel=${imagename})!"
+					echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
 					openuenv=y
 				fi
 
