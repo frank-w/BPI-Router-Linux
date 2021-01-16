@@ -397,8 +397,7 @@ CONFIG_MD_RAID10=y
 CONFIG_MD_RAID456=y
 
 #RamFS
-#CONFIG_INITRAMFS_SOURCE="../rootfs_ttys0_rng.cpio.gz"
-#CONFIG_INITRAMFS_SOURCE="../initramfs.cpio"
+#CONFIG_INITRAMFS_SOURCE="utils/buildroot/rootfs_bpi-r2.cpio.gz"
 #CONFIG_INITRAMFS_FORCE=y
 
 #Filesystem
