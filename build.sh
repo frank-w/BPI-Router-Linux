@@ -452,6 +452,50 @@ function install
 	fi
 }
 
+function install_modules {
+	echo "cleaning up modules"
+	rm -r $(pwd)/mod/* 2> /dev/null
+	mkdir $(pwd)/mod
+	echo "building and installing modules"
+#	export LOCALVERSION="${gitbranch}"
+#	#MAKEFLAGS="V=1"
+#	make ${MAKEFLAGS} ${CFLAGS} modules
+	build
+	INSTALL_MOD_PATH=$(pwd)/mod make modules_install
+}
+
+function mod2initrd {
+	size=$(du -s mod | awk '{ print $1}') #65580 working
+	echo $size
+	if [[ $size -eq 0 ]];
+	then
+		install_modules
+	fi
+	if [[ $size -lt 70000 ]]; then
+		#first reset initrd
+		git co utils/buildroot/rootfs_${board}.cpio.gz
+		(
+			echo "adding modules to initramfs..."
+			cd mod
+			find . | cpio -H newc -o | gzip >> ../utils/buildroot/rootfs_${board}.cpio.gz
+		)
+		sed -i 's:# CONFIG_INITRAMFS_SOURCE is not set:CONFIG_INITRAMFS_SOURCE="../rootfs_ttys0_rng.cpio.gz":g' $DOTCONFIG
+		sed -i 's:# CONFIG_INITRAMFS_FORCE is not set:CONFIG_INITRAMFS_FORCE=y:g' $DOTCONFIG
+		build
+	else
+		echo "too much modules, please clean up to get working initrd!"
+		if [[ "autocleanmod" == "y" ]];then
+			echo "cleaning up modules..."
+			rm -r mod/lib/modules/*/kernel/net/netfilter
+			rm -r mod/lib/modules/*/kernel/fs
+			rm -r mod/lib/modules/*/kernel/drivers/media/dvb-frontends
+			rm -r mod/lib/modules/*/kernel/drivers/media
+			rm -r mod/lib/modules/*/kernel/drivers/net/wireless/ath/
+			rm -r mod/lib/modules/*/kernel/net/sched
+		fi
+	fi
+}
+
 function deb {
 #set -x
 	check_dep "deb"
@@ -942,7 +986,12 @@ if [ -n "$kernver" ]; then
 			#$0 cryptodev
 			$0 pack
 			;;
-
+		"install_modules")
+				install_modules
+			;;
+		"mod2initrd")
+				mod2initrd
+			;;
 		"help")
 			echo "print help"
 			sed -n -e '/case "$action" in/,/esac/{//!p}'  $0 | grep -A1 '")$' | sed -e 's/echo "\(.*\)"/\1/'
