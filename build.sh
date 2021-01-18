@@ -470,21 +470,7 @@ function mod2initrd {
 	if [[ $size -eq 0 ]];
 	then
 		install_modules
-	fi
-	if [[ $size -lt 70000 ]]; then
-		#first reset initrd
-		git co utils/buildroot/rootfs_${board}.cpio.gz
-		(
-			echo "adding modules to initramfs..."
-			cd mod
-			find . | cpio -H newc -o | gzip >> ../utils/buildroot/rootfs_${board}.cpio.gz
-		)
-		sed -i 's:# CONFIG_INITRAMFS_SOURCE is not set:CONFIG_INITRAMFS_SOURCE="../rootfs_ttys0_rng.cpio.gz":g' $DOTCONFIG
-		sed -i 's:# CONFIG_INITRAMFS_FORCE is not set:CONFIG_INITRAMFS_FORCE=y:g' $DOTCONFIG
-		build
-	else
-		echo "too much modules, please clean up to get working initrd!"
-		if [[ "autocleanmod" == "y" ]];then
+		if [[ "$autocleanmod" == "y" ]];then
 			echo "cleaning up modules..."
 			rm -r mod/lib/modules/*/kernel/net/netfilter
 			rm -r mod/lib/modules/*/kernel/fs
@@ -493,6 +479,24 @@ function mod2initrd {
 			rm -r mod/lib/modules/*/kernel/drivers/net/wireless/ath/
 			rm -r mod/lib/modules/*/kernel/net/sched
 		fi
+	fi
+	size=$(du -s mod | awk '{ print $1}') #65580 working
+	echo "size:"$size
+	if [[ $size -lt 70000 ]]; then
+		#first reset initrd
+		echo "reset initramfs..."
+		git checkout utils/buildroot/rootfs_${board}.cpio.gz
+		(
+			echo "adding modules to initramfs..."
+			cd mod
+			find . | cpio -H newc -o | gzip >> ../utils/buildroot/rootfs_${board}.cpio.gz
+		)
+		echo "re-building kernel with initramfs... ($DOTCONFIG)"
+		OWNCONFIGS="CONFIG_INITRAMFS_SOURCE=\"utils/buildroot/rootfs_${board}.cpio.gz\" CONFIG_INITRAMFS_FORCE=y"
+		build
+		installchoice
+	else
+		echo "too much modules, please clean up to get working initrd!"
 	fi
 }
 
@@ -644,7 +648,7 @@ function build {
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
-		make ${MAKEFLAGS} ${CFLAGS} 2>&3
+		make ${MAKEFLAGS} ${CFLAGS} ${OWNCONFIGS} 2>&3
 		ret=$?
 		exec 3>&-
 
@@ -751,6 +755,34 @@ function prepare_SD {
 			cp -r utils/wmt/firmware/* $SD/BPI-ROOT/etc/firmware/
 		else
 			echo "WMT-Tools not available"
+		fi
+	fi
+}
+
+function installchoice
+{
+	if [ -e "./uImage" ] || [ -e "./uImage_nodt" ]; then
+		echo "==========================================="
+		echo "1) pack"
+		if [[ $crosscompile -eq 0 ]];then
+			echo "2) install to System"
+		else
+			echo "2) install to SD-Card"
+		fi;
+		echo "3) deb-package"
+		echo "4) upload"
+		read -n1 -p "choice [1234]:" choice
+		echo
+		if [[ "$choice" == "1" ]]; then
+			$0 pack
+		elif [[ "$choice" == "2" ]];then
+			$0 install
+		elif [[ "$choice" == "3" ]];then
+			$0 deb
+		elif [[ "$choice" == "4" ]];then
+			$0 upload
+		else
+			echo "wrong option: $choice"
 		fi
 	fi
 }
@@ -1003,30 +1035,7 @@ if [ -n "$kernver" ]; then
 			fi;
 			$0 build
 			#$0 cryptodev
-			if [ -e "./uImage" ] || [ -e "./uImage_nodt" ]; then
-				echo "==========================================="
-				echo "1) pack"
-				if [[ $crosscompile -eq 0 ]];then
-					echo "2) install to System"
-				else
-					echo "2) install to SD-Card"
-				fi;
-				echo "3) deb-package"
-				echo "4) upload"
-				read -n1 -p "choice [1234]:" choice
-				echo
-				if [[ "$choice" == "1" ]]; then
-					$0 pack
-				elif [[ "$choice" == "2" ]];then
-					$0 install
-				elif [[ "$choice" == "3" ]];then
-					$0 deb
-				elif [[ "$choice" == "4" ]];then
-					$0 upload
-				else
-					echo "wrong option: $choice"
-				fi
-			fi
+			installchoice
  			;;
 	esac
 fi
