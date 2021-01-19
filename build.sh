@@ -470,33 +470,33 @@ function mod2initrd {
 	if [[ $size -eq 0 ]];
 	then
 		install_modules
-		if [[ "$autocleanmod" == "y" ]];then
-			echo "cleaning up modules..."
-			rm -r mod/lib/modules/*/kernel/net/netfilter
-			rm -r mod/lib/modules/*/kernel/fs
-			rm -r mod/lib/modules/*/kernel/drivers/media/dvb-frontends
-			rm -r mod/lib/modules/*/kernel/drivers/media
-			rm -r mod/lib/modules/*/kernel/drivers/net/wireless/ath/
-			rm -r mod/lib/modules/*/kernel/net/sched
-		fi
 	fi
-	size=$(du -s mod | awk '{ print $1}') #65580 working
-	echo "size:"$size
-	if [[ $size -lt 70000 ]]; then
-		#first reset initrd
-		echo "reset initramfs..."
-		git checkout utils/buildroot/rootfs_${board}.cpio.gz
-		(
-			echo "adding modules to initramfs..."
-			cd mod
-			find . | cpio -H newc -o | gzip >> ../utils/buildroot/rootfs_${board}.cpio.gz
-		)
+	#first reset initrd
+	echo "reset initramfs..."
+	git checkout utils/buildroot/rootfs_${board}.cpio.gz
+	ls -lh utils/buildroot/rootfs_${board}.cpio.gz
+	(
+		echo "adding modules to initramfs..."
+		cd mod
+		#need to create dirs and common files first
+		find . -not -iname '*.ko' > mod.lst
+		if [[ "$ownmodules" != "" ]];then
+			find . | grep $ownmodules >> mod.lst
+		fi
+		cat mod.lst | cpio -H newc -o | gzip >> ../utils/buildroot/rootfs_${board}.cpio.gz
+		#to show whats inside cpio:
+		#gunzip -c < ../utils/buildroot/rootfs_${board}.cpio.gz | while LANG=C cpio -itv 2>/dev/null; do :; done| grep lib/modules
+		ls -lh ../utils/buildroot/rootfs_${board}.cpio.gz
+	)
+	initrdsize=$(ls -l --block-size=M utils/buildroot/rootfs_bpi-r2.cpio.gz | awk '{print $5}' | sed 's/M$//')
+	if [[ $initrdsize -lt 40 ]]; #lower than 40MB leaves 10MB for kernel uImage
+	then
 		echo "re-building kernel with initramfs... ($DOTCONFIG)"
 		OWNCONFIGS="CONFIG_INITRAMFS_SOURCE=\"utils/buildroot/rootfs_${board}.cpio.gz\" CONFIG_INITRAMFS_FORCE=y"
 		build
 		installchoice
 	else
-		echo "too much modules, please clean up to get working initrd!"
+		echo "kernel with initrd may exceed uboot limit of ~50MB"
 	fi
 }
 
