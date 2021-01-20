@@ -489,14 +489,14 @@ function mod2initrd {
 		ls -lh ../utils/buildroot/rootfs_${board}.cpio.gz
 	)
 	initrdsize=$(ls -l --block-size=M utils/buildroot/rootfs_bpi-r2.cpio.gz | awk '{print $5}' | sed 's/M$//')
-	if [[ $initrdsize -lt 40 ]]; #lower than 40MB leaves 10MB for kernel uImage
+	if [[ $initrdsize -lt 100 ]]; #lower than 40MB leaves 10MB for kernel uImage
 	then
 		echo "re-building kernel with initramfs... ($DOTCONFIG)"
 		OWNCONFIGS="CONFIG_INITRAMFS_SOURCE=\"utils/buildroot/rootfs_${board}.cpio.gz\" CONFIG_INITRAMFS_FORCE=y"
 		build
 		installchoice
 	else
-		echo "kernel with initrd may exceed uboot limit of ~50MB"
+		echo "kernel with initrd may exceed uboot limit of ~100MB (Bad Data CRC)"
 	fi
 }
 
