@@ -297,6 +297,7 @@ mt76x02_vif_init(struct mt76x02_dev *dev, struct ieee80211_vif *vif,
 	mvif->idx = idx;
 	mvif->group_wcid.idx = MT_VIF_WCID(idx);
 	mvif->group_wcid.hw_key_idx = -1;
+	printk(KERN_ALERT "DEBUG: Passed %s %d 0x%x \n",__FUNCTION__,__LINE__,(unsigned int)vif->txq);
 	mtxq = (struct mt76_txq *)vif->txq->drv_priv;
 	mtxq->wcid = &mvif->group_wcid;
 
