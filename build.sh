@@ -235,6 +235,13 @@ function update_kernel_source {
         fi
 }
 
+function changelog() {
+	get_version >/dev/null
+	lasttag=$(curl -s "https://api.github.com/repos/frank-w/BPI-R2-4.14/releases?per_page=100" | jq -r '[.[] | select(.tag_name|contains("'${kernbranch}'"))][0]' | grep "tag_name" | sed 's/.*: "\(.*\)",/\1/')
+	echo "changes since $lasttag:"
+	git log --pretty=format:"%h %ad %s %d" --date=short $lasttag..HEAD
+}
+
 function pack {
 	get_version
 	#if [[ "$board" == "bpi-r64" ]];then
@@ -822,6 +829,14 @@ if [ -n "$kernver" ]; then
 			echo "checking depencies..."
 			check_dep "build";
 			if [[ $? -eq 0 ]];then echo "OK";else echo "failed";fi
+		;;
+		"changelog")
+			echo "print changelog from last release of branch"
+			changelog
+		;;
+		"changelog_file")
+			echo "write changelog from last release of branch to file"
+			changelog > changelog.txt
 		;;
 		"reset")
 			echo "Reset Git"
