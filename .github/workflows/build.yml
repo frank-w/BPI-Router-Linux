@@ -27,7 +27,9 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install depencies
-        run: sudo apt-get install ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler
+        run: |
+          sudo apt update
+          sudo apt install ccache libssl-dev u-boot-tools python-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler
 
       - name: Setup env
         run: |
