@@ -46,9 +46,9 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.ccache
-          key: ${{ runner.os }}-ccache-$BRANCH
+          key: ${{ runner.os }}-ccache-${BRANCH}
           restore-keys: |
-            ${{ runner.os }}-ccache-$BRANCH
+            ${{ runner.os }}-ccache-${BRANCH}
             ${{ runner.os }}-ccache
             ${{ runner.os }}-ccache-
 
