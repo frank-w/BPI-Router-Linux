@@ -924,7 +924,7 @@ static int pci_register_host_bridge(struct pci_host_bridge *bridge)
 	device_enable_async_suspend(bus->bridge);
 	pci_set_bus_of_node(bus);
 	pci_set_bus_msi_domain(bus);
-	if (bridge->no_msi)
+	if (bridge->no_msi || (bridge->msi_domain && !bus->dev.msi_domain))
 		bus->bus_flags |= PCI_BUS_FLAGS_NO_MSI;
 
 	if (!parent)
