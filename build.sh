@@ -235,6 +235,13 @@ function update_kernel_source {
         fi
 }
 
+function changelog() {
+	get_version >/dev/null
+	lasttag=$(curl -s "https://api.github.com/repos/frank-w/BPI-R2-4.14/releases?per_page=100" | jq -r '[.[] | select(.tag_name|contains("'${kernbranch}'"))][0]' | grep "tag_name" | sed 's/.*: "\(.*\)",/\1/')
+	echo "changes since $lasttag:"
+	git log --pretty=format:"%h %ad %s %d" --date=short $lasttag..HEAD
+}
+
 function pack {
 	get_version
 	#if [[ "$board" == "bpi-r64" ]];then
@@ -383,6 +390,9 @@ function install
 				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH KBUILD_OUTPUT=$KBUILD_OUTPUT modules_install
 
 				echo "uImage:"
+				if [[ "$itbinput" == "y" ]];then
+					echo "${itbfile}"
+				fi
 				if [[ "$dtinput" == "y" ]];then
 					echo "${kernelfile}"
 				fi
@@ -394,17 +404,21 @@ function install
 				echo $uenv
 				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
 				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
-				curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
-				curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
-				echo "kernel: " $curkernel
-				echo "dtb: " $curfdt
 
 				openuenv=n
-				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" ]];then
+				if [[ "$itbinput" == "y" ]];then
+					curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
+				else
+					curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
+					curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
+				fi
+				echo "kernel: " $curkernel
+				echo "dtb: " $curfdt
+				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
 					echo "no change needed!"
 					openuenv=n
 				else
-					echo "change needed to boot new kernel (kernel=${imagename})!"
+					echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
 					openuenv=y
 				fi
 
@@ -442,6 +456,54 @@ function install
 		else
 			echo "SD-Card not found!"
 		fi
+	fi
+}
+
+function install_modules {
+	echo "cleaning up modules"
+	rm -r $(pwd)/mod/* 2> /dev/null
+	mkdir $(pwd)/mod
+	echo "building and installing modules"
+#	export LOCALVERSION="${gitbranch}"
+#	#MAKEFLAGS="V=1"
+#	make ${MAKEFLAGS} ${CFLAGS} modules
+	build
+	INSTALL_MOD_PATH=$(pwd)/mod make modules_install
+}
+
+function mod2initrd {
+	size=$(du -s mod | awk '{ print $1}') #65580 working
+	echo $size
+	if [[ $size -eq 0 ]];
+	then
+		install_modules
+	fi
+	#first reset initrd
+	echo "reset initramfs..."
+	git checkout utils/buildroot/rootfs_${board}.cpio.gz
+	ls -lh utils/buildroot/rootfs_${board}.cpio.gz
+	(
+		echo "adding modules to initramfs..."
+		cd mod
+		#need to create dirs and common files first
+		find . -not -iname '*.ko' > mod.lst
+		if [[ "$ownmodules" != "" ]];then
+			find . | grep $ownmodules >> mod.lst
+		fi
+		cat mod.lst | cpio -H newc -o | gzip >> ../utils/buildroot/rootfs_${board}.cpio.gz
+		#to show whats inside cpio:
+		#gunzip -c < ../utils/buildroot/rootfs_${board}.cpio.gz | while LANG=C cpio -itv 2>/dev/null; do :; done| grep lib/modules
+		ls -lh ../utils/buildroot/rootfs_${board}.cpio.gz
+	)
+	initrdsize=$(ls -l --block-size=M utils/buildroot/rootfs_bpi-r2.cpio.gz | awk '{print $5}' | sed 's/M$//')
+	if [[ $initrdsize -lt 100 ]]; #lower than 40MB leaves 10MB for kernel uImage
+	then
+		echo "re-building kernel with initramfs... ($DOTCONFIG)"
+		OWNCONFIGS="CONFIG_INITRAMFS_SOURCE=\"utils/buildroot/rootfs_${board}.cpio.gz\" CONFIG_INITRAMFS_FORCE=y"
+		build
+		installchoice
+	else
+		echo "kernel with initrd may exceed uboot limit of ~100MB (Bad Data CRC)"
 	fi
 }
 
@@ -593,7 +655,7 @@ function build {
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
-		make ${MAKEFLAGS} ${CFLAGS} 2>&3
+		make ${MAKEFLAGS} ${CFLAGS} ${OWNCONFIGS} 2>&3
 		ret=$?
 		exec 3>&-
 
@@ -704,6 +766,34 @@ function prepare_SD {
 	fi
 }
 
+function installchoice
+{
+	if [ -e "./uImage" ] || [ -e "./uImage_nodt" ]; then
+		echo "==========================================="
+		echo "1) pack"
+		if [[ $crosscompile -eq 0 ]];then
+			echo "2) install to System"
+		else
+			echo "2) install to SD-Card"
+		fi;
+		echo "3) deb-package"
+		echo "4) upload"
+		read -n1 -p "choice [1234]:" choice
+		echo
+		if [[ "$choice" == "1" ]]; then
+			$0 pack
+		elif [[ "$choice" == "2" ]];then
+			$0 install
+		elif [[ "$choice" == "3" ]];then
+			$0 deb
+		elif [[ "$choice" == "4" ]];then
+			$0 upload
+		else
+			echo "wrong option: $choice"
+		fi
+	fi
+}
+
 function release
 {
 	lc=$(git log -n 1 --pretty=format:'%s')
@@ -739,6 +829,14 @@ if [ -n "$kernver" ]; then
 			echo "checking depencies..."
 			check_dep "build";
 			if [[ $? -eq 0 ]];then echo "OK";else echo "failed";fi
+		;;
+		"changelog")
+			echo "print changelog from last release of branch"
+			changelog
+		;;
+		"changelog_file")
+			echo "write changelog from last release of branch to file"
+			changelog > changelog.txt
 		;;
 		"reset")
 			echo "Reset Git"
@@ -935,7 +1033,12 @@ if [ -n "$kernver" ]; then
 			#$0 cryptodev
 			$0 pack
 			;;
-
+		"install_modules")
+				install_modules
+			;;
+		"mod2initrd")
+				mod2initrd
+			;;
 		"help")
 			echo "print help"
 			sed -n -e '/case "$action" in/,/esac/{//!p}'  $0 | grep -A1 '")$' | sed -e 's/echo "\(.*\)"/\1/'
@@ -947,30 +1050,7 @@ if [ -n "$kernver" ]; then
 			fi;
 			$0 build
 			#$0 cryptodev
-			if [ -e "./uImage" ] || [ -e "./uImage_nodt" ]; then
-				echo "==========================================="
-				echo "1) pack"
-				if [[ $crosscompile -eq 0 ]];then
-					echo "2) install to System"
-				else
-					echo "2) install to SD-Card"
-				fi;
-				echo "3) deb-package"
-				echo "4) upload"
-				read -n1 -p "choice [1234]:" choice
-				echo
-				if [[ "$choice" == "1" ]]; then
-					$0 pack
-				elif [[ "$choice" == "2" ]];then
-					$0 install
-				elif [[ "$choice" == "3" ]];then
-					$0 deb
-				elif [[ "$choice" == "4" ]];then
-					$0 upload
-				else
-					echo "wrong option: $choice"
-				fi
-			fi
+			installchoice
  			;;
 	esac
 fi
