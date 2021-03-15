@@ -956,6 +956,7 @@ static inline int skb_ensure_writable(struct sk_buff *skb, int write_len)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 1, 0)
 #include <net/netfilter/nf_nat_core.h>
 #endif
+#if !IS_ENABLED(CONFIG_NF_NAT)
 static inline void icmp_ndo_send(struct sk_buff *skb_in, int type, int code, __be32 info)
 {
 	struct sk_buff *cloned_skb = NULL;
@@ -1014,6 +1015,7 @@ static inline void icmpv6_ndo_send(struct sk_buff *skb_in, u8 type, u8 code, __u
 out:
 	consume_skb(cloned_skb);
 }
+#endif
 #else
 #define icmp_ndo_send icmp_send
 #define icmpv6_ndo_send icmpv6_send
