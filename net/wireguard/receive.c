@@ -57,7 +57,7 @@ static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
 	size_t data_offset, data_len, header_len;
 	struct udphdr *udp;
 
-	if (unlikely(wg_skb_examine_untrusted_ip_hdr(skb) != skb->protocol ||
+	if (unlikely(!wg_check_packet_protocol(skb) ||
 		     skb_transport_header(skb) < skb->head ||
 		     (skb_transport_header(skb) + sizeof(struct udphdr)) >
 			     skb_tail_pointer(skb)))
@@ -227,27 +227,26 @@ void wg_packet_handshake_receive_worker(struct work_struct *work)
 static void keep_key_fresh(struct wg_peer *peer)
 {
 	struct noise_keypair *keypair;
-	bool send = false;
+	bool send;
 
 	if (peer->sent_lastminute_handshake)
 		return;
 
 	rcu_read_lock_bh();
 	keypair = rcu_dereference_bh(peer->keypairs.current_keypair);
-	if (likely(keypair && READ_ONCE(keypair->sending.is_valid)) &&
-	    keypair->i_am_the_initiator &&
-	    unlikely(wg_birthdate_has_expired(keypair->sending.birthdate,
-			REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT)))
-		send = true;
+	send = keypair && READ_ONCE(keypair->sending.is_valid) &&
+	       keypair->i_am_the_initiator &&
+	       wg_birthdate_has_expired(keypair->sending.birthdate,
+			REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT);
 	rcu_read_unlock_bh();
 
-	if (send) {
+	if (unlikely(send)) {
 		peer->sent_lastminute_handshake = true;
 		wg_packet_send_queued_handshake_initiation(peer, false);
 	}
 }
 
-static bool decrypt_packet(struct sk_buff *skb, struct noise_symmetric_key *key,
+static bool decrypt_packet(struct sk_buff *skb, struct noise_keypair *keypair,
 			   simd_context_t *simd_context)
 {
 	struct scatterlist sg[MAX_SKB_FRAGS + 8];
@@ -255,13 +254,13 @@ static bool decrypt_packet(struct sk_buff *skb, struct noise_symmetric_key *key,
 	unsigned int offset;
 	int num_frags;
 
-	if (unlikely(!key))
+	if (unlikely(!keypair))
 		return false;
 
-	if (unlikely(!READ_ONCE(key->is_valid) ||
-		  wg_birthdate_has_expired(key->birthdate, REJECT_AFTER_TIME) ||
-		  key->counter.receive.counter >= REJECT_AFTER_MESSAGES)) {
-		WRITE_ONCE(key->is_valid, false);
+	if (unlikely(!READ_ONCE(keypair->receiving.is_valid) ||
+		  wg_birthdate_has_expired(keypair->receiving.birthdate, REJECT_AFTER_TIME) ||
+		  keypair->receiving_counter.counter >= REJECT_AFTER_MESSAGES)) {
+		WRITE_ONCE(keypair->receiving.is_valid, false);
 		return false;
 	}
 
@@ -285,7 +284,8 @@ static bool decrypt_packet(struct sk_buff *skb, struct noise_symmetric_key *key,
 		return false;
 
 	if (!chacha20poly1305_decrypt_sg_inplace(sg, skb->len, NULL, 0,
-						 PACKET_CB(skb)->nonce, key->key,
+						 PACKET_CB(skb)->nonce,
+						 keypair->receiving.key,
 						 simd_context))
 		return false;
 
@@ -301,41 +301,41 @@ static bool decrypt_packet(struct sk_buff *skb, struct noise_symmetric_key *key,
 }
 
 /* This is RFC6479, a replay detection bitmap algorithm that avoids bitshifts */
-static bool counter_validate(union noise_counter *counter, u64 their_counter)
+static bool counter_validate(struct noise_replay_counter *counter, u64 their_counter)
 {
 	unsigned long index, index_current, top, i;
 	bool ret = false;
 
-	spin_lock_bh(&counter->receive.lock);
+	spin_lock_bh(&counter->lock);
 
-	if (unlikely(counter->receive.counter >= REJECT_AFTER_MESSAGES + 1 ||
+	if (unlikely(counter->counter >= REJECT_AFTER_MESSAGES + 1 ||
 		     their_counter >= REJECT_AFTER_MESSAGES))
 		goto out;
 
 	++their_counter;
 
 	if (unlikely((COUNTER_WINDOW_SIZE + their_counter) <
-		     counter->receive.counter))
+		     counter->counter))
 		goto out;
 
 	index = their_counter >> ilog2(BITS_PER_LONG);
 
-	if (likely(their_counter > counter->receive.counter)) {
-		index_current = counter->receive.counter >> ilog2(BITS_PER_LONG);
+	if (likely(their_counter > counter->counter)) {
+		index_current = counter->counter >> ilog2(BITS_PER_LONG);
 		top = min_t(unsigned long, index - index_current,
 			    COUNTER_BITS_TOTAL / BITS_PER_LONG);
 		for (i = 1; i <= top; ++i)
-			counter->receive.backtrack[(i + index_current) &
+			counter->backtrack[(i + index_current) &
 				((COUNTER_BITS_TOTAL / BITS_PER_LONG) - 1)] = 0;
-		counter->receive.counter = their_counter;
+		counter->counter = their_counter;
 	}
 
 	index &= (COUNTER_BITS_TOTAL / BITS_PER_LONG) - 1;
 	ret = !test_and_set_bit(their_counter & (BITS_PER_LONG - 1),
-				&counter->receive.backtrack[index]);
+				&counter->backtrack[index]);
 
 out:
-	spin_unlock_bh(&counter->receive.lock);
+	spin_unlock_bh(&counter->lock);
 	return ret;
 }
 
@@ -392,18 +392,16 @@ static void wg_packet_consume_data_done(struct wg_peer *peer,
 #ifndef COMPAT_CANNOT_USE_CSUM_LEVEL
 	skb->csum_level = ~0; /* All levels */
 #endif
-	skb->protocol = wg_skb_examine_untrusted_ip_hdr(skb);
+	skb->protocol = ip_tunnel_parse_protocol(skb);
 	if (skb->protocol == htons(ETH_P_IP)) {
 		len = ntohs(ip_hdr(skb)->tot_len);
 		if (unlikely(len < sizeof(struct iphdr)))
 			goto dishonest_packet_size;
-		if (INET_ECN_is_ce(PACKET_CB(skb)->ds))
-			IP_ECN_set_ce(ip_hdr(skb));
+		INET_ECN_decapsulate(skb, PACKET_CB(skb)->ds, ip_hdr(skb)->tos);
 	} else if (skb->protocol == htons(ETH_P_IPV6)) {
 		len = ntohs(ipv6_hdr(skb)->payload_len) +
 		      sizeof(struct ipv6hdr);
-		if (INET_ECN_is_ce(PACKET_CB(skb)->ds))
-			IP6_ECN_set_ce(skb, ipv6_hdr(skb));
+		INET_ECN_decapsulate(skb, PACKET_CB(skb)->ds, ipv6_get_dsfield(ipv6_hdr(skb)));
 	} else {
 		goto dishonest_packet_type;
 	}
@@ -421,14 +419,8 @@ static void wg_packet_consume_data_done(struct wg_peer *peer,
 	if (unlikely(routed_peer != peer))
 		goto dishonest_packet_peer;
 
-	if (unlikely(napi_gro_receive(&peer->napi, skb) == GRO_DROP)) {
-		++dev->stats.rx_dropped;
-		net_dbg_ratelimited("%s: Failed to give packet to userspace from peer %llu (%pISpfsc)\n",
-				    dev->name, peer->internal_id,
-				    &peer->endpoint.addr);
-	} else {
-		update_rx_stats(peer, message_data_len(len_before_trim));
-	}
+	napi_gro_receive(&peer->napi, skb);
+	update_rx_stats(peer, message_data_len(len_before_trim));
 	return;
 
 dishonest_packet_peer:
@@ -457,7 +449,6 @@ packet_processed:
 int wg_packet_rx_poll(struct napi_struct *napi, int budget)
 {
 	struct wg_peer *peer = container_of(napi, struct wg_peer, napi);
-	struct crypt_queue *queue = &peer->rx_queue;
 	struct noise_keypair *keypair;
 	struct endpoint endpoint;
 	enum packet_state state;
@@ -468,30 +459,29 @@ int wg_packet_rx_poll(struct napi_struct *napi, int budget)
 	if (unlikely(budget <= 0))
 		return 0;
 
-	while ((skb = __ptr_ring_peek(&queue->ring)) != NULL &&
+	while ((skb = wg_prev_queue_peek(&peer->rx_queue)) != NULL &&
 	       (state = atomic_read_acquire(&PACKET_CB(skb)->state)) !=
 		       PACKET_STATE_UNCRYPTED) {
-		__ptr_ring_discard_one(&queue->ring);
-		peer = PACKET_PEER(skb);
+		wg_prev_queue_drop_peeked(&peer->rx_queue);
 		keypair = PACKET_CB(skb)->keypair;
 		free = true;
 
 		if (unlikely(state != PACKET_STATE_CRYPTED))
 			goto next;
 
-		if (unlikely(!counter_validate(&keypair->receiving.counter,
+		if (unlikely(!counter_validate(&keypair->receiving_counter,
 					       PACKET_CB(skb)->nonce))) {
 			net_dbg_ratelimited("%s: Packet has invalid nonce %llu (max %llu)\n",
 					    peer->device->dev->name,
 					    PACKET_CB(skb)->nonce,
-					    keypair->receiving.counter.receive.counter);
+					    keypair->receiving_counter.counter);
 			goto next;
 		}
 
 		if (unlikely(wg_socket_endpoint_from_skb(&endpoint, skb)))
 			goto next;
 
-		wg_reset_packet(skb);
+		wg_reset_packet(skb, false);
 		wg_packet_consume_data_done(peer, skb, &endpoint);
 		free = false;
 
@@ -520,11 +510,11 @@ void wg_packet_decrypt_worker(struct work_struct *work)
 
 	simd_get(&simd_context);
 	while ((skb = ptr_ring_consume_bh(&queue->ring)) != NULL) {
-		enum packet_state state = likely(decrypt_packet(skb,
-					   &PACKET_CB(skb)->keypair->receiving,
-					   &simd_context)) ?
+		enum packet_state state =
+			likely(decrypt_packet(skb, PACKET_CB(skb)->keypair,
+					      &simd_context)) ?
 				PACKET_STATE_CRYPTED : PACKET_STATE_DEAD;
-		wg_queue_enqueue_per_peer_napi(skb, state);
+		wg_queue_enqueue_per_peer_rx(skb, state);
 		simd_relax(&simd_context);
 	}
 
@@ -548,12 +538,10 @@ static void wg_packet_consume_data(struct wg_device *wg, struct sk_buff *skb)
 	if (unlikely(READ_ONCE(peer->is_dead)))
 		goto err;
 
-	ret = wg_queue_enqueue_per_device_and_peer(&wg->decrypt_queue,
-						   &peer->rx_queue, skb,
-						   wg->packet_crypt_wq,
-						   &wg->decrypt_queue.last_cpu);
+	ret = wg_queue_enqueue_per_device_and_peer(&wg->decrypt_queue, &peer->rx_queue, skb,
+						   wg->packet_crypt_wq, &wg->decrypt_queue.last_cpu);
 	if (unlikely(ret == -EPIPE))
-		wg_queue_enqueue_per_peer_napi(skb, PACKET_STATE_DEAD);
+		wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD);
 	if (likely(!ret || ret == -EPIPE)) {
 		rcu_read_unlock_bh();
 		return;
@@ -597,8 +585,7 @@ void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb)
 		wg_packet_consume_data(wg, skb);
 		break;
 	default:
-		net_dbg_skb_ratelimited("%s: Invalid packet from %pISpfsc\n",
-					wg->dev->name, skb);
+		WARN(1, "Non-exhaustive parsing of packet header lead to unknown packet type!\n");
 		goto err;
 	}
 	return;

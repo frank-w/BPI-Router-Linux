@@ -15,7 +15,7 @@ endif
 ARCH := $(firstword $(subst -, ,$(CBUILD)))
 
 # Set these from the environment to override
-KERNEL_VERSION ?= 5.5
+KERNEL_VERSION ?= 5.4.99
 KERNEL_VERSION := $(KERNEL_VERSION)$(if $(DEBUG_KERNEL),$(if $(findstring -debug,$(KERNEL_VERSION)),,-debug),)
 BUILD_PATH ?= $(PWD)/../../../qemu-build/$(ARCH)
 DISTFILES_PATH ?= $(PWD)/distfiles
@@ -43,18 +43,28 @@ $(DISTFILES_PATH)/$(1):
 	flock -x $$@.lock -c '[ -f $$@ ] && exit 0; wget -O $$@ $(MIRROR)$(1) || wget -t inf --retry-on-http-error=404 -O $$@ $(2)$(1) || rm -f $$@'
 endef
 
+ifneq ($(findstring https://,$(KERNEL_VERSION)),)
+KERNEL_URL := $(word 1,$(KERNEL_VERSION))
+KERNEL_NAME := $(word 2,$(KERNEL_VERSION))
+KERNEL_TAR := $(DISTFILES_PATH)/linux-$(KERNEL_NAME)-$(notdir $(KERNEL_URL))
+KERNEL_PATH := $(BUILD_PATH)/linux-$(KERNEL_NAME)
+KERNEL_VERSION := $(KERNEL_NAME)
+$(KERNEL_TAR):
+	mkdir -p $(DISTFILES_PATH)
+	flock -x $@.lock -c '[ -f $@ ] && exit 0; wget -O $@ $(KERNEL_URL) || rm -f $@'
+else
 ifeq ($(findstring -rc,$(KERNEL_VERSION)),)
 KERNEL_URL_DIRECTORY := https://cdn.kernel.org/pub/linux/kernel/v$(firstword $(subst ., ,$(KERNEL_VERSION:-debug=))).x/
 else
 KERNEL_URL_DIRECTORY := https://git.kernel.org/torvalds/t/
 endif
-
 $(eval $(call tar_download,KERNEL,linux,$(KERNEL_VERSION),.tar.gz,$(KERNEL_URL_DIRECTORY)))
+endif
 $(eval $(call tar_download,MUSL,musl,1.1.24,.tar.gz,https://www.musl-libc.org/releases/))
 $(eval $(call tar_download,LIBMNL,libmnl,1.0.4,.tar.bz2,https://www.netfilter.org/projects/libmnl/files/))
 $(eval $(call tar_download,IPERF,iperf,3.7,.tar.gz,https://downloads.es.net/pub/iperf/))
 $(eval $(call tar_download,BASH,bash,5.0,.tar.gz,https://ftp.gnu.org/gnu/bash/))
-$(eval $(call tar_download,IPROUTE2,iproute2,5.4.0,.tar.xz,https://www.kernel.org/pub/linux/utils/net/iproute2/))
+$(eval $(call tar_download,IPROUTE2,iproute2,5.6.0,.tar.xz,https://www.kernel.org/pub/linux/utils/net/iproute2/))
 $(eval $(call tar_download,IPTABLES,iptables,1.8.4,.tar.bz2,https://www.netfilter.org/projects/iptables/files/))
 $(eval $(call tar_download,NMAP,nmap,7.80,.tar.bz2,https://nmap.org/dist/))
 $(eval $(call tar_download,IPUTILS,iputils,s20161105,.tar.gz,https://github.com/iputils/iputils/archive/s20161105.tar.gz/#))
@@ -66,16 +76,14 @@ export CPPFLAGS := -I$(BUILD_PATH)/include
 
 ifeq ($(HOST_ARCH),$(ARCH))
 CROSS_COMPILE_FLAG := --host=$(CHOST)
-NOPIE_GCC := gcc -fno-PIE
 CFLAGS += -march=native
-OMIT_AVX512 := $(shell gcc -march=native -Q --help=target | sed -n 's/.*\-m\(avx512[^ ]*\).*\[enabled\].*/-mno-\1/p')
+OMIT_AVX512 := $(shell $(CBUILD)-gcc -march=native -Q --help=target | sed -n 's/.*\-m\(avx512[^ ]*\).*\[enabled\].*/-mno-\1/p')
 CFLAGS += $(OMIT_AVX512)
 STRIP := strip
 else
 $(info Cross compilation: building for $(CBUILD) using $(CHOST))
 CROSS_COMPILE_FLAG := --build=$(CBUILD) --host=$(CHOST)
 export CROSS_COMPILE=$(CBUILD)-
-NOPIE_GCC := $(CBUILD)-gcc -fno-PIE
 STRIP := $(CBUILD)-strip
 endif
 ifeq ($(ARCH),aarch64)
@@ -263,6 +271,12 @@ ifeq ($(findstring -git,$(KERNEL_VERSION)),)
 $(KERNEL_PATH)/.installed: $(KERNEL_TAR)
 	mkdir -p $(KERNEL_PATH)
 	flock -s $<.lock tar --strip-components=1 -C $(KERNEL_PATH) -xf $<
+	find $(KERNEL_PATH) -type f -name Makefile -exec sed -i 's/-Werror\(\s\|$$\)//g' {} +
+	sed -i "/printf '\\\\#/d" $(KERNEL_PATH)/tools/build/Build.include || true
+	sed -i '/jmp early_idt_handler$$/a .fill early_idt_handlers + i*9 - ., 1, 0xcc' $(KERNEL_PATH)/arch/x86/kernel/head_{64,32}.S || true
+	printf 'ifdef CONFIG_X86_64\nLDFLAGS += $$(call ld-option, -z max-page-size=0x200000)\nendif\n' >> $(KERNEL_PATH)/arch/x86/Makefile
+	sed -i 's/^Elf_Addr per_cpu_load_addr;$$/static \0/' $(KERNEL_PATH)/arch/x86/tools/relocs.c || true
+	if grep -qr UTS_UBUNTU_RELEASE_ABI $(KERNEL_PATH)/debian/rules.d; then echo 'KBUILD_CFLAGS += -DUTS_UBUNTU_RELEASE_ABI=0' >> $(KERNEL_PATH)/Makefile; fi
 	sed -i "/^if INET\$$/a source \"net/wireguard/Kconfig\"" $(KERNEL_PATH)/net/Kconfig
 	sed -i "/^obj-\$$(CONFIG_NETFILTER).*+=/a obj-\$$(CONFIG_WIREGUARD) += wireguard/" $(KERNEL_PATH)/net/Makefile
 	ln -sfT $(shell readlink -f ../..) $(KERNEL_PATH)/net/wireguard
@@ -288,7 +302,7 @@ $(KERNEL_PATH)/.config: kernel.config arch/$(ARCH).config | $(KERNEL_PATH)/.inst
 	$(if $(findstring -debug,$(KERNEL_VERSION)),cd $(KERNEL_PATH) && sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -debug/' Makefile && ARCH=$(KERNEL_ARCH) scripts/kconfig/merge_config.sh -n .config $(PWD)/debug.config,)
 
 $(KERNEL_BZIMAGE): $(KERNEL_PATH)/.config $(BUILD_PATH)/init-cpio-spec.txt $(MUSL_PATH)/lib/libc.so $(IPERF_PATH)/src/iperf3 $(IPUTILS_PATH)/ping $(BASH_PATH)/bash $(IPROUTE2_PATH)/misc/ss $(IPROUTE2_PATH)/ip/ip $(IPTABLES_PATH)/iptables/xtables-legacy-multi $(NMAP_PATH)/ncat/ncat $(WIREGUARD_TOOLS_PATH)/src/wg $(BUILD_PATH)/init ../netns.sh $(WIREGUARD_SOURCES)
-	LOCALVERSION="" $(MAKE) -C $(KERNEL_PATH) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) CC="$(NOPIE_GCC)"
+	LOCALVERSION="" $(MAKE) -C $(KERNEL_PATH) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) CC="$(CBUILD)-gcc -fno-PIE"
 
 $(BUILD_PATH)/include/linux/.installed: | $(KERNEL_PATH)/.config
 	LOCALVERSION="" $(MAKE) -C $(KERNEL_PATH) INSTALL_HDR_PATH=$(BUILD_PATH) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) headers_install
@@ -350,7 +364,7 @@ $(IPUTILS_PATH)/.installed: $(IPUTILS_TAR)
 	touch $@
 
 $(IPUTILS_PATH)/ping: | $(IPUTILS_PATH)/.installed $(USERSPACE_DEPS)
-	$(MAKE) -C $(IPUTILS_PATH) USE_CAP=no USE_IDN=no USE_NETTLE=no USE_CRYPTO=no ping
+	$(MAKE) -C $(IPUTILS_PATH) USE_CAP=no USE_IDN=no USE_NETTLE=no USE_CRYPTO=no CFLAGS="-fcommon $(CFLAGS)" ping
 	$(STRIP) -s $@
 
 $(BASH_PATH)/.installed: $(BASH_TAR)

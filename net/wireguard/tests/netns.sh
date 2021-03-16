@@ -30,6 +30,7 @@ netns0="wg-test-$$-0"
 netns1="wg-test-$$-1"
 netns2="wg-test-$$-2"
 pretty() { echo -e "\x1b[32m\x1b[1m[+] ${1:+NS$1: }${2}\x1b[0m" >&3; }
+compatwarn() { echo -e "\x1b[31m\x1b[1m[-] Tolerated failure: $1\x1b[0m" >&3; }
 pp() { pretty "" "$*"; "$@"; }
 maybe_exec() { if [[ $BASHPID -eq $$ ]]; then "$@"; else exec "$@"; fi; }
 n0() { pretty 0 "$*"; maybe_exec ip netns exec $netns0 "$@"; }
@@ -39,7 +40,7 @@ ip0() { pretty 0 "ip $*"; ip -n $netns0 "$@"; }
 ip1() { pretty 1 "ip $*"; ip -n $netns1 "$@"; }
 ip2() { pretty 2 "ip $*"; ip -n $netns2 "$@"; }
 sleep() { read -t "$1" -N 1 || true; }
-waitiperf() { pretty "${1//*-}" "wait for iperf:5201 pid $2"; while [[ $(ss -N "$1" -tlpH 'sport = 5201') != *\"iperf3\",pid=$2,fd=* ]]; do sleep 0.1; done; }
+waitiperf() { pretty "${1//*-}" "wait for iperf:${3:-5201} pid $2"; while [[ $(ss -N "$1" -tlpH "sport = ${3:-5201}") != *\"iperf3\",pid=$2,fd=* ]]; do sleep 0.1; done; }
 waitncatudp() { pretty "${1//*-}" "wait for udp:1111 pid $2"; while [[ $(ss -N "$1" -ulpH 'sport = 1111') != *\"ncat\",pid=$2,fd=* ]]; do sleep 0.1; done; }
 waitiface() { pretty "${1//*-}" "wait for $2 to come up"; ip netns exec "$1" bash -c "while [[ \$(< \"/sys/class/net/$2/operstate\") != up ]]; do read -t .1 -N 0 || true; done;"; }
 
@@ -48,8 +49,11 @@ cleanup() {
 	exec 2>/dev/null
 	printf "$orig_message_cost" > /proc/sys/net/core/message_cost
 	ip0 link del dev wg0
+	ip0 link del dev wg1
 	ip1 link del dev wg0
+	ip1 link del dev wg1
 	ip2 link del dev wg0
+	ip2 link del dev wg1
 	local to_kill="$(ip netns pids $netns0) $(ip netns pids $netns1) $(ip netns pids $netns2)"
 	[[ -n $to_kill ]] && kill $to_kill
 	pp ip netns del $netns1
@@ -77,18 +81,20 @@ ip0 link set wg0 netns $netns2
 key1="$(pp wg genkey)"
 key2="$(pp wg genkey)"
 key3="$(pp wg genkey)"
+key4="$(pp wg genkey)"
 pub1="$(pp wg pubkey <<<"$key1")"
 pub2="$(pp wg pubkey <<<"$key2")"
 pub3="$(pp wg pubkey <<<"$key3")"
+pub4="$(pp wg pubkey <<<"$key4")"
 psk="$(pp wg genpsk)"
 [[ -n $key1 && -n $key2 && -n $psk ]]
 
 configure_peers() {
 	ip1 addr add 192.168.241.1/24 dev wg0
-	ip1 addr add fd00::1/24 dev wg0
+	ip1 addr add fd00::1/112 dev wg0
 
 	ip2 addr add 192.168.241.2/24 dev wg0
-	ip2 addr add fd00::2/24 dev wg0
+	ip2 addr add fd00::2/112 dev wg0
 
 	n1 wg set wg0 \
 		private-key <(echo "$key1") \
@@ -136,6 +142,22 @@ tests() {
 	n2 iperf3 -s -1 -B fd00::2 &
 	waitiperf $netns2 $!
 	n1 iperf3 -Z -t 3 -b 0 -u -c fd00::2
+
+	# Old TCP stack bugs make the below tests problematic
+	[[ $(< /proc/version) =~ ^Linux\ version\ 5\.4[.\ ] ]] || return 0
+
+	# TCP over IPv4, in parallel
+	for max in 4 5 50; do
+		local pids=( )
+		for ((i=0; i < max; ++i)) do
+			n2 iperf3 -p $(( 5200 + i )) -s -1 -B 192.168.241.2 &
+			pids+=( $! ); waitiperf $netns2 $! $(( 5200 + i ))
+		done
+		for ((i=0; i < max; ++i)) do
+			n1 iperf3 -Z -t 3 -p $(( 5200 + i )) -c 192.168.241.2 &
+		done
+		wait "${pids[@]}"
+	done
 }
 
 [[ $(ip1 link show dev wg0) =~ mtu\ ([0-9]+) ]] && orig_mtu="${BASH_REMATCH[1]}"
@@ -230,9 +252,38 @@ n1 ping -W 1 -c 1 192.168.241.2
 n1 wg set wg0 private-key <(echo "$key3")
 n2 wg set wg0 peer "$pub3" preshared-key <(echo "$psk") allowed-ips 192.168.241.1/32 peer "$pub1" remove
 n1 ping -W 1 -c 1 192.168.241.2
+n2 wg set wg0 peer "$pub3" remove
 
-ip1 link del wg0
+# Test that we can route wg through wg
+ip1 addr flush dev wg0
+ip2 addr flush dev wg0
+ip1 addr add fd00::5:1/112 dev wg0
+ip2 addr add fd00::5:2/112 dev wg0
+n1 wg set wg0 private-key <(echo "$key1") peer "$pub2" preshared-key <(echo "$psk") allowed-ips fd00::5:2/128 endpoint 127.0.0.1:2
+n2 wg set wg0 private-key <(echo "$key2") listen-port 2 peer "$pub1" preshared-key <(echo "$psk") allowed-ips fd00::5:1/128 endpoint 127.212.121.99:9998
+ip1 link add wg1 type wireguard
+ip2 link add wg1 type wireguard
+ip1 addr add 192.168.241.1/24 dev wg1
+ip1 addr add fd00::1/112 dev wg1
+ip2 addr add 192.168.241.2/24 dev wg1
+ip2 addr add fd00::2/112 dev wg1
+ip1 link set mtu 1340 up dev wg1
+ip2 link set mtu 1340 up dev wg1
+n1 wg set wg1 listen-port 5 private-key <(echo "$key3") peer "$pub4" allowed-ips 192.168.241.2/32,fd00::2/128 endpoint [fd00::5:2]:5
+n2 wg set wg1 listen-port 5 private-key <(echo "$key4") peer "$pub3" allowed-ips 192.168.241.1/32,fd00::1/128 endpoint [fd00::5:1]:5
+tests
+# Try to set up a routing loop between the two namespaces
+ip1 link set netns $netns0 dev wg1
+ip0 addr add 192.168.241.1/24 dev wg1
+ip0 link set up dev wg1
+n0 ping -W 1 -c 1 192.168.241.2
+n1 wg set wg0 peer "$pub2" endpoint 192.168.241.2:7
 ip2 link del wg0
+ip2 link del wg1
+! n0 ping -W 1 -c 10 -f 192.168.241.2 || false # Should not crash kernel
+
+ip0 link del wg1
+ip1 link del wg0
 
 # Test using NAT. We now change the topology to this:
 # ┌────────────────────────────────────────┐    ┌────────────────────────────────────────────────┐     ┌────────────────────────────────────────┐
@@ -282,6 +333,28 @@ pp sleep 3
 n2 ping -W 1 -c 1 192.168.241.1
 n1 wg set wg0 peer "$pub2" persistent-keepalive 0
 
+# Test that sk_bound_dev_if works
+n1 ping -I wg0 -c 1 -W 1 192.168.241.2
+# What about when the mark changes and the packet must be rerouted?
+n1 iptables -t mangle -I OUTPUT -j MARK --set-xmark 1
+n1 ping -c 1 -W 1 192.168.241.2 # First the boring case
+n1 ping -I wg0 -c 1 -W 1 192.168.241.2 || compatwarn "sk_bound_dev_if test failed, but fix not backportable in compat layer" # Then the sk_bound_dev_if case
+n1 iptables -t mangle -D OUTPUT -j MARK --set-xmark 1
+
+# Test that onion routing works, even when it loops
+n1 wg set wg0 peer "$pub3" allowed-ips 192.168.242.2/32 endpoint 192.168.241.2:5
+ip1 addr add 192.168.242.1/24 dev wg0
+ip2 link add wg1 type wireguard
+ip2 addr add 192.168.242.2/24 dev wg1
+n2 wg set wg1 private-key <(echo "$key3") listen-port 5 peer "$pub1" allowed-ips 192.168.242.1/32
+ip2 link set wg1 up
+n1 ping -W 1 -c 1 192.168.242.2
+ip2 link del wg1
+n1 wg set wg0 peer "$pub3" endpoint 192.168.242.2:5
+! n1 ping -W 1 -c 1 192.168.242.2 || false # Should not crash kernel
+n1 wg set wg0 peer "$pub3" remove
+ip1 addr del 192.168.242.1/24 dev wg0
+
 # Do a wg-quick(8)-style policy routing for the default route, making sure vethc has a v6 address to tease out bugs.
 ip1 -6 addr add fc00::9/96 dev vethc
 ip1 -6 route add default via fc00::1
@@ -298,7 +371,8 @@ ip1 -4 rule add table main suppress_prefixlength 0
 if [[ $(ip1 -4 rule show all) == *suppress_prefixlength* ]]; then
 	# Flood the pings instead of sending just one, to trigger routing table reference counting bugs.
 	n1 ping -W 1 -c 100 -f 192.168.99.7
-	n1 ping -W 1 -c 100 -f abab::1111
+	# ca7a03c got ported to 5.2 when it shouldn't have.
+	[[ $(< /proc/version) =~ ^Linux\ version\ 5\.2[.\ ] ]] || n1 ping -W 1 -c 100 -f abab::1111
 fi
 
 # Have ns2 NAT into wg0 packets from ns0, but return an icmp error along the right route.
@@ -530,16 +604,32 @@ n0 wg set wg0 peer "$pub2" allowed-ips 0.0.0.0/0
 n0 wg set wg0 peer "$pub2" allowed-ips ::/0,1700::/111,5000::/4,e000::/37,9000::/75
 n0 wg set wg0 peer "$pub2" allowed-ips ::/0
 n0 wg set wg0 peer "$pub2" remove
-low_order_points=( AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= 4Ot6fDtBuK4WVuP68Z/EatoJjeucMrH9hmIFFl9JuAA= X5yVvKNQjCSx0LFVnIPvWwREXMRYHI6G2CJO3dCfEVc= 7P///////////////////////////////////////38= 7f///////////////////////////////////////38= 7v///////////////////////////////////////38= )
-n0 wg set wg0 private-key /dev/null ${low_order_points[@]/#/peer }
-[[ -z $(n0 wg show wg0 peers) ]]
-n0 wg set wg0 private-key <(echo "$key1") ${low_order_points[@]/#/peer }
-[[ -z $(n0 wg show wg0 peers) ]]
+for low_order_point in AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= 4Ot6fDtBuK4WVuP68Z/EatoJjeucMrH9hmIFFl9JuAA= X5yVvKNQjCSx0LFVnIPvWwREXMRYHI6G2CJO3dCfEVc= 7P///////////////////////////////////////38= 7f///////////////////////////////////////38= 7v///////////////////////////////////////38=; do
+	n0 wg set wg0 peer "$low_order_point" persistent-keepalive 1 endpoint 127.0.0.1:1111
+done
+[[ -n $(n0 wg show wg0 peers) ]]
+exec 4< <(n0 ncat -l -u -p 1111)
+ncat_pid=$!
+waitncatudp $netns0 $ncat_pid
+ip0 link set wg0 up
+! read -r -n 1 -t 2 <&4 || false
+kill $ncat_pid
 ip0 link del wg0
 
+# Ensure there aren't circular reference loops
+ip1 link add wg1 type wireguard
+ip2 link add wg2 type wireguard
+ip1 link set wg1 netns $netns2
+ip2 link set wg2 netns $netns1
+pp ip netns delete $netns1
+pp ip netns delete $netns2
+pp ip netns add $netns1
+pp ip netns add $netns2
+
+sleep 2 # Wait for cleanup and grace periods
 declare -A objects
 while read -t 0.1 -r line 2>/dev/null || [[ $? -ne 142 ]]; do
-	[[ $line =~ .*(wg[0-9]+:\ [A-Z][a-z]+\ [0-9]+)\ .*(created|destroyed).* ]] || continue
+	[[ $line =~ .*(wg[0-9]+:\ [A-Z][a-z]+\ ?[0-9]*)\ .*(created|destroyed).* ]] || continue
 	objects["${BASH_REMATCH[1]}"]+="${BASH_REMATCH[2]}"
 done < /dev/kmsg
 alldeleted=1
