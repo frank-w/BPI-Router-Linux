@@ -77,7 +77,6 @@ int pci_host_common_probe(struct platform_device *pdev)
 
 	bridge->sysdata = cfg;
 	bridge->ops = (struct pci_ops *)&ops->pci_ops;
-	bridge->msi_domain = true;
 
 	platform_set_drvdata(pdev, bridge);
 
