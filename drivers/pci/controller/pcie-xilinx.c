@@ -194,8 +194,18 @@ static struct pci_ops xilinx_pcie_ops = {
 
 /* MSI functions */
 
+static void xilinx_msi_top_irq_ack(struct irq_data *d)
+{
+	/*
+	 * xilinx_pcie_intr_handler() will have performed the Ack.
+	 * Eventually, this should be fixed and the Ack be moved in
+	 * the respective callbacks for INTx and MSI.
+	 */
+}
+
 static struct irq_chip xilinx_msi_top_chip = {
 	.name		= "PCIe MSI",
+	.irq_ack	= xilinx_msi_top_irq_ack,
 };
 
 static int xilinx_msi_set_affinity(struct irq_data *d, const struct cpumask *mask, bool force)
@@ -206,7 +216,7 @@ static int xilinx_msi_set_affinity(struct irq_data *d, const struct cpumask *mas
 static void xilinx_compose_msi_msg(struct irq_data *data, struct msi_msg *msg)
 {
 	struct xilinx_pcie_port *pcie = irq_data_get_irq_chip_data(data);
-	phys_addr_t pa = virt_to_phys(pcie);
+	phys_addr_t pa = ALIGN_DOWN(virt_to_phys(pcie), SZ_4K);
 
 	msg->address_lo = lower_32_bits(pa);
 	msg->address_hi = upper_32_bits(pa);
@@ -468,7 +478,7 @@ static int xilinx_pcie_init_irq_domain(struct xilinx_pcie_port *port)
 
 	/* Setup MSI */
 	if (IS_ENABLED(CONFIG_PCI_MSI)) {
-		phys_addr_t pa = virt_to_phys(port);
+		phys_addr_t pa = ALIGN_DOWN(virt_to_phys(port), SZ_4K);
 
 		ret = xilinx_allocate_msi_domains(port);
 		if (ret)
