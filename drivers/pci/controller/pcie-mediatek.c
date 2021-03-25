@@ -1070,7 +1070,7 @@ static int mtk_pcie_setup(struct mtk_pcie *pcie)
 	} else {
 		err = mtk_pcie_parse_port(pcie, node, slot);
 		if (err)
-			goto error_put_node;
+			return err;
 	}
 
 	err = mtk_pcie_subsys_powerup(pcie);
