@@ -20,15 +20,11 @@
 #include "wmt_detect.h"
 #include "wlan_drv_init.h"
 
-#if defined(CONFIG_MTK_COMBO_WIFI_MODULE)
-unsigned int gWmtDetectDbgLvl = WMT_DETECT_LOG_INFO;
-#endif
-
 int do_wlan_drv_init(int chip_id)
 {
 	int i_ret = 0;
 
-#if defined(CONFIG_MTK_COMBO_WIFI) || defined(CONFIG_MTK_COMBO_WIFI_MODULE)
+#if defined(CONFIG_MTK_COMBO_WIFI)
 	int ret = 0;
 
 	WMT_DETECT_INFO_FUNC("start to do wlan module init 0x%x\n", chip_id);
@@ -76,5 +72,3 @@ int do_wlan_drv_init(int chip_id)
 
 	return i_ret;
 }
-
-MODULE_LICENSE("GPL");
