@@ -216,7 +216,7 @@ config MTK_COMBO_BT_HCI
 
 config MTK_COMBO_WIFI
 	tristate "MediaTek combo chip Wi-Fi support"
-	depends on MTK_COMBO
+	depends on MTK_COMBO && CFG80211
 	select MTK_BTIF
 	select WIRELESS_EXT
 	select WEXT_PRIV
