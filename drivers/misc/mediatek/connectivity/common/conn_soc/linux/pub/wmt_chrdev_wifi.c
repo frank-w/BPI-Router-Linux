@@ -181,11 +181,11 @@ do { \
 static struct net_device * get_netdev(void)
 {
 	struct net_device *netdev;
-	char tmpifname[6]="";
+	char tmpifname[9]="";
 	int i;
 
 	for (i = 9; i>=0; i--) {
-		snprintf(tmpifname,sizeof(tmpifname),"wlan%d",i);
+		snprintf(tmpifname,sizeof(tmpifname),"mt6625_%d",i);
 		netdev = dev_get_by_name(&init_net, tmpifname); //crash if wlan1
 		if (netdev) break;
 	}
