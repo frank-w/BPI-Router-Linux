@@ -854,7 +854,7 @@ const UINT_32 mtk_cipher_suites[5] = {
 
 /*********************************************************/
 
-#define NIC_INF_NAME    "wlan%d"	/* interface name */
+#define NIC_INF_NAME    "mt6625_%d"	/* interface name */
 #if CFG_TC1_FEATURE
 #define NIC_INF_NAME_IN_AP_MODE  "legacy%d"
 #endif
