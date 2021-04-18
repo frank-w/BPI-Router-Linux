@@ -443,6 +443,7 @@ function install
 			fi
 
 			echo "syncing sd-card...this will take a while"
+			echo "run 'watch -n 1 grep -e Dirty: /proc/meminfo' to show progress"
 			sync
 
 			read -e -i "$openuenv" -p "open uenv-file [yn]? " input
@@ -858,8 +859,10 @@ if [ -n "$kernver" ]; then
 
 		"umount")
 			echo "umount SD Media"
-			umount /media/$USER/BPI-BOOT
-			umount /media/$USER/BPI-ROOT
+			dev=$(mount | grep BPI-BOOT | sed -e 's/[0-9] .*$/?/')
+			if [[ ! -z "$dev" ]];then
+				umount $dev
+			fi
 			;;
 
 		"uenv")
