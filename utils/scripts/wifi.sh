@@ -45,6 +45,12 @@ then
   fi
 fi
 
+ismodule=$(find /lib/modules/$(uname -r)/kernel -iname wlan_gen2.ko | wc -l)
+if [[ $ismodule -ne 0 ]];then
+        echo "loading wifi driver module"
+        modprobe wlan_gen2
+fi
+
 # Check FILE exists and is character special
 if  [[ -c /dev/wmtWifi ]];
 then
