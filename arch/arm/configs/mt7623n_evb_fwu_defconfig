@@ -437,7 +437,7 @@ CONFIG_GPIO_SYSFS=y
 
 #wlan
 CONFIG_MAC80211=y
-CONFIG_CFG80211=y
+CONFIG_CFG80211=m
 CONFIG_CFG80211_WEXT=y
 
 #internal wlan (not working yet)
