@@ -1398,31 +1398,7 @@ void mtk_p2p_cfg80211_update_mgmt_frame_register(IN struct wiphy *wiphy,
 			prGlueInfo->u4OsMgmtFrameFilter &= ~PARAM_PACKET_FILTER_PROBE_REQ;
 			prGlueInfo->u4OsMgmtFrameFilter &= ~PARAM_PACKET_FILTER_ACTION_FRAME;
 		}
-/*
-		switch (frame_type) {
-		case MAC_FRAME_PROBE_REQ:
-			if (reg) {
-				prGlueInfo->prP2PInfo->u4OsMgmtFrameFilter |= PARAM_PACKET_FILTER_PROBE_REQ;
-				DBGLOG(P2P, TRACE, "Open packet filer probe request\n");
-			} else {
-				prGlueInfo->prP2PInfo->u4OsMgmtFrameFilter &= ~PARAM_PACKET_FILTER_PROBE_REQ;
-				DBGLOG(P2P, TRACE, "Close packet filer probe request\n");
-			}
-			break;
-		case MAC_FRAME_ACTION:
-			if (reg) {
-				prGlueInfo->prP2PInfo->u4OsMgmtFrameFilter |= PARAM_PACKET_FILTER_ACTION_FRAME;
-				DBGLOG(P2P, TRACE, "Open packet filer action frame.\n");
-			} else {
-				prGlueInfo->prP2PInfo->u4OsMgmtFrameFilter &= ~PARAM_PACKET_FILTER_ACTION_FRAME;
-				DBGLOG(P2P, TRACE, "Close packet filer action frame.\n");
-			}
-			break;
-		default:
-			DBGLOG(P2P, ERROR, "Ask frog to add code for mgmt:%x\n", frame_type);
-			break;
-		}
-*/
+
 		//printk(KERN_ALERT "DEBUG: Passed %s %d frame-filter:0x%x \n",__FUNCTION__,__LINE__,prGlueInfo->u4OsMgmtFrameFilter);
 
 		if ((prGlueInfo->prAdapter != NULL) && (prGlueInfo->prAdapter->fgIsP2PRegistered == TRUE)) {
