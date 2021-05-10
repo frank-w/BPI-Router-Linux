@@ -78,6 +78,9 @@ static const unsigned int mt2701_afe_backup_list[] = {
 	AFE_CONN21,
 	AFE_CONN22,
 	AFE_DAC_CON0,
+	AFE_HDMI_OUT_BASE,
+	AFE_HDMI_OUT_END,
+	AFE_HDMI_CONN0,
 	AFE_MEMIF_PBUF_SIZE,
 };
 
@@ -510,6 +513,99 @@ static int mt2701_irq_fs(struct snd_pcm_substream *substream, unsigned int rate)
 	return mt2701_afe_i2s_fs(rate);
 }
 
+static int mt2701_afe_dais_enable_clks(struct mtk_base_afe *afe,
+				       struct clk *m_ck, struct clk *b_ck)
+{
+	int ret;
+
+	if (m_ck) {
+		ret = clk_prepare_enable(m_ck);
+		if (ret) {
+			dev_err(afe->dev, "Failed to enable m_ck\n");
+			return ret;
+		}
+	}
+
+	if (b_ck) {
+		ret = clk_prepare_enable(b_ck);
+		if (ret) {
+			dev_err(afe->dev, "Failed to enable b_ck\n");
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static int mt2701_afe_dais_set_clks(struct mtk_base_afe *afe,
+				    struct clk *m_ck, unsigned int mck_rate,
+				    struct clk *b_ck, unsigned int bck_rate)
+{
+	int ret;
+
+	if (m_ck) {
+		ret = clk_set_rate(m_ck, mck_rate);
+		if (ret) {
+			dev_err(afe->dev, "Failed to set m_ck rate\n");
+			return ret;
+		}
+	}
+
+	if (b_ck) {
+		ret = clk_set_rate(b_ck, bck_rate);
+		if (ret) {
+			dev_err(afe->dev, "Failed to set b_ck rate\n");
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static void mt2701_afe_dais_disable_clks(struct mtk_base_afe *afe,
+					 struct clk *m_ck, struct clk *b_ck)
+{
+	if (m_ck)
+		clk_disable_unprepare(m_ck);
+	if (b_ck)
+		clk_disable_unprepare(b_ck);
+}
+
+
+static int mt2701_afe_hdmi_startup(struct snd_pcm_substream *substream,
+				   struct snd_soc_dai *dai)
+{
+	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+	struct mt2701_afe_private *afe_priv = afe->platform_priv;
+
+	if (snd_soc_dai_active(dai))
+		return 0;
+
+	//mt2701_afe_dais_enable_clks(afe, afe_priv->clocks[MT2701_CLK_I2S3_M],
+	//			    afe_priv->clocks[MT2701_CLK_I2S3_B]);
+	return 0;
+}
+static void mt2701_afe_hdmi_shutdown(struct snd_pcm_substream *substream,
+				     struct snd_soc_dai *dai)
+{
+	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+	struct mt2701_afe_private *afe_priv = afe->platform_priv;
+
+	if (snd_soc_dai_active(dai))
+		return;
+
+	//mt2701_afe_dais_disable_clks(afe, afe_priv->clocks[MT2701_CLK_I2S3_M],
+	//			     afe_priv->clocks[MT2701_CLK_I2S3_B]);
+}
+static int mt2701_afe_hdmi_prepare(struct snd_pcm_substream *substream,
+				   struct snd_soc_dai *dai)
+{
+	return 0;
+}
+static int mt2701_afe_hdmi_trigger(struct snd_pcm_substream *substream, int cmd,
+				   struct snd_soc_dai *dai)
+{
+	return 0;
+}
+
 /* FE DAIs */
 static const struct snd_soc_dai_ops mt2701_single_memif_dai_ops = {
 	.startup	= mt2701_simple_fe_startup,
@@ -542,6 +638,13 @@ static const struct snd_soc_dai_ops mt2701_btmrg_ops = {
 	.startup = mt2701_btmrg_startup,
 	.shutdown = mt2701_btmrg_shutdown,
 	.hw_params = mt2701_btmrg_hw_params,
+};
+
+static const struct snd_soc_dai_ops mt2701_afe_hdmi_ops = {
+	.startup	= mt2701_afe_hdmi_startup,
+	.shutdown	= mt2701_afe_hdmi_shutdown,
+	.prepare	= mt2701_afe_hdmi_prepare,
+	.trigger	= mt2701_afe_hdmi_trigger,
 };
 
 static struct snd_soc_dai_driver mt2701_afe_pcm_dais[] = {
@@ -753,6 +856,40 @@ static struct snd_soc_dai_driver mt2701_afe_pcm_dais[] = {
 	}
 };
 
+static struct snd_soc_dai_driver mt2701_afe_hdmi_dais[] = {
+	/* FE DAIs */
+	{
+		.name = "HDMI",
+		.id = MT2701_MEMIF_HDMI,
+		.playback = {
+			.stream_name = "HDMI",
+			.channels_min = 2,
+			.channels_max = 8,
+			.rates = SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		},
+		.ops = &mtk_afe_fe_ops,
+	}, {
+	/* BE DAIs */
+		.name = "HDMIO",
+		.id = MT2701_IO_HDMI,
+		.playback = {
+			.stream_name = "HDMIO Playback",
+			.channels_min = 2,
+			.channels_max = 8,
+			.rates = SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		},
+		.ops = &mt2701_afe_hdmi_ops,
+	},
+};
+
 static const struct snd_kcontrol_new mt2701_afe_o00_mix[] = {
 	SOC_DAPM_SINGLE_AUTODISABLE("I00 Switch", AFE_CONN0, 0, 1, 0),
 };
@@ -954,6 +1091,10 @@ static const struct snd_soc_dapm_route mt2701_afe_pcm_routes[] = {
 	{ "O31", "I35 Switch", "I35" },
 };
 
+static const struct snd_soc_dapm_route mt2701_afe_hdmi_routes[] = {
+	{"HDMIO Playback", NULL, "HDMI"},
+};
+
 static int mt2701_afe_pcm_probe(struct snd_soc_component *component)
 {
 	struct mtk_base_afe *afe = snd_soc_component_get_drvdata(component);
@@ -970,6 +1111,14 @@ static const struct snd_soc_component_driver mt2701_afe_pcm_dai_component = {
 	.num_dapm_widgets = ARRAY_SIZE(mt2701_afe_pcm_widgets),
 	.dapm_routes = mt2701_afe_pcm_routes,
 	.num_dapm_routes = ARRAY_SIZE(mt2701_afe_pcm_routes),
+	.suspend = mtk_afe_suspend,
+	.resume = mtk_afe_resume,
+};
+
+static const struct snd_soc_component_driver mt2701_afe_hdmi_dai_component = {
+	.name = "mt2701-afe-hdmi-dai",
+	.dapm_routes = mt2701_afe_hdmi_routes,
+	.num_dapm_routes = ARRAY_SIZE(mt2701_afe_hdmi_routes),
 	.suspend = mtk_afe_suspend,
 	.resume = mtk_afe_resume,
 };
@@ -1208,6 +1357,21 @@ static const struct mtk_base_memif_data memif_data[MT2701_MEMIF_NUM] = {
 		.agent_disable_reg = AUDIO_TOP_CON5,
 		.agent_disable_shift = 16,
 		.msb_reg = -1,
+	}, {
+		.name = "HDMI",
+		.id = MT2701_MEMIF_HDMI,
+		.reg_ofs_base = AFE_HDMI_OUT_BASE,
+		.reg_ofs_cur = AFE_HDMI_OUT_CUR,
+		.fs_reg = -1,
+		.fs_shift = -1,
+		.fs_maskbit = -1,
+		.mono_reg = -1,
+		.mono_shift = -1,
+		.hd_reg = -1,
+		.enable_reg = -1,
+		.msb_reg = -1,
+		.msb_shift = 8,
+		.agent_disable_reg = -1,
 	},
 };
 
@@ -1250,6 +1414,17 @@ static const struct mtk_base_irq_data irq_data[MT2701_IRQ_ASYS_END] = {
 		.irq_en_shift = 31,
 		.irq_clr_reg = ASYS_IRQ_CLR,
 		.irq_clr_shift = 2,
+	}, {
+		.id = MT2701_AFE_IRQ_HDMI,
+		.irq_cnt_reg = AFE_IRQ_CNT5,
+		.irq_cnt_shift = 0,
+		.irq_cnt_maskbit = 0x3ffff,
+		.irq_en_reg = AFE_IRQ_MCU_CON,
+		.irq_en_shift = 12,
+		.irq_fs_reg = -1,
+		.irq_fs_maskbit = -1,
+		.irq_clr_reg = AFE_IRQ_CLR,
+		.irq_clr_shift = 4,
 	}
 };
 
@@ -1417,6 +1592,15 @@ static int mt2701_afe_pcm_dev_probe(struct platform_device *pdev)
 					      NULL, 0);
 	if (ret) {
 		dev_warn(dev, "err_platform\n");
+		goto err_platform;
+	}
+
+	ret = devm_snd_soc_register_component(&pdev->dev,
+					 &mt2701_afe_hdmi_dai_component,
+					 mt2701_afe_hdmi_dais,
+					 ARRAY_SIZE(mt2701_afe_hdmi_dais));
+	if (ret) {
+		dev_warn(dev, "err_platform (hdmi)\n");
 		goto err_platform;
 	}
 
