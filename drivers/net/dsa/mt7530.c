@@ -2761,7 +2761,7 @@ mt7530_probe(struct mdio_device *mdiodev)
 	priv->dev = &mdiodev->dev;
 	priv->ds->priv = priv;
 	priv->ds->ops = &mt7530_switch_ops;
-	priv->ds->assisted_learning_on_cpu_port = true;
+	//priv->ds->assisted_learning_on_cpu_port = true;
 	mutex_init(&priv->reg_mutex);
 	dev_set_drvdata(&mdiodev->dev, priv);
 
