@@ -958,6 +958,9 @@ mt753x_cpu_port_enable(struct dsa_switch *ds, int port)
 	mt7530_write(priv, MT7530_PVC_P(port),
 		     PORT_SPEC_TAG);
 
+	/* Disable auto learning on the cpu port */
+	mt7530_set(priv, MT7530_PSC_P(port), SA_DIS);
+
 	/* Set CPU port number */
 	if (priv->id == ID_MT7621)
 		mt7530_rmw(priv, MT7530_MFC, CPU_MASK, CPU_EN | CPU_PORT(port));
@@ -986,7 +989,7 @@ mt7530_port_enable(struct dsa_switch *ds, int port,
 	 * restore the port matrix if the port is the member of a certain
 	 * bridge.
 	 */
-	priv->ports[port].pm |= PCR_MATRIX(BIT(MT7530_CPU_PORT));
+	priv->ports[port].pm |= PCR_MATRIX(BIT(dsa_upstream_port(ds, port)));
 	priv->ports[port].enable = true;
 	mt7530_rmw(priv, MT7530_PCR_P(port), PCR_MATRIX_MASK,
 		   priv->ports[port].pm);
@@ -1065,7 +1068,7 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
 			struct net_device *bridge)
 {
 	struct mt7530_priv *priv = ds->priv;
-	u32 port_bitmap = BIT(MT7530_CPU_PORT);
+	u32 port_bitmap = BIT(dsa_upstream_port(ds, port));
 	int i;
 
 	mutex_lock(&priv->reg_mutex);
@@ -1127,10 +1130,14 @@ mt7530_port_set_vlan_unaware(struct dsa_switch *ds, int port)
 	 * the CPU port get out of VLAN filtering mode.
 	 */
 	if (all_user_ports_removed) {
-		mt7530_write(priv, MT7530_PCR_P(MT7530_CPU_PORT),
-			     PCR_MATRIX(dsa_user_ports(priv->ds)));
-		mt7530_write(priv, MT7530_PVC_P(MT7530_CPU_PORT), PORT_SPEC_TAG
-			     | PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT));
+		for (i = 0; i < MT7530_NUM_PORTS; i++) {
+			if (dsa_is_cpu_port(ds, i)) {
+				mt7530_write(priv, MT7530_PCR_P(i),
+					     PCR_MATRIX(dsa_user_ports(priv->ds)));
+				mt7530_write(priv, MT7530_PVC_P(i), PORT_SPEC_TAG |
+					     PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT));
+			}
+		}
 	}
 }
 
@@ -1198,8 +1205,8 @@ mt7530_port_bridge_leave(struct dsa_switch *ds, int port,
 	 */
 	if (priv->ports[port].enable)
 		mt7530_rmw(priv, MT7530_PCR_P(port), PCR_MATRIX_MASK,
-			   PCR_MATRIX(BIT(MT7530_CPU_PORT)));
-	priv->ports[port].pm = PCR_MATRIX(BIT(MT7530_CPU_PORT));
+			   PCR_MATRIX(BIT(dsa_upstream_port(ds, port))));
+	priv->ports[port].pm = PCR_MATRIX(BIT(dsa_upstream_port(ds, port)));
 
 	mutex_unlock(&priv->reg_mutex);
 }
@@ -1210,7 +1217,9 @@ mt7530_port_fdb_add(struct dsa_switch *ds, int port,
 {
 	struct mt7530_priv *priv = ds->priv;
 	int ret;
-	u8 port_mask = BIT(port);
+	u8 cpu_port_mask = dsa_cpu_ports(ds);
+	u8 port_mask = cpu_port_mask & BIT(port) ?
+		       cpu_port_mask : BIT(port);
 
 	mutex_lock(&priv->reg_mutex);
 	mt7530_fdb_write(priv, vid, port_mask, addr, -1, STATIC_ENT);
@@ -1226,7 +1235,9 @@ mt7530_port_fdb_del(struct dsa_switch *ds, int port,
 {
 	struct mt7530_priv *priv = ds->priv;
 	int ret;
-	u8 port_mask = BIT(port);
+	u8 cpu_port_mask = dsa_cpu_ports(ds);
+	u8 port_mask = cpu_port_mask & BIT(port) ?
+		       cpu_port_mask : BIT(port);
 
 	mutex_lock(&priv->reg_mutex);
 	mt7530_fdb_write(priv, vid, port_mask, addr, -1, STATIC_EMP);
@@ -1285,6 +1296,7 @@ mt7530_port_mdb_add(struct dsa_switch *ds, int port,
 	struct mt7530_priv *priv = ds->priv;
 	const u8 *addr = mdb->addr;
 	u16 vid = mdb->vid;
+	u8 cpu_port_mask = dsa_cpu_ports(ds);
 	u8 port_mask = 0;
 
 	mutex_lock(&priv->reg_mutex);
@@ -1294,7 +1306,8 @@ mt7530_port_mdb_add(struct dsa_switch *ds, int port,
 		port_mask = (mt7530_read(priv, MT7530_ATRD) >> PORT_MAP)
 			    & PORT_MAP_MASK;
 
-	port_mask |= BIT(port);
+	port_mask |= cpu_port_mask & BIT(port) ?
+		     cpu_port_mask : BIT(port);
 	mt7530_fdb_write(priv, vid, port_mask, addr, -1, STATIC_ENT);
 	mt7530_fdb_cmd(priv, MT7530_FDB_WRITE, NULL);
 
@@ -1308,6 +1321,7 @@ mt7530_port_mdb_del(struct dsa_switch *ds, int port,
 	struct mt7530_priv *priv = ds->priv;
 	const u8 *addr = mdb->addr;
 	u16 vid = mdb->vid;
+	u8 cpu_port_mask = dsa_cpu_ports(ds);
 	u8 port_mask = 0;
 	int ret;
 
@@ -1318,7 +1332,8 @@ mt7530_port_mdb_del(struct dsa_switch *ds, int port,
 		port_mask = (mt7530_read(priv, MT7530_ATRD) >> PORT_MAP)
 			    & PORT_MAP_MASK;
 
-	port_mask &= ~BIT(port);
+	port_mask &= cpu_port_mask & BIT(port) ?
+		     ~cpu_port_mask : ~BIT(port);
 	mt7530_fdb_write(priv, vid, port_mask, addr, -1,
 			 port_mask ? STATIC_ENT : STATIC_EMP);
 	ret = mt7530_fdb_cmd(priv, MT7530_FDB_WRITE, NULL);
@@ -1369,8 +1384,12 @@ mt7530_port_vlan_filtering(struct dsa_switch *ds, int port,
 		 * port and the corresponding CPU port is required the setup
 		 * for becoming a VLAN-aware port.
 		 */
+		int i;
+
 		mt7530_port_set_vlan_aware(ds, port);
-		mt7530_port_set_vlan_aware(ds, MT7530_CPU_PORT);
+		for (i = 0; i < MT7530_NUM_PORTS; i++)
+			if (dsa_is_cpu_port(ds, i))
+				mt7530_port_set_vlan_aware(ds, i);
 	} else {
 		mt7530_port_set_vlan_unaware(ds, port);
 	}
@@ -1393,9 +1412,10 @@ mt7530_hw_vlan_add(struct mt7530_priv *priv,
 {
 	u8 new_members;
 	u32 val;
+	int i;
 
 	new_members = entry->old_members | BIT(entry->port) |
-		      BIT(MT7530_CPU_PORT);
+		      dsa_cpu_ports(priv->ds);
 
 	/* Validate the entry with independent learning, create egress tag per
 	 * VLAN and joining the port as one of the port members.
@@ -1417,10 +1437,10 @@ mt7530_hw_vlan_add(struct mt7530_priv *priv,
 	 * that VLAN tags would be appended after hardware special tag used as
 	 * DSA tag.
 	 */
-	mt7530_rmw(priv, MT7530_VAWD2,
-		   ETAG_CTRL_P_MASK(MT7530_CPU_PORT),
-		   ETAG_CTRL_P(MT7530_CPU_PORT,
-			       MT7530_VLAN_EGRESS_STACK));
+	for (i = 0; i < MT7530_NUM_PORTS; i++)
+		if (dsa_is_cpu_port(priv->ds, i))
+			mt7530_rmw(priv, MT7530_VAWD2, ETAG_CTRL_P_MASK(i),
+				   ETAG_CTRL_P(i, MT7530_VLAN_EGRESS_STACK));
 }
 
 static void
@@ -1443,7 +1463,7 @@ mt7530_hw_vlan_del(struct mt7530_priv *priv,
 	 * the entry would be kept valid. Otherwise, the entry is got to be
 	 * disabled.
 	 */
-	if (new_members && new_members != BIT(MT7530_CPU_PORT)) {
+	if (new_members && new_members != dsa_cpu_ports(priv->ds)) {
 		val = IVL_MAC | VTAG_EN | PORT_MEM(new_members) |
 		      VLAN_VALID;
 		mt7530_write(priv, MT7530_VAWD1, val);
@@ -1605,19 +1625,21 @@ static void mt753x_port_mirror_del(struct dsa_switch *ds, int port,
 	}
 }
 
+static int
+mt753x_port_change_cpu_port(struct dsa_switch *ds, int port,
+			    struct dsa_port *new_cpu_dp)
+{
+	mt7530_rmw(ds->priv, MT7530_PCR_P(port), PCR_MATRIX(dsa_cpu_ports(ds)),
+		   PCR_MATRIX(BIT(new_cpu_dp->index)));
+
+	return 0;
+}
+
 static enum dsa_tag_protocol
 mtk_get_tag_protocol(struct dsa_switch *ds, int port,
 		     enum dsa_tag_protocol mp)
 {
-	struct mt7530_priv *priv = ds->priv;
-
-	if (port != MT7530_CPU_PORT) {
-		dev_warn(priv->dev,
-			 "port not matched with tagging CPU port\n");
-		return DSA_TAG_PROTO_NONE;
-	} else {
-		return DSA_TAG_PROTO_MTK;
-	}
+	return DSA_TAG_PROTO_MTK;
 }
 
 static int
@@ -2578,6 +2600,7 @@ mt753x_phy_write(struct dsa_switch *ds, int port, int regnum, u16 val)
 }
 
 static const struct dsa_switch_ops mt7530_switch_ops = {
+	.port_change_cpu_port	= mt753x_port_change_cpu_port,
 	.get_tag_protocol	= mtk_get_tag_protocol,
 	.setup			= mt753x_setup,
 	.get_strings		= mt7530_get_strings,
@@ -2738,6 +2761,7 @@ mt7530_probe(struct mdio_device *mdiodev)
 	priv->dev = &mdiodev->dev;
 	priv->ds->priv = priv;
 	priv->ds->ops = &mt7530_switch_ops;
+	priv->ds->assisted_learning_on_cpu_port = true;
 	mutex_init(&priv->reg_mutex);
 	dev_set_drvdata(&mdiodev->dev, priv);
 
