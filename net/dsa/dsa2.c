@@ -234,6 +234,14 @@ static int dsa_tree_setup_default_cpus(struct dsa_switch_tree *dst)
 	/* Assign the CPU ports in round-robbin way to all ports of the fabric */
 	list_for_each_entry(dp, &dst->ports, list)
 		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp)) {
+			struct device_node *dn;
+
+			if (dn = of_parse_phandle(dp->dn, "default-cpu", 0)) {
+				dp->cpu_dp = dsa_tree_find_port_by_node(dst, dn);
+				if (dp->cpu_dp && dsa_port_is_cpu(dp->cpu_dp))
+					continue;
+			}
+
 			dp->cpu_dp = cpu_dp;
 
 			if (cpu_dp == last_cpu_dp)
