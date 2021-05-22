@@ -52,8 +52,6 @@ mt76_get_eeprom_file(struct mt76_dev *dev, int len)
 }
 
 int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int offset, int len)
-//static
-//int mt76_get_of_eeprom(struct mt76_dev *dev, int len)
 {
 #if defined(CONFIG_OF) && defined(CONFIG_MTD)
 	struct device_node *np = dev->dev->of_node;
@@ -375,7 +373,6 @@ mt76_eeprom_init(struct mt76_dev *dev, int len)
 	if (!dev->eeprom.data)
 		return -ENOMEM;
 
-	return !mt76_get_of_eeprom(dev, dev->eeprom.data, 0, len);
-//	return (!mt76_get_eeprom_file(dev, len)) || (!mt76_get_of_eeprom(dev, len));
+	return (!mt76_get_eeprom_file(dev, len)) ||(!mt76_get_of_eeprom(dev, dev->eeprom.data, 0, len));
 }
 EXPORT_SYMBOL_GPL(mt76_eeprom_init);
