@@ -54,7 +54,7 @@ $(obj)/compressed/vmlinux: $(obj)/Image FORCE
 
 $(obj)/zImage:	$(obj)/compressed/vmlinux FORCE
 	$(call if_changed,objcopy)
-
+	@$(kecho) '  Kernel: $@ is ready'
 endif
 
 ifneq ($(LOADADDR),)

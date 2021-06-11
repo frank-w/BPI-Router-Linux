@@ -176,7 +176,8 @@
 #define CLK_TOP_AUD_EXT1			156
 #define CLK_TOP_AUD_EXT2			157
 #define CLK_TOP_NFI1X_PAD			158
-#define CLK_TOP_NR				159
+#define CLK_TOP_AXISEL_D4			159
+#define CLK_TOP_NR				160
 
 /* APMIXEDSYS */
 
@@ -193,7 +194,8 @@
 #define CLK_APMIXED_HADDS2PLL			11
 #define CLK_APMIXED_AUD2PLL			12
 #define CLK_APMIXED_TVD2PLL			13
-#define CLK_APMIXED_NR				14
+#define CLK_APMIXED_HDMI_REF		14
+#define CLK_APMIXED_NR				15
 
 /* DDRPHY */
 
