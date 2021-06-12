@@ -1,0 +1,136 @@
+diff --git a/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/bluetooth_drv_init.c b/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/bluetooth_drv_init.c
+index 47b055433443..82b799f256b4 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/bluetooth_drv_init.c
++++ b/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/bluetooth_drv_init.c
+@@ -23,13 +23,14 @@
+ int do_bluetooth_drv_init(int chip_id)
+ {
+ 	int i_ret = -1;
+-
++#if 0
+ #if defined(CONFIG_MTK_COMBO_BT) || defined(CONFIG_MTK_COMBO_BT_HCI)
+ 	WMT_DETECT_INFO_FUNC("start to do bluetooth driver init\n");
+ 	i_ret = mtk_wcn_stpbt_drv_init();
+ 	WMT_DETECT_INFO_FUNC("finish bluetooth driver init, i_ret:%d\n", i_ret);
+ #else
+ 	WMT_DETECT_INFO_FUNC("CONFIG_MTK_COMBO_BT is not defined\n");
++#endif
+ #endif
+ 	return i_ret;
+ }
+diff --git a/drivers/misc/mediatek/connectivity/common/conn_soc/linux/pub/stp_chrdev_bt.c b/drivers/misc/mediatek/connectivity/common/conn_soc/linux/pub/stp_chrdev_bt.c
+index 190fa3944d80..5a85f68b092f 100644
+--- a/drivers/misc/mediatek/connectivity/common/conn_soc/linux/pub/stp_chrdev_bt.c
++++ b/drivers/misc/mediatek/connectivity/common/conn_soc/linux/pub/stp_chrdev_bt.c
+@@ -877,7 +877,8 @@ static void BT_exit(void)
+ 	BT_INFO_FUNC("%s driver removed\n", BT_DRIVER_NAME);
+ }
+ 
+-#ifdef MTK_WCN_REMOVE_KERNEL_MODULE
++#if 0
++//#ifdef MTK_WCN_REMOVE_KERNEL_MODULE
+ 
+ int mtk_wcn_stpbt_drv_init(void)
+ {
+diff --git a/drivers/misc/mediatek/connectivity/common/conn_soc/mt7623/mtk_wcn_consys_hw.c b/drivers/misc/mediatek/connectivity/common/conn_soc/mt7623/mtk_wcn_consys_hw.c
+index 191f7312f897..eafee784dc68 100644
+--- a/drivers/misc/mediatek/connectivity/common/conn_soc/mt7623/mtk_wcn_consys_hw.c
++++ b/drivers/misc/mediatek/connectivity/common/conn_soc/mt7623/mtk_wcn_consys_hw.c
+@@ -190,16 +190,16 @@ static INT32 mtk_wmt_remove(struct platform_device *pdev)
+ VOID mtk_wcn_consys_power_on(VOID)
+ {
+ 	INT32 iRet = -1;
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++	//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 	iRet = pm_runtime_get_sync(&my_pdev->dev);
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++	//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 	if (iRet)
+ 		WMT_PLAT_ERR_FUNC("pm_runtime_get_sync() fail(%d)\n", iRet);
+ 	else
+ 		WMT_PLAT_INFO_FUNC("pm_runtime_get_sync() CONSYS ok\n");
+ 
+ 	iRet = device_init_wakeup(&my_pdev->dev, true);
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++	//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 	if (iRet)
+ 		WMT_PLAT_ERR_FUNC("device_init_wakeup(true) fail.\n");
+ 	else
+@@ -231,23 +231,23 @@ INT32 mtk_wcn_consys_hw_reg_ctrl(UINT32 on, UINT32 co_clock_type)
+ 	WMT_PLAT_DBG_FUNC("CONSYS-HW-REG-CTRL(0x%08x),start\n", on);
+ 	if (on) {
+ 		WMT_PLAT_DBG_FUNC("++\n");
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		/*need PMIC driver provide new API protocol */
+ 		/*1.AP power on VCN_1V8 LDO (with PMIC_WRAP API) VCN_1V8  */
+ 		regulator_set_mode(reg_VCN18, REGULATOR_MODE_STANDBY);
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		/* VOL_DEFAULT, VOL_1200, VOL_1300, VOL_1500, VOL_1800... */
+ 		if (reg_VCN18) {
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 			regulator_set_voltage(reg_VCN18, 1800000, 1800000);
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 			if (regulator_enable(reg_VCN18))
+ 				WMT_PLAT_ERR_FUNC("enable VCN18 fail\n");
+ 			else
+ 				WMT_PLAT_DBG_FUNC("enable VCN18 ok\n");
+ 		}
+ 		udelay(150);
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		if (co_clock_type) {
+ 			/*step0,clk buf ctrl */
+ 			WMT_PLAT_INFO_FUNC("co clock type(%d),turn on clk buf\n", co_clock_type);
+@@ -274,16 +274,16 @@ printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		}
+ 
+ 		/*3.assert CONNSYS CPU SW reset  0x10007018 "[12]=1'b1  [31:24]=8'h88 (key)" */
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		reset_control_reset(rstc);
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		mtk_wcn_consys_power_on();
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		/*11.26M is ready now, delay 10us for mem_pd de-assert */
+ 		udelay(10);
+ 		/*enable AP bus clock : connmcu_bus_pd  API: enable_clock() ++?? */
+ 		clk_prepare_enable(clk_infra_conn_main);
+-printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
++		//printk(KERN_ALERT "DEBUG: Passed %s %d \n",__FUNCTION__,__LINE__);
+ 		WMT_PLAT_DBG_FUNC("[CCF]enable clk_infra_conn_main\n");
+ 		/*12.poll CONNSYS CHIP ID until chipid is returned  0x18070008 */
+ 		while (retry-- > 0) {
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen2/mgmt/p2p_fsm.c b/drivers/misc/mediatek/connectivity/wlan/gen2/mgmt/p2p_fsm.c
+index f8c09e2aa9de..30b3434b4e89 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen2/mgmt/p2p_fsm.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen2/mgmt/p2p_fsm.c
+@@ -1489,17 +1489,20 @@ VOID p2pFsmRunEventScanRequest(IN P_ADAPTER_T prAdapter, IN P_MSG_HDR_T prMsgHdr
+ 		}
+ 
+ 		u4ChnlListSize = sizeof(RF_CHANNEL_INFO_T) * prScanReqInfo->ucNumChannelList;
++
+ 		kalMemCopy(prScanReqInfo->arScanChannelList, prP2pScanReqMsg->arChannelListInfo, u4ChnlListSize);
+ 
+ 		/* TODO: I only take the first SSID. Multiple SSID may be needed in the future. */
+ 		/* SSID */
+-		if (prP2pScanReqMsg->i4SsidNum >= 1)
+-			kalMemCopy(&(prScanReqInfo->rSsidStruct), prP2pScanReqMsg->prSSID, sizeof(P2P_SSID_STRUCT_T));
++		if (prP2pScanReqMsg->i4SsidNum >= 1 && prP2pScanReqMsg->prSSID)
++			kalMemCopy(&(prScanReqInfo->rSsidStruct), prP2pScanReqMsg->prSSID, sizeof(prScanReqInfo->rSsidStruct));
+ 		else
+ 			prScanReqInfo->rSsidStruct.ucSsidLen = 0;
+ 
+ 		/* IE Buffer */
+-		kalMemCopy(prScanReqInfo->aucIEBuf, prP2pScanReqMsg->pucIEBuf, prP2pScanReqMsg->u4IELen);
++		kalMemCopy(prScanReqInfo->aucIEBuf,
++		    prP2pScanReqMsg->pucIEBuf,
++		    prP2pScanReqMsg->u4IELen > CFG_IE_BUFFER_SIZE? CFG_IE_BUFFER_SIZE : prP2pScanReqMsg->u4IELen);
+ 
+ 		prScanReqInfo->u4BufLength = prP2pScanReqMsg->u4IELen;
+ 
