@@ -37,6 +37,13 @@
 		};
 	};
 
+	fan0: pwm-fan {
+		compatible = "pwm-fan";
+		#cooling-cells = <2>;
+		pwms = <&pwm 2 10000 0>;
+		cooling-levels = <0 102 170 230>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
@@ -580,6 +587,23 @@
 
 &u3phy {
 	status = "okay";
+};
+
+&cpu_thermal {
+	trips {
+		cpu_active: cpu-active {
+			temperature = <70000>;
+			hysteresis = <2000>;
+			type = "active";
+		};
+	};
+
+	cooling-maps {
+		map1 {
+			trip = <&cpu_active>;
+			cooling-device = <&fan0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+		};
+	};
 };
 
 &uart0 {
