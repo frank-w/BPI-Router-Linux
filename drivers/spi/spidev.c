@@ -688,6 +688,7 @@ MODULE_DEVICE_TABLE(spi, spidev_spi_ids);
 
 #ifdef CONFIG_OF
 static const struct of_device_id spidev_dt_ids[] = {
+	{ .compatible = "linux,spidev" },
 	{ .compatible = "rohm,dh2228fv" },
 	{ .compatible = "lineartechnology,ltc2488" },
 	{ .compatible = "semtech,sx1301" },
