@@ -57,6 +57,25 @@ struct mtk_mmsys {
 	const struct mtk_mmsys_driver_data *data;
 };
 
+static void mtk_mmsys_ddp_sout_sel(struct device *dev,
+				   enum mtk_ddp_comp_id cur,
+				   enum mtk_ddp_comp_id next)
+{
+	struct mtk_mmsys *mmsys = dev_get_drvdata(dev);
+
+	if (cur == DDP_COMPONENT_BLS && next == DDP_COMPONENT_DSI0) {
+		writel_relaxed(BLS_TO_DSI_RDMA1_TO_DPI1,
+			       mmsys->regs + DISP_REG_CONFIG_OUT_SEL);
+	} else if (cur == DDP_COMPONENT_BLS && next == DDP_COMPONENT_DPI0) {
+		writel_relaxed(BLS_TO_DPI_RDMA1_TO_DSI,
+			       mmsys->regs + DISP_REG_CONFIG_OUT_SEL);
+		writel_relaxed(DSI_SEL_IN_RDMA,
+			       mmsys->regs + DISP_REG_CONFIG_DSI_SEL);
+		writel_relaxed(DPI_SEL_IN_BLS,
+			       mmsys->regs + DISP_REG_CONFIG_DPI_SEL);
+	}
+}
+
 void mtk_mmsys_ddp_connect(struct device *dev,
 			   enum mtk_ddp_comp_id cur,
 			   enum mtk_ddp_comp_id next)
@@ -71,6 +90,8 @@ void mtk_mmsys_ddp_connect(struct device *dev,
 			reg = readl_relaxed(mmsys->regs + routes[i].addr) | routes[i].val;
 			writel_relaxed(reg, mmsys->regs + routes[i].addr);
 		}
+
+	mtk_mmsys_ddp_sout_sel(dev, cur, next);
 }
 EXPORT_SYMBOL_GPL(mtk_mmsys_ddp_connect);
 
