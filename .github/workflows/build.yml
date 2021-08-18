@@ -25,6 +25,8 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 10
 
       - name: Install depencies
         run: |
@@ -41,8 +43,8 @@ jobs:
         run: |
           echo "# CI-Build for $BRANCH ($KERNELVER)" > ${{ github.workspace }}-CHANGELOG.txt
           echo "$DT ${{github.ref}} ${{github.sha}}" >> ${{ github.workspace }}-CHANGELOG.txt
-          echo "last 10 commits:" >> ${{ github.workspace }}-CHANGELOG.txt
-          git log -10 --pretty=format:"%h %ad %s %d by %an" --date=short >> ${{ github.workspace }}-CHANGELOG.txt
+          echo "last commits:" >> ${{ github.workspace }}-CHANGELOG.txt
+          git log --pretty=format:"%h %ad %s %d by %an" --date=short >> ${{ github.workspace }}-CHANGELOG.txt
 
       - name: Print env
         run: |
