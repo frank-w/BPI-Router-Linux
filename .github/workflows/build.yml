@@ -56,8 +56,8 @@ jobs:
             ${{ runner.os }}-ccache
             ${{ runner.os }}-ccache-
 
-      - name: show Body file
-        run: cat ${{ github.workspace }}-CHANGELOG.txt
+#      - name: show Body file
+#        run: cat ${{ github.workspace }}-CHANGELOG.txt
 
       - name: Build for bananapi-r2
         run: |
@@ -92,9 +92,11 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          draft: true
+          #draft: true
+          prerelease: true
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           body: ${{ github.sha }}-$BRANCH-$KERNELVER
+          tag_name: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
           files: |
             ../SD/*
             ../*.deb
