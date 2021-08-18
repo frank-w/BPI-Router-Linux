@@ -42,7 +42,7 @@ jobs:
           echo "# CI-Build for $BRANCH ($KERNELVER)" > ${{ github.workspace }}-CHANGELOG.txt
           echo "$DT ${{github.ref}} ${{github.sha}}" >> ${{ github.workspace }}-CHANGELOG.txt
           echo "last 10 commits:" >> ${{ github.workspace }}-CHANGELOG.txt
-          git log -10 --pretty=format:"%h %ad | %s %d [%an]" --date=short >> ${{ github.workspace }}-CHANGELOG.txt
+          git log -10 --pretty=format:"%h %ad %s %d by %an" --date=short >> ${{ github.workspace }}-CHANGELOG.txt
 
       - name: Print env
         run: |
