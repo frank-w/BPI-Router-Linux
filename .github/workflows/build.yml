@@ -56,6 +56,9 @@ jobs:
             ${{ runner.os }}-ccache
             ${{ runner.os }}-ccache-
 
+      - name: show Body file
+        run: cat ${{ github.workspace }}-CHANGELOG.txt
+
       - name: Build for bananapi-r2
         run: |
           export PATH=/usr/lib/ccache:$PATH
@@ -91,6 +94,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
           body_path: ${{ github.workspace }}-CHANGELOG.txt
+          body: ${{ github.sha }}-$BRANCH-$KERNELVER
           files: |
             ../SD/*
             ../*.deb
