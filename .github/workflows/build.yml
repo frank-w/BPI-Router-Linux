@@ -42,7 +42,7 @@ jobs:
       - name: Generate Body
         run: |
           echo "# CI-Build for $BRANCH ($KERNELVER)" > ${{ github.workspace }}-CHANGELOG.txt
-          echo "$DT ${{github.ref}} ${{github.sha}}" >> ${{ github.workspace }}-CHANGELOG.txt
+          echo "" #"$DT ${{github.ref}} ${{github.sha}}" >> ${{ github.workspace }}-CHANGELOG.txt
           echo "last commits:" >> ${{ github.workspace }}-CHANGELOG.txt
           git log --pretty=format:"%h %ad %s %d by %an" --date=short >> ${{ github.workspace }}-CHANGELOG.txt
 
@@ -101,6 +101,7 @@ jobs:
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           body: ${{ github.sha }}-$BRANCH-$KERNELVER
           tag_name: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
+          target_commitish: ${{ github.sha }}
           files: |
             ../SD/*
             ../*.deb
