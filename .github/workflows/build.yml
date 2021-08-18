@@ -37,6 +37,11 @@ jobs:
           echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
           echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
 
+      - name: Generate Body
+        run: |
+          echo "# CI-Build for $BRANCH ($KERNELVER)" > ${{ github.workspace }}-CHANGELOG.txt
+          echo "$DT ${{github.ref}} ${{github.sha}}" >> ${{ github.workspace }}-CHANGELOG.txt
+
       - name: Print env
         run: |
           echo $BRANCH $KERNELVER $DT
@@ -85,6 +90,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
           files: |
             ../SD/*
             ../*.deb
