@@ -95,3 +95,4 @@ jobs:
             ../SD/*
             ../*.deb
             *.itb
+            ${{ github.workspace }}-CHANGELOG.txt
