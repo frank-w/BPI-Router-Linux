@@ -25,6 +25,8 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 10
 
       - name: Install depencies
         run: |
@@ -36,6 +38,12 @@ jobs:
           echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
           echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
           echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+      - name: Generate Changelog
+        run: |
+          echo "# CI-Build for $BRANCH ($KERNELVER)" > ${{ github.workspace }}-CHANGELOG.txt
+          echo "last commits:" >> ${{ github.workspace }}-CHANGELOG.txt
+          git log --pretty=format:"%h %ad %s %d by %an" --date=short >> ${{ github.workspace }}-CHANGELOG.txt
 
       - name: Print env
         run: |
@@ -75,12 +83,21 @@ jobs:
 
       - name: Upload binaries to release
         if: endsWith(github.ref,'-main') 
-        uses: marvinpinto/action-automatic-releases@latest
+        #uses: marvinpinto/action-automatic-releases@latest
+        #with:
+        #  repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        #  automatic_release_tag: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
+        #  prerelease: false
+        #  title: "Build for branch ${{ env.BRANCH }} (${{ env.KERNELVER }})"
+        uses: softprops/action-gh-release@v1
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
-          prerelease: false
-          title: "Build for branch ${{ env.BRANCH }} (${{ env.KERNELVER }})"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          #draft: true
+          #prerelease: true
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          body: ${{ github.sha }}-$BRANCH-$KERNELVER
+          tag_name: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
+          target_commitish: ${{ github.sha }}
           files: |
             ../SD/*
             ../*.deb
