@@ -1440,7 +1440,7 @@ INT32 wmt_dev_read_file(PUINT8 pName, const PPUINT8 ppBufPtr, INT32 offset, INT3
 	INT32 file_len;
 	INT32 read_len;
 	PVOID pBuf;
-        mm_segment_t fs;
+    //    mm_segment_t fs;
 
 	/* struct cred *cred = get_task_cred(current); */
 	//const struct cred *cred = get_current_cred();
@@ -1491,9 +1491,9 @@ INT32 wmt_dev_read_file(PUINT8 pName, const PPUINT8 ppBufPtr, INT32 offset, INT3
 			}
 		}
 
-                fs=get_fs();
+                //fs=get_fs();
 		read_len = kernel_read(fd, pBuf + padSzBuf, file_len, &fd->f_pos);
-                set_fs(fs);
+                //set_fs(fs);
 		if (read_len != file_len)
 			WMT_WARN_FUNC("read abnormal: read_len(%d), file_len(%d)\n", read_len, file_len);
 
@@ -1525,7 +1525,7 @@ INT32 wmt_dev_patch_get(PUINT8 pPatchName, osal_firmware **ppPatch, INT32 padSzB
 	/* struct cred *cred = get_task_cred(current); */
 	struct cred *cred = (struct cred *)get_current_cred();
 
-	mm_segment_t orig_fs = get_fs();
+	//mm_segment_t orig_fs = get_fs();
 
 	if (*ppPatch) {
 		WMT_WARN_FUNC("f/w patch already exists\n");
@@ -1552,11 +1552,11 @@ INT32 wmt_dev_patch_get(PUINT8 pPatchName, osal_firmware **ppPatch, INT32 padSzB
 	orig_gid = cred->fsgid.val;
 	cred->fsuid.val = cred->fsgid.val = 0;
 
-	set_fs(get_ds());
+	//set_fs(get_ds());
 
 	/* load patch file from fs */
 	iRet = wmt_dev_read_file(pPatchName, (const PPUINT8)&pfw->data, 0, padSzBuf);
-	set_fs(orig_fs);
+	//set_fs(orig_fs);
 
 	cred->fsuid.val = orig_uid;
 	cred->fsgid.val = orig_gid;

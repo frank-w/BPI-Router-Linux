@@ -786,7 +786,7 @@ VOID kalHifAhbKalWakeLockTimeout(IN P_GLUE_INFO_T prGlueInfo)
 static struct file *filp;
 static uid_t orgfsuid;
 static gid_t orgfsgid;
-static mm_segment_t orgfs;
+//static mm_segment_t orgfs;
 
 /*----------------------------------------------------------------------------*/
 /*!
@@ -818,8 +818,8 @@ WLAN_STATUS kalFirmwareOpen(IN P_GLUE_INFO_T prGlueInfo)
 
 	ASSERT(prGlueInfo);
 
-	orgfs = get_fs();
-	set_fs(get_ds());
+	//orgfs = get_fs();
+	//set_fs(get_ds());
 
 	/* open the fw file */
 #if defined(MT6620) & CFG_MULTI_ECOVER_SUPPORT
@@ -869,7 +869,7 @@ open_success:
 
 error_open:
 	/* restore */
-	set_fs(orgfs);
+	//set_fs(orgfs);
 	cred->fsuid.val = orgfsuid;
 	cred->fsgid.val = orgfsgid;
 	put_cred(cred);
@@ -897,7 +897,7 @@ WLAN_STATUS kalFirmwareClose(IN P_GLUE_INFO_T prGlueInfo)
 		filp_close(filp, NULL);
 
 		/* restore */
-		set_fs(orgfs);
+		//set_fs(orgfs);
 		{
 			struct cred *cred = (struct cred *)get_current_cred();
 
@@ -3817,13 +3817,13 @@ UINT_32 kalGetMfpSetting(IN P_GLUE_INFO_T prGlueInfo)
 struct file *kalFileOpen(const char *path, int flags, int rights)
 {
 	struct file *filp = NULL;
-	mm_segment_t oldfs;
+	//mm_segment_t oldfs;
 	int err = 0;
 
-	oldfs = get_fs();
-	set_fs(get_ds());
+	//oldfs = get_fs();
+	//set_fs(get_ds());
 	filp = filp_open(path, flags, rights);
-	set_fs(oldfs);
+	//set_fs(oldfs);
 	if (IS_ERR(filp)) {
 		err = PTR_ERR(filp);
 		return NULL;
@@ -3838,29 +3838,29 @@ VOID kalFileClose(struct file *file)
 
 UINT_32 kalFileRead(struct file *file, UINT_64 offset, UINT_8 *data, UINT_32 size)
 {
-	mm_segment_t oldfs;
+	//mm_segment_t oldfs;
 	INT_32 ret;
 
-	oldfs = get_fs();
-	set_fs(get_ds());
+	//oldfs = get_fs();
+	//set_fs(get_ds());
 
 	ret = kernel_read(file, data, size, &offset);
 
-	set_fs(oldfs);
+	//set_fs(oldfs);
 	return ret;
 }
 
 UINT_32 kalFileWrite(struct file *file, UINT_64 offset, UINT_8 *data, UINT_32 size)
 {
-	mm_segment_t oldfs;
+	//mm_segment_t oldfs;
 	INT_32 ret;
 
-	oldfs = get_fs();
-	set_fs(get_ds());
+	//oldfs = get_fs();
+	//set_fs(get_ds());
 
 	ret = kernel_write(file, data, size, &offset);
 
-	set_fs(oldfs);
+	//set_fs(oldfs);
 	return ret;
 }
 
