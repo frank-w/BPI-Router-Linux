@@ -1036,9 +1036,9 @@ scanSearchExistingBssDescWithSsid(IN P_ADAPTER_T prAdapter,
 	switch (eBSSType) {
 	case BSS_TYPE_P2P_DEVICE:
 		fgCheckSsid = FALSE;
-		/* FALLTHRU */
+		fallthrough;
 	case BSS_TYPE_INFRASTRUCTURE:
-		/* FALLTHRU */
+		fallthrough;
 	case BSS_TYPE_BOW_DEVICE:
 		{
 			prBssDesc = scanSearchBssDescByBssidAndSsid(prAdapter, aucBSSID, fgCheckSsid, prSsid);
@@ -1047,7 +1047,7 @@ scanSearchExistingBssDescWithSsid(IN P_ADAPTER_T prAdapter,
 
 			return prBssDesc;
 		}
-		/* FALLTHRU */
+		fallthrough;
 	case BSS_TYPE_IBSS:
 		{
 			prIBSSBssDesc = scanSearchBssDescByBssidAndSsid(prAdapter, aucBSSID, fgCheckSsid, prSsid);
@@ -1095,7 +1095,7 @@ scanSearchExistingBssDescWithSsid(IN P_ADAPTER_T prAdapter,
 			/* CASE V */
 			break;	/* Return NULL; */
 		}
-		/* FALLTHRU */
+		fallthrough;
 	default:
 		break;
 	}
