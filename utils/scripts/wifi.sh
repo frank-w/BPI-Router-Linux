@@ -28,7 +28,7 @@ then
   if [[ -x /usr/bin/wmt_loader ]];
   then
 	# ??
-	/usr/bin/wmt_loader > /var/log/wmtloader.log
+	/usr/bin/wmt_loader &> /var/log/wmtloader.log
 	sleep 3
   else
 	echo "Error, unable to find wmt_loader"
@@ -38,7 +38,7 @@ then
   if  [[ -c /dev/stpwmt ]];
   then
 	# Load firmware
-	/usr/bin/stp_uart_launcher -p /etc/firmware > /var/log/stp_launcher.log &
+	/usr/bin/stp_uart_launcher -p /etc/firmware &> /var/log/stp_launcher.log &
 	sleep 5
   else
   	echo "Error, device no created, /dev/stpwmt"
@@ -57,7 +57,11 @@ then
 	if [[ -n $(pidof hostapd) ]];
 	then
 		echo "hostapd running...kill it";
-		killall hostapd
+		#killall hostapd
+		pid=$(ps auxf | grep hostapd | grep ap0 | awk '{print $2}')
+		if [[ -n "$pid" ]];then
+			kill $pid
+		fi
 	fi
 	if [[ -n $(ip a|grep ap0) ]];
 	then
@@ -81,16 +85,16 @@ else
 #	echo "set MAC"
 #	ip link set ap0 address 01:02:03:04:05:06 up
 	echo "Done, all good, ready to lauch hostapd"
-	hostapd -dd /etc/hostapd/hostapd_ap0.conf > /var/log/hostapd_ap0.log &
-	echo "set IP"
+#	hostapd -dd /etc/hostapd/hostapd_ap0.conf | ts "%Y-%m-%d %H:%M:%S" &> /var/log/hostapd_ap0.log &
+	hostapd -d /etc/hostapd/hostapd_ap0.conf &> /var/log/hostapd_ap0.log &
+	echo "hostapd started...set IP"
 	ip addr add 192.168.10.1/24 dev ap0
+
+	ip -6 addr add fd00:B::10/64 dev ap0
+	#ip -6 addr add 2001:xxx:xxxx:B::10/64 dev ap0
 	echo "restart dnsmasq..."
 	service dnsmasq restart
-
-	#limit speed as suggested in http://wiki.banana-pi.org/Getting_Started_with_R2#WiFi_and_Ap_mode_on_R2_Openwrt
-	#tc qdisc add dev ap0 root handle 1: htb default 11
-	#tc class add dev ap0 parent 1:1 classid 1:2 htb rate 8Mbit ceil 4Mbit prio 2
 fi
-
-#load bluetooth-driver (has to be done after stp_uart_launcher)
-modprobe stp_chrdev_bt
+#echo "waiting before starting second hostapd..."
+#sleep 30s
+#/usr/local/sbin/hostapd_2.sh
