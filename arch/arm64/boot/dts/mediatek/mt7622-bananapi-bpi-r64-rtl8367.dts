@@ -1,0 +1,23 @@
+/*
+ * Copyright (c) 2018 MediaTek Inc.
+ * Author: Ryder Lee <ryder.lee@mediatek.com>
+ *
+ * SPDX-License-Identifier: (GPL-2.0 OR MIT)
+ */
+
+/dts-v1/;
+#include "mt7622-bananapi-bpi-r64.dts"
+
+/* delete mt7531 switch */
+/delete-node/ &switch;
+
+/ {
+	rtkgsw: rtkgswsys@1b100000 {
+		compatible = "mediatek,rtk-gsw";
+		mediatek,ethsys = <&ethsys>;
+		mediatek,mdio = <&mdio>;
+		mediatek,reset-pin = <&pio 54 0>;
+		mediatek,port_map = "wllll";
+		status = "okay";
+	};
+};
