@@ -78,6 +78,17 @@ config NET_DSA_REALTEK_SMI
 	  This enables support for the Realtek SMI-based switch
 	  chips, currently only RTL8366RB.
 
+config NET_DSA_REALTEK_MDIO
+	tristate "Realtek MDIO Ethernet switch family support"
+	select NET_DSA_TAG_RTL4_A
+	select FIXED_PHY
+	select IRQ_DOMAIN
+	select REALTEK_PHY
+	select REGMAP
+	help
+	  This enables support for the Realtek MDIO-based switch
+	  chips, currently only RTL8367RB.
+
 config NET_DSA_SMSC_LAN9303
 	tristate
 	select NET_DSA_TAG_LAN9303
