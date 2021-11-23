@@ -769,13 +769,13 @@ static ret_t rtl8367c_setAsicPortForceLinkExt(rtk_uint32 id, rtl8367c_port_abili
     reg_data |= pPortAbility->duplex << 2;
     reg_data |= pPortAbility->speed;
 
-    if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0249)) != RT_ERR_OK)
+    if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, RTL8367C_RTL_MAGIC_ID_VAL)) != RT_ERR_OK)
         return retVal;
     /*get chip ID */
-    if((retVal = rtl8367c_getAsicReg(0x1300, &regValue)) != RT_ERR_OK)
+    if((retVal = rtl8367c_getAsicReg(RTL8367C_CHIP_NUMBER_REG, &regValue)) != RT_ERR_OK)
         return retVal;
 
-    if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0000)) != RT_ERR_OK)
+    if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, 0x0000)) != RT_ERR_OK)
         return retVal;
 
     type = 0;
@@ -847,13 +847,13 @@ static ret_t rtl8367c_getAsicPortForceLinkExt(rtk_uint32 id, rtl8367c_port_abili
     if(id >= RTL8367C_EXTNO)
         return RT_ERR_OUT_OF_RANGE;
     /*cfg_magic_id  &  get chip_id*/
-    if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0249)) != RT_ERR_OK)
+    if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, RTL8367C_RTL_MAGIC_ID_VAL)) != RT_ERR_OK)
         return retVal;
 
-    if((retVal = rtl8367c_getAsicReg(0x1300, &regValue)) != RT_ERR_OK)
+    if((retVal = rtl8367c_getAsicReg(RTL8367C_CHIP_NUMBER_REG, &regValue)) != RT_ERR_OK)
         return retVal;
 
-    if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0000)) != RT_ERR_OK)
+    if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, 0x0000)) != RT_ERR_OK)
         return retVal;
 
     type = 0;
@@ -1435,13 +1435,13 @@ static ret_t rtl8367c_setSgmiiNway(rtk_uint32 ext_id, rtk_uint32 state)
 {
     rtk_uint32 retVal, regValue, type, running = 0, retVal2;
 
-    if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0249)) != RT_ERR_OK)
+    if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, RTL8367C_RTL_MAGIC_ID_VAL)) != RT_ERR_OK)
         return retVal;
 
-    if((retVal = rtl8367c_getAsicReg(0x1300, &regValue)) != RT_ERR_OK)
+    if((retVal = rtl8367c_getAsicReg(RTL8367C_CHIP_NUMBER_REG, &regValue)) != RT_ERR_OK)
         return retVal;
 
-    if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0000)) != RT_ERR_OK)
+    if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, 0x0000)) != RT_ERR_OK)
         return retVal;
 
     switch (regValue)
@@ -2039,13 +2039,13 @@ static rtk_api_ret_t _rtk_switch_init_8367c(void)
     rtk_uint32 regData;
     rtk_uint32 regValue;
 
-    if( (retVal = rtl8367c_setAsicReg(0x13c2, 0x0249)) != RT_ERR_OK)
+    if( (retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, RTL8367C_RTL_MAGIC_ID_VAL)) != RT_ERR_OK)
         return retVal;
 
-    if( (retVal = rtl8367c_getAsicReg(0x1301, &regValue)) != RT_ERR_OK)
+    if( (retVal = rtl8367c_getAsicReg(RTL8367C_CHIP_VER_REG, &regValue)) != RT_ERR_OK)
         return retVal;
 
-    if( (retVal = rtl8367c_setAsicReg(0x13c2, 0x0000)) != RT_ERR_OK)
+    if( (retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, 0x0000)) != RT_ERR_OK)
         return retVal;
 
     RTK_SCAN_ALL_LOG_PORT(port)
@@ -2136,16 +2136,16 @@ static rtk_api_ret_t rtk_switch_probe(switch_chip_t *pSwitchChip)
 	rtk_uint32 retVal;
 	rtk_uint32 data, regValue;
 
-	if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0249)) != RT_ERR_OK)
+	if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, RTL8367C_RTL_MAGIC_ID_VAL)) != RT_ERR_OK)
 		return retVal;
 
-	if((retVal = rtl8367c_getAsicReg(0x1300, &data)) != RT_ERR_OK)
+	if((retVal = rtl8367c_getAsicReg(RTL8367C_CHIP_NUMBER_REG, &data)) != RT_ERR_OK)
 		return retVal;
 
-	if((retVal = rtl8367c_getAsicReg(0x1301, &regValue)) != RT_ERR_OK)
+	if((retVal = rtl8367c_getAsicReg(RTL8367C_CHIP_VER_REG, &regValue)) != RT_ERR_OK)
 		return retVal;
 
-	if((retVal = rtl8367c_setAsicReg(0x13C2, 0x0000)) != RT_ERR_OK)
+	if((retVal = rtl8367c_setAsicReg(RTL8367C_RTL_MAGIC_ID_REG, 0x0000)) != RT_ERR_OK)
 		return retVal;
 
 	printk(KERN_ALERT "DEBUG: Passed %s %d chip: 0x%x\n",__FUNCTION__,__LINE__,data); //0x6367 on r64 v0.1
