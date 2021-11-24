@@ -13,11 +13,11 @@
 
 / {
 	rtkgsw: rtkgswsys@1b100000 {
-		compatible = "mediatek,rtk-gsw";
-		mediatek,ethsys = <&ethsys>;
-		mediatek,mdio = <&mdio>;
-		mediatek,reset-pin = <&pio 54 0>;
-		mediatek,port_map = "wllll";
+		compatible = "realtek,rtk-gsw";
+		//mediatek,ethsys = <&ethsys>;
+		realtek,mdio = <&mdio>;
+		realtek,reset-pin = <&pio 54 0>;
+		realtek,port_map = "wllll";
 		status = "okay";
 	};
 };
