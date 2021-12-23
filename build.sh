@@ -400,27 +400,6 @@ function install
 					echo "${kernelfile}${ndtsuffix}"
 					echo "DTB: ${dtbfile}"
 				fi
-				uenv=$(getuenvpath)
-				echo $uenv
-				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
-				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
-
-				openuenv=n
-				if [[ "$itbinput" == "y" ]];then
-					curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
-				else
-					curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
-					curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
-				fi
-				echo "kernel: " $curkernel
-				echo "dtb: " $curfdt
-				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
-					echo "no change needed!"
-					openuenv=n
-				else
-					echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
-					openuenv=y
-				fi
 
 				kernelname=$(ls -1t $INSTALL_MOD_PATH"/lib/modules" | head -n 1)
 				EXTRA_MODULE_PATH=$INSTALL_MOD_PATH"/lib/modules/"$kernelname"/kernel/extras"
@@ -446,10 +425,34 @@ function install
 			echo "run 'watch -n 1 grep -e Dirty: /proc/meminfo' to show progress"
 			sync
 
+			uenv=$(getuenvpath)
+			echo $uenv
+			if [[ -n "$uenv" ]];then
+				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
+				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
+				openuenv=n
+				if [[ "$itbinput" == "y" ]];then
+					curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
+				else
+					curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
+					curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
+				fi
+				echo "kernel: " $curkernel
+				echo "dtb: " $curfdt
+				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
+					echo "no change needed!"
+					openuenv=n
+				else
+					echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
+					openuenv=y
+				fi
+			fi
+
 			read -e -i "$openuenv" -p "open uenv-file [yn]? " input
 			if [[ "$input" == "y" ]];then
 				$0 uenv
 			fi
+
 			read -e -i "y" -p "umount SD card [yn]? " input
 			if [[ "$input" == "y" ]];then
 				$0 umount
