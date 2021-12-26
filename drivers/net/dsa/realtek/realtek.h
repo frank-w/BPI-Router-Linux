@@ -52,6 +52,7 @@ struct realtek_priv {
 	struct mii_bus		*slave_mii_bus;
 	struct mii_bus		*bus;
 	int			mdio_addr;
+	int			reset_pin;
 
 	unsigned int		clk_delay;
 	u8			cmd_read;
