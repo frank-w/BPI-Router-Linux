@@ -21,6 +21,7 @@
 
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
 #include <linux/regmap.h>
 
 #include "realtek.h"
@@ -128,6 +129,28 @@ static int realtek_read_reg(struct realtek_priv *priv,unsigned int start,unsigne
 	return 0;
 }
 
+static int realtek_hw_reset(struct realtek_priv *priv)
+{
+	int ret;
+
+	ret = devm_gpio_request(priv->dev, priv->reset_pin, "realtek,reset-pin");
+
+	if (ret)
+                printk("fail to devm_gpio_request\n");
+
+	gpio_direction_output(priv->reset_pin, 0);
+
+	//usleep_range(1000, 1100); //r64
+	usleep_range(100000, 110000); //r2pro
+
+	printk(KERN_ALERT "DEBUG: Passed %s %d do reset!\n",__FUNCTION__,__LINE__);
+	gpio_set_value(priv->reset_pin, 1);
+
+	mdelay(500);
+
+	devm_gpio_free(priv->dev, priv->reset_pin);
+	return 0;
+}
 
 static int realtek_mdio_probe(struct mdio_device *mdiodev)
 {
@@ -170,6 +193,10 @@ static int realtek_mdio_probe(struct mdio_device *mdiodev)
 
 	/* TODO: if power is software controlled, set up any regulators here */
 	priv->leds_disabled = of_property_read_bool(np, "realtek,disable-leds");
+
+	priv->reset_pin = of_get_named_gpio(np, "realtek,reset-pin", 0);
+	if (priv->reset_pin >= 0)
+		realtek_hw_reset(priv);
 
 	ret = priv->ops->detect(priv);
 	if (ret) {
