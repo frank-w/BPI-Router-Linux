@@ -559,6 +559,7 @@ static void rk808_pm_power_off(void)
 	ret = regmap_update_bits(rk808->regmap, reg, bit, bit);
 	if (ret)
 		dev_err(&rk808_i2c_client->dev, "Failed to shutdown device!\n");
+	usleep_range(10000, 11000);
 }
 
 static int rk808_restart_notify(struct notifier_block *this, unsigned long mode, void *cmd)
