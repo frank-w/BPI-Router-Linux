@@ -1,0 +1,104 @@
+/*
+ * Copyright (c) 2018 MediaTek Inc.
+ * Author: Ryder Lee <ryder.lee@mediatek.com>
+ *
+ * SPDX-License-Identifier: (GPL-2.0 OR MIT)
+ */
+
+/dts-v1/;
+#include "mt7622-bananapi-bpi-r64.dts"
+
+/* delete mt7531 switch */
+/delete-node/ &switch;
+
+/*
+/ {
+	rtkgsw: rtkgswsys@1b100000 {
+		compatible = "realtek,rtk-gsw";
+		//mediatek,ethsys = <&ethsys>;
+		realtek,mdio = <&mdio>;
+		realtek,reset-pin = <&pio 54 0>;
+		realtek,port_map = "wllll";
+		realtek,phy-id = <29>;
+		status = "okay";
+	};
+};
+*/
+/*
+// no need to change first gmac to rgmii because
+// switch does not support it on its side
+&gmac0 {
+	phy-mode = "rgmii";
+
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+		pause;
+	};
+};
+*/
+
+/*
+checksum-offloading needs to be disabled to use dsa driver
+or tcp-connections are not possible
+
+root@bpi-r64:~# ethtool -K eth1 rx off tx off
+*/
+
+&mdio {
+	switch1 {
+		compatible = "realtek,rtl8367s";
+		//realtek,reset-pin = <&pio 54 0>;
+		reset-gpios = <&pio 54 GPIO_ACTIVE_LOW>;
+		reg = <29>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				label = "wan";
+			};
+
+			port@1 {
+				reg = <1>;
+				label = "lan0";
+			};
+
+			port@2 {
+				reg = <2>;
+				label = "lan1";
+			};
+
+			port@3 {
+				reg = <3>;
+				label = "lan2";
+			};
+
+			port@4 {
+				reg = <4>;
+				label = "lan3";
+			};
+
+			port@7 {
+				reg = <7>;
+				ethernet = <&gmac1>;
+				phy-mode = "rgmii";
+				realtek,ext-int = <2>;
+
+				//r64: rtk_port_rgmiiDelayExt_set(EXT_PORT1, 1, 3); //tx,rx
+				//r2p: rtk_port_rgmiiDelayExt_set(EXT_PORT0, 0, 0);
+				//regData = (regData & 0xFFF0) | ((txDelay << 3) & 0x0008) | (rxDelay & 0x0007);
+				tx-internal-delay-ps = <2000>; //only 0||2000 regvalue=val/1000 and then /2
+				rx-internal-delay-ps = <900>; //val/300 0..7
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+					pause;
+				};
+			};
+		};
+	};
+};
