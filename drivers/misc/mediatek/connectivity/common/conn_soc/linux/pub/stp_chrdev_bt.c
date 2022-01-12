@@ -473,6 +473,8 @@ int mtk_bt_hci_init(void)
 	mtk_hci.hdev->notify = mtk_bt_hci_notify;
 	SET_HCIDEV_DEV(mtk_hci.hdev, stpbt_dev);
 
+	set_bit(HCI_QUIRK_BROKEN_ERR_DATA_REPORTING, &mtk_hci.hdev->quirks);
+
         hci_set_drvdata(mtk_hci.hdev, &mtk_hci);       
 
 	mtk_wcn_stp_register_if_rx(mtk_bt_hci_receive);
