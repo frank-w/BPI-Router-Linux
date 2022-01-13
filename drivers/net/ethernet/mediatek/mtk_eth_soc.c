@@ -2933,7 +2933,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 
 	eth->netdev[id]->mtu = 1536;
 	eth->netdev[id]->min_mtu = ETH_MIN_MTU;
-	eth->netdev[id]->max_mtu = 1536;
+	eth->netdev[id]->max_mtu = MTK_MAX_RX_LENGTH - MTK_RX_ETH_HLEN;
 
 	if (name)
 		strlcpy(eth->netdev[id]->name, name, IFNAMSIZ);
