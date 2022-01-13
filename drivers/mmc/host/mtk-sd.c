@@ -436,7 +436,6 @@ struct msdc_host {
 	struct msdc_save_para save_para; /* used when gate HCLK */
 	struct msdc_tune_para def_tune_para; /* default tune setting */
 	struct msdc_tune_para saved_tune_para; /* tune result of CMD21/CMD19 */
-	struct reset_control *reset;
 };
 
 static const struct mtk_mmc_compatible mt8135_compat = {
