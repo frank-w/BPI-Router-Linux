@@ -115,6 +115,11 @@
 	status = "okay";
 };
 
+&combphy2 {
+	/* used for sata */
+	status = "okay";
+};
+
 &gmac0 {
 	assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
 	assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>, <&cru CLK_MAC0_2TOP>;
@@ -503,6 +508,10 @@
 	/* shared with pwm12/14/15 and uart9 */
 	pinctrl-0 = <&spi3m1_pins>;
 	status = "disabled";
+};
+
+&sata2 {
+	status = "okay";
 };
 
 &tsadc {
