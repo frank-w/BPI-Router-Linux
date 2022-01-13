@@ -50,7 +50,7 @@ Optional properties:
 		     Valid range = [0:0x7]. if not present, default value is 0.
 		     applied to compatible "mediatek,mt2701-mmc".
 - resets: Phandle and reset specifier pair to softreset line of MSDC IP.
-- reset-names: Reset names for MSDC.
+- reset-names: Should be "hrst".
 
 Examples:
 mmc0: mmc@11230000 {
