@@ -282,6 +282,16 @@ config REALTEK_PHY
 	help
 	  Supports the Realtek 821x PHY.
 
+config NET_REALTEK_MDIO
+	tristate "Realtek MDIO Ethernet switch family support"
+#	select FIXED_PHY
+#	select IRQ_DOMAIN
+#	select REALTEK_PHY
+#	select REGMAP
+	help
+	  This enables support for the Realtek MDIO-based switch
+	  chips, currently only RTL8367RB.
+
 config RENESAS_PHY
 	tristate "Renesas PHYs"
 	help
