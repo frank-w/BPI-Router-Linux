@@ -74,6 +74,14 @@
 		regulator-max-microvolt = <5000000>;
 		vin-supply = <&dc_12v>;
 	};
+
+	rtkgsw_red: rtkgsw_red@0 {
+		compatible = "realtek,rtk-gsw"; //reduced phy driver
+		realtek,mdio = <&mdio1>;
+		realtek,reset-pin = <&gpio3 RK_PB0 GPIO_ACTIVE_HIGH>;
+		realtek,extifconfig = "rgmii,rgmii"; //own property to setup rgmii instead of sgmii
+		status = "disabled";
+	};
 };
 
 &gmac0 {
@@ -478,6 +486,10 @@
 	/* shared with spi3 */
 	pinctrl-0 = <&pwm15m1_pins>;
 	status = "disabled";
+};
+
+&rtkgsw_red {
+	//status = "okay";
 };
 
 &rtkgsw_dsa {
