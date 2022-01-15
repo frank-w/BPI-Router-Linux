@@ -21,12 +21,35 @@ clr_yellow=$'\e[1;33m'
 clr_blue=$'\e[1;34m'
 clr_reset=$'\e[0m'
 
+DEFCONFIG=""
+DTS=""
+DTSI=""
+case $board in
+	"bpi-r2pro")
+		DEFCONFIG=arch/arm64/configs/rk3568_bpi-r2p_defconfig
+		#DEFCONFIG=arch/arm64/configs/quartz64_defconfig
+		DTS=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dts
+		DTSI=arch/arm64/boot/dts/rockchip/rk3568.dtsi
+		;;
+	"bpi-r64")
+		DEFCONFIG=arch/arm64/configs/mt7622_bpi-r64_defconfig
+		DTS=arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
+		DTSI=arch/arm64/boot/dts/mediatek/mt7622.dtsi
+		;;
+    *) #bpir2
+		DEFCONFIG=arch/arm/configs/mt7623n_evb_fwu_defconfig
+		DTS=arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
+		DTSI=arch/arm/boot/dts/mt7623.dtsi
+		;;
+esac
+#echo "DTB:${DTS%.*}.dtb"
+
 #Check Crosscompile
 crosscompile=0
 hostarch=$(uname -m) #r64:aarch64 r2: armv7l
 
 if [[ ! $hostarch =~ aarch64|armv ]];then
-	if [[ "$board" == "bpi-r64" ]];then
+	if [[ "$board" == "bpi-r64" || "$board" == "bpi-r2pro" ]];then
 		if [[ -z "$(which aarch64-linux-gnu-gcc)" ]];then echo "please install gcc-aarch64-linux-gnu";exit 1;fi
 		export ARCH=arm64;export CROSS_COMPILE='ccache aarch64-linux-gnu-'
 	else
@@ -664,36 +687,61 @@ function build {
 		exec 3>&-
 
 		if [[ $ret == 0 ]]; then
-			if [[ "$board" == "bpi-r64" ]];then
-				if [[ "$builddir" != "" ]];
-				then
-					cp $builddir/arch/arm64/boot/Image arch/arm64/boot/Image
-					cp $builddir/arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb
-				fi
-				#how to create zImage?? make zImage does not work here
-				if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
-				mkimage -A ${uimagearch} -O linux -T kernel -C none -a 40080000 -e 40080000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm64/boot/Image ./uImage_nodt
-				cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb $board.dtb
+			if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
+
+			DTBFILE=${DTS%.*}.dtb
+			case "$board" in
+				"bpi-r2pro")
+					IMAGE=arch/arm64/boot/Image
+					#DTBFILE=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dtb #maybe use $DTS with .dtb extension
+					LADDR=0x7f000001
+					ENTRY=0x7f000001
+				;;
+				"bpi-r64")
+					IMAGE=arch/arm64/boot/Image
+					#DTBFILE=arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb
+					LADDR=40080000
+					ENTRY=40080000
+				;;
+				"bpi-r2")
+					IMAGE=arch/arm/boot/zImage
+					#DTBFILE=arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb
+					LADDR=80008000
+					ENTRY=80008000
+				;;
+			esac
+
+			if [[ "$builddir" != "" ]];
+			then
+				cp {$builddir/,}$IMAGE
+				cp {$builddir/,}$DTBFILE
+			fi
+
+			cp $DTBFILE $board.dtb
+
+			if [[ "$board" == "bpi-r2pro" ]];then
+				#skipping mkimage causes no choice, but uImage is not bootable on r2pro
+				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
+				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
+				mkimage -f ${board}.its.tmp ${board}.itb
+				cp ${board}.itb ${board}-$kernver$gitbranch.itb
+				rm ${board}.its.tmp
+			elif [[ "$board" == "bpi-r64" ]];then
+				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
 				mkimage -f ${board}.its.tmp ${board}.itb
 				cp ${board}.itb ${board}-$kernver$gitbranch.itb
 				rm ${board}.its.tmp
 			else
-				if [[ "$builddir" != "" ]];
-				then
-					cp $builddir/arch/arm/boot/zImage arch/arm/boot/zImage
-					cp $builddir/arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb
-				fi
-				cat arch/arm/boot/zImage arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb > arch/arm/boot/zImage-dtb
-				mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
+				cat $IMAGE $DTBFILE > arch/arm/boot/zImage-dtb
+				mkimage -A arm -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
 
 				echo "build uImage without appended DTB..."
 				export DTC_FLAGS=-@
 				make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n &>/dev/null #output/errors can be ignored because they are printed before
 				ret=$?
 				if [[ $ret == 0 ]]; then
-					cp arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb $board.dtb
-					mkimage -A arm -O linux -T kernel -C none -a 80008000 -e 80008000 -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage ./uImage_nodt
+					mkimage -A arm -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
 				fi
 			fi
 		fi
@@ -860,9 +908,20 @@ if [ -n "$kernver" ]; then
 			update_kernel_source
 			;;
 
+		"mount")
+			mount | grep "BPI-BOOT" > /dev/null
+			if [[ $? -ne 0 ]];then
+				udisksctl mount -b /dev/disk/by-label/BPI-BOOT
+			fi
+			mount | grep "BPI-ROOT" > /dev/null
+			if [[ $? -ne 0 ]];then
+				udisksctl mount -b /dev/disk/by-label/BPI-ROOT
+			fi
+			;;
+
 		"umount")
 			echo "umount SD Media"
-			dev=$(mount | grep BPI-BOOT | sed -e 's/[0-9] .*$/?/')
+			dev=$(mount | grep BPI-ROOT | sed -e 's/[0-9] .*$/?/')
 			if [[ ! -z "$dev" ]];then
 				umount $dev
 			fi
@@ -887,34 +946,46 @@ if [ -n "$kernver" ]; then
 
 		"defconfig")
 			echo "edit def config"
-			if [[ "$board" == "bpi-r64" ]];then
-				edit arch/arm64/configs/mt7622_bpi-r64_defconfig
-			else
-				edit arch/arm/configs/mt7623n_evb_fwu_defconfig
-			fi
+			edit $DEFCONFIG
+			#if [[ "$board" == "bpi-r2pro" ]];then
+			#	edit arch/arm64/configs/rk3568_bpi-r2p_defconfig
+			#	#edit arch/arm64/configs/quartz64_defconfig
+			#elif [[ "$board" == "bpi-r64" ]];then
+			#	edit arch/arm64/configs/mt7622_bpi-r64_defconfig
+			#else
+			#	edit arch/arm/configs/mt7623n_evb_fwu_defconfig
+			#fi
 			;;
 		"deb")
 			echo "deb-package (currently testing-state)"
 			deb
 			;;
 		"dtsi")
-			if [[ "$board" == "bpi-r64" ]];then
-				echo "edit mt7622.dtsi"
-				edit arch/arm64/boot/dts/mediatek/mt7622.dtsi
-			else
-				echo "edit mt7623.dtsi"
-				edit arch/arm/boot/dts/mt7623.dtsi
-			fi
+			edit $DTSI
+			#if [[ "$board" == "bpi-r2pro" ]];then
+			#	echo "edit rk3568.dtsi"
+			#	edit arch/arm64/boot/dts/rockchip/rk3568.dtsi
+			#elif [[ "$board" == "bpi-r64" ]];then
+			#	echo "edit mt7622.dtsi"
+			#	edit arch/arm64/boot/dts/mediatek/mt7622.dtsi
+			#else
+			#	echo "edit mt7623.dtsi"
+			#	edit arch/arm/boot/dts/mt7623.dtsi
+			#fi
 			;;
 
 		"dts")
-			if [[ "$board" == "bpi-r64" ]];then
-				echo "edit mt7622n-bpi-r64.dts"
-				edit arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
-			else
-				echo "edit mt7623n-bpi-r2.dts"
-				edit arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
-			fi
+			edit $DTS
+			#if [[ "$board" == "bpi-r2pro" ]];then
+			#	echo "edit rk3568-evb1-v10.dts"
+			#	edit arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dts
+			#elif [[ "$board" == "bpi-r64" ]];then
+			#	echo "edit mt7622n-bpi-r64.dts"
+			#	edit arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
+			#else
+			#	echo "edit mt7623n-bpi-r2.dts"
+			#	edit arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
+			#fi
 			;;
 
 		"importmylconfig")
@@ -925,22 +996,31 @@ if [ -n "$kernver" ]; then
 
 		"importconfig")
 			echo "import a defconfig file"
-			if [[ "$board" == "bpi-r64" ]];then
-				p=arm64
-				echo "Import r64 config"
-				f=mt7622_bpi-r64_defconfig
-			else
-				p=arm
-				if [[ -z "$file" ]];then
-					echo "Import fwu config"
-					f=mt7623n_evb_fwu_defconfig
-				else
-					echo "Import config: $f"
-					f=mt7623n_${file}_defconfig
-				fi
-			fi
-			if [[ -e "arch/${p}/configs/${f}" ]];then
-				make ${f}
+			#f=$DEFCONF
+			#if [[ "$board" == "bpi-r2pro" ]];then
+			#	p=arm64
+			#	echo "Import r2 Pro config"
+			#	f=rk3568_bpi-r2p_defconfig
+			#	#f=quartz64_defconfig
+			#elif [[ "$board" == "bpi-r64" ]];then
+			#	p=arm64
+			#	echo "Import r64 config"
+			#	f=mt7622_bpi-r64_defconfig
+			#else
+			#	p=arm
+			#	if [[ -z "$file" ]];then
+			#		echo "Import fwu config"
+			#		f=mt7623n_evb_fwu_defconfig
+			#	else
+			#		echo "Import config: $f"
+			#		f=mt7623n_${file}_defconfig
+			#	fi
+			#fi
+			#if [[ -e "arch/${p}/configs/${f}" ]];then
+			if [[ -e "${DEFCONFIG}" ]];then
+				DEFCONF="${DEFCONFIG##*/}"
+				echo "import $DEFCONF ($DEFCONFIG)"
+				make ${DEFCONF}
 				if [[ -n "$disable" ]];then
 					disable_option "$disable"
 				fi
@@ -953,7 +1033,10 @@ if [ -n "$kernver" ]; then
 			echo "menu for multiple conf-files...currently in developement"
 			files=();
 			i=1;
-			if [[ "$board" == "bpi-r64" ]];then
+			if [[ "$board" == "bpi-r2pro" ]];then
+				p=arch/arm64/configs/
+				ff=rk3568_bpi-r2p_defconfig
+			elif [[ "$board" == "bpi-r64" ]];then
 				p=arch/arm64/configs/
 				ff="mt7622*defconfig"
 			else
