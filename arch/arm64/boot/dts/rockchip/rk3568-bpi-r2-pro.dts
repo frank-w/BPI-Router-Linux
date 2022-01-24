@@ -21,7 +21,7 @@
 		mmc1 = &sdhci;
 	};
 
-	chosen: chosen {
+	chosen {
 		stdout-path = "serial2:1500000n8";
 		bootargs = "earlycon=uart8250,mmio32,0xfe660000";
 	};
