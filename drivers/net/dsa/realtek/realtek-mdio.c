@@ -194,9 +194,17 @@ static int realtek_mdio_probe(struct mdio_device *mdiodev)
 	/* TODO: if power is software controlled, set up any regulators here */
 	priv->leds_disabled = of_property_read_bool(np, "realtek,disable-leds");
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d (before-reset,startreg:0x%x,count:%d)\n",__FUNCTION__,__LINE__,startreg,regcount);
+	if (startreg>=0)
+		realtek_read_reg(priv,startreg,regcount);
+
 	priv->reset_pin = of_get_named_gpio(np, "realtek,reset-pin", 0);
 	if (priv->reset_pin >= 0)
 		realtek_hw_reset(priv);
+
+	printk(KERN_ALERT "DEBUG: Passed %s %d (after-reset,startreg:0x%x,count:%d)\n",__FUNCTION__,__LINE__,startreg,regcount);
+	if (startreg>=0)
+		realtek_read_reg(priv,startreg,regcount);
 
 	ret = priv->ops->detect(priv);
 	if (ret) {
