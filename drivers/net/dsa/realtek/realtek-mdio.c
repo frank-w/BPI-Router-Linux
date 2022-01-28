@@ -38,6 +38,11 @@
 #define REALTEK_MDIO_READ_OP		0x0001
 #define REALTEK_MDIO_WRITE_OP		0x0003
 
+static int startreg=-1;
+module_param( startreg, int, S_IRUGO );
+static int regcount=10;
+module_param( regcount, int, S_IRUGO );
+
 static int realtek_mdio_write(void *ctx, u32 reg, u32 val)
 {
 	struct realtek_priv *priv = ctx;
@@ -109,6 +114,20 @@ static const struct regmap_config realtek_mdio_regmap_config = {
 	.reg_write = realtek_mdio_write,
 	.cache_type = REGCACHE_NONE,
 };
+
+static int realtek_read_reg(struct realtek_priv *priv,unsigned int start,unsigned int count)
+{
+	int ret,i;
+	u32 addr,data;
+	for (i=0;i<count;i++)
+	{
+		addr=start + (i*4);
+		ret = regmap_read(priv->map, addr, &data);
+		printk(KERN_ALERT "DEBUG: Passed %s %d reg 0x%x val 0x%x (ret:%d)\n",__FUNCTION__,__LINE__,addr,data,ret);
+	}
+	return 0;
+}
+
 
 static int realtek_mdio_probe(struct mdio_device *mdiodev)
 {
