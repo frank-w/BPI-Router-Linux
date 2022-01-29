@@ -73,6 +73,46 @@
 		regulator-max-microvolt = <5000000>;
 		vin-supply = <&dc_12v>;
 	};
+
+	vbus: vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "vbus";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&dc_12v>;
+	};
+
+	vcc5v0_usb: vcc5v0_usb {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_usb";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&dc_12v>;
+	};
+
+	vcc5v0_host: vcc5v0-host-regulator {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 RK_PA5 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_host_en>;
+		regulator-name = "vcc5v0_host";
+		regulator-always-on;
+	};
+};
+
+&combphy0 {
+	/* used for USB3 */
+	status = "okay";
+};
+
+&combphy1 {
+	/* used for USB3 */
+	status = "okay";
 };
 
 &gmac0 {
@@ -368,6 +408,12 @@
 				<0 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
+
+	usb {
+		vcc5v0_host_en: vcc5v0-host-en {
+			rockchip,pins = <0 RK_PA5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
 };
 
 &pmu_io_domains {
@@ -463,6 +509,20 @@
 	status = "okay";
 };
 
+&usb2phy0 {
+	status = "okay";
+};
+
+&usb2phy0_host {
+	//phy-supply = <&vcc5v0_host>;
+	status = "okay";
+};
+
+&usb2phy0_otg {
+	//phy-supply = <&vcc5v0_host>;
+	status = "okay";
+};
+
 &uart0 {
 	/* pin 8 (TX) + 10 (RX) (RTS:16, CTS:18) of header con2 */
 	status = "disabled";
@@ -485,3 +545,12 @@
 	pinctrl-0 = <&uart9m1_xfer>;
 	status = "disabled";
 };
+
+&usbdrd3_1 {
+	status = "okay";
+};
+
+&usbdrd3_0 {
+	status = "okay";
+};
+
