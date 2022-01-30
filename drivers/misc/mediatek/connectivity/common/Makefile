@@ -15,7 +15,8 @@ subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
 #endif
 #	obj-y   +=  combo/
 #endif
-ifneq ($(filter "CONSYS_%",$(CONFIG_MTK_COMBO_CHIP)),)
+
+ifneq ($(filter CONSYS_%,$(CONFIG_MTK_COMBO_CHIP)),)
 	obj-y   +=  conn_soc/
 endif
 

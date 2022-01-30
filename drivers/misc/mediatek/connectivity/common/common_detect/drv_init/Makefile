@@ -2,12 +2,12 @@ ifneq ($(CONFIG_MTK_COMBO),)
 	ccflags-y += -I$(srctree)/$(src)/inc/
 	ccflags-y += -I$(srctree)/$(src)/../
 
-ifneq ($(filter "MT6630",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter MT6630,$(CONFIG_MTK_COMBO_CHIP)),)
 	ccflags-y += -D MTK_WCN_WLAN_GEN3
 endif
-ifneq ($(filter "CONSYS_6797",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter CONSYS_6797,$(CONFIG_MTK_COMBO_CHIP)),)
 	ccflags-y += -D MTK_WCN_WLAN_GEN3
-else ifneq ($(filter "CONSYS_%",$(CONFIG_MTK_COMBO_CHIP)),)
+else ifneq ($(filter CONSYS_%,$(CONFIG_MTK_COMBO_CHIP)),)
 	ccflags-y += -D MTK_WCN_WLAN_GEN2
 endif
 
