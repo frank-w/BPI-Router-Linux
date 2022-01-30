@@ -1,13 +1,13 @@
 subdir-ccflags-y += -I$(srctree)/arch/arm/mach-$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/dct/dct
 
 COMBO_CHIP_SUPPORT := false
-ifneq ($(filter "MT6620E3",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter MT6620E3,$(CONFIG_MTK_COMBO_CHIP)),)
 	COMBO_CHIP_SUPPORT := true
 endif
-ifneq ($(filter "MT6628",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter MT6628,$(CONFIG_MTK_COMBO_CHIP)),)
 	COMBO_CHIP_SUPPORT := true
 endif
-ifneq ($(filter "MT6630",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter MT6630,$(CONFIG_MTK_COMBO_CHIP)),)
 	COMBO_CHIP_SUPPORT := true
 endif
 ifeq ($(COMBO_CHIP_SUPPORT), true)
@@ -15,7 +15,7 @@ ifeq ($(COMBO_CHIP_SUPPORT), true)
 	ccflags-y += -I$(srctree)/$(src)/../combo/linux/include
 endif
 
-ifneq ($(filter "CONSYS_%",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter CONSYS_%,$(CONFIG_MTK_COMBO_CHIP)),)
 	subdir-ccflags-y += -D MTK_WCN_SOC_CHIP_SUPPORT
 	ccflags-y += -I$(srctree)/$(src)/../conn_soc/linux/include
 endif
@@ -36,12 +36,12 @@ ifeq ($(CONFIG_MTK_COMBO),m)
 	ccflags-y += -I$(srctree)/$(src)/drv_init/inc
 	ccflags-y += -I$(srctree)/$(src)
 
-ifneq ($(filter "MT6630",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter MT6630,$(CONFIG_MTK_COMBO_CHIP)),)
 	ccflags-y += -D MTK_WCN_WLAN_GEN3
 endif
-ifneq ($(filter "CONSYS_6797",$(CONFIG_MTK_COMBO_CHIP)),)
+ifneq ($(filter CONSYS_6797,$(CONFIG_MTK_COMBO_CHIP)),)
 	ccflags-y += -D MTK_WCN_WLAN_GEN3
-else ifneq ($(filter "CONSYS_%",$(CONFIG_MTK_COMBO_CHIP)),)
+else ifneq ($(filter CONSYS_%,$(CONFIG_MTK_COMBO_CHIP)),)
 	ccflags-y += -D MTK_WCN_WLAN_GEN2
 endif
 
