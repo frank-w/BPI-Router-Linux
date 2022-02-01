@@ -3065,6 +3065,7 @@ bailout:
 			WLAN_STATUS rStatus = WLAN_STATUS_FAILURE;
 			struct sockaddr MacAddr;
 			UINT_32 u4SetInfoLen = 0;
+			char *dstaddr;
 
 			kalMemZero(MacAddr.sa_data, sizeof(MacAddr.sa_data));
 			rStatus = kalIoctl(prGlueInfo,
@@ -3076,7 +3077,8 @@ bailout:
 				DBGLOG(INIT, WARN, "set MAC addr fail 0x%x\n", rStatus);
 				prGlueInfo->u4ReadyFlag = 0;
 			} else {
-				ether_addr_copy(prGlueInfo->prDevHandler->dev_addr, (const u8 *)&(MacAddr.sa_data));
+				dstaddr=(char *)prGlueInfo->prDevHandler->dev_addr;
+				ether_addr_copy(dstaddr, (const u8 *)&(MacAddr.sa_data));
 				ether_addr_copy(prGlueInfo->prDevHandler->perm_addr,
 					prGlueInfo->prDevHandler->dev_addr);
 

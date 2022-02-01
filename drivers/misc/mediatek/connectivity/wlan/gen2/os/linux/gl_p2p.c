@@ -1295,6 +1295,7 @@ BOOLEAN glRegisterP2P(P_GLUE_INFO_T prGlueInfo, const char *prDevName, BOOLEAN f
 	P_GL_HIF_INFO_T prHif = NULL;
 	PARAM_MAC_ADDRESS rMacAddr;
 	struct net_device *prDevHandler = NULL;
+	char *dstaddr;
 #if CFG_ENABLE_WIFI_DIRECT_CFG_80211
 	struct device *prDev;
 #endif
@@ -1376,7 +1377,8 @@ BOOLEAN glRegisterP2P(P_GLUE_INFO_T prGlueInfo, const char *prDevName, BOOLEAN f
 	/* 4.2 fill hardware address */
 	COPY_MAC_ADDR(rMacAddr, prAdapter->rMyMacAddr);
 	rMacAddr[0] ^= 0x2;	/* change to local administrated address */
-	ether_addr_copy(prDevHandler->dev_addr, rMacAddr);
+	dstaddr=(char *)prDevHandler->dev_addr;
+	ether_addr_copy(dstaddr, rMacAddr);
 	ether_addr_copy(prDevHandler->perm_addr, prDevHandler->dev_addr);
 
 	/* 4.3 register callback functions */
