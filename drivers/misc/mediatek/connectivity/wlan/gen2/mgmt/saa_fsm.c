@@ -817,11 +817,15 @@ saaFsmRunEventTxDone(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN E
 * @return (none)
 */
 /*----------------------------------------------------------------------------*/
-VOID saaFsmRunEventTxReqTimeOut(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
+VOID saaFsmRunEventTxReqTimeOut(IN P_ADAPTER_T prAdapter, IN ULONG data)
 {
-	ASSERT(prStaRec);
-	if (!prStaRec)
+	P_STA_RECORD_T prStaRec;
+
+	ASSERT(data);
+	if (!data)
 		return;
+
+	prStaRec = (P_STA_RECORD_T) data;
 
 	DBGLOG(SAA, LOUD, "EVENT-TIMER: TX REQ TIMEOUT, Current Time = %u\n", kalGetTimeTick());
 
@@ -847,15 +851,18 @@ VOID saaFsmRunEventTxReqTimeOut(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prSt
 * @return (none)
 */
 /*----------------------------------------------------------------------------*/
-VOID saaFsmRunEventRxRespTimeOut(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec)
+VOID saaFsmRunEventRxRespTimeOut(IN P_ADAPTER_T prAdapter, IN ULONG data)
 {
 	ENUM_AA_STATE_T eNextState;
+	P_STA_RECORD_T prStaRec;
 
 	DBGLOG(SAA, LOUD, "EVENT-TIMER: RX RESP TIMEOUT, Current Time = %u\n", kalGetTimeTick());
 
-	ASSERT(prStaRec);
-	if (!prStaRec)
+	ASSERT(data);
+	if (!data)
 		return;
+
+	prStaRec = (P_STA_RECORD_T) data;
 
 	eNextState = prStaRec->eAuthAssocState;
 

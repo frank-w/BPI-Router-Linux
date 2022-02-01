@@ -71,7 +71,7 @@ static void mtk_wifi_reset(struct work_struct *work);
 *                   F U N C T I O N   D E C L A R A T I O N S
 ********************************************************************************
 */
-static void *glResetCallback(ENUM_WMTDRV_TYPE_T eSrcType,
+static void glResetCallback(ENUM_WMTDRV_TYPE_T eSrcType,
 			     ENUM_WMTDRV_TYPE_T eDstType,
 			     ENUM_WMTMSG_TYPE_T eMsgType, void *prMsgBody, unsigned int u4MsgLength);
 
@@ -134,7 +134,7 @@ VOID glResetUninit(VOID)
  * @retval
  */
 /*----------------------------------------------------------------------------*/
-static void *glResetCallback(ENUM_WMTDRV_TYPE_T eSrcType,
+static void glResetCallback(ENUM_WMTDRV_TYPE_T eSrcType,
 			     ENUM_WMTDRV_TYPE_T eDstType,
 			     ENUM_WMTMSG_TYPE_T eMsgType, void *prMsgBody, unsigned int u4MsgLength)
 {
@@ -173,8 +173,6 @@ static void *glResetCallback(ENUM_WMTDRV_TYPE_T eSrcType,
 	default:
 		break;
 	}
-
-	return NULL;
 }
 
 /*----------------------------------------------------------------------------*/

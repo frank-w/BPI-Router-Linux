@@ -2709,7 +2709,7 @@ WLAN_STATUS bowRunEventRxDeAuth(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prSt
 * \note after receive deauth frame, callback function call this
 */
 /*----------------------------------------------------------------------------*/
-VOID bowDisconnectLink(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN ENUM_TX_RESULT_CODE_T rTxDoneStatus)
+WLAN_STATUS bowDisconnectLink(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN ENUM_TX_RESULT_CODE_T rTxDoneStatus)
 {
 	P_BOW_FSM_INFO_T prBowFsmInfo;
 	P_STA_RECORD_T prStaRec;
@@ -2742,6 +2742,7 @@ VOID bowDisconnectLink(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN
 		kalUninitBowDevice(prAdapter->prGlueInfo);
 #endif
 	}
+	return WLAN_STATUS_SUCCESS;
 }
 
 /*----------------------------------------------------------------------------*/
