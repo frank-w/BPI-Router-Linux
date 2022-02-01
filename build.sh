@@ -716,6 +716,7 @@ function build {
 			then
 				cp {$builddir/,}$IMAGE
 				cp {$builddir/,}$DTBFILE
+				cp $builddir/{$DTBFILE,$board.dtb}
 			fi
 
 			cp $DTBFILE $board.dtb
@@ -743,6 +744,15 @@ function build {
 				ret=$?
 				if [[ $ret == 0 ]]; then
 					mkimage -A arm -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
+				fi
+			fi
+
+			if [[ "$builddir" != "" ]];
+			then
+				cp {,$builddir/}uImage
+				cp {,$builddir/}uImage_nodt
+				if [[ -e ${board}.itb ]];then
+					cp {,$builddir/}${board}.itb
 				fi
 			fi
 		fi
