@@ -146,6 +146,8 @@ bpi-r64|bpi-r2)
 	if [ "$board" = "bpi-r64" ];
 	then
 		cp ./$board.itb "$tmpdir/boot/bananapi/$board/linux/$board-$version.itb"
+	else
+		cp ./uImage "$tmpdir/boot/bananapi/$board/linux/uImage_$version"
 	fi
 	source_image_path="./uImage_nodt"
 	;;
