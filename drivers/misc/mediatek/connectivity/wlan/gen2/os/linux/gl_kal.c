@@ -1202,11 +1202,15 @@ VOID kalReleaseSpinLock(IN P_GLUE_INFO_T prGlueInfo, IN ENUM_SPIN_LOCK_CATEGORY_
 /*----------------------------------------------------------------------------*/
 VOID kalUpdateMACAddress(IN P_GLUE_INFO_T prGlueInfo, IN PUINT_8 pucMacAddr)
 {
+	void *dst;
 	ASSERT(prGlueInfo);
 	ASSERT(pucMacAddr);
 
 	if (UNEQUAL_MAC_ADDR(prGlueInfo->prDevHandler->dev_addr, pucMacAddr))
-		memcpy(prGlueInfo->prDevHandler->dev_addr, pucMacAddr, PARAM_MAC_ADDR_LEN);
+	{
+		dst=(void *)prGlueInfo->prDevHandler->dev_addr;
+		memcpy(dst, pucMacAddr, PARAM_MAC_ADDR_LEN);
+	}
 
 }
 
