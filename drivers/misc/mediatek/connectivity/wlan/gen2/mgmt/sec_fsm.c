@@ -977,7 +977,7 @@ secFsmEventEapolTxDone(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaRec, IN 
 * \note after receive deauth frame, callback function call this
 */
 /*----------------------------------------------------------------------------*/
-VOID
+WLAN_STATUS
 secFsmEventDeauthTxDone(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, IN ENUM_TX_RESULT_CODE_T rTxDoneStatus)
 {
 	P_STA_RECORD_T prStaRec;
@@ -994,12 +994,12 @@ secFsmEventDeauthTxDone(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, I
 	ASSERT(prStaRec);
 
 	if (!prStaRec)
-		return;
+		return WLAN_STATUS_INVALID_DATA;
 
 	if (!IS_STA_IN_AIS(prStaRec)) {
 		DBGLOG(RSN, INFO, "Counter Measure should occur at AIS network!!\n");
 		/* ASSERT(0); */
-		return;
+		return WLAN_STATUS_INVALID_PACKET;
 	}
 
 	prSecInfo = (P_SEC_INFO_T) &prStaRec->rSecInfo;
@@ -1025,6 +1025,7 @@ secFsmEventDeauthTxDone(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo, I
 		break;
 	}
 
+	return WLAN_STATUS_SUCCESS;
 }				/* secFsmRunEventDeauthTxDone */
 
 /*----------------------------------------------------------------------------*/
