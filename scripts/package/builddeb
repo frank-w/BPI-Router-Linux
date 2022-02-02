@@ -151,6 +151,12 @@ bpi-r64|bpi-r2)
 	fi
 	source_image_path="./uImage_nodt"
 	;;
+bpi-r2pro)
+	mkdir -p "$tmpdir/boot/bananapi/$board/linux/dtb"
+	source_image_path="arch/arm64/boot/Image.gz"
+	installed_image_path="boot/bananapi/$board/linux/Image-$version"
+	cp ./$board.dtb "$tmpdir/boot/bananapi/$board/linux/dtb/$board-$version.dtb"
+	;;
 *)
 	source_image_path="$($MAKE -s -f $srctree/Makefile image_name)"
 	;;
