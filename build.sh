@@ -314,27 +314,40 @@ function pack_debs {
 
 function upload {
 	get_version
-	#if [[ "$board" == "bpi-r64" ]];then
-	#	switch="_"$(get_r64_switch)
-	#fi
-	imagename="uImage_${kernver}${gitbranch}${board//bpi/}${switch}"
+
+	b=${board//bpi/}
+	if [[ "${gitbranch}" =~ "${b}" ]]; then
+		b=""
+	fi
+	imagename="uImage_${kernver}${gitbranch}${b}"
 	read -e -i $imagename -p "Kernel-filename: " input
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
 
 	if [[ "$board" == "bpi-r64" ]];then
-		dtbname="${kernver}${board//bpi/}${gitbranch}${switch}.dtb"
-		read -e -i $dtbname -p "dtb-filename: " input
-		dtbname="${input:-$dtbname}"
-
-		echo "DTB Name: $dtbname"
+		read -e -i y -p "upload fit? " fitupload
+		if [[ "$fitupload" == "y" ]];
+		then
+			imagename="${imagename//uImage_}.itb"
+			echo "uploading fit as $imagename"
+		else
+			dtbname="${kernver}${b}${gitbranch}.dtb"
+			read -e -i $dtbname -p "dtb-filename: " input
+			dtbname="${input:-$dtbname}"
+			echo "DTB Name: $dtbname"
+		fi
 	fi
 
 	echo "uploading to ${uploadserver}:${uploaddir}..."
 	if [[ "$board" == "bpi-r64" ]];then
-		scp uImage_nodt ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
-		scp bpi-r64.dtb ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
+		if [[ "$fitupload" == "y" ]];
+		then
+			scp ${board}.itb ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
+		else
+			scp uImage_nodt ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
+			scp bpi-r64.dtb ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
+		fi
 	else
 		scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 	fi
