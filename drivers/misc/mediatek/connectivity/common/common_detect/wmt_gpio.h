@@ -21,7 +21,7 @@
 #include <linux/pinctrl/pinctrl.h>
 #include <linux/gpio.h>
 #include <linux/platform_device.h>
-#include "osal.h"
+#include <osal.h>
 
 /*******************************************************************************
 *                         C O M P I L E R   F L A G S
