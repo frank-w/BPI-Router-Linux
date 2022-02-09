@@ -49,7 +49,7 @@ root@bpi-r64:~# ethtool -K eth1 rx off tx off
 	switch1 {
 		compatible = "realtek,rtl8367s";
 		//realtek,reset-pin = <&pio 54 0>;
-		reset-gpios = <&pio 54 0>;
+		reset-gpios = <&pio 54 GPIO_ACTIVE_LOW>;
 		reg = <29>;
 
 		ports {
