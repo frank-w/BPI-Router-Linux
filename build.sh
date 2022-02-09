@@ -319,9 +319,16 @@ function upload {
 	if [[ "${gitbranch}" =~ "${b}" ]]; then
 		b=""
 	fi
-	imagename="uImage_${kernver}${gitbranch}${b}"
-	read -e -i $imagename -p "Kernel-filename: " input
-	imagename="${input:-$imagename}"
+
+	if [[ "$board" == "bpi-r2pro" ]];then
+                imagename="none-linux-bpi-r2pro"
+                read -e -i $imagename -p "Kernel-filename: " input
+                imagename="${input:-$imagename}"
+	else
+		imagename="uImage_${kernver}${gitbranch}${b}"
+		read -e -i $imagename -p "Kernel-filename: " input
+		imagename="${input:-$imagename}"
+	fi
 
 	echo "Name: $imagename"
 
@@ -340,7 +347,13 @@ function upload {
 	fi
 
 	echo "uploading to ${uploadserver}:${uploaddir}..."
-	if [[ "$board" == "bpi-r64" ]];then
+
+	if [[ "$board" == "bpi-r2pro" ]];then
+		bindir="";
+		if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
+		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/none-linux-bpi-r2pro
+		scp ${bindir}arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dtb ${uploaduser}@${uploadserver}:${uploaddir}/none-oftree-bpi-r2pro
+	elif [[ "$board" == "bpi-r64" ]];then
 		if [[ "$fitupload" == "y" ]];
 		then
 			scp ${board}.itb ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
