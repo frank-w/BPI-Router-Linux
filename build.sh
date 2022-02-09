@@ -299,11 +299,14 @@ function upload {
 	#if [[ "$board" == "bpi-r64" ]];then
 	#	switch="_"$(get_r64_switch)
 	#fi
-	imagename="uImage_${kernver}${gitbranch}${board//bpi/}${switch}"
-	read -e -i $imagename -p "Kernel-filename: " input
-	imagename="${input:-$imagename}"
 
-	echo "Name: $imagename"
+	if [[ "$board" != "bpi-r2pro" ]];then
+		imagename="uImage_${kernver}${gitbranch}${board//bpi/}${switch}"
+		read -e -i $imagename -p "Kernel-filename: " input
+		imagename="${input:-$imagename}"
+
+		echo "Name: $imagename"
+	fi
 
 	if [[ "$board" == "bpi-r64" ]];then
 		dtbname="${kernver}${board//bpi/}${gitbranch}${switch}.dtb"
@@ -314,7 +317,13 @@ function upload {
 	fi
 
 	echo "uploading to ${uploadserver}:${uploaddir}..."
-	if [[ "$board" == "bpi-r64" ]];then
+
+	if [[ "$board" == "bpi-r2pro" ]];then
+		bindir="";
+		if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
+		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/none-linux-bpi-r2pro
+		scp ${bindir}arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dtb ${uploaduser}@${uploadserver}:${uploaddir}/none-oftree-bpi-r2pro
+	elif [[ "$board" == "bpi-r64" ]];then
 		scp uImage_nodt ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 		scp bpi-r64.dtb ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
 	else
