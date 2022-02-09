@@ -43,6 +43,8 @@
 #include "realtek.h"
 
 #define REALTEK_SMI_ACK_RETRY_COUNT		5
+#define REALTEK_SMI_HW_STOP_DELAY		25	/* msecs */
+#define REALTEK_SMI_HW_START_DELAY		100	/* msecs */
 
 static inline void realtek_smi_clk_delay(struct realtek_priv *priv)
 {
@@ -424,9 +426,9 @@ static int realtek_smi_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to get RESET GPIO\n");
 		return PTR_ERR(priv->reset);
 	}
-	msleep(REALTEK_HW_STOP_DELAY);
+	msleep(REALTEK_SMI_HW_STOP_DELAY);
 	gpiod_set_value(priv->reset, 0);
-	msleep(REALTEK_HW_START_DELAY);
+	msleep(REALTEK_SMI_HW_START_DELAY);
 	dev_info(dev, "deasserted RESET\n");
 
 	/* Fetch MDIO pins */
