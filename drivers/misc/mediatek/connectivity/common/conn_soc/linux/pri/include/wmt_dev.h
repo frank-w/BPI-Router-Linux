@@ -33,6 +33,11 @@ extern VOID wmt_dev_patch_info_free(VOID);
 extern VOID wmt_dev_send_cmd_to_daemon(UINT32 cmd);
 extern MTK_WCN_BOOL wmt_dev_get_early_suspend_state(VOID);
 
+#ifdef MTK_WCN_REMOVE_KERNEL_MODULE
+int mtk_wcn_soc_common_drv_init(void);
+void mtk_wcn_soc_common_drv_exit(void);
+#endif
+
 #if CFG_WMT_DBG_SUPPORT
 typedef struct _COEX_BUF {
 	UINT8 buffer[128];

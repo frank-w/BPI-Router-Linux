@@ -1286,7 +1286,7 @@ static ssize_t wmt_dev_dbg_write(struct file *filp, const char __user *buffer, s
 	return len;
 }
 
-INT32 wmt_dev_dbg_setup(VOID)
+static INT32 wmt_dev_dbg_setup(VOID)
 {
 	static const struct proc_ops wmt_dbg_fops = {
 		.proc_read = wmt_dev_dbg_read,
@@ -1300,7 +1300,7 @@ INT32 wmt_dev_dbg_setup(VOID)
 	return 0;
 }
 
-INT32 wmt_dev_dbg_remove(VOID)
+static INT32 wmt_dev_dbg_remove(VOID)
 {
 	if (NULL != gWmtDbgEntry)
 		remove_proc_entry(WMT_DBG_PROCNAME, NULL);
@@ -1371,7 +1371,7 @@ static ssize_t wmt_dev_proc_for_aee_write(struct file *filp, const char __user *
 	return 0;
 }
 
-INT32 wmt_dev_proc_for_aee_setup(VOID)
+static INT32 wmt_dev_proc_for_aee_setup(VOID)
 {
 	static const struct proc_ops wmt_aee_fops = {
 		.proc_read = wmt_dev_proc_for_aee_read,
@@ -1387,7 +1387,7 @@ INT32 wmt_dev_proc_for_aee_setup(VOID)
 	return 0;
 }
 
-INT32 wmt_dev_proc_for_aee_remove(VOID)
+static INT32 wmt_dev_proc_for_aee_remove(VOID)
 {
 	if (NULL != gWmtAeeEntry)
 		remove_proc_entry(WMT_AEE_PROCNAME, NULL);
@@ -1432,7 +1432,7 @@ INT32 wmt_dev_rx_timeout(P_OSAL_EVENT pEvent)
 	return lRet;
 }
 
-INT32 wmt_dev_read_file(PUINT8 pName, const PPUINT8 ppBufPtr, INT32 offset, INT32 padSzBuf)
+static INT32 wmt_dev_read_file(PUINT8 pName, const PPUINT8 ppBufPtr, INT32 offset, INT32 padSzBuf)
 {
 	INT32 iRet = -1;
 	struct file *fd;
@@ -1700,7 +1700,7 @@ static UINT32 wmt_dev_tra_ahb_poll(void)
 	return 0;
 }
 
-long wmt_dev_tm_temp_query(void)
+static long wmt_dev_tm_temp_query(void)
 {
 #define HISTORY_NUM       5
 #define TEMP_THRESHOLD   65
@@ -1798,7 +1798,7 @@ long wmt_dev_tm_temp_query(void)
 	return return_temp;
 }
 
-ssize_t WMT_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
+static ssize_t WMT_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
 	INT32 iRet = 0;
 	UINT8 wrBuf[NAME_MAX + 1] = { 0 };
@@ -1831,7 +1831,7 @@ write_done:
 	return iRet;
 }
 
-ssize_t WMT_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
+static ssize_t WMT_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	INT32 iRet = 0;
 	PUINT8 pCmd = NULL;
@@ -1862,7 +1862,7 @@ ssize_t WMT_read(struct file *filp, char __user *buf, size_t count, loff_t *f_po
 	return iRet;
 }
 
-unsigned int WMT_poll(struct file *filp, poll_table *wait)
+static unsigned int WMT_poll(struct file *filp, poll_table *wait)
 {
 	UINT32 mask = 0;
 	P_OSAL_EVENT pEvent = wmt_lib_get_cmd_event();
@@ -1882,7 +1882,7 @@ unsigned int WMT_poll(struct file *filp, poll_table *wait)
 }
 
 /* INT32 WMT_ioctl(struct inode *inode, struct file *filp, UINT32 cmd, unsigned long arg) */
-long WMT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static long WMT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 
 	INT32 iRet = 0;
@@ -2365,12 +2365,12 @@ const struct file_operations gWmtFops = {
 	.poll = WMT_poll,
 };
 
-void wmt_dev_bgw_desense_init(VOID)
+static void wmt_dev_bgw_desense_init(VOID)
 {
 	bgw_init_socket();
 }
 
-void wmt_dev_bgw_desense_deinit(VOID)
+static void wmt_dev_bgw_desense_deinit(VOID)
 {
 	bgw_destroy_netlink_kernel();
 }
