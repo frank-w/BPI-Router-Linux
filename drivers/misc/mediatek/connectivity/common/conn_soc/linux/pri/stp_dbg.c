@@ -452,13 +452,13 @@ INT32 wcn_core_dump_reset(P_WCN_CORE_DUMP_T dmp, UINT32 timeout)
 #define WMTD_TIMEOUT_INFO_HEAD "Wait wmtd complation timeout ,just collect SYS_FTRACE to DB"
 INT32 wcn_wmtd_timeout_collect_ftrace(void)
 {
+#ifdef WMT_PLAT_ALPS
 	PUINT8 pbuf;
 	INT32 len;
 
 	pbuf = "Wait wmtd complation timeout";
 	len = osal_strlen("Wait wmtd complation timeout");
 	osal_strcpy(&g_core_dump->info[0], WMTD_TIMEOUT_INFO_HEAD);
-#ifdef WMT_PLAT_ALPS
 	aed_combo_exception(NULL, 0, (const int *)pbuf, len, (const char *)g_core_dump->info);
 #endif
 	return 0;
@@ -470,13 +470,13 @@ INT32 wcn_wmtd_timeout_collect_ftrace(void)
 #define PSM_ABNORMAL_FLAG_INFO_HEAD "Abnormal PSM flag be set ,just collect SYS_FTRACE to DB"
 INT32 wcn_psm_flag_trigger_collect_ftrace(void)
 {
+#ifdef WMT_PLAT_ALPS
 	PUINT8 pbuf;
 	INT32 len;
 
 	pbuf = "Abnormal PSM flag be set";
 	len = osal_strlen("Abnormal PSM flag be set");
 	osal_strcpy(&g_core_dump->info[0], PSM_ABNORMAL_FLAG_INFO_HEAD);
-#ifdef WMT_PLAT_ALPS
 	aed_combo_exception(NULL, 0, (const int *)pbuf, len, (const char *)g_core_dump->info);
 #endif
 	return 0;
@@ -497,13 +497,13 @@ MTK_WCN_BOOL is_btif_rxd_be_blocked(void)
 #define BTIF_RXD_BLOCKED_INFO_HEAD "Btif_rxd thread be blocked too long,just collect SYS_FTRACE to DB"
 INT32 wcn_btif_rxd_blocked_collect_ftrace(void)
 {
+#ifdef WMT_PLAT_ALPS
 	PUINT8 pbuf;
 	INT32 len;
 
 	pbuf = "Btif_rxd thread be blocked too long";
 	len = osal_strlen("Btif_rxd thread be blocked too long");
 	osal_strcpy(&g_core_dump->info[0], BTIF_RXD_BLOCKED_INFO_HEAD);
-#ifdef WMT_PLAT_ALPS
 	aed_combo_exception(NULL, 0, (const int *)pbuf, len, (const char *)g_core_dump->info);
 #endif
 	return 0;
@@ -516,13 +516,13 @@ INT32 wcn_btif_rxd_blocked_collect_ftrace(void)
 #define TIMEOUT_INFO_HEAD "Trigger assert timeout ,just collect SYS_FTRACE to DB"
 INT32 wcn_core_dump_timeout(void)
 {
+#ifdef WMT_PLAT_ALPS
 	PUINT8 pbuf;
 	INT32 len;
 
 	pbuf = "Trigger assert timeout";
 	len = osal_strlen("Trigger assert timeout");
 	osal_strcpy(&g_core_dump->info[0], TIMEOUT_INFO_HEAD);
-#ifdef WMT_PLAT_ALPS
 	aed_combo_exception(NULL, 0, (const int *)pbuf, len, (const char *)g_core_dump->info);
 #endif
 	return 0;
@@ -1029,7 +1029,7 @@ static int _stp_dbg_dmp_in(MTKSTP_DBG_T *stp_dbg, char *buf, int len)
 	return 0;
 }
 
-int stp_gdb_notify_btm_dmp_wq(MTKSTP_DBG_T *stp_dbg)
+static int stp_gdb_notify_btm_dmp_wq(MTKSTP_DBG_T *stp_dbg)
 {
 	int retval = 0;
 /* #ifndef CONFIG_LOG_STP_INTERNAL */
@@ -1053,10 +1053,10 @@ int stp_dbg_log_ctrl(unsigned int on)
 	return 0;
 }
 
-int stp_dbg_dmp_in(MTKSTP_DBG_T *stp_dbg, char *buf, int len)
+/*static int stp_dbg_dmp_in(MTKSTP_DBG_T *stp_dbg, char *buf, int len)
 {
 	return _stp_dbg_dmp_in(stp_dbg, buf, len);
-}
+}*/
 
 int stp_dbg_dmp_printk(MTKSTP_DBG_T *stp_dbg)
 {
@@ -1343,7 +1343,7 @@ INT32 stp_dbg_aee_send(unsigned char *aucMsg, INT32 len, INT32 cmd)
 	return ret;
 }
 
-UINT8 *_stp_dbg_id_to_task(UINT32 id)
+static UINT8 *_stp_dbg_id_to_task(UINT32 id)
 {
 	UINT8 *taskStr[] = {
 		"Task_WMT",
@@ -1359,7 +1359,7 @@ UINT8 *_stp_dbg_id_to_task(UINT32 id)
 	return taskStr[id];
 }
 
-INT32 _stp_dbg_parser_assert_str(PINT8 str, ENUM_ASSERT_INFO_PARSER_TYPE type)
+static INT32 _stp_dbg_parser_assert_str(PINT8 str, ENUM_ASSERT_INFO_PARSER_TYPE type)
 {
 	char *pStr = NULL;
 	char *pDtr = NULL;
@@ -1527,7 +1527,7 @@ INT32 _stp_dbg_parser_assert_str(PINT8 str, ENUM_ASSERT_INFO_PARSER_TYPE type)
 	return 0;
 }
 
-P_STP_DBG_CPUPCR_T stp_dbg_cpupcr_init(VOID)
+static P_STP_DBG_CPUPCR_T stp_dbg_cpupcr_init(VOID)
 {
 	P_STP_DBG_CPUPCR_T pSdCpupcr = NULL;
 
@@ -1544,7 +1544,7 @@ P_STP_DBG_CPUPCR_T stp_dbg_cpupcr_init(VOID)
 	return pSdCpupcr;
 }
 
-P_STP_DBG_DMAREGS_T stp_dbg_dmaregs_init(VOID)
+static P_STP_DBG_DMAREGS_T stp_dbg_dmaregs_init(VOID)
 {
 	P_STP_DBG_DMAREGS_T pDmaRegs = NULL;
 
@@ -1561,7 +1561,7 @@ P_STP_DBG_DMAREGS_T stp_dbg_dmaregs_init(VOID)
 	return pDmaRegs;
 }
 
-VOID stp_dbg_cpupcr_deinit(P_STP_DBG_CPUPCR_T pCpupcr)
+static VOID stp_dbg_cpupcr_deinit(P_STP_DBG_CPUPCR_T pCpupcr)
 {
 	if (pCpupcr) {
 		osal_sleepable_lock_deinit(&pCpupcr->lock);
@@ -1570,7 +1570,7 @@ VOID stp_dbg_cpupcr_deinit(P_STP_DBG_CPUPCR_T pCpupcr)
 	}
 }
 
-VOID stp_dbg_dmaregs_deinit(P_STP_DBG_DMAREGS_T pDmaRegs)
+static VOID stp_dbg_dmaregs_deinit(P_STP_DBG_DMAREGS_T pDmaRegs)
 {
 	if (pDmaRegs) {
 		osal_sleepable_lock_deinit(&pDmaRegs->lock);

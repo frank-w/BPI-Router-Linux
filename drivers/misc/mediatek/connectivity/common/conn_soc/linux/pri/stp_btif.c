@@ -188,10 +188,10 @@ INT32 mtk_wcn_consys_stp_btif_tx(const UINT8 *pBuf, const UINT32 len, UINT32 *wr
 	return -wr_count;
 }
 
-INT32 mtk_wcn_consys_stp_btif_rx(UINT8 *pBuf, UINT32 len)
+/*static INT32 mtk_wcn_consys_stp_btif_rx(UINT8 *pBuf, UINT32 len)
 {
 	return 0;
-}
+}*/
 
 INT32 mtk_wcn_consys_stp_btif_wakeup(VOID)
 {
