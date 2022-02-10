@@ -472,7 +472,7 @@ static void mtk_wcn_cmb_sdio_disable_eirq(void)
 	}
 }
 
-irqreturn_t mtk_wcn_cmb_sdio_eirq_handler_stub(int irq, void *data)
+static irqreturn_t mtk_wcn_cmb_sdio_eirq_handler_stub(int irq, void *data)
 {
 	if ((NULL != mtk_wcn_cmb_sdio_eirq_handler)&&(0 != atomic_read(&sdio_claim_irq_enable_flag)))
 		mtk_wcn_cmb_sdio_eirq_handler(mtk_wcn_cmb_sdio_eirq_data);

@@ -625,7 +625,7 @@ INT32 osal_timer_modify(P_OSAL_TIMER pTimer, UINT32 ms)
 	return 0;
 }
 
-INT32 _osal_fifo_init(OSAL_FIFO *pFifo, UINT8 *buf, UINT32 size)
+static INT32 _osal_fifo_init(OSAL_FIFO *pFifo, UINT8 *buf, UINT32 size)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = -1;
@@ -658,7 +658,7 @@ INT32 _osal_fifo_init(OSAL_FIFO *pFifo, UINT8 *buf, UINT32 size)
 	return (ret < 0) ? (-1) : (0);
 }
 
-INT32 _osal_fifo_deinit(OSAL_FIFO *pFifo)
+static INT32 _osal_fifo_deinit(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 
@@ -675,7 +675,7 @@ INT32 _osal_fifo_deinit(OSAL_FIFO *pFifo)
 	return 0;
 }
 
-INT32 _osal_fifo_size(OSAL_FIFO *pFifo)
+static INT32 _osal_fifo_size(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = 0;
@@ -694,7 +694,7 @@ INT32 _osal_fifo_size(OSAL_FIFO *pFifo)
 }
 
 /*returns unused bytes in fifo*/
-INT32 _osal_fifo_avail_size(OSAL_FIFO *pFifo)
+static INT32 _osal_fifo_avail_size(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = 0;
@@ -713,7 +713,7 @@ INT32 _osal_fifo_avail_size(OSAL_FIFO *pFifo)
 }
 
 /*returns used bytes in fifo*/
-INT32 _osal_fifo_len(OSAL_FIFO *pFifo)
+static INT32 _osal_fifo_len(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = 0;
@@ -731,7 +731,7 @@ INT32 _osal_fifo_len(OSAL_FIFO *pFifo)
 	return ret;
 }
 
-INT32 _osal_fifo_is_empty(OSAL_FIFO *pFifo)
+static INT32 _osal_fifo_is_empty(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = 0;
@@ -749,7 +749,7 @@ INT32 _osal_fifo_is_empty(OSAL_FIFO *pFifo)
 	return ret;
 }
 
-INT32 _osal_fifo_is_full(OSAL_FIFO *pFifo)
+static INT32 _osal_fifo_is_full(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = 0;
@@ -767,7 +767,7 @@ INT32 _osal_fifo_is_full(OSAL_FIFO *pFifo)
 	return ret;
 }
 
-INT32 _osal_fifo_data_in(OSAL_FIFO *pFifo, const VOID *buf, UINT32 len)
+static INT32 _osal_fifo_data_in(OSAL_FIFO *pFifo, const VOID *buf, UINT32 len)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = 0;
@@ -791,7 +791,7 @@ INT32 _osal_fifo_data_in(OSAL_FIFO *pFifo, const VOID *buf, UINT32 len)
 	return ret;
 }
 
-INT32 _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, UINT32 len)
+static INT32 _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, UINT32 len)
 {
 	struct kfifo *fifo = NULL;
 	INT32 ret = 0;
@@ -815,7 +815,7 @@ INT32 _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, UINT32 len)
 	return ret;
 }
 
-INT32 _osal_fifo_reset(OSAL_FIFO *pFifo)
+static INT32 _osal_fifo_reset(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 

@@ -168,6 +168,7 @@ extern int mtk_wcn_cmb_stub_1vautok_for_dvfs(void);
 
 extern int mtk_wcn_wmt_chipid_query(void);
 extern void mtk_wcn_wmt_set_chipid(int chipid);
+extern int mtk_wcn_cmb_stub_do_reset(unsigned int type);
 
 /* mtk_uart_pdn_enable -- request uart port enter/exit deep idle mode, this API is defined in uart driver
  *
