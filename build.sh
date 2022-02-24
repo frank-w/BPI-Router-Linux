@@ -28,12 +28,20 @@ case $board in
 	"bpi-r2pro")
 		DEFCONFIG=arch/arm64/configs/rk3568_bpi-r2p_defconfig
 		#DEFCONFIG=arch/arm64/configs/quartz64_defconfig
-		DTS=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dts
+		if [[ "$boardversion" == "v00" ]];then
+			DTS=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro-rtl8367.dts
+		else
+			DTS=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dts
+		fi
 		DTSI=arch/arm64/boot/dts/rockchip/rk3568.dtsi
 		;;
 	"bpi-r64")
 		DEFCONFIG=arch/arm64/configs/mt7622_bpi-r64_defconfig
-		DTS=arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
+		if [[ "$boardversion" == "v0.1" ]];then
+			DTS=arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-rtl8367.dts
+		else
+			DTS=arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
+		fi
 		DTSI=arch/arm64/boot/dts/mediatek/mt7622.dtsi
 		;;
     *) #bpir2
@@ -296,12 +304,12 @@ function pack_debs {
 
 function upload {
 	get_version
-	#if [[ "$board" == "bpi-r64" ]];then
-	#	switch="_"$(get_r64_switch)
-	#fi
+
+	DTBFILE=${DTS%.*}.dtb
+	echo "using ${DTBFILE}..."
 
 	if [[ "$board" != "bpi-r2pro" ]];then
-		imagename="uImage_${kernver}${gitbranch}${board//bpi/}${switch}"
+		imagename="uImage_${kernver}${gitbranch}${board//bpi/}"
 		read -e -i $imagename -p "Kernel-filename: " input
 		imagename="${input:-$imagename}"
 
@@ -322,10 +330,10 @@ function upload {
 		bindir="";
 		if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/none-linux-bpi-r2pro
-		scp ${bindir}arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dtb ${uploaduser}@${uploadserver}:${uploaddir}/none-oftree-bpi-r2pro
+		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/none-oftree-bpi-r2pro
 	elif [[ "$board" == "bpi-r64" ]];then
 		scp uImage_nodt ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
-		scp bpi-r64.dtb ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
+		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
 	else
 		scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 	fi
@@ -339,6 +347,11 @@ function install
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
+
+	DTBFILE=${DTS%.*}.dtb
+	echo "using ${DTBFILE}..."
+	bindir="";
+	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 
 	if [[ $crosscompile -eq 0 ]]; then
 		kerneldir="/boot/bananapi/$board/linux"
@@ -416,7 +429,7 @@ function install
 					cp $dtbfile $dtbfile.bak
 				fi
 				echo "copy new dtb"
-				cp ./$board.dtb $dtbfile
+				cp ${bindir}${DTBFILE} $dtbfile
 			fi
 
 			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]] || [[ "$itbinput" == "y" ]];then
