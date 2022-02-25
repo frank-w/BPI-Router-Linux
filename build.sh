@@ -33,7 +33,7 @@ case $board in
 		else
 			DTS=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dts
 		fi
-		DTSI=arch/arm64/boot/dts/rockchip/rk3568.dtsi
+		DTSI=arch/arm64/boot/dts/rockchip/rk356x.dtsi
 		;;
 	"bpi-r64")
 		DEFCONFIG=arch/arm64/configs/mt7622_bpi-r64_defconfig
