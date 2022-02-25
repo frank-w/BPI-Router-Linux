@@ -307,28 +307,36 @@ function upload {
 
 	DTBFILE=${DTS%.*}.dtb
 	echo "using ${DTBFILE}..."
+	bindir="";
+	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 
-	if [[ "$board" != "bpi-r2pro" ]];then
-		imagename="uImage_${kernver}${gitbranch}${board//bpi/}"
+	if [[ "$board" == "bpi-r2pro" ]];then
+		imagename="none-linux-bpi-r2pro"
+		read -e -i $imagename -p "Kernel-filename: " input
+		imagename="${input:-$imagename}"
+	else
+		imagename="uImage_${kernver}${gitbranch}${board//bpi/}${switch}"
 		read -e -i $imagename -p "Kernel-filename: " input
 		imagename="${input:-$imagename}"
 
-		echo "Name: $imagename"
 	fi
 
-	if [[ "$board" == "bpi-r64" ]];then
+	echo "Name: $imagename"
+
+	if [[ "$board" == "bpi-r2pro" ]];then
+		dtbname="none-oftree-bpi-r2pro"
+		read -e -i $dtbname -p "dtb-filename: " input
+		dtbname="${input:-$dtbname}"
+	elif [[ "$board" == "bpi-r64" ]];then
 		dtbname="${kernver}${board//bpi/}${gitbranch}${switch}.dtb"
 		read -e -i $dtbname -p "dtb-filename: " input
 		dtbname="${input:-$dtbname}"
-
-		echo "DTB Name: $dtbname"
 	fi
 
+	echo "DTB Name: $dtbname"
 	echo "uploading to ${uploadserver}:${uploaddir}..."
 
 	if [[ "$board" == "bpi-r2pro" ]];then
-		bindir="";
-		if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/none-linux-bpi-r2pro
 		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/none-oftree-bpi-r2pro
 	elif [[ "$board" == "bpi-r64" ]];then
