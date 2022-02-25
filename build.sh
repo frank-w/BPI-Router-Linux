@@ -325,6 +325,8 @@ function upload {
 
 	DTBFILE=${DTS%.*}.dtb
 	echo "using ${DTBFILE}..."
+	bindir="";
+	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 
 	b=${board//bpi/}
 	if [[ "${gitbranch}" =~ "${b}" ]]; then
@@ -343,7 +345,11 @@ function upload {
 
 	echo "Name: $imagename"
 
-	if [[ "$board" == "bpi-r64" ]];then
+	if [[ "$board" == "bpi-r2pro" ]];then
+		dtbname="none-oftree-bpi-r2pro"
+		read -e -i $dtbname -p "dtb-filename: " input
+		dtbname="${input:-$dtbname}"
+	elif [[ "$board" == "bpi-r64" ]];then
 		read -e -i y -p "upload fit? " fitupload
 		if [[ "$fitupload" == "y" ]];
 		then
@@ -357,13 +363,12 @@ function upload {
 		fi
 	fi
 
+	echo "DTB Name: $dtbname"
 	echo "uploading to ${uploadserver}:${uploaddir}..."
 
 	if [[ "$board" == "bpi-r2pro" ]];then
-		bindir="";
-		if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
-		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/none-linux-bpi-r2pro
-		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/none-oftree-bpi-r2pro
+		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
+		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
 	elif [[ "$board" == "bpi-r64" ]];then
 		if [[ "$fitupload" == "y" ]];
 		then
