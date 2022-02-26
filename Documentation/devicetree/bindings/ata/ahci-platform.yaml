@@ -1,0 +1,134 @@
+# SPDX-License-Identifier: GPL-2.0
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/ata/ahci-platform.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: AHCI SATA Controller
+description:
+  SATA nodes are defined to describe on-chip Serial ATA controllers.
+  Each SATA controller should have its own node.
+
+  It is possible, but not required, to represent each port as a sub-node.
+  It allows to enable each port independently when dealing with multiple
+  PHYs.
+
+maintainers:
+  - Hans de Goede <hdegoede@redhat.com>
+  - Jens Axboe <axboe@kernel.dk>
+
+properties:
+  compatible:
+    enum:
+      - brcm,iproc-ahci
+      - hisilicon,hisi-ahci
+      - cavium,octeon-7130-ahci
+      - ibm,476gtr-ahci
+      - marvell,armada-380-ahci
+      - marvell,armada-3700-ahci
+      - snps,dwc-ahci
+      - snps,spear-ahci
+      - generic-ahci
+
+  ahci-supply:
+    description:
+      regulator for AHCI controller
+
+  dma-coherent:
+    description:
+      Present if dma operations are coherent
+
+  clocks:
+    minItems: 1
+    maxItems: 3
+
+  interrupts:
+    minItems: 1
+
+  phy-supply:
+    description:
+      regulator for PHY power
+
+  phys:
+    minItems: 1
+
+  phy-names:
+    minItems: 1
+
+  ports-implemented:
+    description:
+      Mask that indicates which ports that the HBA supports
+      are available for software to use. Useful if PORTS_IMPL
+      is not programmed by the BIOS, which is true with
+      some embedded SOC's.
+    minItems: 1
+
+  reg:
+    maxItems: 1
+
+  resets:
+    minItems: 1
+
+  target-supply:
+    description:
+      regulator for SATA target power
+
+required:
+  - compatible
+  - reg
+  - interrupts
+
+patternProperties:
+  "^sata-port@[0-9]+$":
+    type: object
+    description:
+      Subnode with configuration of the Ports.
+
+    properties:
+      reg:
+        maxItems: 1
+
+      phys:
+        minItems: 1
+
+      target-supply:
+        description:
+          regulator for SATA target power
+
+    required:
+      - reg
+
+    anyOf:
+      - required: [ phys ]
+      - required: [ target-supply ]
+
+additionalProperties: true
+
+examples:
+  - |
+        sata@ffe08000 {
+               compatible = "snps,spear-ahci";
+               reg = <0xffe08000 0x1000>;
+               interrupts = <115>;
+        };
+  - |
+        sata@f7e90000 {
+                compatible = "marvell,berlin2q-achi", "generic-ahci";
+                reg = <0xe90000 0x1000>;
+                interrupts = <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
+                clocks = <&chip CLKID_SATA>;
+                #address-cells = <1>;
+                #size-cells = <0>;
+
+                sata0: sata-port@0 {
+                        reg = <0>;
+                        phys = <&sata_phy 0>;
+                        target-supply = <&reg_sata0>;
+                };
+
+                sata1: sata-port@1 {
+                        reg = <1>;
+                        phys = <&sata_phy 1>;
+                        target-supply = <&reg_sata1>;;
+                };
+        };
