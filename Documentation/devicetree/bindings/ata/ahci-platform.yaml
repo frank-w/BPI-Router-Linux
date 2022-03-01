@@ -89,6 +89,9 @@ properties:
       some embedded SoCs.
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   reg-names:
     maxItems: 1
 
