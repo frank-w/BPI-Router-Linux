@@ -30,7 +30,7 @@ case $board in
 		ARCH=arm64
 		CONFIGPATH=arch/$ARCH/configs
 		DEFCONFIG=$CONFIGPATH/rk3568_bpi-r2p_defconfig
-		#DEFCONFIG=arch/arm64/configs/quartz64_defconfig
+		DEFCONFIG=$CONFIGPATH/quartz64_defconfig
 		if [[ "$boardversion" == "v00" ]];then
 			DTS=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro-rtl8367.dts
 		else
@@ -386,16 +386,22 @@ function upload {
 function install
 {
 	get_version
-	imagename="uImage_${kernver}${gitbranch}"
-	read -e -i $imagename -p "uImage-filename: " input
-	imagename="${input:-$imagename}"
-
-	echo "Name: $imagename"
 
 	DTBFILE=${DTS%.*}.dtb
 	echo "using ${DTBFILE}..."
 	bindir="";
 	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
+
+	if [[ "$board" == "bpi-r2pro" ]];then
+		echo "install for r2pro not yet supported"
+		exit;
+	fi
+
+	imagename="uImage_${kernver}${gitbranch}"
+	read -e -i $imagename -p "uImage-filename: " input
+	imagename="${input:-$imagename}"
+
+	echo "Name: $imagename"
 
 	if [[ $crosscompile -eq 0 ]]; then
 		kerneldir="/boot/bananapi/$board/linux"
