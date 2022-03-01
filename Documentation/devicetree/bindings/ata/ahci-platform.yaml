@@ -29,6 +29,10 @@ properties:
           - marvell,armada-8k-ahci
           - marvell,berlin2q-ahci
         - const: generic-ahci
+      - items:
+        - enum:
+          - rockchip,rk3568-dwc-ahci
+        - const: snps,dwc-ahci
       - enum:
         - brcm,iproc-ahci
         - cavium,octeon-7130-ahci
