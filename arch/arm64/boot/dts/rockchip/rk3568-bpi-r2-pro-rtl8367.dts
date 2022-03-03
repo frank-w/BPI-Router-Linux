@@ -45,9 +45,10 @@
 	};
 };
 
-&mdio1 {
-	/delete-node/ rgmii_phy1;
+/delete-node/ &rgmii_phy1;
 
+&mdio1 {
+	//ethernet-phy@0 needs to be deleted
 	rtkgsw_dsa: switch1 {
 		compatible = "realtek,rtl8367s";
 		realtek,reset-pin = <&gpio3 RK_PB0 GPIO_ACTIVE_HIGH>;
