@@ -136,7 +136,7 @@
 	/* Reset time is 20ms, 100ms for rtl8211f */
 	snps,reset-delays-us = <0 20000 100000>;
 	tx_delay = <0x4f>;
-	rx_delay = <0x26>;
+	rx_delay = <0x0f>;
 	status = "okay";
 
 	fixed-link {
