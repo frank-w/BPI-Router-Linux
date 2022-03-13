@@ -129,6 +129,8 @@ void mt753x_mmd_ind_write(struct gsw_mt753x *gsw, int addr, int devad, u16 reg,
 void mt753x_irq_worker(struct work_struct *work);
 void mt753x_irq_enable(struct gsw_mt753x *gsw);
 
+int mt753x_phy_calibration(struct gsw_mt753x *gsw, u8 phyaddr);
+
 /* MDIO Indirect Access Registers */
 #define MII_MMD_ACC_CTL_REG		0x0d
 #define MMD_CMD_S			14

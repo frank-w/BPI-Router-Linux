@@ -8,4 +8,4 @@ mt753x-$(CONFIG_SWCONFIG)	+= mt753x_swconfig.o
 
 mt753x-y			+= mt753x_mdio.o mt7530.o mt7531.o \
 					mt753x_common.o mt753x_vlan.o \
-					mt753x_nl.o
+					mt753x_nl.o mt753x_phy.o
