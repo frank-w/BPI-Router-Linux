@@ -25,7 +25,13 @@ struct mt753x_mapping mt753x_def_mapping[] = {
 		.members = { 0, 0x5d, 0x22 },
 		.etags = { 0, 0, 0 },
 		.vids = { 0, 1, 2 },
-	},
+	}, {
+		.name = "lllll",
+		.pvids = { 1, 1, 1, 1, 1, 1, 1 },
+		.members = { 0, 0x3f },
+		.etags = { 0, 0, 0 },
+		.vids = { 0, 1 },
+	}
 };
 
 void mt753x_vlan_ctrl(struct gsw_mt753x *gsw, u32 cmd, u32 val)
@@ -158,7 +164,7 @@ struct mt753x_mapping *mt753x_find_mapping(struct device_node *np)
 	const char *map;
 	int i;
 
-	if (of_property_read_string(np, "mediatek,portmap", &map))
+	if (of_property_read_string(np, "rockchip,portmap", &map))
 		return NULL;
 
 	for (i = 0; i < ARRAY_SIZE(mt753x_def_mapping); i++)
