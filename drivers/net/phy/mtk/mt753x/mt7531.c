@@ -585,6 +585,27 @@ static void mt7531_core_pll_setup(struct gsw_mt753x *gsw)
 
 static int mt7531_internal_phy_calibration(struct gsw_mt753x *gsw)
 {
+	u32 i, val;
+	int ret;
+
+	dev_info(gsw->dev,">>>>>>>>>>>>>>>>>>>>>>>>>>>>> START CALIBRATION:\n");
+
+	/* gphy value from sw path */
+	val = gsw->mmd_read(gsw, 0, PHY_DEV1F, PHY_DEV1F_REG_403);
+	val |= GBE_EFUSE_SETTING;
+	gsw->mmd_write(gsw, 0, PHY_DEV1F, PHY_DEV1F_REG_403, val);
+
+	for (i = 0; i < 5; i++) {
+		dev_info(gsw->dev, "-------- gephy-calbration (port:%d) --------\n",
+			 i);
+		ret = mt753x_phy_calibration(gsw, i);
+
+		/* set Auto-negotiation with giga extension. */
+		gsw->mii_write(gsw, i, 0, 0x1340);
+		if (ret)
+			return ret;
+	}
+
 	return 0;
 }
 
@@ -627,7 +648,7 @@ static int mt7531_set_gpio_pinmux(struct gsw_mt753x *gsw)
 	/* Set GPIO 0 interrupt mode */
 	pinmux_set_mux_7531(gsw, gpio_int_pins[0], gpio_int_funcs[0]);
 
-	of_property_read_u32(np, "mediatek,mdio_master_pinmux", &group);
+	of_property_read_u32(np, "rockchip,mdio_master_pinmux", &group);
 
 	/* group = 0: do nothing, 1: 1st group (AE), 2: 2nd group (BE) */
 	if (group > 0 && group <= 2) {
