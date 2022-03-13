@@ -35,7 +35,7 @@ enum mt753x_model {
 
 struct mt753x_port_cfg {
 	struct device_node *np;
-	int phy_mode;
+	phy_interface_t phy_mode;
 	u32 enabled: 1;
 	u32 force_link: 1;
 	u32 speed: 2;
@@ -128,6 +128,8 @@ void mt753x_mmd_ind_write(struct gsw_mt753x *gsw, int addr, int devad, u16 reg,
 
 void mt753x_irq_worker(struct work_struct *work);
 void mt753x_irq_enable(struct gsw_mt753x *gsw);
+
+int mt753x_phy_calibration(struct gsw_mt753x *gsw, u8 phyaddr);
 
 /* MDIO Indirect Access Registers */
 #define MII_MMD_ACC_CTL_REG		0x0d

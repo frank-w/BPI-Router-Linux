@@ -239,6 +239,7 @@ static void mt753x_load_port_cfg(struct gsw_mt753x *gsw)
 	struct device_node *fixed_link_node;
 	struct mt753x_port_cfg *port_cfg;
 	u32 port;
+	int err;
 
 	for_each_child_of_node(gsw->dev->of_node, port_np) {
 		if (!of_device_is_compatible(port_np, "mediatek,mt753x-port"))
@@ -269,8 +270,8 @@ static void mt753x_load_port_cfg(struct gsw_mt753x *gsw)
 
 		port_cfg->np = port_np;
 
-		port_cfg->phy_mode = of_get_phy_mode(port_np);
-		if (port_cfg->phy_mode < 0) {
+		err = of_get_phy_mode(port_np,&port_cfg->phy_mode);
+		if (err) {
 			dev_info(gsw->dev, "incorrect phy-mode %d\n", port);
 			continue;
 		}
@@ -371,31 +372,13 @@ void mt753x_lock_gsw(void)
 	mutex_lock(&mt753x_devs_lock);
 }
 
+#if 0
 static int mt753x_hw_reset(struct gsw_mt753x *gsw)
 {
 	struct device_node *np = gsw->dev->of_node;
-	struct reset_control *rstc;
-	int mcm;
 	int ret = -EINVAL;
 
-	mcm = of_property_read_bool(np, "mediatek,mcm");
-	if (mcm) {
-		rstc = devm_reset_control_get(gsw->dev, "mcm");
-		ret = IS_ERR(rstc);
-		if (IS_ERR(rstc)) {
-			dev_err(gsw->dev, "Missing reset ctrl of switch\n");
-			return ret;
-		}
-
-		reset_control_assert(rstc);
-		msleep(30);
-		reset_control_deassert(rstc);
-
-		gsw->reset_pin = -1;
-		return 0;
-	}
-
-	gsw->reset_pin = of_get_named_gpio(np, "reset-gpios", 0);
+	gsw->reset_pin = of_get_named_gpio(np, "rockchip,reset-pin", 0);
 	if (gsw->reset_pin < 0) {
 		dev_err(gsw->dev, "Missing reset pin of switch\n");
 		return ret;
@@ -415,6 +398,7 @@ static int mt753x_hw_reset(struct gsw_mt753x *gsw)
 
 	return 0;
 }
+#endif
 
 static irqreturn_t mt753x_irq_handler(int irq, void *dev)
 {
@@ -439,7 +423,7 @@ static int mt753x_probe(struct platform_device *pdev)
 	struct mt753x_mapping *map;
 	int i;
 
-	mdio = of_parse_phandle(np, "mediatek,mdio", 0);
+	mdio = of_parse_phandle(np, "rockchip,mdio", 0);
 	if (!mdio)
 		return -EINVAL;
 
@@ -454,11 +438,11 @@ static int mt753x_probe(struct platform_device *pdev)
 	gsw->host_bus = mdio_bus;
 	gsw->dev = &pdev->dev;
 	mutex_init(&gsw->mii_lock);
-
+#if 0
 	/* Switch hard reset */
 	if (mt753x_hw_reset(gsw))
 		goto fail;
-
+#endif
 	/* Fetch the SMI address dirst */
 	if (of_property_read_u32(np, "mediatek,smi-addr", &gsw->smi_addr))
 		gsw->smi_addr = MT753X_DFL_SMI_ADDR;
