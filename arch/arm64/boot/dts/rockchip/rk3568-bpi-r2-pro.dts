@@ -150,6 +150,8 @@
 		rockchip,mdio_master_pinmux = <0>;
 		rockchip,reset-pin = <&gpio3 RK_PB7 GPIO_ACTIVE_HIGH>;
 		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <0>;
 
 		port5: port@5 {
 			compatible = "mediatek,mt753x-port";
