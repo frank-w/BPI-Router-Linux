@@ -239,6 +239,7 @@ static void mt753x_load_port_cfg(struct gsw_mt753x *gsw)
 	struct device_node *fixed_link_node;
 	struct mt753x_port_cfg *port_cfg;
 	u32 port;
+	int err;
 
 	for_each_child_of_node(gsw->dev->of_node, port_np) {
 		if (!of_device_is_compatible(port_np, "mediatek,mt753x-port"))
@@ -269,8 +270,8 @@ static void mt753x_load_port_cfg(struct gsw_mt753x *gsw)
 
 		port_cfg->np = port_np;
 
-		port_cfg->phy_mode = of_get_phy_mode(port_np);
-		if (port_cfg->phy_mode < 0) {
+		err = of_get_phy_mode(port_np,&port_cfg->phy_mode);
+		if (err) {
 			dev_info(gsw->dev, "incorrect phy-mode %d\n", port);
 			continue;
 		}
