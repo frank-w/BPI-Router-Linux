@@ -35,7 +35,7 @@ enum mt753x_model {
 
 struct mt753x_port_cfg {
 	struct device_node *np;
-	int phy_mode;
+	phy_interface_t phy_mode;
 	u32 enabled: 1;
 	u32 force_link: 1;
 	u32 speed: 2;
