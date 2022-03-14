@@ -14,7 +14,7 @@
 #include "mt753x_regs.h"
 #include "mt753x_phy.h"
 
-u32 tc_phy_read_dev_reg(struct gsw_mt753x *gsw, u32 port_num, u32 dev_addr, u32 reg_addr)
+static u32 tc_phy_read_dev_reg(struct gsw_mt753x *gsw, u32 port_num, u32 dev_addr, u32 reg_addr)
 {
 	u32 phy_val;
     phy_val = gsw->mmd_read(gsw, port_num, dev_addr, reg_addr);
@@ -24,7 +24,7 @@ u32 tc_phy_read_dev_reg(struct gsw_mt753x *gsw, u32 port_num, u32 dev_addr, u32 
 	return phy_val;
 }
 
-void tc_phy_write_dev_reg(struct gsw_mt753x *gsw, u32 port_num, u32 dev_addr, u32 reg_addr, u32 write_data)
+static void tc_phy_write_dev_reg(struct gsw_mt753x *gsw, u32 port_num, u32 dev_addr, u32 reg_addr, u32 write_data)
 {
 	u32 phy_val;
     gsw->mmd_write(gsw, port_num, dev_addr, reg_addr, write_data);
@@ -33,7 +33,7 @@ void tc_phy_write_dev_reg(struct gsw_mt753x *gsw, u32 port_num, u32 dev_addr, u3
 	//switch_phy_write_cl45(port_num, dev_addr, reg_addr, write_data);
 }
 
-void switch_phy_write(struct gsw_mt753x *gsw, u32 port_num, u32 reg_addr, u32 write_data){
+static void switch_phy_write(struct gsw_mt753x *gsw, u32 port_num, u32 reg_addr, u32 write_data){
 	gsw->mii_write(gsw, port_num, reg_addr, write_data);
 }
 
@@ -65,7 +65,7 @@ const u8 MT753x_TX_OFFSET_TBL[64] = {
 
 u8 ge_cal_flag;
 
-u8 all_ge_ana_cal_wait(struct gsw_mt753x *gsw, u32 delay, u32 phyaddr) // for EN7512
+static u8 all_ge_ana_cal_wait(struct gsw_mt753x *gsw, u32 delay, u32 phyaddr) // for EN7512
 {
 	u8 all_ana_cal_status;
 	u32 cnt, tmp_1e_17c;
@@ -131,7 +131,7 @@ u8 all_ge_ana_cal_wait(struct gsw_mt753x *gsw, u32 delay, u32 phyaddr) // for EN
 
 
 
-int ge_cal_rext(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
+static int ge_cal_rext(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 {
 	u8 rg_zcal_ctrl, all_ana_cal_status;
 	u16 ad_cal_comp_out_init;
@@ -219,7 +219,7 @@ int ge_cal_rext(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 }
 
 //-----------------------------------------------------------------
-int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
+static int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 {
 	u8 rg_zcal_ctrl, all_ana_cal_status, calibration_pair;
 	u16 ad_cal_comp_out_init;
@@ -350,7 +350,7 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 	return 0;
 }
 
-int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
+static int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 {
 	u8 all_ana_cal_status, calibration_pair;
 	u16 ad_cal_comp_out_init;
@@ -478,7 +478,7 @@ int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 	return 0;
 }
 
-int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
+static int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 {
 	u8	all_ana_cal_status, calibration_pair, i;
 	u16	ad_cal_comp_out_init;
@@ -840,7 +840,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 
 //-----------------------------------------------------------------
 
-int phy_calibration(struct gsw_mt753x *gsw, u8 phyaddr)
+static int phy_calibration(struct gsw_mt753x *gsw, u8 phyaddr)
 {
 	u32	reg_tmp, reg_tmp1;
 	u32 CALDLY = 40;
@@ -939,7 +939,7 @@ int phy_calibration(struct gsw_mt753x *gsw, u8 phyaddr)
 	return 0;
 }
 
-void rx_dc_offset(struct gsw_mt753x *gsw, u8 phyaddr)
+static void rx_dc_offset(struct gsw_mt753x *gsw, u8 phyaddr)
 {
     pr_info("PORT %d RX_DC_OFFSET\n", phyaddr);
     tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x96, 0x8000);
@@ -953,7 +953,7 @@ void rx_dc_offset(struct gsw_mt753x *gsw, u8 phyaddr)
     tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x171, 0x65);
 }
 
-void check_rx_dc_offset_pair_a(struct gsw_mt753x *gsw, u8 phyaddr)
+static void check_rx_dc_offset_pair_a(struct gsw_mt753x *gsw, u8 phyaddr)
 {
     u32 reg_tmp;
 
@@ -973,7 +973,7 @@ void check_rx_dc_offset_pair_a(struct gsw_mt753x *gsw, u8 phyaddr)
         pr_info("pairA RX_DC_OFFSET error");
 }
 
-void check_rx_dc_offset_pair_b(struct gsw_mt753x *gsw, u8 phyaddr)
+static void check_rx_dc_offset_pair_b(struct gsw_mt753x *gsw, u8 phyaddr)
 {
     u32 reg_tmp;
 
@@ -993,7 +993,7 @@ void check_rx_dc_offset_pair_b(struct gsw_mt753x *gsw, u8 phyaddr)
         pr_info("pairB RX_DC_OFFSET error");
 }
 
-void check_rx_dc_offset_pair_c(struct gsw_mt753x *gsw, u8 phyaddr)
+static void check_rx_dc_offset_pair_c(struct gsw_mt753x *gsw, u8 phyaddr)
 {
     u32 reg_tmp;
 
@@ -1013,7 +1013,7 @@ void check_rx_dc_offset_pair_c(struct gsw_mt753x *gsw, u8 phyaddr)
         pr_info("pairC RX_DC_OFFSET error");
 }
 
-void check_rx_dc_offset_pair_d(struct gsw_mt753x *gsw, u8 phyaddr)
+static void check_rx_dc_offset_pair_d(struct gsw_mt753x *gsw, u8 phyaddr)
 {
     u32 reg_tmp;
 
