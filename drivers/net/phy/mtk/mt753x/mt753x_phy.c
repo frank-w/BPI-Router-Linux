@@ -18,7 +18,7 @@ u32 tc_phy_read_dev_reg(struct gsw_mt753x *gsw, u32 port_num, u32 dev_addr, u32 
 {
 	u32 phy_val;
     phy_val = gsw->mmd_read(gsw, port_num, dev_addr, reg_addr);
-    
+
     //printk("switch phy cl45 r %d 0x%x 0x%x = %x\n",port_num, dev_addr, reg_addr, phy_val);
 	//switch_phy_read_cl45(port_num, dev_addr, reg_addr, &phy_val);
 	return phy_val;
@@ -65,14 +65,14 @@ const u8 MT753x_TX_OFFSET_TBL[64] = {
 
 u8 ge_cal_flag;
 
-u8 all_ge_ana_cal_wait(struct gsw_mt753x *gsw, u32 delay, u32 phyaddr) // for EN7512 
+u8 all_ge_ana_cal_wait(struct gsw_mt753x *gsw, u32 delay, u32 phyaddr) // for EN7512
 {
-	u8 all_ana_cal_status;	
+	u8 all_ana_cal_status;
 	u32 cnt, tmp_1e_17c;
 	//tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x017c, 0x0001);	// da_calin_flag pull high
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x17c, 0x0001);
 	//printk("delay = %d\n", delay);
-	
+
 	cnt = 10000;
 	do {
 		udelay(delay);
@@ -93,7 +93,7 @@ u8 all_ge_ana_cal_wait(struct gsw_mt753x *gsw, u32 delay, u32 phyaddr) // for EN
 
 		}
 		printk("re-K again\n");
-        
+
 		tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x17c, 0);
 		tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x17c, 0x0001);
 		cnt = 10000;
@@ -115,16 +115,16 @@ u8 all_ge_ana_cal_wait(struct gsw_mt753x *gsw, u32 delay, u32 phyaddr) // for EN
 			udelay(delay);
 			cnt--;
 			all_ana_cal_status = tc_phy_read_dev_reg(gsw, PHY0, 0x1e, 0x17b) & 0x1;
-	
+
 		} while ((all_ana_cal_status == 0) && (cnt != 0));
-	
+
 		tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x17c, 0);
 	}
 
     if(all_ana_cal_status == 0){
         pr_info("!!!!!!!!!!!! dev1Eh_reg17b ERROR\n");
     }
-	
+
 	return all_ana_cal_status;
 }
 
@@ -152,7 +152,7 @@ int ge_cal_rext(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00dc, 0);
 	//tc_phy_write_dev_reg(phyaddr, 0x1e, 0x00e1, 0x0000);
 	//tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00e1, 0x10);
-	
+
 	rg_zcal_ctrl = 0x20;/* start with 0 dB */
 	dev1e_e0_ana_cal_r5 = tc_phy_read_dev_reg(gsw,  PHY0, 0x1e, 0xe0); // get default value
 	/* 1e_e0[5:0]:rg_zcal_ctrl */
@@ -191,7 +191,7 @@ int ge_cal_rext(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 				all_ana_cal_status = ANACAL_SATURATION;  /* need to FT(IC fail?) */
 				printk(" GE Rext AnaCal Saturation!  \r\n");
 				rg_zcal_ctrl = 0x20;  /* 0 dB */
-			} 
+			}
 		}
 	}
 
@@ -236,7 +236,7 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 		if(calibration_pair == ANACAL_PAIR_A)
 		{
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00db, 0x1101);	// 1e_db[12]:rg_cal_ckinv, [8]:rg_ana_calen, [4]:rg_rext_calen, [0]:rg_zcalen_a
-			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dc, 0x0000);	
+			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dc, 0x0000);
 			//printk("R50 pair A 1e_db=%x 1e_db=%x\n", tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x00db), tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x00dc));
 
 		}
@@ -265,12 +265,12 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 		all_ana_cal_status = all_ge_ana_cal_wait(gsw, delay, phyaddr); // delay 20 usec
 		if(all_ana_cal_status == 0)
 		{
-			all_ana_cal_status = ANACAL_ERROR;	
+			all_ana_cal_status = ANACAL_ERROR;
 			printk( "GE R50 AnaCal ERROR init!   \r\n");
 			return -1;
 		}
-	
-		ad_cal_comp_out_init = (tc_phy_read_dev_reg(gsw,  PHY0, 0x1e, 0x017a)>>8) & 0x1;		// 1e_17a[8]:ad_cal_comp_out	
+
+		ad_cal_comp_out_init = (tc_phy_read_dev_reg(gsw,  PHY0, 0x1e, 0x017a)>>8) & 0x1;		// 1e_17a[8]:ad_cal_comp_out
 		if(ad_cal_comp_out_init == 1)
 			calibration_polarity = -1;
 		else
@@ -286,24 +286,24 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 
 			if(all_ana_cal_status == 0)
 			{
-				all_ana_cal_status = ANACAL_ERROR;	
+				all_ana_cal_status = ANACAL_ERROR;
 				printk( "  GE R50 AnaCal ERROR 2!   \r\n");
 				return -1;
 			}
-			else if(((tc_phy_read_dev_reg(gsw,  PHY0, 0x1e, 0x017a)>>8)&0x1) != ad_cal_comp_out_init) 
+			else if(((tc_phy_read_dev_reg(gsw,  PHY0, 0x1e, 0x017a)>>8)&0x1) != ad_cal_comp_out_init)
 			{
-				all_ana_cal_status = ANACAL_FINISH;	
+				all_ana_cal_status = ANACAL_FINISH;
 			}
 			else {
-				if((rg_zcal_ctrl == 0x3F)||(rg_zcal_ctrl == 0x00))	
+				if((rg_zcal_ctrl == 0x3F)||(rg_zcal_ctrl == 0x00))
 				{
 					all_ana_cal_status = ANACAL_SATURATION;  // need to FT
 					printk( " GE R50 AnaCal Saturation!  \r\n");
 				}
 			}
 		}
-		
-		if(all_ana_cal_status == ANACAL_ERROR) {	
+
+		if(all_ana_cal_status == ANACAL_ERROR) {
 			rg_zcal_ctrl = 0x20;  // 0 dB
 			//tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00e0, (dev1e_e0_ana_cal_r5 | rg_zcal_ctrl));
 		}
@@ -311,7 +311,7 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 			rg_zcal_ctrl = MT753x_ZCAL_TO_R50ohm_GE_TBL_100[rg_zcal_ctrl - 9];	// wait Mog zcal/r50 mapping table
 			printk( " GE R50 AnaCal Done! (%d) (0x%x)(0x%x) \r\n", cnt, rg_zcal_ctrl, (rg_zcal_ctrl|0x80));
 		}
-		
+
 		if(calibration_pair == ANACAL_PAIR_A) {
 			ad_cal_comp_out_init = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174) & (~0x7f00);
 			//ad_cal_comp_out_init = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174);
@@ -323,7 +323,7 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 			ad_cal_comp_out_init = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174) & (~0x007f);
 			//ad_cal_comp_out_init = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174);
 			//printk( " GE-b 1e_174(0x%x)(0x%x), 1e_175(0x%x)  \r\n", tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174), ad_cal_comp_out_init, tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0175));
-			
+
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0174, (ad_cal_comp_out_init | (((rg_zcal_ctrl<<0)&0x00ff) | 0x0080)));	// 1e_174[7:0]
 			//printk( " GE-b 1e_174(0x%x), 1e_175(0x%x)  \r\n", tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174), tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0175));
 		}
@@ -332,7 +332,7 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 			//ad_cal_comp_out_init = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0175);
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0175, (ad_cal_comp_out_init | (((rg_zcal_ctrl<<8)&0xff00) | 0x8000)));	// 1e_175[15:8]
 			//printk( " GE-c 1e_174(0x%x), 1e_175(0x%x)  \r\n", tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174), tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0175));
-		} else {// if(calibration_pair == ANACAL_PAIR_D) 
+		} else {// if(calibration_pair == ANACAL_PAIR_D)
 			ad_cal_comp_out_init = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0175) & (~0x007f);
 			//ad_cal_comp_out_init = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0175);
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0175, (ad_cal_comp_out_init | (((rg_zcal_ctrl<<0)&0x00ff) | 0x0080)));	// 1e_175[7:0]
@@ -340,7 +340,7 @@ int ge_cal_r50(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 		}
 		//tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00e0, ((rg_zcal_ctrl<<8)|rg_zcal_ctrl));
 	}
-	
+
 	printk( " GE 1e_174(0x%x), 1e_175(0x%x)  \r\n", tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0174), tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x0175));
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00db, 0x0000);
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00db, 0x0000);
@@ -364,7 +364,7 @@ int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0096, 0x8000);	// 1e_96[15]:bypass_tx_offset_cal, Hw bypass, Fw cal
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x003e, 0xf808);	// 1e_3e
 	for(i = 0; i <= 4; i++)
-		tc_phy_write_dev_reg(gsw, i, 0x1e, 0x00dd, 0x0000);	
+		tc_phy_write_dev_reg(gsw, i, 0x1e, 0x00dd, 0x0000);
 	for(calibration_pair = ANACAL_PAIR_A; calibration_pair <= ANACAL_PAIR_D; calibration_pair ++)
 	{
 		tabl_idx = 31;
@@ -413,12 +413,12 @@ int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 		tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_offset_reg, (reg_temp|(tx_offset_temp<<tx_offset_reg_shift)));	// 1e_172, 1e_173
 		all_ana_cal_status = all_ge_ana_cal_wait(gsw, delay, phyaddr); // delay 20 usec
 		if(all_ana_cal_status == 0) {
-			all_ana_cal_status = ANACAL_ERROR;	
+			all_ana_cal_status = ANACAL_ERROR;
 			printk( " GE Tx offset AnaCal ERROR init!   \r\n");
 			return -1;
 		}
-	
-		ad_cal_comp_out_init = (tc_phy_read_dev_reg(gsw, PHY0, 0x1e, 0x017a)>>8) & 0x1;		// 1e_17a[8]:ad_cal_comp_out	
+
+		ad_cal_comp_out_init = (tc_phy_read_dev_reg(gsw, PHY0, 0x1e, 0x017a)>>8) & 0x1;		// 1e_17a[8]:ad_cal_comp_out
 		if(ad_cal_comp_out_init == 1)
 			calibration_polarity = 1;
 		else
@@ -427,7 +427,7 @@ int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 		cnt = 0;
 		//printk("TX offset cnt = %d, tabl_idx= %x, offset_val = %x\n", cnt, tabl_idx, MT753x_TX_OFFSET_TBL[tabl_idx]);
 		while(all_ana_cal_status < ANACAL_ERROR) {
-			
+
 			cnt ++;
 			tabl_idx += calibration_polarity;
 			//tx_offset_temp += calibration_polarity;
@@ -438,11 +438,11 @@ int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 
 			all_ana_cal_status = all_ge_ana_cal_wait(gsw, delay, phyaddr); // delay 20 usec
 			if(all_ana_cal_status == 0) {
-				all_ana_cal_status = ANACAL_ERROR;	
+				all_ana_cal_status = ANACAL_ERROR;
 				printk( " GE Tx offset AnaCal ERROR init 2!   \r\n");
 				return -1;
 			} else if(((tc_phy_read_dev_reg(gsw, PHY0, 0x1e, 0x017a)>>8)&0x1) != ad_cal_comp_out_init) {
-				all_ana_cal_status = ANACAL_FINISH;	
+				all_ana_cal_status = ANACAL_FINISH;
 			} else {
 				if((tabl_idx == 0)||(tabl_idx == 0x3f)) {
 					all_ana_cal_status = ANACAL_SATURATION;  // need to FT
@@ -450,8 +450,8 @@ int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 				}
 			}
 		}
-		
-		if(all_ana_cal_status == ANACAL_ERROR) {	
+
+		if(all_ana_cal_status == ANACAL_ERROR) {
 			tx_offset_temp = TX_AMP_OFFSET_0MV;
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_offset_reg, (reg_temp|(tx_offset_temp<<tx_offset_reg_shift)));
 		} else {
@@ -467,13 +467,13 @@ int ge_cal_tx_offset(struct gsw_mt753x *gsw,  u8 phyaddr, u32 delay)
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0182, 0x0000);
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0183, 0x0000);
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0184, 0x0000);
-	
+
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00db, 0x0000);	// disable analog calibration circuit
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00dc, 0x0000);	// disable Tx offset calibration circuit
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00db, 0x0000);	// disable analog calibration circuit
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dc, 0x0000);	// disable Tx offset calibration circuit
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x003e, 0x0000);	// disable Tx VLD force mode
-	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dd, 0x0000);	// disable Tx offset/amplitude calibration circuit	
+	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dd, 0x0000);	// disable Tx offset/amplitude calibration circuit
 
 	return 0;
 }
@@ -483,10 +483,10 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 	u8	all_ana_cal_status, calibration_pair, i;
 	u16	ad_cal_comp_out_init;
 	int	calibration_polarity;
-	u32	tx_amp_reg_shift; 
+	u32	tx_amp_reg_shift;
 	u16	reg_temp;
 	u32	tx_amp_temp, tx_amp_reg, cnt=0, tx_amp_reg_100;
-	u32 debug_tmp, reg_backup, reg_tmp; 
+	u32 debug_tmp, reg_backup, reg_tmp;
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00db, 0x1100);	// 1e_db[12]:rg_cal_ckinv, [8]:rg_ana_calen, [4]:rg_rext_calen, [0]:rg_zcalen_a
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00dc, 0x0001);	// 1e_dc[0]:rg_txvos_calen
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00e1, 0x0010);	// 1e_e1[4]:select 1V
@@ -503,7 +503,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 
 		if(calibration_pair == ANACAL_PAIR_A) {
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dd, 0x1000);				// 1e_dd[12]:tx_a amp calibration enable
-			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x017d, (0x8000|DAC_IN_2V));	// 1e_17d:dac_in0_a	
+			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x017d, (0x8000|DAC_IN_2V));	// 1e_17d:dac_in0_a
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0181, (0x8000|DAC_IN_2V));	// 1e_181:dac_in1_a
 			reg_temp = (tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x012) & (~0xfc00));
 			tx_amp_reg_shift = 10;										// 1e_12[15:10]
@@ -538,11 +538,11 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 		tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg_100, (tx_amp_temp|(tx_amp_temp<<tx_amp_reg_shift)));
 		all_ana_cal_status = all_ge_ana_cal_wait(gsw, delay, phyaddr); 	// delay 20 usec
 		if(all_ana_cal_status == 0) {
-			all_ana_cal_status = ANACAL_ERROR;	
+			all_ana_cal_status = ANACAL_ERROR;
 			printk( " GE Tx amp AnaCal ERROR init init!   \r\n");
 			return -1;
 		}
-	
+
 		ad_cal_comp_out_init = (tc_phy_read_dev_reg(gsw,  PHY0, 0x1e, 0x017a)>>8) & 0x1;		// 1e_17a[8]:ad_cal_comp_out
 		if(ad_cal_comp_out_init == 1)
 			calibration_polarity = -1;
@@ -558,7 +558,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg_100, (tx_amp_temp|(tx_amp_temp<<tx_amp_reg_shift)));
 			all_ana_cal_status = all_ge_ana_cal_wait(gsw, delay, phyaddr); // delay 20 usec
 			if(all_ana_cal_status == 0) {
-				all_ana_cal_status = ANACAL_ERROR;	
+				all_ana_cal_status = ANACAL_ERROR;
 				printk( " GE Tx amp AnaCal ERROR 2!   \r\n");
 				return -1;
 			} else if(((tc_phy_read_dev_reg(gsw,  PHY0, 0x1e, 0x017a)>>8)&0x1) != ad_cal_comp_out_init) {
@@ -602,7 +602,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 						tx_amp_temp = tx_amp_temp;
 					else if(calibration_pair == ANACAL_PAIR_D)
 						tx_amp_temp = tx_amp_temp;
-				}								
+				}
 				reg_temp = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, tx_amp_reg)&(~0xff00);
 				tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg_100,(tx_amp_temp|((tx_amp_temp)<<tx_amp_reg_shift)));
 				tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg, (tx_amp_temp|((tx_amp_temp)<<tx_amp_reg_shift)));
@@ -691,7 +691,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 						tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg_100,(tx_amp_temp|((tx_amp_temp-1+4)<<tx_amp_reg_shift)));
 						//printk("after : PORT[%d] 1e_%x = %x\n", phyaddr, tx_amp_reg_100, tc_phy_read_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg_100));
 					}
-				}	
+				}
 
 				if (calibration_pair == ANACAL_PAIR_A){
 					reg_backup = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1e, 0x12);
@@ -773,7 +773,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 					debug_tmp = tc_phy_read_dev_reg(gsw, phyaddr, 0x1e, 0x16);
 					//printk("1e.016 = 0x%x\n", debug_tmp);
 				}
-	
+
 				else if(calibration_pair == ANACAL_PAIR_B){
 					//printk("PORT (%d) TX_AMP PAIR (A) FINAL CALIBRATION RESULT\n", phyaddr);
 					debug_tmp = tc_phy_read_dev_reg(gsw, phyaddr, 0x1e, 0x17);
@@ -798,7 +798,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 
 
 				printk( " GE Tx amp AnaCal Done! (pair-%d)(1e_%x = 0x%x)\n", calibration_pair, tx_amp_reg, tc_phy_read_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg));
-				
+
 			} else {
 				if((tx_amp_temp == 0x3f)||(tx_amp_temp == 0x00)) {
 					all_ana_cal_status = ANACAL_SATURATION;  // need to FT
@@ -807,7 +807,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 			}
 		}
 
-		if(all_ana_cal_status == ANACAL_ERROR) {	
+		if(all_ana_cal_status == ANACAL_ERROR) {
 			tx_amp_temp = 0x20;
 			tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, tx_amp_reg, (reg_temp|(tx_amp_temp<<tx_amp_reg_shift)));
 		}
@@ -820,7 +820,7 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0182, 0x0000);
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0183, 0x0000);
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x0184, 0x0000);
-	
+
 	/* disable analog calibration circuit */
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00db, 0x0000);
 	tc_phy_write_dev_reg(gsw, PHY0, 0x1e, 0x00dc, 0x0000);	// disable Tx offset calibration circuit
@@ -828,8 +828,8 @@ int ge_cal_tx_amp(struct gsw_mt753x *gsw, u8 phyaddr, u32 delay)
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dc, 0x0000);	// disable Tx offset calibration circuit
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x003e, 0x0000);	// disable Tx VLD force mode
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x00dd, 0x0000);	// disable Tx offset/amplitude calibration circuit
-	
-	
+
+
 
 	//tc_phy_write_dev_reg(gsw, phyaddr, 0x1f, 0x273, 0x2000);
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0xc9, 0x0fff);
@@ -935,7 +935,7 @@ int phy_calibration(struct gsw_mt753x *gsw, u8 phyaddr)
 	reg_tmp = reg_tmp | 0x2;
 	tc_phy_write_dev_reg(gsw, phyaddr, 0x1e, 0x3a9, reg_tmp);
 #endif
-	
+
 	return 0;
 }
 
@@ -965,7 +965,7 @@ void check_rx_dc_offset_pair_a(struct gsw_mt753x *gsw, u8 phyaddr)
     tc_phy_write_dev_reg(gsw, phyaddr, 0x1f, 0x15, (phyaddr << 13) | 0x1142);
     udelay(40);
     reg_tmp = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1f, 0x1a);
-    reg_tmp = reg_tmp & 0xff;   
+    reg_tmp = reg_tmp & 0xff;
     pr_info("after pairA output = %x\n", reg_tmp);
     if ((reg_tmp & 0x80) != 0)
         reg_tmp = (~reg_tmp) + 1;
@@ -985,7 +985,7 @@ void check_rx_dc_offset_pair_b(struct gsw_mt753x *gsw, u8 phyaddr)
     tc_phy_write_dev_reg(gsw, phyaddr, 0x1f, 0x15, (phyaddr << 13) | 0x1143);
     udelay(40);
     reg_tmp = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1f, 0x1a);
-    reg_tmp = reg_tmp & 0xff;   
+    reg_tmp = reg_tmp & 0xff;
     pr_info("after pairB output = %x\n", reg_tmp);
     if ((reg_tmp & 0x80) != 0)
         reg_tmp = (~reg_tmp) + 1;
@@ -1005,7 +1005,7 @@ void check_rx_dc_offset_pair_c(struct gsw_mt753x *gsw, u8 phyaddr)
     tc_phy_write_dev_reg(gsw, phyaddr, 0x1f, 0x15, (phyaddr << 13) | 0x1144);
     udelay(40);
     reg_tmp = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1f, 0x1a);
-    reg_tmp = reg_tmp & 0xff;   
+    reg_tmp = reg_tmp & 0xff;
     pr_info("after pairC output = %x\n", reg_tmp);
     if ((reg_tmp & 0x80) != 0)
         reg_tmp = (~reg_tmp) + 1;
@@ -1025,7 +1025,7 @@ void check_rx_dc_offset_pair_d(struct gsw_mt753x *gsw, u8 phyaddr)
     tc_phy_write_dev_reg(gsw, phyaddr, 0x1f, 0x15, (phyaddr << 13) | 0x1145);
     udelay(40);
     reg_tmp = tc_phy_read_dev_reg(gsw,  phyaddr, 0x1f, 0x1a);
-    reg_tmp = reg_tmp & 0xff;   
+    reg_tmp = reg_tmp & 0xff;
     pr_info("after pairD output = %x\n", reg_tmp);
     if ((reg_tmp & 0x80) != 0)
         reg_tmp = (~reg_tmp) + 1;
