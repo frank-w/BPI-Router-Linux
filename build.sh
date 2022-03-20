@@ -24,25 +24,43 @@ clr_reset=$'\e[0m'
 DEFCONFIG=""
 DTS=""
 DTSI=""
+
 case $board in
 	"bpi-r2pro")
-		DEFCONFIG=arch/arm64/configs/rk3568_bpi-r2p_defconfig
+		ARCH=arm64
+		CONFIGPATH=arch/$ARCH/configs
+		DEFCONFIG=$CONFIGPATH/rk3568_bpi-r2p_defconfig
 		#DEFCONFIG=arch/arm64/configs/quartz64_defconfig
 		DTS=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dts
 		DTSI=arch/arm64/boot/dts/rockchip/rk3568.dtsi
 		;;
 	"bpi-r64")
-		DEFCONFIG=arch/arm64/configs/mt7622_bpi-r64_defconfig
+		ARCH=arm64
+		CONFIGPATH=arch/$ARCH/configs
+		DEFCONFIG=$CONFIGPATH/mt7622_bpi-r64_defconfig
 		DTS=arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dts
 		DTSI=arch/arm64/boot/dts/mediatek/mt7622.dtsi
 		;;
-    *) #bpir2
-		DEFCONFIG=arch/arm/configs/mt7623n_evb_fwu_defconfig
+	*) #bpir2
+		ARCH=arm
+		CONFIGPATH=arch/$ARCH/configs
+		DEFCONFIG=$CONFIGPATH/mt7623n_evb_fwu_defconfig
 		DTS=arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
 		DTSI=arch/arm/boot/dts/mt7623.dtsi
 		;;
 esac
 #echo "DTB:${DTS%.*}.dtb"
+
+#defconfig-override
+if [[ "$1" =~ ^(importconfig|defconfig)$ && -n "$2" ]];
+then
+	if [[ -e "${CONFIGPATH}/${2}_defconfig" ]];then
+		echo "using defconfig ${2}_defconfig"
+		DEFCONFIG="${CONFIGPATH}/${2}_defconfig"
+	else
+		echo "defconfig ${2}_defconfig not found!"
+	fi
+fi
 
 #Check Crosscompile
 crosscompile=0
