@@ -483,7 +483,7 @@ static int mt753x_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
-	gsw->irq = platform_get_irq(pdev, 0);
+	gsw->irq = platform_get_irq_optional(pdev, 0);
 	if (gsw->irq >= 0) {
 		ret = devm_request_irq(gsw->dev, gsw->irq, mt753x_irq_handler,
 				       0, dev_name(gsw->dev), gsw);
