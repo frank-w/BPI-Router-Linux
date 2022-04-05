@@ -17,6 +17,13 @@
 	};
 };
 
+/delete-node/ &vcc5v0_usb_host;
+/delete-node/ &vcc5v0_usb_host_en;
+
+&usb2phy0_host {
+	phy-supply = <&vcc5v0_usb_otg>;
+};
+
 &mtkgsw {
 	status = "disabled";
 };
