@@ -80,6 +80,11 @@
 	};
 };
 
+&i2c3 {
+	//RTC not working on v00
+	status = "disabled";
+};
+
 &mdio0 {
 	rgmii_phy0: ethernet-phy@0 {
 		compatible = "ethernet-phy-ieee802.3-c22";
