@@ -596,6 +596,11 @@
 	status = "okay";
 };
 
+&pwm3 {
+	/* IR */
+	status = "okay";
+};
+
 &pwm8 {
 	/* fan 5v - gnd - pwm */
 	status = "okay";
