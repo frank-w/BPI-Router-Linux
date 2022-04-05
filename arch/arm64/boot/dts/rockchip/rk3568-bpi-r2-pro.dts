@@ -511,6 +511,23 @@
 	};
 };
 
+&i2c3 {
+	/* RTC */
+	status = "okay";
+
+	//https://github.com/BPI-SINOVOIP/BPI-R2PRO-BSP/blob/main/kernel/arch/arm64/boot/dts/rockchip/rk3568-bpi-r2pro-port.dtsi#L356
+	hym8563: hym8563@51 {
+		status = "okay";
+		compatible = "haoyu,hym8563";
+		reg = <0x51>;
+		#clock-cells = <0>;
+		rtc-irq-gpio = <&gpio0 RK_PD3 IRQ_TYPE_EDGE_FALLING>;
+		clock-frequency = <32768>;
+		//clock-output-names = "xin32k";
+		// rtc_int is not connected
+	};
+};
+
 &i2c5 {
 	/* pin 3 (SDA) + 4 (SCL) of header con2 */
 	status = "disabled";
