@@ -236,8 +236,8 @@
 		interrupts = <GIC_SPI 169 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&cru CLK_USB3OTG0_REF>, <&cru CLK_USB3OTG0_SUSPEND>,
 			 <&cru ACLK_USB3OTG0>;
-		clock-names = "ref_clk", "suspend_clk",
-			      "bus_clk";
+		clock-names = "ref", "suspend",
+			      "bus_early";
 		dr_mode = "host";
 		phy_type = "utmi_wide";
 		power-domains = <&power RK3568_PD_PIPE>;
@@ -252,8 +252,8 @@
 		interrupts = <GIC_SPI 170 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&cru CLK_USB3OTG1_REF>, <&cru CLK_USB3OTG1_SUSPEND>,
 			 <&cru ACLK_USB3OTG1>;
-		clock-names = "ref_clk", "suspend_clk",
-			      "bus_clk";
+		clock-names = "ref", "suspend",
+			      "bus_early";
 		dr_mode = "host";
 		phys = <&usb2phy0_host>, <&combphy1 PHY_TYPE_USB3>;
 		phy-names = "usb2-phy", "usb3-phy";
