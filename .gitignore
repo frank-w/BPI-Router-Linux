@@ -162,3 +162,23 @@ x509.genkey
 
 # Documentation toolchain
 sphinx_*/
+
+#FWU
+*.diff
+*.patch
+*asn*.[hc]
+*.itb
+uImage*
+Image*
+*.log
+*.bak
+*.txt
+mod/
+output/
+kernel/config_data.h
+scripts/basic/bin2c
+scripts/kconfig/zconf.hash.c
+tools/include/linux/kmemcheck.h
+tools/objtool/arch/x86/insn/
+tools/objtool/orc_types.h
+tools/spi/include/
