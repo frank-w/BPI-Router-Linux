@@ -1626,10 +1626,7 @@ WLAN_STATUS kalRxIndicatePkts(IN P_GLUE_INFO_T prGlueInfo, IN PVOID apvPkts[], I
 		DBGLOG(BOW, TRACE, "\n");
 #endif
 
-		if (!in_interrupt())
-			netif_rx_ni(prSkb);	/* only in non-interrupt context */
-		else
-			netif_rx(prSkb);
+		netif_rx(prSkb);
 
 		wlanReturnPacket(prGlueInfo->prAdapter, NULL);
 	}
