@@ -523,7 +523,7 @@
 	/* RTC */
 	status = "okay";
 
-	clock-frequency = <400000>;
+	clock-frequency = <100000>;
 	//https://github.com/BPI-SINOVOIP/BPI-R2PRO-BSP/blob/main/kernel/arch/arm64/boot/dts/rockchip/rk3568-bpi-r2pro-port.dtsi#L356
 	hym8563: hym8563@51 {
 		status = "okay";
