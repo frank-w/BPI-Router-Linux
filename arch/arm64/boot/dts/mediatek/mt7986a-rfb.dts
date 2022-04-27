@@ -100,6 +100,15 @@
 	non-removable;
 	no-sd;
 	no-sdio;
+};
+
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie_pins>;
+	status = "okay";
+};
+
+&pcie_phy {
 	status = "okay";
 };
 
@@ -159,6 +168,13 @@
 			pins = "EMMC_RSTB";
 			drive-strength = <4>;
 			mediatek,pull-up-adv = <1>;	/* pull-up 10K */
+		};
+	};
+
+	pcie_pins: pcie-pins {
+		mux {
+			function = "pcie";
+			groups = "pcie_clk", "pcie_wake", "pcie_pereset";
 		};
 	};
 
