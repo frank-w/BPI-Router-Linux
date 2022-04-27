@@ -43,6 +43,10 @@
 	};
 };
 
+&crypto {
+	status = "okay";
+};
+
 &pio {
 	spi_flash_pins: spi-flash-pins {
 		mux {
