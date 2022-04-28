@@ -126,7 +126,7 @@
 		rockchip,reset-pin = <&gpio3 RK_PB7 GPIO_ACTIVE_HIGH>;
 		interrupt-parent = <&gpio3>;
 		interrupts = <16 IRQ_TYPE_LEVEL_HIGH>;
-		status = "okay";
+		status = "disabled";
 		#address-cells = <1>;
 		#size-cells = <0>;
 
