@@ -12,3 +12,10 @@ config PM_OPP
 	  representing individual voltage domains and provides SOC
 	  implementations a ready to use framework to manage OPPs.
 	  For more information, read <file:Documentation/power/opp.rst>
+
+menu "Operating Performance Points (OPP)"
+config DEBUG_OPP
+	bool "Debug Operating Performance Points"
+	help
+	  enable opp debugging
+endmenu
