@@ -139,5 +139,5 @@
 };
 
 &vop {
-	compatible = "rockchip,rk3566-vop";
+	compatible = "rockchip,rk3568-vop";
 };
