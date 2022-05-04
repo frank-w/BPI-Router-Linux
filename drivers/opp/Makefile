@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
-ccflags-$(CONFIG_DEBUG_DRIVER)	:= -DDEBUG
+ccflags-$(CONFIG_DEBUG_OPP)	:= -DDEBUG
 obj-y				+= core.o cpu.o
 obj-$(CONFIG_OF)		+= of.o
 obj-$(CONFIG_DEBUG_FS)		+= debugfs.o
