@@ -704,9 +704,8 @@
 		clocks = <&cru PCLK_HDMI_HOST>,
 			 <&cru CLK_HDMI_SFR>,
 			 <&cru CLK_HDMI_CEC>,
-			 <&pmucru CLK_HDMI_REF>,
-			 <&cru HCLK_VO>;
-		clock-names = "iahb", "isfr", "cec", "ref", "niu";
+			 <&pmucru CLK_HDMI_REF>;
+		clock-names = "iahb", "isfr", "cec", "ref";
 		pinctrl-names = "default";
 		pinctrl-0 = <&hdmitx_scl &hdmitx_sda &hdmitxm0_cec>;
 		power-domains = <&power RK3568_PD_VO>;
