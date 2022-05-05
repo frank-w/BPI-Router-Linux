@@ -315,6 +315,8 @@
 
 	gic: interrupt-controller@fd400000 {
 		compatible = "arm,gic-v3";
+		#address-cells = <2>;
+		#size-cells = <2>;
 		reg = <0x0 0xfd400000 0 0x10000>, /* GICD */
 		      <0x0 0xfd460000 0 0x80000>; /* GICR */
 		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
@@ -323,6 +325,13 @@
 		mbi-alias = <0x0 0xfd410000>;
 		mbi-ranges = <296 24>;
 		msi-controller;
+
+		its: interrupt-controller@fd440000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			#msi-cells = <1>;
+			reg = <0x0 0xfd440000 0x0 0x20000>;
+		};
 	};
 
 	usb_host0_ehci: usb@fd800000 {
