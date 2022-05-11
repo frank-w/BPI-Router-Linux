@@ -87,8 +87,7 @@ properties:
   "#interrupt-cells":
     const: 1
 
-  interrupt-controller:
-    type: boolean
+  interrupt-controller: true
 
   interrupts:
     maxItems: 1
@@ -161,12 +160,8 @@ allOf:
         - resets
         - reset-names
 
-  - if:
-      required:
-        - interrupt-controller
-    then:
-      required:
-        - interrupts
+  - dependencies:
+      interrupt-controller: [ interrupts ]
 
   - if:
       properties:
