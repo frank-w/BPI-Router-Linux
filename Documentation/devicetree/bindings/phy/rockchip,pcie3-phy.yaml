@@ -31,7 +31,7 @@ properties:
     description: which lanes (by position) should be mapped to which
       controller (value). 0 means lane unused, higher value means used.
       (controller-number +1 )
-    $ref: /schemas/types.yaml#/definitions/uint32-array
+    $ref: /schemas/types.yaml#/definitions/uint8-array
     minItems: 2
     maxItems: 16
     items:
