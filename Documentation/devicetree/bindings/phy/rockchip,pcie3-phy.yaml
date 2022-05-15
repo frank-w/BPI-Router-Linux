@@ -27,8 +27,6 @@ properties:
       - const: refclk_n
       - const: pclk
 
-    minItems: 3
-
   lane-map:
     description: which lanes (by position) should be mapped to which
       controller (value). 0 means lane unused, higher value means used.
