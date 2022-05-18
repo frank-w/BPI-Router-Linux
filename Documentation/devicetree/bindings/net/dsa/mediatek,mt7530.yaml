@@ -191,7 +191,7 @@ examples:
             io-supply = <&mt6323_vemc3v3_reg>;
             reset-gpios = <&pio 33 GPIO_ACTIVE_HIGH>;
 
-            ports {
+            ethernet-ports {
                 #address-cells = <1>;
                 #size-cells = <0>;
                 port@0 {
@@ -277,7 +277,7 @@ examples:
                 resets = <&rstctrl 2>;
                 reset-names = "mcm";
 
-                ports {
+                ethernet-ports {
                     #address-cells = <1>;
                     #size-cells = <0>;
 
@@ -362,7 +362,7 @@ examples:
                 resets = <&rstctrl 2>;
                 reset-names = "mcm";
 
-                ports {
+                ethernet-ports {
                     #address-cells = <1>;
                     #size-cells = <0>;
 
