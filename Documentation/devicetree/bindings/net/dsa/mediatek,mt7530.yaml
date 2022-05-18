@@ -66,12 +66,6 @@ properties:
       - mediatek,mt7531
       - mediatek,mt7621
 
-  "#address-cells":
-    const: 1
-
-  "#size-cells":
-    const: 0
-
   core-supply:
     description:
       Phandle to the regulator node necessary for the core power.
@@ -183,8 +177,6 @@ examples:
         #size-cells = <0>;
         switch@0 {
             compatible = "mediatek,mt7530";
-            #address-cells = <1>;
-            #size-cells = <0>;
             reg = <0>;
 
             core-supply = <&mt6323_vpa_reg>;
@@ -269,8 +261,6 @@ examples:
 
             mt7530: switch@1f {
                 compatible = "mediatek,mt7621";
-                #address-cells = <1>;
-                #size-cells = <0>;
                 reg = <0x1f>;
                 mediatek,mcm;
 
@@ -354,8 +344,6 @@ examples:
 
             switch@1f {
                 compatible = "mediatek,mt7621";
-                #address-cells = <1>;
-                #size-cells = <0>;
                 reg = <0x1f>;
                 mediatek,mcm;
 
