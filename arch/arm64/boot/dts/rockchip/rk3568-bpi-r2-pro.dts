@@ -468,7 +468,7 @@
 };
 
 &pcie30phy {
-	lane-map = /bits/ 8 <1 2>;
+	data-lanes = <1 2>;
 	status = "okay";
 };
 
