@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/phy/phy-bindings.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: PHY Device node Device Tree Bindings
+
+maintainers:
+  - Kishon Vijay Abraham I <kishon@ti.com>
+  - Vinod Koul <vkoul@kernel.org>
+
+description:
+  This document explains only the device tree data binding. For general
+  information about PHY subsystem refer to Documentation/driver-api/phy/phy.rst
+
+select: false
+
+properties:
+  $nodename:
+    pattern: "^([a-z0-9]+-)?phy(s)?$"
+
+  data-lanes:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 1
+    maxItems: 16
+    items:
+      # Assume up to 16 controllers/ports
+      minimum: 0
+      maximum: 16
+    description:
+      An array of physical data lane indexes. Position of an entry determines
+      the logical lane number, while the value of an entry indicates controller
+      or port mapped to this lane controllers should start by 1 as 0 indicates
+      not used or disabled lane.
+      e.g. for 2-lane bus we could have
+      "data-lanes = <1 2>;"
+      where hardware lane 0 is mapped to first controller/port and lane 1 is
+      second controller/port.
+
+  "#phy-cells":
+    description: Number of cells in a PHY specifier;  The meaning of all those
+      cells is defined by the binding for the phy node. The PHY provider can
+      use the values in cells to find the appropriate PHY.
+
+  phy-supply:
+    description:
+      Phandle to a regulator that provides power to the PHY. This
+      regulator will be managed during the PHY power on/off sequence.
+
+required:
+  - "#phy-cells"
+
+additionalProperties: true
