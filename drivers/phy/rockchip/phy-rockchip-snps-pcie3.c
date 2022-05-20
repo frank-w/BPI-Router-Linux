@@ -54,7 +54,7 @@ struct rockchip_p3phy_priv {
 	struct clk_bulk_data *clks;
 	int num_clks;
 	int num_lanes;
-	u8 lanes[4];
+	u32 lanes[4];
 };
 
 struct rockchip_p3phy_ops {
@@ -260,7 +260,7 @@ static int rockchip_p3phy_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->pipe_grf))
 		dev_info(dev, "failed to find rockchip,pipe_grf regmap\n");
 
-	priv->num_lanes = of_property_read_variable_u8_array(dev->of_node, "lane-map",
+	priv->num_lanes = of_property_read_variable_u32_array(dev->of_node, "data-lanes",
 							     priv->lanes, 2,
 							     ARRAY_SIZE(priv->lanes));
 
