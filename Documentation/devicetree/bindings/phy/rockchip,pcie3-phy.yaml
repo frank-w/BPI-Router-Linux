@@ -68,7 +68,7 @@ examples:
     #include <dt-bindings/clock/rk3568-cru.h>
     pcie30phy: phy@fe8c0000 {
       compatible = "rockchip,rk3568-pcie3-phy";
-      reg = <0x0 0xfe8c0000 0x0 0x20000>;
+      reg = <0xfe8c0000 0x20000>;
       #phy-cells = <0>;
       clocks = <&pmucru CLK_PCIE30PHY_REF_M>,
                <&pmucru CLK_PCIE30PHY_REF_N>,
