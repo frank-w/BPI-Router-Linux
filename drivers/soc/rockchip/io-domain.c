@@ -611,7 +611,7 @@ static int rockchip_iodomain_probe(struct platform_device *pdev)
 
 		/* set initial correct value */
 		uV = regulator_get_voltage(reg);
-
+dev_err(&pdev->dev, "after get_voltage for %s: uV:%d\n",supply_name,uV);
 		/* must be a regulator we can get the voltage of */
 		if (uV < 0) {
 			dev_err(iod->dev, "Can't determine voltage: %s\n",

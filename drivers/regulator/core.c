@@ -4313,20 +4313,28 @@ int regulator_get_voltage_rdev(struct regulator_dev *rdev)
 
 	if (rdev->desc->ops->get_voltage_sel) {
 		sel = rdev->desc->ops->get_voltage_sel(rdev);
+		rdev_info(rdev, "%s:%d get_voltage_sel:%d\n",__FUNCTION__,__LINE__,sel);
 		if (sel < 0)
 			return sel;
 		ret = rdev->desc->ops->list_voltage(rdev, sel);
+		rdev_info(rdev, "%s:%d get_voltage_sel-list-voltage ret:%d\n",__FUNCTION__,__LINE__,ret);
 	} else if (rdev->desc->ops->get_voltage) {
 		ret = rdev->desc->ops->get_voltage(rdev);
+		rdev_info(rdev, "%s:%d get_voltage ret:%d\n",__FUNCTION__,__LINE__,ret);
 	} else if (rdev->desc->ops->list_voltage) {
 		ret = rdev->desc->ops->list_voltage(rdev, 0);
+		rdev_info(rdev, "%s:%d list_voltage ret:%d\n",__FUNCTION__,__LINE__,ret);
 	} else if (rdev->desc->fixed_uV && (rdev->desc->n_voltages == 1)) {
 		ret = rdev->desc->fixed_uV;
+		rdev_info(rdev, "%s:%d fixed_uV ret:%d\n",__FUNCTION__,__LINE__,ret);
 	} else if (rdev->supply) {
 		ret = regulator_get_voltage_rdev(rdev->supply->rdev);
+		rdev_info(rdev, "%s:%d rdev-supply ret:%d\n",__FUNCTION__,__LINE__,ret);
 	} else if (rdev->supply_name) {
+	rdev_info(rdev, "%s:%d EPROBE_DEFER\n",__FUNCTION__,__LINE__);
 		return -EPROBE_DEFER;
 	} else {
+	rdev_info(rdev, "%s:%d EINVAL\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 
