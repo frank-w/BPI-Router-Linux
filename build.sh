@@ -838,25 +838,34 @@ function prepare_SD {
 	cd $(dirname $0)
 	mkdir -p ../SD >/dev/null 2>/dev/null
 
+	bindir="";
+	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
+
 	echo "cleanup..."
 	for toDel in "$SD/BPI-BOOT/" "$SD/BPI-ROOT/"; do
 		rm -r ${toDel} 2>/dev/null
 	done
 
-	for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
-		mkdir -p ${createDir} >/dev/null 2>/dev/null
-	done
-
-	echo "copy..."
+	if [[ "$board" != "bpi-r2pro" ]]; then
+		for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
+			mkdir -p ${createDir} >/dev/null 2>/dev/null
+		done
+		echo "copy..."
+		if [[ -e ./uImage ]];then
+			cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
+		fi
+		if [[ -e ./uImage_nodt ]];then
+			cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
+			cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
+		fi
+	else
+		#R2Pro
+		mkdir -p "$SD/BPI-BOOT/extlinux" >/dev/null 2>/dev/null
+		cp ${bindir}arch/arm64/boot/Image.gz $SD/BPI-BOOT/extlinux/
+		cp ${DTS%.*}.dtb $SD/BPI-BOOT/extlinux/
+	fi
 	export INSTALL_MOD_PATH=$SD/BPI-ROOT/;
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-	if [[ -e ./uImage ]];then
-		cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
-	fi
-	if [[ -e ./uImage_nodt ]];then
-    		cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
-		cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
-	fi
 	make modules_install
 
 	#Add CryptoDev Module if exists or Blacklist
