@@ -7,9 +7,9 @@
 On a x86/x64-host you need cross compile tools for the armhf architecture (bison and flex-package are needed for kernels >=4.16):
 ```sh
 #for r2
-sudo apt install gcc-arm-linux-gnueabihf libc6-armhf-cross u-boot-tools bc make gcc libc6-dev libncurses5-dev libssl-dev bison flex
+sudo apt install gcc-arm-linux-gnueabihf libc6-armhf-cross u-boot-tools bc make ccache gcc libc6-dev libncurses5-dev libssl-dev bison flex
 #for r64
-sudo apt install gcc-aarch64-linux-gnu u-boot-tools bc make gcc libc6-dev libncurses5-dev libssl-dev bison flex
+sudo apt install gcc-aarch64-linux-gnu u-boot-tools bc make gcc ccache libc6-dev libncurses5-dev libssl-dev bison flex
 ```
 If you build it directly on the BananaPi-R2/R64 (not recommended) you do not need the crosscompile-packages gcc-arm-linux-gnueabihf/gcc-aarch64-linux-gnu and libc6-armhf-cross
 
