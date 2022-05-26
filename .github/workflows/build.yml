@@ -9,7 +9,9 @@ on:
     branches:
     - '*-main'
     - '*-ci'
-
+    paths-ignore:
+    - README*
+    - .github/workflows/build.yml
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
