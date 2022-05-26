@@ -73,30 +73,30 @@ Kernel upstream + BPI-R2 / R64
 
 Kernel features by version
 
-| Feature            | 4.4 | 4.9 | 4.14 | 4.19 | 5.4 | 5.10 |
-|--------------------| --- | --- | ---  | ---  | --- | ---- |
-| PCIe               |  Y  |  Y  |  Y   |  Y   |  Y  |  Y   |
-| SATA               |  Y  |  Y  |  Y   |  Y   |  Y  |  Y   |
-| 2 GMAC             |  Y  |  Y  |  Y   |  Y   |  N  |  N   |
-| DSA                |  N  |  Y  |  Y   |  Y   |  Y  |  Y   |
-| USB                |  Y  |  Y  |  Y   |  Y   |  Y  |  Y   |
-| VLAN (dsa)         |     |     |  Y   |  N   |  Y  |  Y   |
-| VLAN-aware Bridge  |     |     |  N   |  Y   |  Y  |  Y   |
-| HW NAT (R2)        |     |  Y  |  Y   |      |     |  N   |
-| HW QOS (R2)        |     |  Y  |  ?   |      |     |  N   |
-| Crypto             |  Y  |  Y  |  Y   |      |  Y  |      |
-| WIFI (internal)    |     |  Y  |  Y   |  Y   |  Y  |  Y   |
-| BT                 |  N  |  N  |  Y   |  Y   |  Y  |  Y   |
-| VIDEO (R2 only)    |  Y  |  N  |  Y   |  Y   |  Y  |  Y   |
-| ACPI (R2)          |  ?  |  N  |  Y   |  Y   |  Y  |      |
-| IR (R2)            |  ?  |  N  |  N   |  N   |  Y  |  Y   |
-| WIFI (R64)         |  N  |  N  |  N   |  N   |  Y  |  Y   |
-| BT (R64)           |  N  |  N  |  N   |  N   |  Y  |  Y   |
-| Other options      |--|--|--|--|--|--|
-| OpenVPN            |  ?  |  Y  |  Y   |  Y   |  Y  |  Y   |
-| iptables (R2)      |  ?  |  Y  |  Y   |  Y   |  Y  |  Y   |
-| nftables (R2)      |  ?  |  N  |  N   |  Y   |  Y  |  Y   |
-| LXC / Docker (R2)  |  ?  |  ?  |  Y   |  Y   |  Y  |  Y   |
+| Feature            | 4.4 | 4.9 | 4.14 | 4.19 | 5.4 | 5.10 | 5.15 |
+|--------------------| --- | --- | ---  | ---  | --- | ---- | ---- |
+| PCIe               |  Y  |  Y  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| SATA               |  Y  |  Y  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| 2 GMAC             |  Y  |  Y  |  Y   |  Y   |  N  |  N   |  N   |
+| DSA                |  N  |  Y  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| USB                |  Y  |  Y  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| VLAN (dsa)         |     |     |  Y   |  N   |  Y  |  Y   |  Y   |
+| VLAN-aware Bridge  |     |     |  N   |  Y   |  Y  |  Y   |  Y   |
+| HW NAT (R2)        |     |  Y  |  Y   |      |     |  N   |  Y   |
+| HW QOS (R2)        |     |  Y  |  ?   |      |     |  N   |  N   |
+| Crypto             |  Y  |  Y  |  Y   |      |  Y  |      |      |
+| WIFI (internal)    |     |  Y  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| BT                 |  N  |  N  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| VIDEO (R2 only)    |  Y  |  N  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| ACPI (R2)          |  ?  |  N  |  Y   |  Y   |  Y  |      |      |
+| IR (R2)            |  ?  |  N  |  N   |  N   |  Y  |  Y   |  ?   |
+| WIFI (R64)         |  N  |  N  |  N   |  N   |  Y  |  Y   |  Y   |
+| BT (R64)           |  N  |  N  |  N   |  N   |  Y  |  Y   |  Y   |
+| Other options      |--|--|--|--|--|--|--|
+| OpenVPN            |  ?  |  Y  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| iptables (R2)      |  ?  |  Y  |  Y   |  Y   |  Y  |  Y   |  Y   |
+| nftables (R2)      |  ?  |  N  |  N   |  Y   |  Y  |  Y   |  Y   |
+| LXC / Docker (R2)  |  ?  |  ?  |  Y   |  Y   |  Y  |  Y   |  Y   |
 
 Symbols:
 
