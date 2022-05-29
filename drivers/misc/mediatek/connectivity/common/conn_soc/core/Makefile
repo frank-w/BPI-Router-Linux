@@ -6,7 +6,8 @@ ccflags-y += \
 	-I$(srctree)/$(src)/../core/include \
 	-I$(srctree)/$(src)/../include \
 	-I$(srctree)/$(src)/../../common_detect \
-	-I$(srctree)/drivers/misc/mediatek/btif/common/inc
+	-I$(srctree)/drivers/misc/mediatek/btif/common/inc \
+	-Wno-array-bounds
 
 obj-y += wmt_core.o \
          wmt_ctrl.o \
