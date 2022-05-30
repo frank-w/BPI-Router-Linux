@@ -181,3 +181,4 @@ tools/include/linux/kmemcheck.h
 tools/objtool/arch/x86/insn/
 tools/objtool/orc_types.h
 tools/spi/include/
+firmware/
