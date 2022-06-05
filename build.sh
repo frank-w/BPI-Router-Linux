@@ -58,6 +58,7 @@ case $board in
 		;;
 esac
 #echo "DTB:${DTS%.*}.dtb"
+export ARCH=$ARCH;
 
 #defconfig-override
 if [[ "$1" =~ ^(importconfig|defconfig)$ && -n "$2" ]];
@@ -75,17 +76,13 @@ crosscompile=0
 hostarch=$(uname -m) #r64:aarch64 r2: armv7l
 
 if [[ ! $hostarch =~ aarch64|armv ]];then
-	if [[ "$board" == "bpi-r64" || "$board" == "bpi-r2pro" ]];then
+	if [[ "$ARCH" == "arm64" ]]; then
 		if [[ -z "$(which aarch64-linux-gnu-gcc)" ]];then echo "please install gcc-aarch64-linux-gnu";exit 1;fi
-		export ARCH=arm64;export CROSS_COMPILE='ccache aarch64-linux-gnu-'
-	else
+		export CROSS_COMPILE='ccache aarch64-linux-gnu-'
+	elif [[ "$ARCH" == "arm" ]]; then
 		if [[ -z "$(which arm-linux-gnueabihf-gcc)" ]];then echo "please install gcc-arm-linux-gnueabihf";exit 1;fi
-		export ARCH=arm;export CROSS_COMPILE='ccache arm-linux-gnueabihf-'
+		export CROSS_COMPILE='ccache arm-linux-gnueabihf-'
 	fi
-#	CCVER=$(arm-linux-gnueabihf-gcc --version |grep arm| sed -e 's/^.* \([0-9]\.[0-9-]\).*$/\1/')
-#	if [[ $CCVER =~ ^7 ]]; then
-#		echo "arm-linux-gnueabihf-gcc version 7 currently not supported";exit 1;
-#	fi
 
 	crosscompile=1
 fi;
