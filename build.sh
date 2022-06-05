@@ -49,6 +49,13 @@ case $board in
 		fi
 		DTSI=arch/arm64/boot/dts/mediatek/mt7622.dtsi
 		;;
+	"bpi-r3")
+		ARCH=arm64
+		CONFIGPATH=arch/$ARCH/configs
+		DEFCONFIG=$CONFIGPATH/mt7986a_bpi-r3_defconfig
+		DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dts
+		DTSI=arch/arm64/boot/dts/mediatek/mt7986a.dtsi
+		;;
 	*) #bpir2
 		ARCH=arm
 		CONFIGPATH=arch/$ARCH/configs
@@ -774,6 +781,11 @@ function build {
 					LADDR=40080000
 					ENTRY=40080000
 				;;
+				"bpi-r3")
+					IMAGE=arch/arm64/boot/Image
+					LADDR=40080000
+					ENTRY=40080000
+				;;
 				"bpi-r2")
 					IMAGE=arch/arm/boot/zImage
 					LADDR=80008000
@@ -797,7 +809,7 @@ function build {
 				mkimage -f ${board}.its.tmp ${board}.itb
 				cp ${board}.itb ${board}-$kernver$gitbranch.itb
 				rm ${board}.its.tmp
-			elif [[ "$board" == "bpi-r64" ]];then
+			elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
 				mkimage -f ${board}.its.tmp ${board}.itb
