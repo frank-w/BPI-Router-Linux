@@ -7,11 +7,11 @@
 	images {
 		kernel-1 {
 			description = "Linux Kernel %version%";
-			data = /incbin/("./arch/arm64/boot/Image");
+			data = /incbin/("./arch/arm64/boot/Image.gz");
 			type = "kernel";
 			arch = "arm64";
 			os = "linux";
-			compression = "none";
+			compression = "gzip";
 			load = <0x40080000>;
 			entry = <0x40080000>;
 			hash-1 {
