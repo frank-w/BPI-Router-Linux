@@ -786,7 +786,7 @@ function build {
 
 			if [[ "$builddir" != "" ]];
 			then
-				cp {$builddir/,}$IMAGE
+				cp $builddir/${IMAGE%.*}* ${IMAGE%/*}
 				cp {$builddir/,}$DTBFILE
 				cp $builddir/{$DTBFILE,$board.dtb}
 			fi
