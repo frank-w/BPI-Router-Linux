@@ -135,7 +135,7 @@
 			"Headphones", "HPOL",
 			"Headphones", "HPOR",
 			"Speaker", "SPKO";
-		simple-audio-card,hp-det-gpio = <&gpio3 RK_PC2 GPIO_ACTIVE_LOW>; //HP_DET_L_GPIO3_C2
+		//simple-audio-card,hp-det-gpio = <&gpio3 RK_PC2 GPIO_ACTIVE_LOW>; //HP_DET_L_GPIO3_C2
 
 		simple-audio-card,cpu {
 			sound-dai = <&i2s1_8ch>;
