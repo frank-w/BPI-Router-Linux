@@ -14,6 +14,17 @@ properties:
 
   "#phy-cells": true
 
+  data-lanes:
+    description: which lanes (by position) should be mapped to which
+      controller (value). 0 means lane disabled, higher value means used
+      (controller-number +1 ).
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 2
+    maxItems: 16
+    items:
+      minimum: 0
+      maximum: 16
+
   phy-supply: true
 
 required:
