@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2019 Arm Ltd.
+$id: "http://devicetree.org/schemas/phy/phy-provider.yaml#"
+$schema: "http://devicetree.org/meta-schemas/base.yaml#"
+
+title: Common PHY provider schema
+
+maintainers:
+  - Rob Herring <robh@kernel.org>
+
+properties:
+  $nodename:
+    pattern: "^(|usb-|usb2-|usb3-|pci-|pcie-|sata-)phy(@[0-9a-f,]+)*$"
+
+  "#phy-cells": true
+
+  phy-supply: true
+
+required:
+  - "#phy-cells"
+
+additionalProperties: true
+
+...
