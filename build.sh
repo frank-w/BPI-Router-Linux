@@ -188,11 +188,15 @@ function getuenvpath {
 		uenv_base=/boot/
 	fi
 
-	uenv=${uenv_base}/bananapi/$board/linux/uEnv.txt
-	if [[ ! -e $uenv ]];then
-		uenv=${uenv_base}/uEnv.txt
+	if [[ "$board" == "bpi-r2pro" ]];then
+		uenv=${uenv_base}/extlinux/extlinux.conf
+	else
+		uenv=${uenv_base}/bananapi/$board/linux/uEnv.txt
 		if [[ ! -e $uenv ]];then
-			uenv="";
+			uenv=${uenv_base}/uEnv.txt
+			if [[ ! -e $uenv ]];then
+				uenv="";
+			fi
 		fi
 	fi
 	echo "$uenv";
@@ -393,12 +397,13 @@ function install
 	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 
 	if [[ "$board" == "bpi-r2pro" ]];then
-		echo "install for r2pro not yet supported"
-		exit;
+		$0 mount
+		imagename="Image_${kernver}${gitbranch}"
+	else
+		imagename="uImage_${kernver}${gitbranch}"
 	fi
 
-	imagename="uImage_${kernver}${gitbranch}"
-	read -e -i $imagename -p "uImage-filename: " input
+	read -e -i $imagename -p "Image-filename: " input
 	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
@@ -419,21 +424,44 @@ function install
 		fi
 	else
 		itbinput=n
+		imginput=n
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
-			targetdir=/media/$USER/BPI-BOOT/bananapi/$board/linux
+
+			if [[ "$board" == "bpi-r2pro" ]];then
+				targetdir=/media/$USER/BPI-BOOT/extlinux
+			else
+				targetdir=/media/$USER/BPI-BOOT/bananapi/$board/linux
+			fi
 			mkdir -p $targetdir
 			kernelfile=$targetdir/$imagename
 
 			dtinput=n
 			ndtinput=y
-			if [[ "$board" == "bpi-r64" ]];then
+			if [[ "$board" == "bpi-r2pro" ]];then
+				read -e -i "y" -p "install img kernel (img.gz) [yn]? " imginput
+				if [[ "$imginput" == "y" ]];then
+					imgname=${imagename//uImage_/}.gz
+					imgfile=$targetdir/$imgname
+					if [[ -e ${imgfile} ]];then
+						echo "backup of kernel: $imgfile.bak"
+						cp ${imgfile} ${imgfile}.bak
+					fi
+					echo "copy new kernel"
+					set -x
+					cp ${bindir}arch/arm64/boot/Image.gz $imgfile
+					cp ${bindir}${DTBFILE} ${targetdir}/${imagename}.dtb
+					set +x
+					if [[ $? -ne 0 ]];then exit 1;fi
+					ndtinput=n
+				fi
+			elif [[ "$board" == "bpi-r64" ]];then
 				read -e -i "y" -p "install FIT kernel (itb) [yn]? " itbinput
 				if [[ "$itbinput" == "y" ]];then
 					itbname=${imagename//uImage_/}.itb
 					itbfile=$targetdir/$itbname
 					if [[ -e $itbfile ]];then
-						echo "backup of kernel: $kernelfile.bak"
+						echo "backup of kernel: $itbfile.bak"
 						cp $itbfile $itbfile.bak
 					fi
 					echo "copy new kernel"
@@ -482,7 +510,7 @@ function install
 				cp ${bindir}${DTBFILE} $dtbfile
 			fi
 
-			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]] || [[ "$itbinput" == "y" ]];then
+			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]] || [[ "$itbinput" == "y" ]]  || [[ "$imginput" == "y" ]];then
 				echo "copy modules (root needed because of ext-fs permission)"
 				export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
 				echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
@@ -1004,7 +1032,9 @@ if [ -n "$kernver" ]; then
 
 		"umount")
 			echo "umount SD Media"
+			mount | grep BPI-ROOT
 			dev=$(mount | grep BPI-ROOT | sed -e 's/[0-9] .*$/?/')
+			echo "$dev"
 			if [[ ! -z "$dev" ]];then
 				umount $dev
 			fi
