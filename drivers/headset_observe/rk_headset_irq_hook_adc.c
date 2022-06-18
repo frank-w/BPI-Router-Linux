@@ -164,11 +164,12 @@ static irqreturn_t headset_interrupt(int irq, void *dev_id)
 		goto out;
 	}
 
-	pr_info("(headset in is %s)headset status is %s\n",
+	pr_info("(headset in is %s) headset status is %s\n",
 		pdata->headset_insert_type ? "high level" : "low level",
-		headset_info->headset_status ? "in" : "out");
+		headset_info->headset_status ? "in" : "out"); //input should be updated here based on headset_info->headset_status
 
 	if (headset_info->headset_status == HEADSET_IN) {
+	printk("DEBUG %s:%d\n",__FUNCTION__,__LINE__);
 		if (pdata->chan != 0) {
 			/* detect Hook key */
 			schedule_delayed_work(
@@ -189,11 +190,13 @@ static irqreturn_t headset_interrupt(int irq, void *dev_id)
 			irq_set_irq_type(headset_info->irq[HEADSET],
 					 IRQF_TRIGGER_RISING);
 	} else if (headset_info->headset_status == HEADSET_OUT) {
+	printk("DEBUG %s:%d isMic:%d hook_status:%d (==DOWN=%d?)\n",__FUNCTION__,__LINE__,headset_info->isMic,headset_info->hook_status,HOOK_DOWN);
 		headset_info->cur_headset_status = HEADSET_OUT;
 		cancel_delayed_work(&headset_info->hook_work);
 		if (headset_info->isMic) {
-			if (headset_info->hook_status == HOOK_DOWN) {
+			if (headset_info->hook_status == HOOK_DOWN) { //is always up!!
 				headset_info->hook_status = HOOK_UP;
+				printk("DEBUG %s:%d headset:update input device %d %d\n",__FUNCTION__,__LINE__,HOOK_KEY_CODE,headset_info->hook_status);
 				input_report_key(headset_info->input_dev, HOOK_KEY_CODE, headset_info->hook_status);
 				input_sync(headset_info->input_dev);
 			}
@@ -353,10 +356,11 @@ static void hook_work_callback(struct work_struct *work)
 	DBG("HOOK status is %s , adc value = %d hook_time = %d\n",
 	    headset->hook_status ? "down" : "up", val, headset->hook_time);
 	if (old_status == headset->hook_status) {
-		DBG("Hook adc read old_status == headset->hook_status=%d hook_time = %d\n",
+		DBG("Hook adc read old_status == headset->hook_status=%d hook_time = %d (no input update!)\n",
 		    headset->hook_status, headset->hook_time);
 		goto status_error;
 	}
+	printk("DEBUG %s:%d\n",__FUNCTION__,__LINE__);
 	if (headset->headset_status == HEADSET_OUT ||
 	    headset->heatset_irq_working == BUSY ||
 	    headset->heatset_irq_working == WAIT ||
@@ -366,6 +370,7 @@ static void hook_work_callback(struct work_struct *work)
 		printk("headset is out, HOOK status must discard\n");
 		goto out;
 	} else {
+		printk("DEBUG %s:%d headset:update input device %d %d\n",__FUNCTION__,__LINE__,HOOK_KEY_CODE,headset->hook_status);
 		input_report_key(headset->input_dev,
 				 HOOK_KEY_CODE, headset->hook_status);
 		input_sync(headset->input_dev);
