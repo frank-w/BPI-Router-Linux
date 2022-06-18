@@ -554,10 +554,11 @@ function install
 
 			uenv=$(getuenvpath)
 			echo $uenv
+			openuenv=n
 			if [[ -n "$uenv" ]];then
+				if [[ "$board" != "bpi-r2pro" ]];then
 				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
 				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
-				openuenv=n
 				if [[ "$itbinput" == "y" ]];then
 					curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
 				else
@@ -573,9 +574,10 @@ function install
 					echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
 					openuenv=y
 				fi
+				fi
 			fi
 
-			read -e -i "$openuenv" -p "open uenv-file [yn]? " input
+			read -e -i "$openuenv" -p "open boot config file (uEnv/extlinux.conf) [yn]? " input
 			if [[ "$input" == "y" ]];then
 				$0 uenv
 			fi
@@ -1032,8 +1034,7 @@ if [ -n "$kernver" ]; then
 
 		"umount")
 			echo "umount SD Media"
-			mount | grep BPI-ROOT
-			dev=$(mount | grep BPI-ROOT | sed -e 's/[0-9] .*$/?/')
+			dev=$(mount | grep BPI-ROOT | head -1 | sed -e 's/[0-9] .*$/?/' | sort -u)
 			echo "$dev"
 			if [[ ! -z "$dev" ]];then
 				umount $dev
