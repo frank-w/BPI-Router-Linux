@@ -40,7 +40,7 @@
 #include "rk_headset.h"
 
 /* Debug */
-#if 0
+#if 1
 #define DBG(x...) printk(x)
 #else
 #define DBG(x...) do { } while (0)
@@ -326,6 +326,8 @@ static void hook_work_callback(struct work_struct *work)
 	struct rk_headset_pdata *pdata = headset->pdata;
 	static unsigned int old_status = HOOK_UP;
 
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
+
 	ret = iio_read_channel_raw(headset->chan, &val);
 	if (ret < 0) {
 		pr_err("read hook adc channel() error: %d\n", ret);
@@ -394,12 +396,14 @@ int rk_headset_adc_probe(struct platform_device *pdev,
 	int ret;
 	struct headset_priv *headset;
 
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 	headset = devm_kzalloc(&pdev->dev, sizeof(*headset), GFP_KERNEL);
 	if (!headset) {
 		dev_err(&pdev->dev, "failed to allocate driver data\n");
 		ret = -ENOMEM;
 		goto failed;
 	}
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 	headset_info = headset;
 	headset->pdata = pdata;
 	headset->headset_status = HEADSET_OUT;
@@ -422,12 +426,14 @@ int rk_headset_adc_probe(struct platform_device *pdev,
 	headset->isMic = 0;
 	//------------------------------------------------------------------
 	// Create and register the input driver
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 	headset->input_dev = devm_input_allocate_device(&pdev->dev);
 	if (!headset->input_dev) {
 		dev_err(&pdev->dev, "failed to allocate input device\n");
 		ret = -ENOMEM;
 		goto failed;
 	}
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 	headset->input_dev->name = pdev->name;
 	headset->input_dev->open = rk_hskey_open;
 	headset->input_dev->close = rk_hskey_close;
@@ -438,14 +444,17 @@ int rk_headset_adc_probe(struct platform_device *pdev,
 	headset->input_dev->id.version = 0x0100;
 	// Register the input device
 	ret = input_register_device(headset->input_dev);
+	printk("DEBUG: %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register input device\n");
 		goto failed;
 	}
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 	input_set_capability(headset->input_dev, EV_KEY, HOOK_KEY_CODE);
 	if (pdata->headset_gpio) {
 		unsigned long irq_type;
 
+		printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 		headset->irq[HEADSET] = gpio_to_irq(pdata->headset_gpio);
 		if (pdata->headset_insert_type == HEADSET_IN_HIGH)
 			irq_type = IRQF_TRIGGER_HIGH;
@@ -466,10 +475,12 @@ int rk_headset_adc_probe(struct platform_device *pdev,
 		ret = -EEXIST;
 		goto failed;
 	}
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 	if (pdata->chan) {
 		headset->chan = pdata->chan;
 		INIT_DELAYED_WORK(&headset->hook_work, hook_work_callback);
 	}
+	printk("DEBUG: %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 failed:
 	dev_err(&pdev->dev, "failed headset adc probe ret=%d\n", ret);
