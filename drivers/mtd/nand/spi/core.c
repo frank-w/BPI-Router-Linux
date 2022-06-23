@@ -977,6 +977,56 @@ static int spinand_manufacturer_match(struct spinand_device *spinand,
 	return -EOPNOTSUPP;
 }
 
+int spinand_cal_read(void *priv, u32 *addr, int addrlen, u8 *buf, int readlen) {
+	struct spinand_device *spinand = (struct spinand_device *)priv;
+	struct device *dev = &spinand->spimem->spi->dev;
+	struct spi_mem_op op = SPINAND_PAGE_READ_FROM_CACHE_OP(false, 0, 1, buf, readlen);
+	struct nand_pos pos;
+	struct nand_page_io_req req;
+	u8 status;
+	int ret;
+
+	if(addrlen != sizeof(struct nand_addr)/sizeof(unsigned int)) {
+		dev_err(dev, "Must provide correct addr(length) for spinand calibration\n");
+		return -EINVAL;
+	}
+
+	ret = spinand_reset_op(spinand);
+	if (ret)
+		return ret;
+
+	/* We should store our golden data in first target because
+	 * we can't switch target at this moment.
+	 */
+	pos = (struct nand_pos){
+		.target = 0,
+		.lun = *addr,
+		.plane = *(addr+1),
+		.eraseblock = *(addr+2),
+		.page = *(addr+3),
+	};
+
+	req = (struct nand_page_io_req){
+		.pos = pos,
+		.dataoffs = *(addr+4),
+		.datalen = readlen,
+		.databuf.in = buf,
+		.mode = MTD_OPS_AUTO_OOB,
+	};
+
+	ret = spinand_load_page_op(spinand, &req);
+	if (ret)
+		return ret;
+
+	ret = spinand_wait(spinand, &status);
+	if (ret < 0)
+		return ret;
+
+	ret = spi_mem_exec_op(spinand->spimem, &op);
+
+	return 0;
+}
+
 static int spinand_id_detect(struct spinand_device *spinand)
 {
 	u8 *id = spinand->id.data;
@@ -1226,6 +1276,10 @@ static int spinand_init(struct spinand_device *spinand)
 	spinand->scratchbuf = kzalloc(SPINAND_MAX_ID_LEN, GFP_KERNEL);
 	if (!spinand->scratchbuf)
 		return -ENOMEM;
+
+	ret = spi_mem_do_calibration(spinand->spimem, spinand_cal_read, spinand);
+	if (ret)
+		dev_err(dev, "Failed to calibrate SPI-NAND (err = %d)\n", ret);
 
 	ret = spinand_detect(spinand);
 	if (ret)
