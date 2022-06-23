@@ -15,7 +15,6 @@
 #include <linux/gpio/consumer.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
-#include <linux/platform_data/spi-mt65xx.h>
 #include <linux/pm_runtime.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spi-mem.h>
@@ -172,6 +171,8 @@ struct mtk_spi {
 	struct device *dev;
 	dma_addr_t tx_dma;
 	dma_addr_t rx_dma;
+	u32 sample_sel;
+	u32 get_tick_dly;
 };
 
 static const struct mtk_spi_compatible mtk_common_compat;
@@ -215,15 +216,6 @@ static const struct mtk_spi_compatible mt6893_compat = {
 	.enhance_timing = true,
 	.dma_ext = true,
 	.no_need_unprepare = true,
-};
-
-/*
- * A piece of default chip info unless the platform
- * supplies it.
- */
-static const struct mtk_chip_config mtk_default_chip_info = {
-	.sample_sel = 0,
-	.tick_delay = 0,
 };
 
 static const struct of_device_id mtk_spi_of_match[] = {
@@ -403,7 +395,7 @@ static int mtk_spi_hw_init(struct spi_controller *host,
 		else
 			reg_val &= ~SPI_CMD_CS_POL;
 
-		if (chip_config->sample_sel)
+		if (mdata->sample_sel)
 			reg_val |= SPI_CMD_SAMPLE_SEL;
 		else
 			reg_val &= ~SPI_CMD_SAMPLE_SEL;
@@ -430,20 +422,20 @@ static int mtk_spi_hw_init(struct spi_controller *host,
 		if (mdata->dev_comp->ipm_design) {
 			reg_val = readl(mdata->base + SPI_CMD_REG);
 			reg_val &= ~SPI_CMD_IPM_GET_TICKDLY_MASK;
-			reg_val |= ((chip_config->tick_delay & 0x7)
+			reg_val |= ((mdata->get_tick_dly & 0x7)
 				    << SPI_CMD_IPM_GET_TICKDLY_OFFSET);
 			writel(reg_val, mdata->base + SPI_CMD_REG);
 		} else {
 			reg_val = readl(mdata->base + SPI_CFG1_REG);
 			reg_val &= ~SPI_CFG1_GET_TICK_DLY_MASK;
-			reg_val |= ((chip_config->tick_delay & 0x7)
+			reg_val |= ((mdata->get_tick_dly & 0x7)
 				    << SPI_CFG1_GET_TICK_DLY_OFFSET);
 			writel(reg_val, mdata->base + SPI_CFG1_REG);
 		}
 	} else {
 		reg_val = readl(mdata->base + SPI_CFG1_REG);
 		reg_val &= ~SPI_CFG1_GET_TICK_DLY_MASK_V1;
-		reg_val |= ((chip_config->tick_delay & 0x3)
+		reg_val |= ((mdata->get_tick_dly & 0x3)
 			    << SPI_CFG1_GET_TICK_DLY_OFFSET_V1);
 		writel(reg_val, mdata->base + SPI_CFG1_REG);
 	}
@@ -732,9 +724,6 @@ static bool mtk_spi_can_dma(struct spi_controller *host,
 static int mtk_spi_setup(struct spi_device *spi)
 {
 	struct mtk_spi *mdata = spi_controller_get_devdata(spi->controller);
-
-	if (!spi->controller_data)
-		spi->controller_data = (void *)&mtk_default_chip_info;
 
 	if (mdata->dev_comp->need_pad_sel && spi_get_csgpiod(spi, 0))
 		/* CS de-asserted, gpiolib will handle inversion */
@@ -1137,6 +1126,11 @@ static int mtk_spi_probe(struct platform_device *pdev)
 	host->use_gpio_descriptors = true;
 
 	mdata = spi_controller_get_devdata(host);
+
+	/* Set device configs to default first. Calibrate it later. */
+	mdata->sample_sel = 0;
+	mdata->get_tick_dly = 2;
+
 	mdata->dev_comp = device_get_match_data(dev);
 
 	if (mdata->dev_comp->enhance_timing)
