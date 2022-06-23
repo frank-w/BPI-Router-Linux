@@ -1399,7 +1399,10 @@ static int spinand_cal_read(void *priv, u32 *addr, int addrlen, u8 *buf, int rea
 	if (ret)
 		return ret;
 
-	ret = spinand_wait(spinand, &status);
+	ret = spinand_wait(spinand,
+			   SPINAND_READ_INITIAL_DELAY_US,
+			   SPINAND_READ_POLL_DELAY_US,
+			   &status);
 	if (ret < 0)
 		return ret;
 
