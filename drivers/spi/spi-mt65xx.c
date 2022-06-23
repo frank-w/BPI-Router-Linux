@@ -832,6 +832,21 @@ static irqreturn_t mtk_spi_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static int mtk_spi_append_caldata(struct spi_controller *ctlr)
+{
+	struct spi_cal_target *cal_target = kmalloc(sizeof(*cal_target), GFP_KERNEL);
+	struct mtk_spi *mdata = spi_master_get_devdata(ctlr);
+
+	cal_target->cal_item = &mdata->get_tick_dly;
+	cal_target->cal_min = 0;
+	cal_target->cal_max = 7;
+	cal_target->step = 1;
+
+	list_add(&cal_target->list, ctlr->cal_target);
+
+	return 0;
+}
+
 static int mtk_spi_mem_adjust_op_size(struct spi_mem *mem,
 				      struct spi_mem_op *op)
 {
@@ -1122,6 +1137,7 @@ static int mtk_spi_probe(struct platform_device *pdev)
 	master->setup = mtk_spi_setup;
 	master->set_cs_timing = mtk_spi_set_hw_cs_timing;
 	master->use_gpio_descriptors = true;
+	master->append_caldata = mtk_spi_append_caldata;
 
 	mdata = spi_master_get_devdata(master);
 
