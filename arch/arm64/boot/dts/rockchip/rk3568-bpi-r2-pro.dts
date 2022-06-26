@@ -126,6 +126,8 @@
 		regulator-max-microvolt = <3300000>;
 		enable-active-high;
 		gpio = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&minipcie_enable_h>;
 		startup-delay-us = <50000>;
 		vin-supply = <&vcc3v3_pi6c_05>;
 	};
@@ -138,6 +140,8 @@
 		regulator-max-microvolt = <3300000>;
 		enable-active-high;
 		gpio = <&gpio4 RK_PC1 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ngffpcie_enable_h>;
 		startup-delay-us = <50000>;
 		vin-supply = <&vcc3v3_pi6c_05>;
 	};
@@ -571,12 +575,15 @@
 
 &pcie30phy {
 	data-lanes = <1 2>;
+	phy-supply = <&vcc3v3_pi6c_05>;
 	status = "okay";
 };
 
 &pcie3x1 {
 	/* M.2 slot */
 	num-lanes = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&ngffpcie_reset_h>;
 	reset-gpios = <&gpio3 RK_PA1 GPIO_ACTIVE_HIGH>;
 	vpcie3v3-supply = <&vcc3v3_ngff>;
 	status = "okay";
@@ -585,6 +592,8 @@
 &pcie3x2 {
 	/* mPCIe slot */
 	num-lanes = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&minipcie_reset_h>;
 	reset-gpios = <&gpio2 RK_PD6 GPIO_ACTIVE_HIGH>;
 	vpcie3v3-supply = <&vcc3v3_minipcie>;
 	status = "okay";
@@ -603,6 +612,24 @@
 	hym8563 {
 		hym8563_int: hym8563-int {
 			rockchip,pins = <0 RK_PD3 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	pcie {
+		minipcie_enable_h: minipcie-enable-h {
+			rockchip,pins = <0 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none_drv_level_5>;
+		};
+
+		ngffpcie_enable_h: ngffpcie-enable-h {
+			rockchip,pins = <4 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none_drv_level_5>;
+		};
+
+		minipcie_reset_h: minipcie-reset-h {
+			rockchip,pins = <2 RK_PD6 RK_FUNC_GPIO &pcfg_pull_none_drv_level_5>;
+		};
+
+		ngffpcie_reset_h: ngffpcie-reset-h {
+			rockchip,pins = <3 RK_PA1 RK_FUNC_GPIO &pcfg_pull_none_drv_level_5>;
 		};
 	};
 
