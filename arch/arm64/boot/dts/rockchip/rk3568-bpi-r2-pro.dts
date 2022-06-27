@@ -158,7 +158,8 @@
 
 	vcc5v0_usb_otg: vcc5v0-usb-otg {
 		compatible = "regulator-fixed";
-		enable-active-high;
+		//enable-active-high;
+		regulator-always-on;
 		gpio = <&gpio0 RK_PA5 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&vcc5v0_usb_otg_en>;
@@ -663,6 +664,7 @@
 };
 
 &usb_host0_xhci {
+	//upper port???
 	dr_mode = "host";
 	status = "okay";
 };
