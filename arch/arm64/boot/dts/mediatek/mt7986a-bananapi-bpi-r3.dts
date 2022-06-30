@@ -5,6 +5,9 @@
  */
 
 /dts-v1/;
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/gpio/gpio.h>
+
 #include "mt7986a.dtsi"
 
 / {
@@ -17,6 +20,24 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&key_pins_a>;
+
+		reset {
+			label = "reset";
+			linux,code = <BTN_0>;
+			gpios = <&pio 3 GPIO_ACTIVE_LOW>;
+		};
+
+		wps {
+			label = "wps";
+			linux,code = <KEY_WPS_BUTTON>;
+			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+		};
 	};
 
 	memory@40000000 {
@@ -168,6 +189,14 @@
 };
 
 &pio {
+	/*key_pins_a: keys-alt {
+		pins-keys {
+			pinmux = <MT7986_PIN_3_GPIO3_FUNC_GPIO3>,
+				 <MT7986_PIN_4_GPIO4_FUNC_GPIO4> ;
+			input-enable;
+		};
+	};*/
+
 	mmc0_pins_default: mmc0-pins {
 		mux {
 			function = "emmc";
