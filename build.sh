@@ -870,19 +870,28 @@ function prepare_SD {
 		rm -r ${toDel} 2>/dev/null
 	done
 
-	for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
-		mkdir -p ${createDir} >/dev/null 2>/dev/null
-	done
-
 	echo "copy..."
+
+	bindir="";
+	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
+
 	export INSTALL_MOD_PATH=$SD/BPI-ROOT/;
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
-	if [[ -e ./uImage ]];then
-		cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
-	fi
-	if [[ -e ./uImage_nodt ]];then
-    		cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
-		cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
+	if [[ "$board" == "bpi-r2pro" ]];then
+		mkdir -p $SD/BPI-BOOT/extlinux/
+		cp ${bindir}arch/arm64/boot/Image.gz $SD/BPI-BOOT/extlinux/
+		cp ./$board.dtb $SD/BPI-BOOT/extlinux/$board.dtb
+	else
+		for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
+			mkdir -p ${createDir} >/dev/null 2>/dev/null
+		done
+		if [[ -e ./uImage ]];then
+			cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
+		fi
+		if [[ -e ./uImage_nodt ]];then
+			cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
+			cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
+		fi
 	fi
 	make modules_install
 
