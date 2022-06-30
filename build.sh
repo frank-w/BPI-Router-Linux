@@ -1031,8 +1031,7 @@ if [ -n "$kernver" ]; then
 
 		"umount")
 			echo "umount SD Media"
-			mount | grep BPI-ROOT
-			dev=$(mount | grep BPI-ROOT | sed -e 's/[0-9] .*$/?/')
+			dev=$(mount | grep BPI-ROOT | head -1 | sed -e 's/[0-9] .*$/?/' | sort -u)
 			echo "$dev"
 			if [[ ! -z "$dev" ]];then
 				umount $dev
