@@ -152,6 +152,7 @@
 };
 
 &mmc0 {
+	//sdcard
 	pinctrl-names = "default", "state_uhs";
 	pinctrl-0 = <&mmc0_pins_default>;
 	pinctrl-1 = <&mmc0_pins_uhs>;
