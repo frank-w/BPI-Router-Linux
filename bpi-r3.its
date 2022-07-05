@@ -28,6 +28,16 @@
 				algo = "sha1";
 			};
 		};
+		fdt-2 {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");
@@ -43,9 +53,18 @@
 	configurations {
 		default = "conf-1";
 		conf-1 {
-			description = "Boot Linux kernel with FDT blob";
+			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-1";
+			ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-2 {
+			description = "Boot Linux kernel with EMMC FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-2";
 			ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
