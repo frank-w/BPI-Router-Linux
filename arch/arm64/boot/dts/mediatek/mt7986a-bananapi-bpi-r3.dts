@@ -157,18 +157,10 @@
 	pinctrl-0 = <&mmc0_pins_default>;
 	pinctrl-1 = <&mmc0_pins_uhs>;
 	bus-width = <4>;
-	//max-frequency = <200000000>;
 	max-frequency = <52000000>;
 	cap-sd-highspeed;
-	//mmc-hs200-1_8v;
-	//mmc-hs400-1_8v;
-	//hs400-ds-delay = <0x14014>;
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&reg_1p8v>;
-	//vqmmc-supply = <&reg_3p3v>;
-	//non-removable;
-	//no-sd;
-	//no-sdio;
 	status = "okay";
 };
 
