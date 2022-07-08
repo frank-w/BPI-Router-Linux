@@ -976,6 +976,9 @@ static irqreturn_t rockchip_usb2phy_irq(int irq, void *data)
 		if (!rport->phy)
 			continue;
 
+		dev_err(&rport->phy->dev,"DEBUG: Passed %s %d port_id:%d(OTG:%d,HOST:%d)\n",
+			__FUNCTION__,__LINE__,rport->port_id,USB2PHY_PORT_OTG,USB2PHY_PORT_HOST);
+
 		switch (rport->port_id) {
 		case USB2PHY_PORT_OTG:
 			if (rport->mode != USB_DR_MODE_HOST &&
