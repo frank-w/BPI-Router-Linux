@@ -15,11 +15,13 @@
 #include <linux/kmod.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/magic.h>
 #include <linux/err.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
 
 #include "mtdcore.h"
+#include "mtdsplit/mtdsplit.h"
 
 /*
  * MTD methods which simply translate the effective address and pass through
@@ -257,6 +259,147 @@ static int mtd_add_partition_attrs(struct mtd_info *new)
 	return ret;
 }
 
+static DEFINE_SPINLOCK(part_parser_lock);
+static LIST_HEAD(part_parsers);
+
+static struct mtd_part_parser *mtd_part_parser_get(const char *name)
+{
+	struct mtd_part_parser *p, *ret = NULL;
+
+	spin_lock(&part_parser_lock);
+
+	list_for_each_entry(p, &part_parsers, list)
+		if (!strcmp(p->name, name) && try_module_get(p->owner)) {
+			ret = p;
+			break;
+		}
+
+	spin_unlock(&part_parser_lock);
+
+	return ret;
+}
+
+static inline void mtd_part_parser_put(const struct mtd_part_parser *p)
+{
+	module_put(p->owner);
+}
+
+static struct mtd_part_parser *
+get_partition_parser_by_type(enum mtd_parser_type type,
+			     struct mtd_part_parser *start)
+{
+	struct mtd_part_parser *p, *ret = NULL;
+
+	spin_lock(&part_parser_lock);
+
+	p = list_prepare_entry(start, &part_parsers, list);
+	if (start)
+		mtd_part_parser_put(start);
+
+	list_for_each_entry_continue(p, &part_parsers, list) {
+		if (p->type == type && try_module_get(p->owner)) {
+			ret = p;
+			break;
+		}
+	}
+
+	spin_unlock(&part_parser_lock);
+
+	return ret;
+}
+
+static int parse_mtd_partitions_by_type(struct mtd_info *master,
+					enum mtd_parser_type type,
+					const struct mtd_partition **pparts,
+					struct mtd_part_parser_data *data)
+{
+	struct mtd_part_parser *prev = NULL;
+	int ret = 0;
+
+	while (1) {
+		struct mtd_part_parser *parser;
+
+		parser = get_partition_parser_by_type(type, prev);
+		if (!parser)
+			break;
+
+		ret = (*parser->parse_fn)(master, pparts, data);
+
+		if (ret > 0) {
+			mtd_part_parser_put(parser);
+			printk(KERN_NOTICE
+			       "%d %s partitions found on MTD device %s\n",
+			       ret, parser->name, master->name);
+			break;
+		}
+
+		prev = parser;
+	}
+
+	return ret;
+}
+
+static int
+run_parsers_by_type(struct mtd_info *child, enum mtd_parser_type type)
+{
+	struct mtd_partition *parts;
+	int nr_parts;
+	int i;
+
+	nr_parts = parse_mtd_partitions_by_type(child, type, (const struct mtd_partition **)&parts,
+						NULL);
+	if (nr_parts <= 0)
+		return nr_parts;
+
+	if (WARN_ON(!parts))
+		return 0;
+
+	for (i = 0; i < nr_parts; i++) {
+		/* adjust partition offsets */
+		parts[i].offset += child->part.offset;
+
+		mtd_add_partition(child->parent,
+				  parts[i].name,
+				  parts[i].offset,
+				  parts[i].size);
+	}
+
+	kfree(parts);
+
+	return nr_parts;
+}
+
+#ifdef CONFIG_MTD_SPLIT_FIRMWARE_NAME
+#define SPLIT_FIRMWARE_NAME	CONFIG_MTD_SPLIT_FIRMWARE_NAME
+#else
+#define SPLIT_FIRMWARE_NAME	"unused"
+#endif
+
+static void split_firmware(struct mtd_info *master, struct mtd_info *part)
+{
+	run_parsers_by_type(part, MTD_PARSER_TYPE_FIRMWARE);
+}
+
+static void mtd_partition_split(struct mtd_info *master, struct mtd_info *part)
+{
+	static int rootfs_found = 0;
+
+	if (rootfs_found)
+		return;
+
+	if (of_find_property(mtd_get_of_node(part), "linux,rootfs", NULL) ||
+	    !strcmp(part->name, "rootfs")) {
+		run_parsers_by_type(part, MTD_PARSER_TYPE_ROOTFS);
+
+		rootfs_found = 1;
+	}
+
+	if (IS_ENABLED(CONFIG_MTD_SPLIT_FIRMWARE) &&
+	    !strcmp(part->name, SPLIT_FIRMWARE_NAME) &&
+	    !of_find_property(mtd_get_of_node(part), "compatible", NULL))
+		split_firmware(master, part);
+}
+
 int mtd_add_partition(struct mtd_info *parent, const char *name,
 		      long long offset, long long length)
 {
@@ -295,6 +438,7 @@ int mtd_add_partition(struct mtd_info *parent, const char *name,
 	if (ret)
 		goto err_remove_part;
 
+	mtd_partition_split(parent, child);
 	mtd_add_partition_attrs(child);
 
 	return 0;
@@ -438,6 +582,7 @@ int add_mtd_partitions(struct mtd_info *parent,
 			goto err_del_partitions;
 		}
 
+		mtd_partition_split(master, child);
 		mtd_add_partition_attrs(child);
 
 		/* Look for subpartitions */
@@ -452,31 +597,6 @@ err_del_partitions:
 	del_mtd_partitions(master);
 
 	return ret;
-}
-
-static DEFINE_SPINLOCK(part_parser_lock);
-static LIST_HEAD(part_parsers);
-
-static struct mtd_part_parser *mtd_part_parser_get(const char *name)
-{
-	struct mtd_part_parser *p, *ret = NULL;
-
-	spin_lock(&part_parser_lock);
-
-	list_for_each_entry(p, &part_parsers, list)
-		if (!strcmp(p->name, name) && try_module_get(p->owner)) {
-			ret = p;
-			break;
-		}
-
-	spin_unlock(&part_parser_lock);
-
-	return ret;
-}
-
-static inline void mtd_part_parser_put(const struct mtd_part_parser *p)
-{
-	module_put(p->owner);
 }
 
 /*
