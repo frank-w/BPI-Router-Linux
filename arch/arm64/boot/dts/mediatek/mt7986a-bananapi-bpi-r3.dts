@@ -71,6 +71,47 @@
 		regulator-boot-on;
 		regulator-always-on;
 	};
+
+	/* i2c of the left SFP cage */
+	i2c8: i2c-sfp-1 {
+		compatible = "i2c-gpio";
+		sda-gpios = <&pio 11 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&pio 12 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		i2c-gpio,delay-us = <2>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	sfp1: sfp1 {
+		compatible = "sff,sfp";
+		i2c-bus = <&i2c8>;//gpio 11/12 (sda/scl)
+		los-gpio = <&pio 46 GPIO_ACTIVE_LOW>;
+		moddef0-gpio = <&pio 49 GPIO_ACTIVE_LOW>;
+		sfp,ethernet = <&gmac1>;
+		tx-disable-gpio = <&pio 15 GPIO_ACTIVE_LOW>;
+		tx-fault-gpio = <&pio 2 GPIO_ACTIVE_LOW>;
+	};
+
+	/* i2c of the right SFP cage */
+	i2c9: i2c-sfp-2 {
+		compatible = "i2c-gpio";
+		sda-gpios = <&pio 13 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&pio 14 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		i2c-gpio,delay-us = <2>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	sfp2: sfp2 {
+		compatible = "sff,sfp";
+		i2c-bus = <&i2c9>;//gpio 13/14 (sda/scl)
+		los-gpio = <&pio 31 GPIO_ACTIVE_LOW>; //shared with spi1!
+		moddef0-gpio = <&pio 47 GPIO_ACTIVE_LOW>;
+		sfp,ethernet = <&port5>;
+		tx-disable-gpio = <&pio 10 GPIO_ACTIVE_LOW>;
+		tx-fault-gpio = <&pio 48 GPIO_ACTIVE_LOW>;
+	};
+
 };
 
 &eth {
@@ -154,7 +195,7 @@
 			label = "lan3";
 		};
 
-		port@5 {
+		port5: port@5 {
 			reg = <5>;
 			label = "lan4";
 			phy-mode = "2500base-x";
