@@ -326,7 +326,7 @@
 	pcie_pins: pcie-pins {
 		mux {
 			function = "pcie";
-			groups = "pcie_clk", "pcie_wake", "pcie_pereset";
+			groups = "pcie_clk",/* "pcie_wake",*/ "pcie_pereset";
 		};
 	};
 
