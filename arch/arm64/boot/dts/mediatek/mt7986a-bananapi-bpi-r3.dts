@@ -73,7 +73,7 @@
 	};
 
 	/* i2c of the left SFP cage */
-	i2c8: i2c-sfp-1 {
+	i2c_sfp1: i2c {
 		compatible = "i2c-gpio";
 		sda-gpios = <&pio 11 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&pio 12 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
@@ -84,7 +84,7 @@
 
 	sfp1: sfp1 {
 		compatible = "sff,sfp";
-		i2c-bus = <&i2c8>;//gpio 11/12 (sda/scl)
+		i2c-bus = <&i2c_sfp1>;//gpio 11/12 (sda/scl)
 		los-gpio = <&pio 46 GPIO_ACTIVE_LOW>;
 		moddef0-gpio = <&pio 49 GPIO_ACTIVE_LOW>;
 		sfp,ethernet = <&gmac1>;
@@ -93,7 +93,7 @@
 	};
 
 	/* i2c of the right SFP cage */
-	i2c9: i2c-sfp-2 {
+	i2c_sfp2: i2c {
 		compatible = "i2c-gpio";
 		sda-gpios = <&pio 13 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
 		scl-gpios = <&pio 14 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
@@ -104,7 +104,7 @@
 
 	sfp2: sfp2 {
 		compatible = "sff,sfp";
-		i2c-bus = <&i2c9>;//gpio 13/14 (sda/scl)
+		i2c-bus = <&i2c_sfp2>;//gpio 13/14 (sda/scl)
 		los-gpio = <&pio 31 GPIO_ACTIVE_LOW>; //shared with spi1!
 		moddef0-gpio = <&pio 47 GPIO_ACTIVE_LOW>;
 		sfp,ethernet = <&port5>;
