@@ -2,7 +2,7 @@
 /*
  * Rockchip PCIE3.0 phy driver
  *
- * Copyright (C) 2020 Rockchip Electronics Co., Ltd.
+ * Copyright (C) 2022 Rockchip Electronics Co., Ltd.
  */
 
 #include <linux/clk.h>
@@ -175,8 +175,8 @@ static int rockchip_p3phy_rk3588_init(struct rockchip_p3phy_priv *priv)
 					reg, RK3588_SRAM_INIT_DONE(reg),
 					0, 500);
 	if (ret)
-		pr_err("%s: lock failed 0x%x, check input refclk and power supply\n",
-		       __func__, reg);
+		dev_err(&priv->phy->dev,"lock failed 0x%x, check input refclk and power supply\n",
+		        reg);
 	return ret;
 }
 
@@ -191,7 +191,7 @@ static int rochchip_p3phy_init(struct phy *phy)
 
 	ret = clk_bulk_prepare_enable(priv->num_clks, priv->clks);
 	if (ret) {
-		pr_err("failed to enable PCIe bulk clks %d\n", ret);
+		dev_err(&priv->phy->dev,"failed to enable PCIe bulk clks %d\n", ret);
 		return ret;
 	}
 
@@ -245,7 +245,7 @@ static int rockchip_p3phy_probe(struct platform_device *pdev)
 
 	priv->ops = of_device_get_match_data(&pdev->dev);
 	if (!priv->ops) {
-		dev_err(&pdev->dev, "no of match data provided\n");
+		dev_err(dev, "no of match data provided\n");
 		return -EINVAL;
 	}
 
