@@ -22,7 +22,9 @@
 #define GRF_PCIE30PHY_CON1			0x4
 #define GRF_PCIE30PHY_CON6			0x18
 #define GRF_PCIE30PHY_CON9			0x24
+#define GRF_PCIE30PHY_DA_OCM			(BIT(15) | BIT(31))
 #define GRF_PCIE30PHY_STATUS0			0x80
+#define GRF_PCIE30PHY_WR_EN			(0xf << 16)
 #define SRAM_INIT_DONE(reg)			(reg & BIT(14))
 
 #define RK3568_BIFURCATION_LANE_0_1		BIT(0)
@@ -89,7 +91,7 @@ static int rockchip_p3phy_rk3568_init(struct rockchip_p3phy_priv *priv)
 	u32 reg;
 
 	/* Deassert PCIe PMA output clamp mode */
-	regmap_write(priv->phy_grf, GRF_PCIE30PHY_CON9, BIT(15) | BIT(31));
+	regmap_write(priv->phy_grf, GRF_PCIE30PHY_CON9, GRF_PCIE30PHY_DA_OCM);
 
 	for (int i = 0; i < priv->num_lanes; i++) {
 		dev_info(&phy->dev, "lane number %d, val %d\n", i, priv->lanes[i]);
@@ -101,13 +103,13 @@ static int rockchip_p3phy_rk3568_init(struct rockchip_p3phy_priv *priv)
 	if (bifurcation) {
 		dev_info(&phy->dev, "bifurcation enabled\n");
 		regmap_write(priv->phy_grf, GRF_PCIE30PHY_CON6,
-			     (0xf << 16) | RK3568_BIFURCATION_LANE_0_1);
+			     GRF_PCIE30PHY_WR_EN | RK3568_BIFURCATION_LANE_0_1);
 		regmap_write(priv->phy_grf, GRF_PCIE30PHY_CON1,
-			     BIT(15) | BIT(31));
+			     GRF_PCIE30PHY_DA_OCM);
 	} else {
-		dev_info(&phy->dev, "bifurcation disabled\n");
+		dev_dbg(&phy->dev, "bifurcation disabled\n");
 		regmap_write(priv->phy_grf, GRF_PCIE30PHY_CON6,
-			     (0xf << 16) & ~RK3568_BIFURCATION_LANE_0_1);
+			     GRF_PCIE30PHY_WR_EN & ~RK3568_BIFURCATION_LANE_0_1);
 	}
 
 	reset_control_deassert(priv->p30phy);
