@@ -38,7 +38,7 @@
 				algo = "sha1";
 			};
 		};
-		ramdisk-1 {
+/*		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");
 			type = "ramdisk";
@@ -48,7 +48,7 @@
 			hash-1 {
 				algo = "sha1";
 			};
-		};
+		};*/
 	};
 	configurations {
 		default = "conf-1";
@@ -56,7 +56,7 @@
 			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-1";
-			ramdisk = "ramdisk-1";
+			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
 			};
@@ -65,7 +65,7 @@
 			description = "Boot Linux kernel with EMMC FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-2";
-			ramdisk = "ramdisk-1";
+			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
 			};
