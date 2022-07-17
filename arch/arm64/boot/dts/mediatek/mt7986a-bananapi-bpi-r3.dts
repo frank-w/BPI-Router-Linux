@@ -27,19 +27,33 @@
 		//pinctrl-names = "default";
 		//pinctrl-0 = <&key_pins_a>;
 
-		reset {
+		factory {
 			label = "reset";
-			linux,code = <BTN_0>;
-			gpios = <&pio 3 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 9 GPIO_ACTIVE_LOW>;
 		};
 
 		wps {
 			label = "wps";
 			linux,code = <KEY_WPS_BUTTON>;
-			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+			gpios = <&pio 10 GPIO_ACTIVE_LOW>;
 		};
 	};
 
+	leds {
+		compatible = "gpio-leds";
+
+		led_status_green: green {
+			label = "green:status";
+			gpios = <&pio 69 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+
+		led_status_blue: blue {
+			label = "blue:status";
+			gpios = <&pio 86 GPIO_ACTIVE_HIGH>;
+		};
+	};
 	memory@40000000 {
 		device_type = "memory";
 		reg = <0 0x40000000 0 0x40000000>;
@@ -75,8 +89,8 @@
 	/* i2c of the left SFP cage */
 	i2c_sfp1: i2c-gpio-0 {
 		compatible = "i2c-gpio";
-		sda-gpios = <&pio 11 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
-		scl-gpios = <&pio 12 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		sda-gpios = <&pio 16 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&pio 17 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
 		i2c-gpio,delay-us = <2>;
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -85,18 +99,18 @@
 	sfp1: sfp1 {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp1>;//gpio 11/12 (sda/scl)
-		los-gpio = <&pio 46 GPIO_ACTIVE_LOW>;
+		los-gpio = <&pio 46 GPIO_ACTIVE_HIGH>;
 		moddef0-gpio = <&pio 49 GPIO_ACTIVE_LOW>;
-		sfp,ethernet = <&gmac1>;
-		tx-disable-gpio = <&pio 15 GPIO_ACTIVE_LOW>;
-		tx-fault-gpio = <&pio 2 GPIO_ACTIVE_LOW>;
+		//sfp,ethernet = <&gmac1>;
+		tx-disable-gpio = <&pio 20 GPIO_ACTIVE_HIGH>;
+		tx-fault-gpio = <&pio 7 GPIO_ACTIVE_HIGH>;
 	};
 
 	/* i2c of the right SFP cage */
 	i2c_sfp2: i2c-gpio-1 {
 		compatible = "i2c-gpio";
-		sda-gpios = <&pio 13 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
-		scl-gpios = <&pio 14 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		sda-gpios = <&pio 18 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&pio 19 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
 		i2c-gpio,delay-us = <2>;
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -105,13 +119,12 @@
 	sfp2: sfp2 {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp2>;//gpio 13/14 (sda/scl)
-		los-gpio = <&pio 31 GPIO_ACTIVE_LOW>; //shared with spi1!
+		los-gpio = <&pio 31 GPIO_ACTIVE_HIGH>; //shared with spi1!
 		moddef0-gpio = <&pio 47 GPIO_ACTIVE_LOW>;
-		sfp,ethernet = <&port5>;
-		tx-disable-gpio = <&pio 10 GPIO_ACTIVE_LOW>;
-		tx-fault-gpio = <&pio 48 GPIO_ACTIVE_LOW>;
+		//sfp,ethernet = <&port5>;
+		tx-disable-gpio = <&pio 15 GPIO_ACTIVE_HIGH>;
+		tx-fault-gpio = <&pio 48 GPIO_ACTIVE_HIGH>;
 	};
-
 };
 
 &eth {
@@ -133,6 +146,7 @@
 		compatible = "mediatek,eth-mac";
 		reg = <1>;
 		phy-mode = "2500base-x";
+		sfp = <&sfp1>;
 
 		fixed-link {
 			speed = <1000>;
@@ -155,7 +169,7 @@
 		reset-gpios = <&pio 32 0>;
 	};
 
-	phy5: phy@5 {
+	/*phy5: phy@5 {
 		compatible = "ethernet-phy-id67c9.de0a";
 		reg = <5>;
 		//reset-gpios = <&pio 6 1>;
@@ -167,7 +181,7 @@
 		compatible = "ethernet-phy-id67c9.de0a";
 		reg = <6>;
 		phy-mode = "2500base-x";
-	};
+	};*/
 };
 
 &switch {
@@ -204,6 +218,7 @@
 			reg = <5>;
 			label = "lan4";
 			phy-mode = "2500base-x";
+			sfp = <&sfp2>;
 
 			fixed-link {
 				speed = <1000>;
