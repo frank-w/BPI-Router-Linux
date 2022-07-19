@@ -123,7 +123,7 @@
 	sfp2: sfp2 {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp2>;//gpio 13/14 (sda/scl)
-		los-gpio = <&pio 31 GPIO_ACTIVE_HIGH>; //shared with spi1!
+		los-gpio = <&pio 31 GPIO_ACTIVE_HIGH>;
 		moddef0-gpio = <&pio 47 GPIO_ACTIVE_LOW>;
 		//sfp,ethernet = <&port5>;
 		tx-disable-gpio = <&pio 15 GPIO_ACTIVE_HIGH>;
@@ -364,7 +364,7 @@
 	spic_pins: spic-pins {
 		mux {
 			function = "spi";
-			groups = "spi1_2";
+			groups = "spi1_0";
 		};
 	};
 
@@ -431,12 +431,12 @@
 	};
 };
 
-/*&spi1 {
+&spi1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spic_pins>;
 	cs-gpios = <0>, <0>;
 	status = "okay";
-};*/
+};
 
 &ssusb {
 	vusb33-supply = <&reg_3p3v>;
