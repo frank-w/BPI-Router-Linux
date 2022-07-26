@@ -506,7 +506,12 @@ static bool mt7531_dual_sgmii_supported(struct mt7530_priv *priv)
 static int
 mt7531_pad_setup(struct dsa_switch *ds, phy_interface_t interface)
 {
-	struct mt7530_priv *priv = ds->priv;
+	return 0;
+}
+
+static int
+mt7531_pll_setup(struct mt7530_priv *priv)
+{
 	u32 top_sig;
 	u32 hwstrap;
 	u32 xtal;
@@ -523,6 +528,11 @@ mt7531_pad_setup(struct dsa_switch *ds, phy_interface_t interface)
 						    HWTRAP_XTAL_FSEL_25MHZ;
 	else
 		xtal = hwstrap & HWTRAP_XTAL_FSEL_MASK;
+
+	/* Disable Port5 SGMII clearly */
+	val = mt7530_read(priv, MT7531_PHYA_ANA_SYSPLL(5));
+	val &= ~MT7531_RG_VUSB10_ON;
+	mt7530_write(priv, MT7531_PHYA_ANA_SYSPLL(5), val);
 
 	/* Step 1 : Disable MT7531 COREPLL */
 	val = mt7530_read(priv, MT7531_PLLGP_EN);
@@ -2326,10 +2336,16 @@ mt7531_setup(struct dsa_switch *ds)
 		return -ENODEV;
 	}
 
+	/* shutdown port 5 & 6 before initiating a reset */
+	mt7530_write(priv, MT7530_PMCR_P(5), MT7531_FORCE_LNK);
+	mt7530_write(priv, MT7530_PMCR_P(6), MT7531_FORCE_LNK);
+
 	/* Reset the switch through internal reset */
 	mt7530_write(priv, MT7530_SYS_CTRL,
-		     SYS_CTRL_PHY_RST | SYS_CTRL_SW_RST |
+		     SYS_CTRL_SW_RST |
 		     SYS_CTRL_REG_RST);
+
+	mt7531_pll_setup(priv);
 
 	if (mt7531_dual_sgmii_supported(priv)) {
 		priv->p5_intf_sel = P5_INTF_SEL_GMAC5_SGMII;
@@ -2886,8 +2902,6 @@ mt7531_cpu_port_config(struct dsa_switch *ds, int port)
 		break;
 	case 6:
 		interface = PHY_INTERFACE_MODE_2500BASEX;
-
-		mt7531_pad_setup(ds, interface);
 
 		priv->p6_interface = interface;
 		break;

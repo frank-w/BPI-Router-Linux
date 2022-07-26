@@ -405,6 +405,10 @@ enum mt7531_sgmii_force_duplex {
 #define  MT7531_RG_TPHY_SPEED_1_25G	0x0
 #define  MT7531_RG_TPHY_SPEED_3_125G	BIT(2)
 
+/* SGMII PHYA_ANA_SYSPLL (from Uboot-arm driver) */
+#define MT7531_PHYA_ANA_SYSPLL(p)	MT7531_SGMII_REG(p, 0x158)
+#define  MT7531_RG_VUSB10_ON		BIT(29)
+
 /* Register for system reset */
 #define MT7530_SYS_CTRL			0x7000
 #define  SYS_CTRL_PHY_RST		BIT(2)
