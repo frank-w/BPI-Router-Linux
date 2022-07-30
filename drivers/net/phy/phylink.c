@@ -919,8 +919,12 @@ static void phylink_mac_pcs_get_state(struct phylink *pl,
 	state->link = 1;
 
 	if (pl->pcs_ops)
-		pl->pcs_ops->pcs_get_state(pl->pcs, state);
-	else if (pl->mac_ops->mac_pcs_get_state &&
+	{
+		if (pl->pcs_ops->pcs_get_state)
+			pl->pcs_ops->pcs_get_state(pl->pcs, state);
+		else
+			dev_err(pl->dev,"pcs_get_state callback not set!");
+	} else if (pl->mac_ops->mac_pcs_get_state &&
 		 pl->config->legacy_pre_march2020)
 		pl->mac_ops->mac_pcs_get_state(pl->config, state);
 	else
