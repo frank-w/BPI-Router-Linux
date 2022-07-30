@@ -103,7 +103,7 @@
 	sfp1: sfp1 {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp1>;//gpio 11/12 (sda/scl)
-		los-gpio = <&pio 46 GPIO_ACTIVE_LOW>; //seems to intersect with uart2
+		los-gpio = <&pio 46 GPIO_ACTIVE_HIGH>;
 		moddef0-gpio = <&pio 49 GPIO_ACTIVE_LOW>;
 		//sfp,ethernet = <&gmac1>;
 		tx-disable-gpio = <&pio 20 GPIO_ACTIVE_LOW>;
@@ -151,7 +151,7 @@
 		reg = <1>;
 		phy-mode = "2500base-x";
 		sfp = <&sfp1>;
-		managed = "in-band-status";
+		//managed = "in-band-status";
 
 		fixed-link {
 			speed = <1000>;
@@ -174,7 +174,7 @@
 		reset-gpios = <&pio 32 0>;
 	};
 
-	/*phy5: phy@5 {
+	phy5: phy@5 {
 		compatible = "ethernet-phy-id67c9.de0a";
 		reg = <5>;
 		//reset-gpios = <&pio 6 1>;
@@ -186,7 +186,7 @@
 		compatible = "ethernet-phy-id67c9.de0a";
 		reg = <6>;
 		phy-mode = "2500base-x";
-	};*/
+	};
 };
 
 &switch {
