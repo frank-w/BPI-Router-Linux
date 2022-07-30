@@ -38,6 +38,12 @@
 				algo = "sha1";
 			};
 		};
+
+		fdt-3{
+			data = /incbin/("./bpi-r3-nor.dtbo");
+			type = "flat_dt";
+			arch = "arm64";
+		};
 /*		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");
@@ -69,6 +75,9 @@
 			hash-1 {
 				algo = "sha1";
 			};
+		};
+		conf-nor {
+			fdt = "fdt-3";
 		};
 	};
 };
