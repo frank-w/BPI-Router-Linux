@@ -221,6 +221,28 @@
 			status = "disabled";
 		};
 
+		pwm: pwm@10048000 {
+			compatible = "mediatek,mt7986-pwm";
+			reg = <0 0x10048000 0 0x1000>;
+			#clock-cells = <1>;
+			#pwm-cells = <2>;
+			interrupts = <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
+			/*clocks = <&infracfg CK_INFRA_PWM>,
+				 <&infracfg_ao CK_INFRA_PWM_BSEL>,
+				 <&infracfg_ao CK_INFRA_PWM1_CK>,
+				 <&infracfg_ao CK_INFRA_PWM2_CK>;
+			assigned-clocks = <&topckgen CK_TOP_PWM_SEL>,
+					  <&infracfg_ao CK_INFRA_PWM_BSEL>,
+					  <&infracfg_ao CK_INFRA_PWM1_SEL>,
+					  <&infracfg_ao CK_INFRA_PWM2_SEL>;
+			assigned-clock-parents = <&topckgen CK_TOP_CB_M_D4>,
+						 <&infracfg CK_INFRA_PWM>,
+						 <&infracfg CK_INFRA_PWM>,
+						 <&infracfg CK_INFRA_PWM>;*/
+			clock-names = "top", "main", "pwm1", "pwm2";
+			status = "disabled";
+		};
+
 		uart0: serial@11002000 {
 			compatible = "mediatek,mt7986-uart",
 				     "mediatek,mt6577-uart";
@@ -260,6 +282,20 @@
 			assigned-clocks = <&infracfg CLK_INFRA_UART2_SEL>;
 			assigned-clock-parents = <&topckgen CLK_TOP_F26M_SEL>;
 			status = "disabled";
+		};
+
+		i2c0: i2c@11008000 {
+		        compatible = "mediatek,mt7986-i2c";
+		        reg = <0 0x11008000 0 0x90>,
+		              <0 0x10217080 0 0x80>;
+		        interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
+		        clock-div = <5>;
+		        /*clocks = <&infracfg_ao CK_INFRA_I2CO_CK>,
+		                 <&infracfg_ao CK_INFRA_AP_DMA_CK>;*/
+		        clock-names = "main", "dma";
+		        #address-cells = <1>;
+		        #size-cells = <0>;
+		        status = "disabled";
 		};
 
 		ssusb: usb@11200000 {
