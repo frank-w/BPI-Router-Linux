@@ -820,7 +820,7 @@ function build {
 				mkimage -A arm -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
 
 				echo "build uImage without appended DTB..."
-				export DTC_FLAGS=-@
+				export DTC_FLAGS=-@ --space 32768
 				make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n &>/dev/null #output/errors can be ignored because they are printed before
 				ret=$?
 				if [[ $ret == 0 ]]; then
