@@ -43,6 +43,7 @@
 			data = /incbin/("./bpi-r3-nor.dtbo");
 			type = "flat_dt";
 			arch = "arm64";
+			//load = <0x47000000>;
 		};
 /*		ramdisk-1 {
 			description = "ramdisk";
@@ -71,6 +72,24 @@
 			description = "Boot Linux kernel with EMMC FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-2";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-3 {
+			description = "Boot Linux kernel with SD+NOR FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-1", "fdt-3";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-4 {
+			description = "Boot Linux kernel with EMMC+NOR FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-2", "fdt-3";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
