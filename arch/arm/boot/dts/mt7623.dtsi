@@ -160,13 +160,13 @@
 
 				trips {
 					cpu_passive: cpu-passive {
-						temperature = <57000>;
+						temperature = <60000>;
 						hysteresis = <2000>;
 						type = "passive";
 					};
 
 					cpu_active: cpu-active {
-						temperature = <67000>;
+						temperature = <70000>;
 						hysteresis = <2000>;
 						type = "active";
 					};
