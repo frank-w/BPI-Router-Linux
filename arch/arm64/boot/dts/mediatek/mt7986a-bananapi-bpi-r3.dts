@@ -106,7 +106,7 @@
 		los-gpio = <&pio 46 GPIO_ACTIVE_HIGH>;
 		moddef0-gpio = <&pio 49 GPIO_ACTIVE_LOW>;
 		//sfp,ethernet = <&gmac1>;
-		tx-disable-gpio = <&pio 20 GPIO_ACTIVE_LOW>;
+		tx-disable-gpio = <&pio 20 GPIO_ACTIVE_HIGH>;
 		tx-fault-gpio = <&pio 7 GPIO_ACTIVE_HIGH>; //verified
 	};
 
