@@ -122,10 +122,25 @@ static void mtk_pcs_link_up(struct phylink_pcs *pcs, unsigned int mode,
 	regmap_write(mpcs->regmap, SGMSYS_SGMII_MODE, val);
 }
 
+static void mtk_pcs_get_state(struct phylink_pcs *pcs, struct phylink_link_state *state)
+{
+	struct mtk_pcs *mpcs = pcs_to_mtk_pcs(pcs);
+	unsigned int val;
+
+	regmap_read(mpcs->regmap, mpcs->ana_rgc3, &val);
+	state->speed = val & RG_PHY_SPEED_3_125G ? SPEED_2500 : SPEED_1000;
+
+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val);
+	state->an_complete = !!(val & SGMII_AN_COMPLETE);
+	state->link = !!(val & SGMII_LINK_STATYS);
+	state->pause = 0;
+}
+
 static const struct phylink_pcs_ops mtk_pcs_ops = {
 	.pcs_config = mtk_pcs_config,
 	.pcs_an_restart = mtk_pcs_restart_an,
 	.pcs_link_up = mtk_pcs_link_up,
+	.pcs_get_state = mtk_pcs_get_state,
 };
 
 int mtk_sgmii_init(struct mtk_sgmii *ss, struct device_node *r, u32 ana_rgc3)
