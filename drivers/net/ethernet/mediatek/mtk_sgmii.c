@@ -80,7 +80,8 @@ static int mtk_pcs_setup_mode_force(struct mtk_pcs *mpcs,
 	val &= ~SGMII_AN_ENABLE;
 	regmap_write(mpcs->regmap, SGMSYS_PCS_CONTROL_1, val);
 
-	/* Set the speed etc but leave the duplex unchanged */
+	/* Set the speed etc but leave the duplex unchanged.
+	 * The SGMII mode for 2.5gbit is the same as for 1gbit, expect the speed in ANA_RGC3 */
 	regmap_read(mpcs->regmap, SGMSYS_SGMII_MODE, &val);
 	val &= SGMII_DUPLEX_FULL | ~SGMII_IF_MODE_MASK;
 	val |= SGMII_SPEED_1000;
