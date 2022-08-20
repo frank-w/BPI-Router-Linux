@@ -107,7 +107,7 @@
 		moddef0-gpio = <&pio 49 GPIO_ACTIVE_LOW>;
 		//sfp,ethernet = <&gmac1>;
 		tx-disable-gpio = <&pio 20 GPIO_ACTIVE_HIGH>;
-		tx-fault-gpio = <&pio 7 GPIO_ACTIVE_HIGH>; //verified
+		tx-fault-gpio = <&pio 7 GPIO_ACTIVE_HIGH>;
 	};
 
 	/* i2c of the right SFP cage */
@@ -120,15 +120,15 @@
 		#size-cells = <0>;
 	};
 
-	/*sfp2: sfp2 {
+	sfp2: sfp2 {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp2>;//gpio 13/14 (sda/scl)
-		los-gpio = <&pio 31 GPIO_ACTIVE_LOW>;
+		los-gpio = <&pio 31 GPIO_ACTIVE_HIGH>;
 		moddef0-gpio = <&pio 47 GPIO_ACTIVE_LOW>;
 		//sfp,ethernet = <&port5>;
 		tx-disable-gpio = <&pio 15 GPIO_ACTIVE_HIGH>;
 		tx-fault-gpio = <&pio 48 GPIO_ACTIVE_HIGH>;
-	};*/
+	};
 };
 
 &eth {
