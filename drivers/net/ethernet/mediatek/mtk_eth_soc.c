@@ -3270,66 +3270,55 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	struct phylink *phylink;
 	struct mtk_mac *mac;
 	int id, err;
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 	if (!_id) {
 		dev_err(eth->dev, "missing mac id\n");
 		return -EINVAL;
 	}
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	id = be32_to_cpup(_id);
 	if (id >= MTK_MAC_COUNT) {
 		dev_err(eth->dev, "%d is not a valid mac id\n", id);
 		return -EINVAL;
 	}
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (eth->netdev[id]) {
 		dev_err(eth->dev, "duplicate mac id found: %d\n", id);
 		return -EINVAL;
 	}
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	eth->netdev[id] = alloc_etherdev(sizeof(*mac));
 	if (!eth->netdev[id]) {
 		dev_err(eth->dev, "alloc_etherdev failed\n");
 		return -ENOMEM;
 	}
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	mac = netdev_priv(eth->netdev[id]);
 	eth->mac[id] = mac;
 	mac->id = id;
 	mac->hw = eth;
 	mac->of_node = np;
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	memset(mac->hwlro_ip, 0, sizeof(mac->hwlro_ip));
 	mac->hwlro_ip_cnt = 0;
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	mac->hw_stats = devm_kzalloc(eth->dev,
 				     sizeof(*mac->hw_stats),
 				     GFP_KERNEL);
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (!mac->hw_stats) {
 		dev_err(eth->dev, "failed to allocate counter memory\n");
 		err = -ENOMEM;
 		goto free_netdev;
 	}
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	spin_lock_init(&mac->hw_stats->stats_lock);
 	u64_stats_init(&mac->hw_stats->syncp);
 	mac->hw_stats->reg_offset = id * MTK_STAT_OFFSET;
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	/* phylink create */
 	err = of_get_phy_mode(np, &phy_mode);
-printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,err);
 	if (err) {
 		dev_err(eth->dev, "incorrect phy-mode\n");
 		goto free_netdev;
 	}
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	/* mac config is not set */
 	mac->interface = PHY_INTERFACE_MODE_NA;
@@ -3341,22 +3330,18 @@ printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	mac->phylink_config.legacy_pre_march2020 = true;
 	mac->phylink_config.mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
 		MAC_10 | MAC_100 | MAC_1000 | MAC_2500FD;
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	__set_bit(PHY_INTERFACE_MODE_MII,
 		  mac->phylink_config.supported_interfaces);
 	__set_bit(PHY_INTERFACE_MODE_GMII,
 		  mac->phylink_config.supported_interfaces);
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	if (MTK_HAS_CAPS(mac->hw->soc->caps, MTK_RGMII))
 		phy_interface_set_rgmii(mac->phylink_config.supported_interfaces);
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	if (MTK_HAS_CAPS(mac->hw->soc->caps, MTK_TRGMII) && !mac->id)
 		__set_bit(PHY_INTERFACE_MODE_TRGMII,
 			  mac->phylink_config.supported_interfaces);
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	if (MTK_HAS_CAPS(mac->hw->soc->caps, MTK_SGMII)) {
 		__set_bit(PHY_INTERFACE_MODE_SGMII,
@@ -3366,7 +3351,7 @@ printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		__set_bit(PHY_INTERFACE_MODE_2500BASEX,
 			  mac->phylink_config.supported_interfaces);
 	}
-dev_info(eth->dev,"DEBUG: %s:%d",__FUNCTION__,__LINE__);
+dev_info(eth->dev,"%s:%d",__FUNCTION__,__LINE__);
 	phylink = phylink_create(&mac->phylink_config,
 				 of_fwnode_handle(mac->of_node),
 				 phy_mode, &mtk_phylink_ops);
@@ -3375,7 +3360,6 @@ dev_info(eth->dev,"DEBUG: %s:%d",__FUNCTION__,__LINE__);
 		err = PTR_ERR(phylink);
 		goto free_netdev;
 	}
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	mac->phylink = phylink;
 
@@ -3564,32 +3548,24 @@ static int mtk_probe(struct platform_device *pdev)
 	INIT_WORK(&eth->pending_work, mtk_pending_work);
 
 	err = mtk_hw_init(eth);
-printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 	if (err)
 		return err;
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	eth->hwlro = MTK_HAS_CAPS(eth->soc->caps, MTK_HWLRO);
 
-printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 	for_each_child_of_node(pdev->dev.of_node, mac_np) {
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		if (!of_device_is_compatible(mac_np,
 					     "mediatek,eth-mac"))
 			continue;
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		if (!of_device_is_available(mac_np))
 			continue;
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 		err = mtk_add_mac(eth, mac_np);
-printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 		if (err) {
 			of_node_put(mac_np);
 			goto err_deinit_hw;
 		}
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	}
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_INT)) {
@@ -3607,14 +3583,12 @@ printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 				       mtk_handle_irq_rx, 0,
 				       dev_name(eth->dev), eth);
 	}
-printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 	if (err)
 		goto err_free_dev;
 
 	/* No MT7628/88 support yet */
 	if (!MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628)) {
 		err = mtk_mdio_init(eth);
-printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 		if (err)
 			goto err_free_dev;
 	}
@@ -3627,7 +3601,6 @@ printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 		}
 
 		err = mtk_eth_offload_init(eth);
-printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 		if (err)
 			goto err_free_dev;
 	}
@@ -3637,7 +3610,6 @@ printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 			continue;
 
 		err = register_netdev(eth->netdev[i]);
-printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 		if (err) {
 			dev_err(eth->dev, "error bringing up device\n");
 			goto err_deinit_mdio;
