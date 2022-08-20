@@ -23,6 +23,7 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dtb");
 			type = "flat_dt";
 			arch = "arm64";
+			load = <0x47000000>;
 			compression = "none";
 			hash-1 {
 				algo = "sha1";
@@ -33,6 +34,7 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtb");
 			type = "flat_dt";
 			arch = "arm64";
+			load = <0x47000000>;
 			compression = "none";
 			hash-1 {
 				algo = "sha1";
@@ -43,7 +45,6 @@
 			data = /incbin/("./bpi-r3-nor.dtbo");
 			type = "flat_dt";
 			arch = "arm64";
-			//load = <0x47000000>;
 		};
 /*		ramdisk-1 {
 			description = "ramdisk";
