@@ -333,27 +333,21 @@ static unsigned int sff_gpio_get_state(struct sfp *sfp)
 
 static void sfp_gpio_set_state(struct sfp *sfp, unsigned int state)
 {
-	dev_info(sfp->dev,"%s:%d state present:%d",__FUNCTION__,__LINE__,state & SFP_F_PRESENT);
 	if (state & SFP_F_PRESENT) {
 		/* If the module is present, drive the signals */
-		dev_info(sfp->dev,"%s:%d tx disable:%p",__FUNCTION__,__LINE__,sfp->gpio[GPIO_TX_DISABLE]);
 		if (sfp->gpio[GPIO_TX_DISABLE])
 			gpiod_direction_output(sfp->gpio[GPIO_TX_DISABLE],
 					       state & SFP_F_TX_DISABLE);
-		dev_info(sfp->dev,"%s:%d state_rate:%d",__FUNCTION__,__LINE__,state & SFP_F_RATE_SELECT);
 		if (state & SFP_F_RATE_SELECT)
 			gpiod_direction_output(sfp->gpio[GPIO_RATE_SELECT],
 					       state & SFP_F_RATE_SELECT);
 	} else {
 		/* Otherwise, let them float to the pull-ups */
-		dev_info(sfp->dev,"%s:%d tx disable:%p",__FUNCTION__,__LINE__,sfp->gpio[GPIO_TX_DISABLE]);
 		if (sfp->gpio[GPIO_TX_DISABLE])
 			gpiod_direction_input(sfp->gpio[GPIO_TX_DISABLE]);
-		dev_info(sfp->dev,"%s:%d state_rate:%d",__FUNCTION__,__LINE__,state & SFP_F_RATE_SELECT);
 		if (state & SFP_F_RATE_SELECT)
 			gpiod_direction_input(sfp->gpio[GPIO_RATE_SELECT]);
 	}
-	dev_info(sfp->dev,"%s:%d",__FUNCTION__,__LINE__);
 }
 
 static int sfp_i2c_read(struct sfp *sfp, bool a2, u8 dev_addr, void *buf,

@@ -401,14 +401,13 @@ void phylink_generic_validate(struct phylink_config *config,
 			      struct phylink_link_state *state)
 {
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
-	dev_info(NULL,"%s:%d",__FUNCTION__,__LINE__);
+
 	phylink_set_port_modes(mask);
 	phylink_set(mask, Autoneg);
 	phylink_get_linkmodes(mask, state->interface, config->mac_capabilities);
 
 	linkmode_and(supported, supported, mask);
 	linkmode_and(state->advertising, state->advertising, mask);
-	dev_info(NULL,"%s:%d",__FUNCTION__,__LINE__);
 }
 EXPORT_SYMBOL_GPL(phylink_generic_validate);
 
@@ -2590,7 +2589,6 @@ static int phylink_sfp_config(struct phylink *pl, u8 mode,
 
 	/* Ignore errors if we're expecting a PHY to attach later */
 	ret = phylink_validate(pl, support, &config);
-	dev_info(pl->dev,"%s:%d %d",__FUNCTION__,__LINE__,ret);
 	if (ret) {
 		phylink_err(pl, "validation with support %*pb failed: %pe\n",
 			    __ETHTOOL_LINK_MODE_MASK_NBITS, support,
@@ -2609,7 +2607,6 @@ static int phylink_sfp_config(struct phylink *pl, u8 mode,
 	config.interface = iface;
 	linkmode_copy(support1, support);
 	ret = phylink_validate(pl, support1, &config);
-	dev_info(pl->dev,"%s:%d %d",__FUNCTION__,__LINE__,ret);
 	if (ret) {
 		phylink_err(pl,
 			    "validation of %s/%s with support %*pb failed: %pe\n",

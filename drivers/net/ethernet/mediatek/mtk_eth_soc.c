@@ -3351,11 +3351,10 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 		__set_bit(PHY_INTERFACE_MODE_2500BASEX,
 			  mac->phylink_config.supported_interfaces);
 	}
-dev_info(eth->dev,"%s:%d",__FUNCTION__,__LINE__);
+
 	phylink = phylink_create(&mac->phylink_config,
 				 of_fwnode_handle(mac->of_node),
 				 phy_mode, &mtk_phylink_ops);
-	dev_info(eth->dev,"%s:%d 0x%p",__FUNCTION__,__LINE__,phylink);
 	if (IS_ERR(phylink)) {
 		err = PTR_ERR(phylink);
 		goto free_netdev;
