@@ -49,6 +49,13 @@ case $board in
 		fi
 		DTSI=arch/arm64/boot/dts/mediatek/mt7622.dtsi
 		;;
+	"bpi-r3")
+		ARCH=arm64
+		CONFIGPATH=arch/$ARCH/configs
+		DEFCONFIG=$CONFIGPATH/mt7986a_bpi-r3_defconfig
+		DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dts
+		DTSI=arch/arm64/boot/dts/mediatek/mt7986a.dtsi
+		;;
 	*) #bpir2
 		ARCH=arm
 		CONFIGPATH=arch/$ARCH/configs
@@ -804,6 +811,16 @@ function build {
 					LADDR=40080000
 					ENTRY=40080000
 				;;
+				"bpi-r3")
+					IMAGE=arch/arm64/boot/Image
+					LADDR=40080000
+					ENTRY=40080000
+					if [[ -e mt7986a-bananapi-bpi-r3-nor.dts ]];then
+						echo "compiling r3 dt overlays"
+						dtc -O dtb -o bpi-r3-nor.dtbo mt7986a-bananapi-bpi-r3-nor.dts
+						dtc -O dtb -o bpi-r3-nand.dtbo mt7986a-bananapi-bpi-r3-nand.dts
+					fi
+				;;
 				"bpi-r2")
 					IMAGE=arch/arm/boot/zImage
 					LADDR=80008000
@@ -814,7 +831,10 @@ function build {
 			if [[ "$builddir" != "" ]];
 			then
 				cp $builddir/${IMAGE%.*}* ${IMAGE%/*}
-				cp {$builddir/,}$DTBFILE
+				cp $builddir/${DTBFILE%.*}.dtb ${DTBFILE%/*}
+				if [[ -e $builddir/${DTBFILE%.*}-emmc.dtb ]];then
+					cp $builddir/${DTBFILE%.*}-emmc.dtb ${DTBFILE%/*}
+				fi
 				cp $builddir/{$DTBFILE,$board.dtb}
 			fi
 
@@ -823,7 +843,7 @@ function build {
 			if [[ "$board" == "bpi-r2pro" ]];then
 				#skipping mkimage causes no choice, but uImage is not bootable on r2pro
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
-			elif [[ "$board" == "bpi-r64" ]];then
+			elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
 				mkimage -f ${board}.its.tmp ${board}.itb
@@ -834,7 +854,7 @@ function build {
 				mkimage -A arm -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
 
 				echo "build uImage without appended DTB..."
-				export DTC_FLAGS=-@
+				export DTC_FLAGS="-@ --space 32768"
 				make ${CFLAGS} CONFIG_ARM_APPENDED_DTB=n &>/dev/null #output/errors can be ignored because they are printed before
 				ret=$?
 				if [[ $ret == 0 ]]; then
