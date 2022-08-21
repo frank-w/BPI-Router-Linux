@@ -1759,7 +1759,7 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 						    prGlueInfo->aucRspIe, prGlueInfo->u4RspIeLength, GFP_KERNEL);
 				*/
 				struct cfg80211_roam_info roam_info = {
-							.bss = bss,
+							.links[0].bss = bss,
 						    .req_ie = prGlueInfo->aucReqIe,
 						    .req_ie_len = prGlueInfo->u4ReqIeLength,
 						    .resp_ie = prGlueInfo->aucRspIe,

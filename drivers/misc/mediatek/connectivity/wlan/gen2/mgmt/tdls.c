@@ -260,9 +260,9 @@ static void TdlsCmdTestAddPeer(P_GLUE_INFO_T prGlueInfo, UINT_8 *prInBuf, UINT_3
 	CmdStringMacParse(prInBuf, &prInBuf, &u4InBufLen, rCmd.arRspAddr);
 
 	/* init */
-	rCmd.rPeerInfo.supported_rates = NULL;
-	rCmd.rPeerInfo.ht_capa = &rCmd.rHtCapa;
-	rCmd.rPeerInfo.vht_capa = &rCmd.rVhtCapa; /* LINUX_KERNEL_VERSION >= 3.10.0 */
+	rCmd.rPeerInfo.link_sta_params.supported_rates = NULL;
+	rCmd.rPeerInfo.link_sta_params.ht_capa = &rCmd.rHtCapa;
+	rCmd.rPeerInfo.link_sta_params.vht_capa = &rCmd.rVhtCapa; /* LINUX_KERNEL_VERSION >= 3.10.0 */
 	rCmd.rPeerInfo.sta_flags_set = BIT(NL80211_STA_FLAG_TDLS_PEER);
 
 	/* send command to wifi task to handle */
@@ -1758,9 +1758,9 @@ static void TdlsCmdTestUpdatePeer(P_GLUE_INFO_T prGlueInfo, UINT_8 *prInBuf, UIN
 	CmdStringMacParse(prInBuf, &prInBuf, &u4InBufLen, rCmd.arRspAddr);
 
 	/* init */
-	rCmd.rPeerInfo.supported_rates = rCmd.arSupRate;
-	rCmd.rPeerInfo.ht_capa = &rCmd.rHtCapa;
-	rCmd.rPeerInfo.vht_capa = &rCmd.rVhtCapa; /* LINUX_KERNEL_VERSION >= 3.10.0 */
+	rCmd.rPeerInfo.link_sta_params.supported_rates = rCmd.arSupRate;
+	rCmd.rPeerInfo.link_sta_params.ht_capa = &rCmd.rHtCapa;
+	rCmd.rPeerInfo.link_sta_params.vht_capa = &rCmd.rVhtCapa; /* LINUX_KERNEL_VERSION >= 3.10.0 */
 	rCmd.rPeerInfo.sta_flags_set = BIT(NL80211_STA_FLAG_TDLS_PEER);
 	rCmd.rPeerInfo.uapsd_queues = 0xf;	/* all AC */
 	rCmd.rPeerInfo.max_sp = 0;	/* delivery all packets */
