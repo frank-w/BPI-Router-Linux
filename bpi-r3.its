@@ -18,7 +18,7 @@
 				algo = "sha1";
 			};
 		};
-		fdt-1 {
+		fdt-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dtb");
 			type = "flat_dt";
@@ -29,7 +29,7 @@
 				algo = "sha1";
 			};
 		};
-		fdt-2 {
+		fdt-emmc {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtb");
 			type = "flat_dt";
@@ -40,8 +40,12 @@
 				algo = "sha1";
 			};
 		};
-
-		fdt-3{
+		fdt-ov-nand{
+			data = /incbin/("./bpi-r3-nand.dtbo");
+			type = "flat_dt";
+			arch = "arm64";
+		};
+		fdt-ov-nor{
 			data = /incbin/("./bpi-r3-nor.dtbo");
 			type = "flat_dt";
 			arch = "arm64";
@@ -59,45 +63,60 @@
 		};*/
 	};
 	configurations {
-		default = "conf-1";
-		conf-1 {
+		default = "conf-sd";
+		conf-sd {
 			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-1";
+			fdt = "fdt-sd";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
 			};
 		};
-		conf-2 {
+		conf-emmc {
 			description = "Boot Linux kernel with EMMC FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-2";
+			fdt = "fdt-emmc";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
 			};
 		};
-		conf-3 {
+		conf-sd-nand {
+			description = "Boot Linux kernel with SD+NAND FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-sd", "fdt-ov-nand";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-emmc-nand {
+			description = "Boot Linux kernel with EMMC+NAND FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-emmc", "fdt-ov-nand";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-sd-nor {
 			description = "Boot Linux kernel with SD+NOR FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-1", "fdt-3";
+			fdt = "fdt-sd", "fdt-ov-nor";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
 			};
 		};
-		conf-4 {
+		conf-emmc-nor {
 			description = "Boot Linux kernel with EMMC+NOR FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-2", "fdt-3";
+			fdt = "fdt-emmc", "fdt-ov-nor";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
 			};
-		};
-		conf-nor {
-			fdt = "fdt-3";
 		};
 	};
 };
