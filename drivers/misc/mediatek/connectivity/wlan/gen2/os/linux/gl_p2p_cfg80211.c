@@ -578,8 +578,8 @@ int mtk_p2p_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev, struc
 	PUINT_8 pucBuffer = (PUINT_8) NULL;
 	/* P_IE_SSID_T prSsidIE = (P_IE_SSID_T)NULL; */
 
-	struct wireless_dev *wdev = dev->ieee80211_ptr;
-	struct cfg80211_chan_def *chandef = &wdev->preset_chandef;
+	//struct wireless_dev *wdev = dev->ieee80211_ptr;
+	//struct cfg80211_chan_def *chandef = &wdev->preset_chandef;
 
 	do {
 		if ((wiphy == NULL) || (settings == NULL))
@@ -589,11 +589,11 @@ int mtk_p2p_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev, struc
 		prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
 
 #if 1
-		mtk_p2p_cfg80211_set_channel(wiphy, chandef);
+		//mtk_p2p_cfg80211_set_channel(wiphy, chandef);
 #else
-		prGlueInfo->prAdapter->rWifiVar.prP2PConnSettings->ucOperatingChnl =
+		/*prGlueInfo->prAdapter->rWifiVar.prP2PConnSettings->ucOperatingChnl =
 		    (chandef->chan->center_freq - 2407) / 5;
-		prGlueInfo->prAdapter->rWifiVar.prP2PConnSettings->eBand = BAND_2G4;
+		prGlueInfo->prAdapter->rWifiVar.prP2PConnSettings->eBand = BAND_2G4;*/
 #endif
 
 		prP2pBcnUpdateMsg = (P_MSG_P2P_BEACON_UPDATE_T) cnmMemAlloc(prGlueInfo->prAdapter,
