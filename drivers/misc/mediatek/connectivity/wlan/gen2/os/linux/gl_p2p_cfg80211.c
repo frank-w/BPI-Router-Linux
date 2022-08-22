@@ -833,7 +833,7 @@ int mtk_p2p_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev, 
 	return i4Rslt;
 }				/* mtk_p2p_cfg80211_change_beacon */
 
-int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
+int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev, unsigned int link_id)
 {
 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) NULL;
 	INT_32 i4Rslt = -EINVAL;
@@ -1347,6 +1347,7 @@ int mtk_p2p_cfg80211_set_channel(IN struct wiphy *wiphy,
 int
 mtk_p2p_cfg80211_set_bitrate_mask(IN struct wiphy *wiphy,
 				  IN struct net_device *dev,
+				  IN unsigned int link_id,
 				  IN const u8 *peer, IN const struct cfg80211_bitrate_mask *mask)
 {
 	INT_32 i4Rslt = -EINVAL;

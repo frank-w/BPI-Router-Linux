@@ -542,7 +542,7 @@ int mtk_p2p_cfg80211_mgmt_tx(struct wiphy *wiphy,
 			     struct cfg80211_mgmt_tx_params *params,
 			     u64 *cookie);
 
-int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev);
+int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev, unsigned int link_id);
 
 int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, struct station_del_parameters *params);
 //int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, const u8 *mac);
@@ -554,6 +554,7 @@ void mtk_p2p_cfg80211_update_mgmt_frame_register(struct wiphy *wiphy, struct wir
 int
 mtk_p2p_cfg80211_set_bitrate_mask(IN struct wiphy *wiphy,
 				  IN struct net_device *dev,
+				  IN unsigned int link_id,
 				  IN const u8 *peer, IN const struct cfg80211_bitrate_mask *mask);
 
 #ifdef CONFIG_NL80211_TESTMODE
