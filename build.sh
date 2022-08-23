@@ -222,7 +222,7 @@ function get_version()
 		kernbranch="-$commit";
 	fi
 
-	gitbranch=$(echo $kernbranch|sed 's/^[45]\.[0-9]\+//'|sed 's/-rc$//')
+	gitbranch=$(echo $kernbranch|sed 's/^[456]\.[0-9]\+//'|sed 's/-rc$//')
 
 	echo "kernbranch:$kernbranch,gitbranch:$gitbranch"
 }
