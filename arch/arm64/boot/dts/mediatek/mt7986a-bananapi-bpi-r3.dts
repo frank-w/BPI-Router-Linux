@@ -472,6 +472,10 @@
 	status = "okay";
 };
 
+&trng {
+	status = "okay";
+};
+
 &uart0 {
 	status = "okay";
 };
