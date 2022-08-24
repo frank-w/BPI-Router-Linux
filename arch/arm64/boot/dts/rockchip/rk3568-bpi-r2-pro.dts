@@ -139,7 +139,7 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		enable-active-high;
-		gpio = <&gpio4 RK_PC1 GPIO_ACTIVE_HIGH>;
+		gpio = <&gpio0 RK_PB7 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&ngffpcie_enable_h>;
 		startup-delay-us = <50000>;
@@ -621,7 +621,7 @@
 		};
 
 		ngffpcie_enable_h: ngffpcie-enable-h {
-			rockchip,pins = <4 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none_drv_level_5>;
+			rockchip,pins = <0 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none_drv_level_5>;
 		};
 
 		minipcie_reset_h: minipcie-reset-h {
