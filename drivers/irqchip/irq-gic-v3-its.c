@@ -45,7 +45,6 @@
 
 #define RDIST_FLAGS_PROPBASE_NEEDS_FLUSHING	(1 << 0)
 #define RDIST_FLAGS_RD_TABLES_PREALLOCATED	(1 << 1)
-#define RDIST_FLAGS_FORCE_NO_LOCAL_CACHE	(1 << 2)
 
 #define RD_LOCAL_LPI_ENABLED                    BIT(0)
 #define RD_LOCAL_PENDTABLE_PREALLOCATED         BIT(1)
@@ -2177,11 +2176,6 @@ static struct page *its_allocate_prop_table(gfp_t gfp_flags)
 {
 	struct page *prop_page;
 
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE) {
-		pr_err("ITS ALLOCATE PROP WORKAROUND\n");
-		gfp_flags |= GFP_DMA;
-	}
-
 	prop_page = alloc_pages(gfp_flags, get_order(LPI_PROPBASE_SZ));
 	if (!prop_page)
 		return NULL;
@@ -2305,7 +2299,6 @@ static int its_setup_baser(struct its_node *its, struct its_baser *baser,
 	u32 alloc_pages, psz;
 	struct page *page;
 	void *base;
-	gfp_t gfp_flags;
 
 	psz = baser->psz;
 	alloc_pages = (PAGE_ORDER_TO_SIZE(order) / psz);
@@ -2317,10 +2310,7 @@ static int its_setup_baser(struct its_node *its, struct its_baser *baser,
 		order = get_order(GITS_BASER_PAGES_MAX * psz);
 	}
 
-	gfp_flags = GFP_KERNEL | __GFP_ZERO;
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE)
-		gfp_flags |= GFP_DMA;
-	page = alloc_pages_node(its->numa_node, gfp_flags, order);
+	page = alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO, order);
 	if (!page)
 		return -ENOMEM;
 
@@ -2366,13 +2356,6 @@ retry_baser:
 
 	its_write_baser(its, baser, val);
 	tmp = baser->val;
-
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE) {
-		if (tmp & GITS_BASER_SHAREABILITY_MASK)
-			tmp &= ~GITS_BASER_SHAREABILITY_MASK;
-		else
-			gic_flush_dcache_to_poc(base, PAGE_ORDER_TO_SIZE(order));
-	}
 
 	if ((val ^ tmp) & GITS_BASER_SHAREABILITY_MASK) {
 		/*
@@ -2956,10 +2939,6 @@ static struct page *its_allocate_pending_table(gfp_t gfp_flags)
 {
 	struct page *pend_page;
 
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE) {
-		gfp_flags |= GFP_DMA;
-	}
-
 	pend_page = alloc_pages(gfp_flags | __GFP_ZERO,
 				get_order(LPI_PENDBASE_SZ));
 	if (!pend_page)
@@ -3115,9 +3094,6 @@ static void its_cpu_init_lpis(void)
 	gicr_write_propbaser(val, rbase + GICR_PROPBASER);
 	tmp = gicr_read_propbaser(rbase + GICR_PROPBASER);
 
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE)
-		tmp &= ~GICR_PROPBASER_SHAREABILITY_MASK;
-
 	if ((tmp ^ val) & GICR_PROPBASER_SHAREABILITY_MASK) {
 		if (!(tmp & GICR_PROPBASER_SHAREABILITY_MASK)) {
 			/*
@@ -3141,9 +3117,6 @@ static void its_cpu_init_lpis(void)
 
 	gicr_write_pendbaser(val, rbase + GICR_PENDBASER);
 	tmp = gicr_read_pendbaser(rbase + GICR_PENDBASER);
-
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE)
-		tmp &= ~GICR_PENDBASER_SHAREABILITY_MASK;
 
 	if (!(tmp & GICR_PENDBASER_SHAREABILITY_MASK)) {
 		/*
@@ -3308,12 +3281,7 @@ static bool its_alloc_table_entry(struct its_node *its,
 
 	/* Allocate memory for 2nd level table */
 	if (!table[idx]) {
-		gfp_t gfp_flags = GFP_KERNEL | __GFP_ZERO;
-		if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE) {
-			gfp_flags |= GFP_DMA;
-		}
-
-		page = alloc_pages_node(its->numa_node, gfp_flags,
+		page = alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO,
 					get_order(baser->psz));
 		if (!page)
 			return false;
@@ -3402,7 +3370,6 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 	int nr_lpis;
 	int nr_ites;
 	int sz;
-	gfp_t gfp_flags;
 
 	if (!its_alloc_device_table(its, dev_id))
 		return NULL;
@@ -3410,11 +3377,7 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 	if (WARN_ON(!is_power_of_2(nvecs)))
 		nvecs = roundup_pow_of_two(nvecs);
 
-	gfp_flags = GFP_KERNEL;
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE)
-		gfp_flags |= GFP_DMA;
-
-	dev = kzalloc(sizeof(*dev), gfp_flags);
+	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	/*
 	 * Even if the device wants a single LPI, the ITT must be
 	 * sized as a power of two (and you need at least one bit...).
@@ -3422,8 +3385,7 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 	nr_ites = max(2, nvecs);
 	sz = nr_ites * (FIELD_GET(GITS_TYPER_ITT_ENTRY_SIZE, its->typer) + 1);
 	sz = max(sz, ITS_ITT_ALIGN) + ITS_ITT_ALIGN - 1;
-
-	itt = kzalloc_node(sz, gfp_flags, its->numa_node);
+	itt = kzalloc_node(sz, GFP_KERNEL, its->numa_node);
 	if (alloc_lpis) {
 		lpi_map = its_lpi_alloc(nvecs, &lpi_base, &nr_lpis);
 		if (lpi_map)
@@ -4746,13 +4708,6 @@ static bool __maybe_unused its_enable_quirk_hip07_161600802(void *data)
 	return true;
 }
 
-static bool __maybe_unused its_enable_quirk_rk3568(void *data)
-{
-	gic_rdists->flags |= RDIST_FLAGS_FORCE_NO_LOCAL_CACHE;
-
-	return true;
-}
-
 static const struct gic_quirk its_quirks[] = {
 #ifdef CONFIG_CAVIUM_ERRATUM_22375
 	{
@@ -4799,13 +4754,6 @@ static const struct gic_quirk its_quirks[] = {
 		.init	= its_enable_quirk_hip07_161600802,
 	},
 #endif
-	{
-		.desc	= "ITS: Rockchip RK3568 force no_local_cache",
-		.iidr	= 0x0201743b,
-		.mask	= 0xffffffff,
-		.init	= its_enable_quirk_rk3568,
-	},
-
 	{
 	}
 };
@@ -5061,7 +5009,6 @@ static int __init its_probe_one(struct resource *res,
 	struct page *page;
 	u32 ctlr;
 	int err;
-	gfp_t gfp_flags;
 
 	its_base = its_map_one(res, &err);
 	if (!its_base)
@@ -5115,11 +5062,7 @@ static int __init its_probe_one(struct resource *res,
 
 	its->numa_node = numa_node;
 
-	gfp_flags = GFP_KERNEL | __GFP_ZERO | GFP_DMA;
-//	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE)
-//		gfp_flags |= GFP_DMA;
-
-	page = alloc_pages_node(its->numa_node, gfp_flags,
+	page = alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO,
 				get_order(ITS_CMD_QUEUE_SZ));
 	if (!page) {
 		err = -ENOMEM;
@@ -5149,9 +5092,6 @@ static int __init its_probe_one(struct resource *res,
 
 	gits_write_cbaser(baser, its->base + GITS_CBASER);
 	tmp = gits_read_cbaser(its->base + GITS_CBASER);
-
-	if (gic_rdists->flags & RDIST_FLAGS_FORCE_NO_LOCAL_CACHE)
-		tmp &= ~GITS_CBASER_SHAREABILITY_MASK;
 
 	if ((tmp ^ baser) & GITS_CBASER_SHAREABILITY_MASK) {
 		if (!(tmp & GITS_CBASER_SHAREABILITY_MASK)) {
