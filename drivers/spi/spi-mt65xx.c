@@ -222,7 +222,7 @@ static const struct mtk_spi_compatible mt6893_compat = {
  */
 static const struct mtk_chip_config mtk_default_chip_info = {
 	.sample_sel = 0,
-	.tick_delay = 0,
+	.tick_delay = 2,
 };
 
 static const struct of_device_id mtk_spi_of_match[] = {

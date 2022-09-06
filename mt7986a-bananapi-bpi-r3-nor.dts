@@ -16,9 +16,11 @@
 			flash@0 {
 				compatible = "jedec,spi-nor";
 				reg = <0>;
-				spi-max-frequency = <10000000>;
+				spi-max-frequency = <52000000>;
+				spi-tx-buswidth = <4>;
+				spi-rx-buswidth = <4>;
 
-				/*partitions {
+				partitions {
 					compatible = "fixed-partitions";
 					#address-cells = <1>;
 					#size-cells = <1>;
@@ -60,7 +62,7 @@
 						reg = <0xc00000 0x1400000>;
 						compatible = "denx,fit";
 					};
-				};*/
+				};
 			};
 		};
 	};
