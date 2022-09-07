@@ -41,6 +41,9 @@ module_param(disable_tap_to_click, bool, 0644);
 MODULE_PARM_DESC(disable_tap_to_click,
 	"Disable Tap-To-Click mode reporting for touchpads (only on the K400 currently).");
 
+/* Define a non-zero software ID to identify our own requests */
+#define LINUX_KERNEL_SW_ID			0x01
+
 #define REPORT_ID_HIDPP_SHORT			0x10
 #define REPORT_ID_HIDPP_LONG			0x11
 #define REPORT_ID_HIDPP_VERY_LONG		0x12
@@ -343,7 +346,7 @@ static int hidpp_send_fap_command_sync(struct hidpp_device *hidpp,
 	else
 		message->report_id = REPORT_ID_HIDPP_LONG;
 	message->fap.feature_index = feat_index;
-	message->fap.funcindex_clientid = funcindex_clientid;
+	message->fap.funcindex_clientid = funcindex_clientid | LINUX_KERNEL_SW_ID;
 	memcpy(&message->fap.params, params, param_count);
 
 	ret = hidpp_send_message_sync(hidpp, message, response);
@@ -856,8 +859,8 @@ static int hidpp_unifying_init(struct hidpp_device *hidpp)
 #define HIDPP_PAGE_ROOT					0x0000
 #define HIDPP_PAGE_ROOT_IDX				0x00
 
-#define CMD_ROOT_GET_FEATURE				0x01
-#define CMD_ROOT_GET_PROTOCOL_VERSION			0x11
+#define CMD_ROOT_GET_FEATURE				0x00
+#define CMD_ROOT_GET_PROTOCOL_VERSION			0x10
 
 static int hidpp_root_get_feature(struct hidpp_device *hidpp, u16 feature,
 	u8 *feature_index, u8 *feature_type)
@@ -934,9 +937,9 @@ print_version:
 
 #define HIDPP_PAGE_GET_DEVICE_NAME_TYPE			0x0005
 
-#define CMD_GET_DEVICE_NAME_TYPE_GET_COUNT		0x01
-#define CMD_GET_DEVICE_NAME_TYPE_GET_DEVICE_NAME	0x11
-#define CMD_GET_DEVICE_NAME_TYPE_GET_TYPE		0x21
+#define CMD_GET_DEVICE_NAME_TYPE_GET_COUNT		0x00
+#define CMD_GET_DEVICE_NAME_TYPE_GET_DEVICE_NAME	0x10
+#define CMD_GET_DEVICE_NAME_TYPE_GET_TYPE		0x20
 
 static int hidpp_devicenametype_get_count(struct hidpp_device *hidpp,
 	u8 feature_index, u8 *nameLength)
@@ -1966,8 +1969,8 @@ static int hidpp_touchpad_fw_items_set(struct hidpp_device *hidpp,
 
 #define HIDPP_PAGE_TOUCHPAD_RAW_XY			0x6100
 
-#define CMD_TOUCHPAD_GET_RAW_INFO			0x01
-#define CMD_TOUCHPAD_SET_RAW_REPORT_STATE		0x21
+#define CMD_TOUCHPAD_GET_RAW_INFO			0x00
+#define CMD_TOUCHPAD_SET_RAW_REPORT_STATE		0x20
 
 #define EVENT_TOUCHPAD_RAW_XY				0x00
 
@@ -4219,6 +4222,21 @@ static void hidpp_remove(struct hid_device *hdev)
 	mutex_destroy(&hidpp->send_mutex);
 }
 
+static const struct hid_device_id unhandled_hidpp_devices[] = {
+	/* Logitech Harmony Adapter for PS3, handled in hid-sony */
+	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_LOGITECH_HARMONY_PS3) },
+	/* Handled in hid-generic */
+	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_LOGITECH_DINOVO_EDGE_KBD) },
+	{}
+};
+
+static bool hidpp_match(struct hid_device *hdev,
+			bool ignore_special_driver)
+{
+	/* Refuse to handle devices handled by other HID drivers */
+	return !hid_match_id(hdev, unhandled_hidpp_devices);
+}
+
 #define LDJ_DEVICE(product) \
 	HID_DEVICE(BUS_USB, HID_GROUP_LOGITECH_DJ_DEVICE, \
 		   USB_VENDOR_ID_LOGITECH, (product))
@@ -4335,18 +4353,17 @@ static const struct hid_device_id hidpp_devices[] = {
 	{ /* MX5500 keyboard over Bluetooth */
 	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb30b),
 	  .driver_data = HIDPP_QUIRK_HIDPP_CONSUMER_VENDOR_KEYS },
-	{ /* M-RCQ142 V470 Cordless Laser Mouse over Bluetooth */
-	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb008) },
 	{ /* MX Master mouse over Bluetooth */
 	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb012),
 	  .driver_data = HIDPP_QUIRK_HI_RES_SCROLL_X2121 },
-	{ /* MX Ergo trackball over Bluetooth */
-	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb01d) },
 	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb01e),
 	  .driver_data = HIDPP_QUIRK_HI_RES_SCROLL_X2121 },
 	{ /* MX Master 3 mouse over Bluetooth */
 	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb023),
 	  .driver_data = HIDPP_QUIRK_HI_RES_SCROLL_X2121 },
+
+	{ /* And try to enable HID++ for all the Logitech Bluetooth devices */
+	  HID_DEVICE(BUS_BLUETOOTH, HID_GROUP_ANY, USB_VENDOR_ID_LOGITECH, HID_ANY_ID) },
 	{}
 };
 
@@ -4360,6 +4377,7 @@ static const struct hid_usage_id hidpp_usages[] = {
 static struct hid_driver hidpp_driver = {
 	.name = "logitech-hidpp-device",
 	.id_table = hidpp_devices,
+	.match = hidpp_match,
 	.report_fixup = hidpp_report_fixup,
 	.probe = hidpp_probe,
 	.remove = hidpp_remove,
