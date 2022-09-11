@@ -120,15 +120,14 @@
 		#size-cells = <0>;
 	};
 
-	/*sfp2: sfp2 {
+	sfp2: sfp2 {
 		compatible = "sff,sfp";
-		i2c-bus = <&i2c_sfp2>;//gpio 13/14 (sda/scl)
-		los-gpio = <&pio 31 GPIO_ACTIVE_LOW>;
-		moddef0-gpio = <&pio 47 GPIO_ACTIVE_LOW>;
-		//sfp,ethernet = <&port5>;
-		tx-disable-gpio = <&pio 15 GPIO_ACTIVE_HIGH>;
-		tx-fault-gpio = <&pio 48 GPIO_ACTIVE_HIGH>;
-	};*/
+		i2c-bus = <&i2c_sfp2>;
+		los-gpios = <&pio 31 GPIO_ACTIVE_HIGH>;
+		mod-def0-gpios = <&pio 47 GPIO_ACTIVE_LOW>;
+		tx-disable-gpios = <&pio 15 GPIO_ACTIVE_HIGH>;
+		tx-fault-gpios = <&pio 48 GPIO_ACTIVE_HIGH>;
+	};
 };
 
 &eth {
@@ -174,7 +173,7 @@
 		reset-gpios = <&pio 32 0>;
 	};
 
-	phy5: phy@5 {
+	/*phy5: phy@5 {
 		compatible = "ethernet-phy-id67c9.de0a";
 		reg = <5>;
 		//reset-gpios = <&pio 6 1>;
@@ -186,7 +185,7 @@
 		compatible = "ethernet-phy-id67c9.de0a";
 		reg = <6>;
 		phy-mode = "2500base-x";
-	};
+	};*/
 };
 
 &switch {
@@ -219,19 +218,19 @@
 			label = "lan3";
 		};
 
-		/*port5: port@5 {
+		port5: port@5 {
 			reg = <5>;
 			label = "lan4";
 			phy-mode = "2500base-x";
-			//sfp = <&sfp2>;
-			//managed = "in-band-status";
+			sfp = <&sfp2>;
+			managed = "in-band-status";
 
-			fixed-link {
+			/*fixed-link {
 				speed = <1000>;
 				full-duplex;
 				pause;
-			};
-		};*/
+			};*/
+		};
 
 		port@6 {
 			reg = <6>;
