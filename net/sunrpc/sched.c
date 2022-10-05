@@ -63,6 +63,7 @@ gfp_t rpc_task_gfp_mask(void)
 		return GFP_KERNEL | __GFP_NORETRY | __GFP_NOWARN;
 	return GFP_KERNEL;
 }
+EXPORT_SYMBOL_GPL(rpc_task_gfp_mask);
 
 unsigned long
 rpc_task_timeout(const struct rpc_task *task)
@@ -1128,6 +1129,11 @@ struct rpc_task *rpc_new_task(const struct rpc_task_setup *setup_data)
 
 	if (task == NULL) {
 		task = rpc_alloc_task();
+		if (task == NULL) {
+			rpc_release_calldata(setup_data->callback_ops,
+					     setup_data->callback_data);
+			return ERR_PTR(-ENOMEM);
+		}
 		flags = RPC_TASK_DYNAMIC;
 	}
 

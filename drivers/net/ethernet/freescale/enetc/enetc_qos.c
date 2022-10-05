@@ -70,6 +70,9 @@ static int enetc_setup_taprio(struct net_device *ndev,
 		enetc_wr(&priv->si->hw,
 			 ENETC_QBV_PTGCR_OFFSET,
 			 tge & (~ENETC_QBV_TGE));
+
+		priv->active_offloads &= ~ENETC_F_QBV;
+
 		return 0;
 	}
 
@@ -124,6 +127,9 @@ static int enetc_setup_taprio(struct net_device *ndev,
 			 tge & (~ENETC_QBV_TGE));
 
 	enetc_cbd_free_data_mem(priv->si, data_size, tmp, &dma);
+
+	if (!err)
+		priv->active_offloads |= ENETC_F_QBV;
 
 	return err;
 }
@@ -296,10 +302,6 @@ int enetc_setup_tc_txtime(struct net_device *ndev, void *type_data)
 
 	if (tc < 0 || tc >= priv->num_tx_rings)
 		return -EINVAL;
-
-	/* Do not support TXSTART and TX CSUM offload simutaniously */
-	if (ndev->features & NETIF_F_CSUM_MASK)
-		return -EBUSY;
 
 	/* TSD and Qbv are mutually exclusive in hardware */
 	if (enetc_rd(&priv->si->hw, ENETC_QBV_PTGCR_OFFSET) & ENETC_QBV_TGE)
@@ -1513,6 +1515,29 @@ int enetc_setup_tc_block_cb(enum tc_setup_type type, void *type_data,
 	default:
 		return -EOPNOTSUPP;
 	}
+}
+
+int enetc_set_psfp(struct net_device *ndev, bool en)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	int err;
+
+	if (en) {
+		err = enetc_psfp_enable(priv);
+		if (err)
+			return err;
+
+		priv->active_offloads |= ENETC_F_QCI;
+		return 0;
+	}
+
+	err = enetc_psfp_disable(priv);
+	if (err)
+		return err;
+
+	priv->active_offloads &= ~ENETC_F_QCI;
+
+	return 0;
 }
 
 int enetc_psfp_init(struct enetc_ndev_priv *priv)

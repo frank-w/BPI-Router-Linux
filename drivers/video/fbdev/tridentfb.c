@@ -270,7 +270,7 @@ static int tridentfb_setup_ddc_bus(struct fb_info *info)
 {
 	struct tridentfb_par *par = info->par;
 
-	strlcpy(par->ddc_adapter.name, info->fix.id,
+	strscpy(par->ddc_adapter.name, info->fix.id,
 		sizeof(par->ddc_adapter.name));
 	par->ddc_adapter.owner		= THIS_MODULE;
 	par->ddc_adapter.class		= I2C_CLASS_DDC;
@@ -995,6 +995,9 @@ static int tridentfb_check_var(struct fb_var_screeninfo *var,
 	int line_length;
 	int ramdac = 230000; /* 230MHz for most 3D chips */
 	debug("enter\n");
+
+	if (!var->pixclock)
+		return -EINVAL;
 
 	/* check color depth */
 	if (bpp == 24)

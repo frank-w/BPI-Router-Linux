@@ -545,43 +545,24 @@ static int try_next_permutation(struct happy_meal *hp, void __iomem *tregs)
 
 static void display_link_mode(struct happy_meal *hp, void __iomem *tregs)
 {
-	printk(KERN_INFO "%s: Link is up using ", hp->dev->name);
-	if (hp->tcvr_type == external)
-		printk("external ");
-	else
-		printk("internal ");
-	printk("transceiver at ");
 	hp->sw_lpa = happy_meal_tcvr_read(hp, tregs, MII_LPA);
-	if (hp->sw_lpa & (LPA_100HALF | LPA_100FULL)) {
-		if (hp->sw_lpa & LPA_100FULL)
-			printk("100Mb/s, Full Duplex.\n");
-		else
-			printk("100Mb/s, Half Duplex.\n");
-	} else {
-		if (hp->sw_lpa & LPA_10FULL)
-			printk("10Mb/s, Full Duplex.\n");
-		else
-			printk("10Mb/s, Half Duplex.\n");
-	}
+
+	netdev_info(hp->dev,
+		    "Link is up using %s transceiver at %dMb/s, %s Duplex.\n",
+		    hp->tcvr_type == external ? "external" : "internal",
+		    hp->sw_lpa & (LPA_100HALF | LPA_100FULL) ? 100 : 10,
+		    hp->sw_lpa & (LPA_100FULL | LPA_10FULL) ? "Full" : "Half");
 }
 
 static void display_forced_link_mode(struct happy_meal *hp, void __iomem *tregs)
 {
-	printk(KERN_INFO "%s: Link has been forced up using ", hp->dev->name);
-	if (hp->tcvr_type == external)
-		printk("external ");
-	else
-		printk("internal ");
-	printk("transceiver at ");
 	hp->sw_bmcr = happy_meal_tcvr_read(hp, tregs, MII_BMCR);
-	if (hp->sw_bmcr & BMCR_SPEED100)
-		printk("100Mb/s, ");
-	else
-		printk("10Mb/s, ");
-	if (hp->sw_bmcr & BMCR_FULLDPLX)
-		printk("Full Duplex.\n");
-	else
-		printk("Half Duplex.\n");
+
+	netdev_info(hp->dev,
+		    "Link has been forced up using %s transceiver at %dMb/s, %s Duplex.\n",
+		    hp->tcvr_type == external ? "external" : "internal",
+		    hp->sw_bmcr & BMCR_SPEED100 ? 100 : 10,
+		    hp->sw_bmcr & BMCR_FULLDPLX ? "Full" : "Half");
 }
 
 static int set_happy_link_modes(struct happy_meal *hp, void __iomem *tregs)
@@ -2039,9 +2020,9 @@ static void happy_meal_rx(struct happy_meal *hp, struct net_device *dev)
 
 			skb_reserve(copy_skb, 2);
 			skb_put(copy_skb, len);
-			dma_sync_single_for_cpu(hp->dma_dev, dma_addr, len, DMA_FROM_DEVICE);
+			dma_sync_single_for_cpu(hp->dma_dev, dma_addr, len + 2, DMA_FROM_DEVICE);
 			skb_copy_from_linear_data(skb, copy_skb->data, len);
-			dma_sync_single_for_device(hp->dma_dev, dma_addr, len, DMA_FROM_DEVICE);
+			dma_sync_single_for_device(hp->dma_dev, dma_addr, len + 2, DMA_FROM_DEVICE);
 			/* Reuse original ring buffer. */
 			hme_write_rxd(hp, this,
 				      (RXFLAG_OWN|((RX_BUF_ALLOC_SIZE-RX_OFFSET)<<16)),

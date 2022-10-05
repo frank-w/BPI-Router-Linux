@@ -115,14 +115,16 @@ config SATA_AHCI
 
 	  If unsure, say N.
 
-config SATA_LPM_POLICY
+config SATA_MOBILE_LPM_POLICY
 	int "Default SATA Link Power Management policy for low power chipsets"
 	range 0 4
 	default 0
 	depends on SATA_AHCI
 	help
 	  Select the Default SATA Link Power Management (LPM) policy to use
-	  for chipsets / "South Bridges" designated as supporting low power.
+	  for chipsets / "South Bridges" supporting low-power modes. Such
+	  chipsets are typically found on most laptops but desktops and
+	  servers now also widely use chipsets supporting low power modes.
 
 	  The value set has the following meanings:
 		0 => Keep firmware settings
@@ -146,7 +148,7 @@ config SATA_AHCI_PLATFORM
 config AHCI_BRCM
 	tristate "Broadcom AHCI SATA support"
 	depends on ARCH_BRCMSTB || BMIPS_GENERIC || ARCH_BCM_NSP || \
-		   ARCH_BCM_63XX || COMPILE_TEST
+		   ARCH_BCMBCA || COMPILE_TEST
 	select SATA_HOST
 	help
 	  This option enables support for the AHCI SATA3 controller found on

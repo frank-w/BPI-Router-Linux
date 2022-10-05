@@ -28,6 +28,7 @@
  *    Alan Cox <alan@linux.intel.com>
  */
 
+#include "gem.h"
 #include "power.h"
 #include "psb_drv.h"
 #include "psb_reg.h"
@@ -112,7 +113,9 @@ static void gma_resume_display(struct pci_dev *pdev)
 	pci_write_config_word(pdev, PSB_GMCH_CTRL,
 			dev_priv->gmch_ctrl | _PSB_GMCH_ENABLED);
 
-	psb_gtt_restore(dev); /* Rebuild our GTT mappings */
+	/* Rebuild our GTT mappings */
+	psb_gtt_resume(dev);
+	psb_gem_mm_resume(dev);
 	dev_priv->ops->restore_regs(dev);
 }
 
@@ -136,8 +139,6 @@ static void gma_suspend_pci(struct pci_dev *pdev)
 	dev_priv->regs.saveBSM = bsm;
 	pci_read_config_dword(pdev, 0xFC, &vbt);
 	dev_priv->regs.saveVBT = vbt;
-	pci_read_config_dword(pdev, PSB_PCIx_MSI_ADDR_LOC, &dev_priv->msi_addr);
-	pci_read_config_dword(pdev, PSB_PCIx_MSI_DATA_LOC, &dev_priv->msi_data);
 
 	pci_disable_device(pdev);
 	pci_set_power_state(pdev, PCI_D3hot);
@@ -165,9 +166,6 @@ static bool gma_resume_pci(struct pci_dev *pdev)
 	pci_restore_state(pdev);
 	pci_write_config_dword(pdev, 0x5c, dev_priv->regs.saveBSM);
 	pci_write_config_dword(pdev, 0xFC, dev_priv->regs.saveVBT);
-	/* restoring MSI address and data in PCIx space */
-	pci_write_config_dword(pdev, PSB_PCIx_MSI_ADDR_LOC, dev_priv->msi_addr);
-	pci_write_config_dword(pdev, PSB_PCIx_MSI_DATA_LOC, dev_priv->msi_data);
 	ret = pci_enable_device(pdev);
 
 	if (ret != 0)
@@ -198,7 +196,7 @@ int gma_power_suspend(struct device *_dev)
 			dev_err(dev->dev, "GPU hardware busy, cannot suspend\n");
 			return -EBUSY;
 		}
-		psb_irq_uninstall(dev);
+		gma_irq_uninstall(dev);
 		gma_suspend_display(dev);
 		gma_suspend_pci(pdev);
 	}
@@ -220,8 +218,7 @@ int gma_power_resume(struct device *_dev)
 	mutex_lock(&power_mutex);
 	gma_resume_pci(pdev);
 	gma_resume_display(pdev);
-	psb_irq_preinstall(dev);
-	psb_irq_postinstall(dev);
+	gma_irq_install(dev);
 	mutex_unlock(&power_mutex);
 	return 0;
 }
@@ -267,8 +264,8 @@ bool gma_power_begin(struct drm_device *dev, bool force_on)
 	/* Ok power up needed */
 	ret = gma_resume_pci(pdev);
 	if (ret == 0) {
-		psb_irq_preinstall(dev);
-		psb_irq_postinstall(dev);
+		gma_irq_preinstall(dev);
+		gma_irq_postinstall(dev);
 		pm_runtime_get(dev->dev);
 		dev_priv->display_count++;
 		spin_unlock_irqrestore(&power_ctrl_lock, flags);
