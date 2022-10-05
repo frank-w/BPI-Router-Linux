@@ -170,22 +170,8 @@
 	switch: switch@0 {
 		compatible = "mediatek,mt7531";
 		reg = <31>;
-		reset-gpios = <&pio 32 0>;
+		reset-gpios = <&pio 5 GPIO_ACTIVE_HIGH>;
 	};
-
-	/*phy5: phy@5 {
-		compatible = "ethernet-phy-id67c9.de0a";
-		reg = <5>;
-		//reset-gpios = <&pio 6 1>;
-		//reset-deassert-us = <20000>;
-		phy-mode = "2500base-x";
-	};
-
-	phy6: phy@6 {
-		compatible = "ethernet-phy-id67c9.de0a";
-		reg = <6>;
-		phy-mode = "2500base-x";
-	};*/
 };
 
 &switch {
