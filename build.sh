@@ -53,7 +53,8 @@ case $board in
 		ARCH=arm64
 		CONFIGPATH=arch/$ARCH/configs
 		DEFCONFIG=$CONFIGPATH/mt7986a_bpi-r3_defconfig
-		DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dts
+		DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dtsi
+		#DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dts
 		DTSI=arch/arm64/boot/dts/mediatek/mt7986a.dtsi
 		;;
 	*) #bpir2
@@ -833,14 +834,20 @@ function build {
 			if [[ "$builddir" != "" ]];
 			then
 				cp $builddir/${IMAGE%.*}* ${IMAGE%/*}
-				cp $builddir/${DTBFILE%.*}.dtb ${DTBFILE%/*}
-				if [[ -e $builddir/${DTBFILE%.*}-emmc.dtb ]];then
-					cp $builddir/${DTBFILE%.*}-emmc.dtb ${DTBFILE%/*}
+				DTBBASE=${DTBFILE%.*}
+				if [[ -e $builddir/${DTBBASE}.dtb ]];then
+					cp $builddir/${DTBBASE}.dtb ${DTBFILE%/*}
+					cp $builddir/{$DTBFILE,$board.dtb}
+				elif [[ $builddir/${DTBBASE}-sd.dtb ]];then
+					cp $builddir/${DTBBASE}-sd.dtb ${DTBFILE%/*}
 				fi
-				cp $builddir/{$DTBFILE,$board.dtb}
+				#second dts
+				if [[ -e $builddir/${DTBBASE}-emmc.dtb ]];then
+					cp $builddir/${DTBBASE}-emmc.dtb ${DTBFILE%/*}
+				fi
+			elif [[ -e $DTBFILE ]];then
+				cp $DTBFILE $board.dtb
 			fi
-
-			cp $DTBFILE $board.dtb
 
 			if [[ "$board" == "bpi-r2pro" ]];then
 				#skipping mkimage causes no choice, but uImage is not bootable on r2pro
