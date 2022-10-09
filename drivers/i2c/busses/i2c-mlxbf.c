@@ -2203,7 +2203,7 @@ static u32 mlxbf_i2c_functionality(struct i2c_adapter *adap)
 	return MLXBF_I2C_FUNC_ALL;
 }
 
-static struct mlxbf_i2c_chip_info mlxbf_i2c_chip[] = {
+static struct mlxbf_i2c_chip_info __maybe_unused mlxbf_i2c_chip[] = {
 	[MLXBF_I2C_CHIP_TYPE_1] = {
 		.type = MLXBF_I2C_CHIP_TYPE_1,
 		.shared_res = {
