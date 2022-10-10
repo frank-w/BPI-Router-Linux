@@ -167,6 +167,11 @@
 	};
 };
 
+&fan {
+	pwms = <&pwm 0 500000 0>;
+	status = "okay";
+};
+
 &mdio {
 	switch: switch@31 {
 		compatible = "mediatek,mt7531";
