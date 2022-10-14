@@ -443,7 +443,7 @@ static int fuse_setup_new_dax_mapping(struct inode *inode, loff_t pos,
 
 	/*
 	 * Can't do inline reclaim in fault path. We call
-	 * dax_layout_busy_page() before we free a range. And
+	 * dax_zap_mappings() before we free a range. And
 	 * fuse_wait_dax_page() drops mapping->invalidate_lock and requires it.
 	 * In fault path we enter with mapping->invalidate_lock held and can't
 	 * drop it. Also in fault path we hold mapping->invalidate_lock shared
@@ -671,7 +671,7 @@ static int __fuse_dax_break_layouts(struct inode *inode, bool *retry,
 {
 	struct page *page;
 
-	page = dax_layout_busy_page_range(inode->i_mapping, start, end);
+	page = dax_zap_mappings_range(inode->i_mapping, start, end);
 	if (!page)
 		return 0;
 

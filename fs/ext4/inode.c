@@ -3964,7 +3964,7 @@ int ext4_break_layouts(struct inode *inode)
 		return -EINVAL;
 
 	do {
-		page = dax_layout_busy_page(inode->i_mapping);
+		page = dax_zap_mappings(inode->i_mapping);
 		if (!page)
 			return 0;
 

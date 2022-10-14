@@ -822,7 +822,7 @@ xfs_break_dax_layouts(
 
 	ASSERT(xfs_isilocked(XFS_I(inode), XFS_MMAPLOCK_EXCL));
 
-	page = dax_layout_busy_page(inode->i_mapping);
+	page = dax_zap_mappings(inode->i_mapping);
 	if (!page)
 		return 0;
 

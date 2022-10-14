@@ -74,11 +74,12 @@ fs_initcall(init_dax_wait_table);
  * and EMPTY bits aren't set the entry is a normal DAX entry with a filesystem
  * block allocation.
  */
-#define DAX_SHIFT	(4)
+#define DAX_SHIFT	(5)
 #define DAX_LOCKED	(1UL << 0)
 #define DAX_PMD		(1UL << 1)
 #define DAX_ZERO_PAGE	(1UL << 2)
 #define DAX_EMPTY	(1UL << 3)
+#define DAX_ZAP		(1UL << 4)
 
 static unsigned long dax_to_pfn(void *entry)
 {
@@ -93,6 +94,11 @@ static void *dax_make_entry(pfn_t pfn, unsigned long flags)
 static bool dax_is_locked(void *entry)
 {
 	return xa_to_value(entry) & DAX_LOCKED;
+}
+
+static bool dax_is_zapped(void *entry)
+{
+	return xa_to_value(entry) & DAX_ZAP;
 }
 
 static unsigned int dax_entry_order(void *entry)
@@ -407,19 +413,6 @@ static void dax_disassociate_entry(void *entry, struct address_space *mapping,
 	}
 }
 
-static struct page *dax_busy_page(void *entry)
-{
-	unsigned long pfn;
-
-	for_each_mapped_pfn(entry, pfn) {
-		struct page *page = pfn_to_page(pfn);
-
-		if (!dax_page_idle(page))
-			return page;
-	}
-	return NULL;
-}
-
 /*
  * dax_lock_page - Lock the DAX entry corresponding to a page
  * @page: The page whose entry we want to lock
@@ -664,8 +657,43 @@ fallback:
 	return xa_mk_internal(VM_FAULT_FALLBACK);
 }
 
+static void *dax_zap_entry(struct xa_state *xas, void *entry)
+{
+	unsigned long v = xa_to_value(entry);
+
+	return xas_store(xas, xa_mk_value(v | DAX_ZAP));
+}
+
 /**
- * dax_layout_busy_page_range - find first pinned page in @mapping
+ * Return NULL if the entry is zapped and all pages in the entry are
+ * idle, otherwise return the non-idle page in the entry
+ */
+static struct page *dax_zap_pages(struct xa_state *xas, void *entry)
+{
+	struct page *ret = NULL;
+	unsigned long pfn;
+	bool zap;
+
+	if (!dax_entry_size(entry))
+		return NULL;
+
+	zap = !dax_is_zapped(entry);
+
+	for_each_mapped_pfn(entry, pfn) {
+		struct page *page = pfn_to_page(pfn);
+
+		if (!ret && !dax_page_idle(page))
+			ret = page;
+	}
+
+	if (zap)
+		dax_zap_entry(xas, entry);
+
+	return ret;
+}
+
+/**
+ * dax_zap_mappings_range - find first pinned page in @mapping
  * @mapping: address space to scan for a page with ref count > 1
  * @start: Starting offset. Page containing 'start' is included.
  * @end: End offset. Page containing 'end' is included. If 'end' is LLONG_MAX,
@@ -682,8 +710,8 @@ fallback:
  * to be able to run unmap_mapping_range() and subsequently not race
  * mapping_mapped() becoming true.
  */
-struct page *dax_layout_busy_page_range(struct address_space *mapping,
-					loff_t start, loff_t end)
+struct page *dax_zap_mappings_range(struct address_space *mapping, loff_t start,
+				    loff_t end)
 {
 	void *entry;
 	unsigned int scanned = 0;
@@ -727,7 +755,7 @@ struct page *dax_layout_busy_page_range(struct address_space *mapping,
 		if (unlikely(dax_is_locked(entry)))
 			entry = get_unlocked_entry(&xas, 0);
 		if (entry)
-			page = dax_busy_page(entry);
+			page = dax_zap_pages(&xas, entry);
 		put_unlocked_entry(&xas, entry, WAKE_NEXT);
 		if (page)
 			break;
@@ -742,13 +770,13 @@ struct page *dax_layout_busy_page_range(struct address_space *mapping,
 	xas_unlock_irq(&xas);
 	return page;
 }
-EXPORT_SYMBOL_GPL(dax_layout_busy_page_range);
+EXPORT_SYMBOL_GPL(dax_zap_mappings_range);
 
-struct page *dax_layout_busy_page(struct address_space *mapping)
+struct page *dax_zap_mappings(struct address_space *mapping)
 {
-	return dax_layout_busy_page_range(mapping, 0, LLONG_MAX);
+	return dax_zap_mappings_range(mapping, 0, LLONG_MAX);
 }
-EXPORT_SYMBOL_GPL(dax_layout_busy_page);
+EXPORT_SYMBOL_GPL(dax_zap_mappings);
 
 static int __dax_invalidate_entry(struct address_space *mapping,
 					  pgoff_t index, bool trunc)
