@@ -264,6 +264,22 @@ vm_fault_t dax_iomap_fault(struct vm_fault *vmf, enum page_entry_size pe_size,
 		    pfn_t *pfnp, int *errp, const struct iomap_ops *ops);
 vm_fault_t dax_finish_sync_fault(struct vm_fault *vmf,
 		enum page_entry_size pe_size, pfn_t pfn);
+
+static inline bool is_dax_err(void *entry)
+{
+	return xa_is_internal(entry);
+}
+
+static inline vm_fault_t dax_err_to_vmfault(void *entry)
+{
+	return (vm_fault_t __force)(xa_to_internal(entry));
+}
+
+static inline void *vmfault_to_dax_err(vm_fault_t error)
+{
+	return xa_mk_internal((unsigned long __force)error);
+}
+
 void *dax_grab_mapping_entry(struct xa_state *xas,
 			     struct address_space *mapping, unsigned int order);
 void dax_unlock_entry(struct xa_state *xas, void *entry);

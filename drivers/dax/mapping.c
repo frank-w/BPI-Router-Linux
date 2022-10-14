@@ -634,13 +634,13 @@ out_unlock:
 	if (xas_nomem(xas, mapping_gfp_mask(mapping) & ~__GFP_HIGHMEM))
 		goto retry;
 	if (xas->xa_node == XA_ERROR(-ENOMEM))
-		return xa_mk_internal(VM_FAULT_OOM);
+		return vmfault_to_dax_err(VM_FAULT_OOM);
 	if (xas_error(xas))
-		return xa_mk_internal(VM_FAULT_SIGBUS);
+		return vmfault_to_dax_err(VM_FAULT_SIGBUS);
 	return entry;
 fallback:
 	xas_unlock_irq(xas);
-	return xa_mk_internal(VM_FAULT_FALLBACK);
+	return vmfault_to_dax_err(VM_FAULT_FALLBACK);
 }
 
 static void *dax_zap_entry(struct xa_state *xas, void *entry)

@@ -710,8 +710,8 @@ static vm_fault_t dax_iomap_pte_fault(struct vm_fault *vmf, pfn_t *pfnp,
 		iter.flags |= IOMAP_WRITE;
 
 	entry = dax_grab_mapping_entry(&xas, mapping, 0);
-	if (xa_is_internal(entry)) {
-		ret = xa_to_internal(entry);
+	if (is_dax_err(entry)) {
+		ret = dax_err_to_vmfault(entry);
 		goto out;
 	}
 
@@ -832,8 +832,8 @@ static vm_fault_t dax_iomap_pmd_fault(struct vm_fault *vmf, pfn_t *pfnp,
 	 * VM_FAULT_FALLBACK.
 	 */
 	entry = dax_grab_mapping_entry(&xas, mapping, PMD_ORDER);
-	if (xa_is_internal(entry)) {
-		ret = xa_to_internal(entry);
+	if (is_dax_err(entry)) {
+		ret = dax_err_to_vmfault(entry);
 		goto fallback;
 	}
 
