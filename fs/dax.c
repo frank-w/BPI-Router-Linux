@@ -406,8 +406,7 @@ static struct dev_pagemap *folio_pgmap(struct folio *folio)
  */
 static vm_fault_t dax_associate_entry(void *entry,
 				      struct address_space *mapping,
-				      struct vm_area_struct *vma,
-				      unsigned long address, bool cow)
+				      struct vm_fault *vmf, unsigned long flags)
 {
 	unsigned long size = dax_entry_size(entry), index;
 	struct folio *folio;
@@ -416,9 +415,9 @@ static vm_fault_t dax_associate_entry(void *entry,
 	if (IS_ENABLED(CONFIG_FS_DAX_LIMITED))
 		return 0;
 
-	index = linear_page_index(vma, address & ~(size - 1));
+	index = linear_page_index(vmf->vma, ALIGN(vmf->address, size));
 	dax_for_each_folio(entry, folio, i)
-		if (cow) {
+		if (flags & DAX_COW) {
 			dax_mapping_set_cow(folio);
 		} else {
 			WARN_ON_ONCE(folio->mapping);
@@ -992,8 +991,7 @@ static vm_fault_t dax_insert_entry(struct xa_state *xas, struct vm_fault *vmf,
 		void *old;
 
 		dax_disassociate_entry(entry, mapping, false);
-		ret = dax_associate_entry(new_entry, mapping, vmf->vma, vmf->address,
-				cow);
+		ret = dax_associate_entry(new_entry, mapping, vmf, flags);
 		if (ret)
 			goto out;
 		/*
