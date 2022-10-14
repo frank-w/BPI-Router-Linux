@@ -804,12 +804,36 @@ out:
 }
 
 /*
+ * wait indefinitely for all pins to drop, the alternative to waiting is
+ * a potential use-after-free scenario
+ */
+static void dax_break_layout(struct address_space *mapping, pgoff_t index)
+{
+	/* To do this without locks, the inode needs to be unreferenced */
+	WARN_ON(atomic_read(&mapping->host->i_count));
+	do {
+		struct page *page;
+
+		page = dax_zap_mappings_range(mapping, index << PAGE_SHIFT,
+					      (index + 1) << PAGE_SHIFT);
+		if (!page)
+			return;
+		wait_var_event(page, dax_page_idle(page));
+	} while (true);
+}
+
+/*
  * Delete DAX entry at @index from @mapping.  Wait for it
  * to be unlocked before deleting it.
  */
 int dax_delete_mapping_entry(struct address_space *mapping, pgoff_t index)
 {
-	int ret = __dax_invalidate_entry(mapping, index, true);
+	int ret;
+
+	if (mapping_exiting(mapping))
+		dax_break_layout(mapping, index);
+
+	ret = __dax_invalidate_entry(mapping, index, true);
 
 	/*
 	 * This gets called from truncate / punch_hole path. As such, the caller
