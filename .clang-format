@@ -136,6 +136,7 @@ ForEachMacros:
   - 'data__for_each_file'
   - 'data__for_each_file_new'
   - 'data__for_each_file_start'
+  - 'dax_for_each_folio'
   - 'device_for_each_child_node'
   - 'displayid_iter_for_each'
   - 'dma_fence_array_for_each'

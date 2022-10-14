@@ -327,18 +327,41 @@ static unsigned long dax_entry_size(void *entry)
 		return PAGE_SIZE;
 }
 
-static unsigned long dax_end_pfn(void *entry)
+/*
+ * Until fsdax constructs compound folios it needs to be prepared to
+ * support multiple folios per entry where each folio is a single page
+ */
+static struct folio *dax_entry_to_folio(void *entry, int idx)
 {
-	return dax_to_pfn(entry) + dax_entry_size(entry) / PAGE_SIZE;
+	unsigned long pfn, size = dax_entry_size(entry);
+	struct page *page;
+	struct folio *folio;
+
+	if (!size)
+		return NULL;
+
+	pfn = dax_to_pfn(entry);
+	page = pfn_to_page(pfn);
+	folio = page_folio(page);
+
+	/*
+	 * Are there multiple folios per entry, and has the iterator
+	 * passed the end of that set?
+	 */
+	if (idx >= size / folio_size(folio))
+		return NULL;
+
+	VM_WARN_ON_ONCE(!IS_ALIGNED(size, folio_size(folio)));
+
+	return page_folio(page + idx);
 }
 
 /*
- * Iterate through all mapped pfns represented by an entry, i.e. skip
- * 'empty' and 'zero' entries.
+ * Iterate through all folios associated with a given entry
  */
-#define for_each_mapped_pfn(entry, pfn) \
-	for (pfn = dax_to_pfn(entry); \
-			pfn < dax_end_pfn(entry); pfn++)
+#define dax_for_each_folio(entry, folio, i)                      \
+	for (i = 0, folio = dax_entry_to_folio(entry, i); folio; \
+	     folio = dax_entry_to_folio(entry, ++i))
 
 static inline bool dax_mapping_is_cow(struct address_space *mapping)
 {
@@ -348,18 +371,18 @@ static inline bool dax_mapping_is_cow(struct address_space *mapping)
 /*
  * Set the page->mapping with FS_DAX_MAPPING_COW flag, increase the refcount.
  */
-static inline void dax_mapping_set_cow(struct page *page)
+static inline void dax_mapping_set_cow(struct folio *folio)
 {
-	if ((uintptr_t)page->mapping != PAGE_MAPPING_DAX_COW) {
+	if ((uintptr_t)folio->mapping != PAGE_MAPPING_DAX_COW) {
 		/*
-		 * Reset the index if the page was already mapped
+		 * Reset the index if the folio was already mapped
 		 * regularly before.
 		 */
-		if (page->mapping)
-			page->index = 1;
-		page->mapping = (void *)PAGE_MAPPING_DAX_COW;
+		if (folio->mapping)
+			folio->index = 1;
+		folio->mapping = (void *)PAGE_MAPPING_DAX_COW;
 	}
-	page->index++;
+	folio->index++;
 }
 
 /*
@@ -370,48 +393,45 @@ static inline void dax_mapping_set_cow(struct page *page)
 static void dax_associate_entry(void *entry, struct address_space *mapping,
 		struct vm_area_struct *vma, unsigned long address, bool cow)
 {
-	unsigned long size = dax_entry_size(entry), pfn, index;
-	int i = 0;
+	unsigned long size = dax_entry_size(entry), index;
+	struct folio *folio;
+	int i;
 
 	if (IS_ENABLED(CONFIG_FS_DAX_LIMITED))
 		return;
 
 	index = linear_page_index(vma, address & ~(size - 1));
-	for_each_mapped_pfn(entry, pfn) {
-		struct page *page = pfn_to_page(pfn);
-
+	dax_for_each_folio(entry, folio, i)
 		if (cow) {
-			dax_mapping_set_cow(page);
+			dax_mapping_set_cow(folio);
 		} else {
-			WARN_ON_ONCE(page->mapping);
-			page->mapping = mapping;
-			page->index = index + i++;
+			WARN_ON_ONCE(folio->mapping);
+			folio->mapping = mapping;
+			folio->index = index + i;
 		}
-	}
 }
 
 static void dax_disassociate_entry(void *entry, struct address_space *mapping,
 		bool trunc)
 {
-	unsigned long pfn;
+	struct folio *folio;
+	int i;
 
 	if (IS_ENABLED(CONFIG_FS_DAX_LIMITED))
 		return;
 
-	for_each_mapped_pfn(entry, pfn) {
-		struct page *page = pfn_to_page(pfn);
-
-		if (dax_mapping_is_cow(page->mapping)) {
-			/* keep the CoW flag if this page is still shared */
-			if (page->index-- > 0)
+	dax_for_each_folio(entry, folio, i) {
+		if (dax_mapping_is_cow(folio->mapping)) {
+			/* keep the CoW flag if this folio is still shared */
+			if (folio->index-- > 0)
 				continue;
 		} else {
 			WARN_ON_ONCE(trunc && !dax_is_zapped(entry));
-			WARN_ON_ONCE(trunc && !dax_page_idle(page));
-			WARN_ON_ONCE(page->mapping && page->mapping != mapping);
+			WARN_ON_ONCE(trunc && !dax_folio_idle(folio));
+			WARN_ON_ONCE(folio->mapping && folio->mapping != mapping);
 		}
-		page->mapping = NULL;
-		page->index = 0;
+		folio->mapping = NULL;
+		folio->index = 0;
 	}
 }
 
@@ -673,20 +693,18 @@ static void *dax_zap_entry(struct xa_state *xas, void *entry)
 static struct page *dax_zap_pages(struct xa_state *xas, void *entry)
 {
 	struct page *ret = NULL;
-	unsigned long pfn;
+	struct folio *folio;
 	bool zap;
+	int i;
 
 	if (!dax_entry_size(entry))
 		return NULL;
 
 	zap = !dax_is_zapped(entry);
 
-	for_each_mapped_pfn(entry, pfn) {
-		struct page *page = pfn_to_page(pfn);
-
-		if (!ret && !dax_page_idle(page))
-			ret = page;
-	}
+	dax_for_each_folio(entry, folio, i)
+		if (!ret && !dax_folio_idle(folio))
+			ret = folio_page(folio, 0);
 
 	if (zap)
 		dax_zap_entry(xas, entry);

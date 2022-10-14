@@ -222,6 +222,11 @@ static inline bool dax_page_idle(struct page *page)
 	return page_ref_count(page) == 1;
 }
 
+static inline bool dax_folio_idle(struct folio *folio)
+{
+	return dax_page_idle(folio_page(folio, 0));
+}
+
 #if IS_ENABLED(CONFIG_DAX)
 int dax_read_lock(void);
 void dax_read_unlock(int id);
