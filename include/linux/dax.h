@@ -235,7 +235,7 @@ static inline void dax_unlock_mapping_entry(struct address_space *mapping,
  */
 static inline bool dax_page_idle(struct page *page)
 {
-	return page_ref_count(page) == 1;
+	return page_ref_count(page) == 0;
 }
 
 static inline bool dax_folio_idle(struct folio *folio)

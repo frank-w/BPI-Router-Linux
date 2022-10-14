@@ -691,7 +691,7 @@ static struct page *dax_zap_pages(struct xa_state *xas, void *entry)
 
 	dax_for_each_folio(entry, folio, i) {
 		if (zap)
-			pgmap_release_folios(folio_pgmap(folio), folio, 1);
+			pgmap_release_folios(folio, 1);
 		if (!ret && !dax_folio_idle(folio))
 			ret = folio_page(folio, 0);
 	}

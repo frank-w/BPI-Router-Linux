@@ -6799,6 +6799,7 @@ static void __ref __init_zone_device_page(struct page *page, unsigned long pfn,
 {
 
 	__init_single_page(page, pfn, zone_idx, nid);
+	set_page_count(page, 0);
 
 	/*
 	 * Mark page reserved as it will need to wait for onlining
@@ -6831,14 +6832,6 @@ static void __ref __init_zone_device_page(struct page *page, unsigned long pfn,
 		set_pageblock_migratetype(page, MIGRATE_MOVABLE);
 		cond_resched();
 	}
-
-	/*
-	 * ZONE_DEVICE pages are released directly to the driver page allocator
-	 * which will set the page count to 1 when allocating the page.
-	 */
-	if (pgmap->type == MEMORY_DEVICE_PRIVATE ||
-	    pgmap->type == MEMORY_DEVICE_COHERENT)
-		set_page_count(page, 0);
 }
 
 /*

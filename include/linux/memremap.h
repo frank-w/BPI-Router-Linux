@@ -195,8 +195,7 @@ struct dev_pagemap *get_dev_pagemap(unsigned long pfn,
 				    struct dev_pagemap *pgmap);
 bool pgmap_request_folios(struct dev_pagemap *pgmap, struct folio *folio,
 			  int nr_folios);
-void pgmap_release_folios(struct dev_pagemap *pgmap, struct folio *folio,
-			  int nr_folios);
+void pgmap_release_folios(struct folio *folio, int nr_folios);
 bool pgmap_pfn_valid(struct dev_pagemap *pgmap, unsigned long pfn);
 
 unsigned long vmem_altmap_offset(struct vmem_altmap *altmap);
@@ -238,8 +237,7 @@ static inline bool pgmap_request_folios(struct dev_pagemap *pgmap,
 	return false;
 }
 
-static inline void pgmap_release_folios(struct dev_pagemap *pgmap,
-					struct folio *folio, int nr_folios)
+static inline void pgmap_release_folios(struct folio *folio, int nr_folios)
 {
 }
 

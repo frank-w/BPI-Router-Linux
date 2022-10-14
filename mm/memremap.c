@@ -470,8 +470,10 @@ EXPORT_SYMBOL_GPL(get_dev_pagemap);
 
 void free_zone_device_page(struct page *page)
 {
-	if (WARN_ON_ONCE(!page->pgmap->ops || !page->pgmap->ops->page_free))
-		return;
+	struct dev_pagemap *pgmap = page->pgmap;
+
+	/* wake filesystem 'break dax layouts' waiters */
+	wake_up_var(page);
 
 	mem_cgroup_uncharge(page_folio(page));
 
@@ -506,17 +508,9 @@ void free_zone_device_page(struct page *page)
 	 * to clear page->mapping.
 	 */
 	page->mapping = NULL;
-	page->pgmap->ops->page_free(page);
-
-	if (page->pgmap->type != MEMORY_DEVICE_PRIVATE &&
-	    page->pgmap->type != MEMORY_DEVICE_COHERENT)
-		/*
-		 * Reset the page count to 1 to prepare for handing out the page
-		 * again.
-		 */
-		set_page_count(page, 1);
-	else
-		put_dev_pagemap(page->pgmap);
+	if (pgmap->ops && pgmap->ops->page_free)
+		pgmap->ops->page_free(page);
+	put_dev_pagemap(page->pgmap);
 }
 
 static __maybe_unused bool folio_span_valid(struct dev_pagemap *pgmap,
@@ -578,17 +572,19 @@ bool pgmap_request_folios(struct dev_pagemap *pgmap, struct folio *folio,
 }
 EXPORT_SYMBOL_GPL(pgmap_request_folios);
 
-void pgmap_release_folios(struct dev_pagemap *pgmap, struct folio *folio, int nr_folios)
+/*
+ * A symmetric helper to undo the page references acquired by
+ * pgmap_request_folios(), but the caller can also just arrange
+ * folio_put() on all the folios it acquired previously for the same
+ * effect.
+ */
+void pgmap_release_folios(struct folio *folio, int nr_folios)
 {
 	struct folio *iter;
 	int i;
 
-	for (iter = folio, i = 0; i < nr_folios; iter = folio_next(iter), i++) {
-		if (!put_devmap_managed_page(&iter->page))
-			folio_put(iter);
-		if (!folio_ref_count(iter))
-			put_dev_pagemap(pgmap);
-	}
+	for (iter = folio, i = 0; i < nr_folios; iter = folio_next(folio), i++)
+		folio_put(iter);
 }
 
 #ifdef CONFIG_FS_DAX
