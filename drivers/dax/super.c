@@ -564,6 +564,8 @@ static int __init dax_core_init(void)
 	if (rc)
 		return rc;
 
+	dax_mapping_init();
+
 	rc = alloc_chrdev_region(&dax_devt, 0, MINORMASK+1, "dax");
 	if (rc)
 		goto err_chrdev;
@@ -590,5 +592,5 @@ static void __exit dax_core_exit(void)
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_LICENSE("GPL v2");
-subsys_initcall(dax_core_init);
+fs_initcall(dax_core_init);
 module_exit(dax_core_exit);

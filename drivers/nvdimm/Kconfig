@@ -78,6 +78,7 @@ config NVDIMM_DAX
 	bool "NVDIMM DAX: Raw access to persistent memory"
 	default LIBNVDIMM
 	depends on NVDIMM_PFN
+	depends on DAX
 	help
 	  Support raw device dax access to a persistent memory
 	  namespace.  For environments that want to hard partition

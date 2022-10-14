@@ -15,6 +15,7 @@ struct dax_device *inode_dax(struct inode *inode);
 struct inode *dax_inode(struct dax_device *dax_dev);
 int dax_bus_init(void);
 void dax_bus_exit(void);
+void dax_mapping_init(void);
 
 /**
  * struct dax_region - mapping infrastructure for dax devices

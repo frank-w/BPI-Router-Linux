@@ -6,6 +6,7 @@ obj-$(CONFIG_DEV_DAX_PMEM) += dax_pmem.o
 
 dax-y := super.o
 dax-y += bus.o
+dax-y += mapping.o
 device_dax-y := device.o
 dax_pmem-y := pmem.o
 

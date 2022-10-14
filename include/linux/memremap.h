@@ -221,6 +221,12 @@ static inline void devm_memunmap_pages(struct device *dev,
 {
 }
 
+static inline struct dev_pagemap *
+get_dev_pagemap_many(unsigned long pfn, struct dev_pagemap *pgmap, int refs)
+{
+	return NULL;
+}
+
 static inline struct dev_pagemap *get_dev_pagemap(unsigned long pfn,
 		struct dev_pagemap *pgmap)
 {

@@ -157,15 +157,34 @@ static inline void fs_put_dax(struct dax_device *dax_dev, void *holder)
 int dax_writeback_mapping_range(struct address_space *mapping,
 		struct dax_device *dax_dev, struct writeback_control *wbc);
 
-struct page *dax_zap_mappings(struct address_space *mapping);
-struct page *dax_zap_mappings_range(struct address_space *mapping, loff_t start,
-				    loff_t end);
+#else
+static inline int dax_writeback_mapping_range(struct address_space *mapping,
+		struct dax_device *dax_dev, struct writeback_control *wbc)
+{
+	return -EOPNOTSUPP;
+}
+
+#endif
+
+int dax_zero_range(struct inode *inode, loff_t pos, loff_t len, bool *did_zero,
+		const struct iomap_ops *ops);
+int dax_truncate_page(struct inode *inode, loff_t pos, bool *did_zero,
+		const struct iomap_ops *ops);
+
+#if IS_ENABLED(CONFIG_DAX)
+int dax_read_lock(void);
+void dax_read_unlock(int id);
 dax_entry_t dax_lock_page(struct page *page);
 void dax_unlock_page(struct page *page, dax_entry_t cookie);
+void run_dax(struct dax_device *dax_dev);
 dax_entry_t dax_lock_mapping_entry(struct address_space *mapping,
 		unsigned long index, struct page **page);
 void dax_unlock_mapping_entry(struct address_space *mapping,
 		unsigned long index, dax_entry_t cookie);
+void dax_break_layouts(struct inode *inode);
+struct page *dax_zap_mappings(struct address_space *mapping);
+struct page *dax_zap_mappings_range(struct address_space *mapping, loff_t start,
+				    loff_t end);
 #else
 static inline struct page *dax_zap_mappings(struct address_space *mapping)
 {
@@ -179,12 +198,6 @@ static inline struct page *dax_zap_mappings_range(struct address_space *mapping,
 	return NULL;
 }
 
-static inline int dax_writeback_mapping_range(struct address_space *mapping,
-		struct dax_device *dax_dev, struct writeback_control *wbc)
-{
-	return -EOPNOTSUPP;
-}
-
 static inline dax_entry_t dax_lock_page(struct page *page)
 {
 	if (IS_DAX(page->mapping->host))
@@ -193,6 +206,15 @@ static inline dax_entry_t dax_lock_page(struct page *page)
 }
 
 static inline void dax_unlock_page(struct page *page, dax_entry_t cookie)
+{
+}
+
+static inline int dax_read_lock(void)
+{
+	return 0;
+}
+
+static inline void dax_read_unlock(int id)
 {
 }
 
@@ -208,11 +230,6 @@ static inline void dax_unlock_mapping_entry(struct address_space *mapping,
 }
 #endif
 
-int dax_zero_range(struct inode *inode, loff_t pos, loff_t len, bool *did_zero,
-		const struct iomap_ops *ops);
-int dax_truncate_page(struct inode *inode, loff_t pos, bool *did_zero,
-		const struct iomap_ops *ops);
-
 /*
  * Document all the code locations that want know when a dax page is
  * unreferenced.
@@ -227,19 +244,6 @@ static inline bool dax_folio_idle(struct folio *folio)
 	return dax_page_idle(folio_page(folio, 0));
 }
 
-#if IS_ENABLED(CONFIG_DAX)
-int dax_read_lock(void);
-void dax_read_unlock(int id);
-#else
-static inline int dax_read_lock(void)
-{
-	return 0;
-}
-
-static inline void dax_read_unlock(int id)
-{
-}
-#endif /* CONFIG_DAX */
 bool dax_alive(struct dax_device *dax_dev);
 void *dax_get_private(struct dax_device *dax_dev);
 long dax_direct_access(struct dax_device *dax_dev, pgoff_t pgoff, long nr_pages,
@@ -260,6 +264,9 @@ vm_fault_t dax_iomap_fault(struct vm_fault *vmf, enum page_entry_size pe_size,
 		    pfn_t *pfnp, int *errp, const struct iomap_ops *ops);
 vm_fault_t dax_finish_sync_fault(struct vm_fault *vmf,
 		enum page_entry_size pe_size, pfn_t pfn);
+void *dax_grab_mapping_entry(struct xa_state *xas,
+			     struct address_space *mapping, unsigned int order);
+void dax_unlock_entry(struct xa_state *xas, void *entry);
 int dax_delete_mapping_entry(struct address_space *mapping, pgoff_t index);
 int dax_invalidate_mapping_entry_sync(struct address_space *mapping,
 				      pgoff_t index);
@@ -276,6 +283,57 @@ static inline bool dax_mapping(struct address_space *mapping)
 	return mapping->host && IS_DAX(mapping->host);
 }
 
+/*
+ * DAX pagecache entries use XArray value entries so they can't be mistaken
+ * for pages.  We use one bit for locking, one bit for the entry size (PMD)
+ * and two more to tell us if the entry is a zero page or an empty entry that
+ * is just used for locking.  In total four special bits.
+ *
+ * If the PMD bit isn't set the entry has size PAGE_SIZE, and if the ZERO_PAGE
+ * and EMPTY bits aren't set the entry is a normal DAX entry with a filesystem
+ * block allocation.
+ */
+#define DAX_SHIFT	(5)
+#define DAX_MASK	((1UL << DAX_SHIFT) - 1)
+#define DAX_LOCKED	(1UL << 0)
+#define DAX_PMD		(1UL << 1)
+#define DAX_ZERO_PAGE	(1UL << 2)
+#define DAX_EMPTY	(1UL << 3)
+#define DAX_ZAP		(1UL << 4)
+
+/*
+ * These flags are not conveyed in Xarray value entries, they are just
+ * modifiers to dax_insert_entry().
+ */
+#define DAX_DIRTY (1UL << (DAX_SHIFT + 0))
+#define DAX_COW   (1UL << (DAX_SHIFT + 1))
+
+vm_fault_t dax_insert_entry(struct xa_state *xas, struct vm_fault *vmf,
+			    void **pentry, pfn_t pfn, unsigned long flags);
+vm_fault_t dax_insert_pfn_mkwrite(struct vm_fault *vmf, pfn_t pfn,
+				  unsigned int order);
+int dax_writeback_one(struct xa_state *xas, struct dax_device *dax_dev,
+		      struct address_space *mapping, void *entry);
+
+#ifdef CONFIG_MMU
+/* The 'colour' (ie low bits) within a PMD of a page offset.  */
+#define PG_PMD_COLOUR ((PMD_SIZE >> PAGE_SHIFT) - 1)
+#define PG_PMD_NR (PMD_SIZE >> PAGE_SHIFT)
+
+/* The order of a PMD entry */
+#define PMD_ORDER (PMD_SHIFT - PAGE_SHIFT)
+
+static inline unsigned int pe_order(enum page_entry_size pe_size)
+{
+	if (pe_size == PE_SIZE_PTE)
+		return PAGE_SHIFT - PAGE_SHIFT;
+	if (pe_size == PE_SIZE_PMD)
+		return PMD_SHIFT - PAGE_SHIFT;
+	if (pe_size == PE_SIZE_PUD)
+		return PUD_SHIFT - PAGE_SHIFT;
+	return ~0;
+}
+
 #ifdef CONFIG_DEV_DAX_HMEM_DEVICES
 void hmem_register_device(int target_nid, struct resource *r);
 #else
@@ -283,5 +341,6 @@ static inline void hmem_register_device(int target_nid, struct resource *r)
 {
 }
 #endif
+#endif /* CONFIG_MMU */
 
 #endif
