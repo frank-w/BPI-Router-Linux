@@ -385,20 +385,27 @@ static inline void dax_mapping_set_cow(struct folio *folio)
 	folio->index++;
 }
 
+static struct dev_pagemap *folio_pgmap(struct folio *folio)
+{
+	return folio_page(folio, 0)->pgmap;
+}
+
 /*
  * When it is called in dax_insert_entry(), the cow flag will indicate that
  * whether this entry is shared by multiple files.  If so, set the page->mapping
  * FS_DAX_MAPPING_COW, and use page->index as refcount.
  */
-static void dax_associate_entry(void *entry, struct address_space *mapping,
-		struct vm_area_struct *vma, unsigned long address, bool cow)
+static vm_fault_t dax_associate_entry(void *entry,
+				      struct address_space *mapping,
+				      struct vm_area_struct *vma,
+				      unsigned long address, bool cow)
 {
 	unsigned long size = dax_entry_size(entry), index;
 	struct folio *folio;
 	int i;
 
 	if (IS_ENABLED(CONFIG_FS_DAX_LIMITED))
-		return;
+		return 0;
 
 	index = linear_page_index(vma, address & ~(size - 1));
 	dax_for_each_folio(entry, folio, i)
@@ -406,9 +413,13 @@ static void dax_associate_entry(void *entry, struct address_space *mapping,
 			dax_mapping_set_cow(folio);
 		} else {
 			WARN_ON_ONCE(folio->mapping);
+			if (!pgmap_request_folios(folio_pgmap(folio), folio, 1))
+				return VM_FAULT_SIGBUS;
 			folio->mapping = mapping;
 			folio->index = index + i;
 		}
+
+	return 0;
 }
 
 static void dax_disassociate_entry(void *entry, struct address_space *mapping,
@@ -702,9 +713,12 @@ static struct page *dax_zap_pages(struct xa_state *xas, void *entry)
 
 	zap = !dax_is_zapped(entry);
 
-	dax_for_each_folio(entry, folio, i)
+	dax_for_each_folio(entry, folio, i) {
+		if (zap)
+			pgmap_release_folios(folio_pgmap(folio), folio, 1);
 		if (!ret && !dax_folio_idle(folio))
 			ret = folio_page(folio, 0);
+	}
 
 	if (zap)
 		dax_zap_entry(xas, entry);
@@ -934,6 +948,7 @@ static vm_fault_t dax_insert_entry(struct xa_state *xas, struct vm_fault *vmf,
 	bool dirty = !dax_fault_is_synchronous(iter, vmf->vma);
 	bool cow = dax_fault_is_cow(iter);
 	void *entry = *pentry;
+	vm_fault_t ret = 0;
 
 	if (dirty)
 		__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
@@ -954,8 +969,10 @@ static vm_fault_t dax_insert_entry(struct xa_state *xas, struct vm_fault *vmf,
 		void *old;
 
 		dax_disassociate_entry(entry, mapping, false);
-		dax_associate_entry(new_entry, mapping, vmf->vma, vmf->address,
+		ret = dax_associate_entry(new_entry, mapping, vmf->vma, vmf->address,
 				cow);
+		if (ret)
+			goto out;
 		/*
 		 * Only swap our new entry into the page cache if the current
 		 * entry is a zero page or an empty entry.  If a normal PTE or
@@ -978,10 +995,11 @@ static vm_fault_t dax_insert_entry(struct xa_state *xas, struct vm_fault *vmf,
 	if (cow)
 		xas_set_mark(xas, PAGECACHE_TAG_TOWRITE);
 
+	*pentry = entry;
+out:
 	xas_unlock_irq(xas);
 
-	*pentry = entry;
-	return 0;
+	return ret;
 }
 
 static int dax_writeback_one(struct xa_state *xas, struct dax_device *dax_dev,

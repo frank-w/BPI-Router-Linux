@@ -531,6 +531,76 @@ void zone_device_page_init(struct page *page)
 }
 EXPORT_SYMBOL_GPL(zone_device_page_init);
 
+static bool folio_span_valid(struct dev_pagemap *pgmap, struct folio *folio,
+			     int nr_folios)
+{
+	unsigned long pfn_start, pfn_end;
+
+	pfn_start = page_to_pfn(folio_page(folio, 0));
+	pfn_end = pfn_start + (1 << folio_order(folio)) * nr_folios - 1;
+
+	if (pgmap != xa_load(&pgmap_array, pfn_start))
+		return false;
+
+	if (pfn_end > pfn_start && pgmap != xa_load(&pgmap_array, pfn_end))
+		return false;
+
+	return true;
+}
+
+/**
+ * pgmap_request_folios - activate an contiguous span of folios in @pgmap
+ * @pgmap: host page map for the folio array
+ * @folio: start of the folio list, all subsequent folios have same folio_size()
+ *
+ * Caller is responsible for @pgmap remaining live for the duration of
+ * this call. Caller is also responsible for not racing requests for the
+ * same folios.
+ */
+bool pgmap_request_folios(struct dev_pagemap *pgmap, struct folio *folio,
+			  int nr_folios)
+{
+	struct folio *iter;
+	int i;
+
+	/*
+	 * All of the WARNs below are for catching bugs in future
+	 * development that changes the assumptions of:
+	 * 1/ uniform folios in @pgmap
+	 * 2/ @pgmap death does not race this routine.
+	 */
+	VM_WARN_ON_ONCE(!folio_span_valid(pgmap, folio, nr_folios));
+
+	if (WARN_ON_ONCE(percpu_ref_is_dying(&pgmap->ref)))
+		return false;
+
+	for (iter = folio_next(folio), i = 1; i < nr_folios;
+	     iter = folio_next(folio), i++)
+		if (WARN_ON_ONCE(folio_order(iter) != folio_order(folio)))
+			return false;
+
+	for (iter = folio, i = 0; i < nr_folios; iter = folio_next(iter), i++) {
+		folio_ref_inc(iter);
+		if (folio_ref_count(iter) == 1)
+			percpu_ref_tryget(&pgmap->ref);
+	}
+
+	return true;
+}
+
+void pgmap_release_folios(struct dev_pagemap *pgmap, struct folio *folio, int nr_folios)
+{
+	struct folio *iter;
+	int i;
+
+	for (iter = folio, i = 0; i < nr_folios; iter = folio_next(iter), i++) {
+		if (!put_devmap_managed_page(&iter->page))
+			folio_put(iter);
+		if (!folio_ref_count(iter))
+			put_dev_pagemap(pgmap);
+	}
+}
+
 #ifdef CONFIG_FS_DAX
 bool __put_devmap_managed_page_refs(struct page *page, int refs)
 {
