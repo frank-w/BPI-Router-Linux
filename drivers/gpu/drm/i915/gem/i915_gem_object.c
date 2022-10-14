@@ -238,7 +238,7 @@ static void __i915_gem_object_free_mmaps(struct drm_i915_gem_object *obj)
 {
 	/* Skip serialisation and waking the device if known to be not used. */
 
-	if (obj->userfault_count)
+	if (obj->userfault_count && !IS_DGFX(to_i915(obj->base.dev)))
 		i915_gem_object_release_mmap_gtt(obj);
 
 	if (!RB_EMPTY_ROOT(&obj->mmo.offsets)) {
@@ -722,6 +722,9 @@ bool i915_gem_object_needs_ccs_pages(struct drm_i915_gem_object *obj)
 {
 	bool lmem_placement = false;
 	int i;
+
+	if (!HAS_FLAT_CCS(to_i915(obj->base.dev)))
+		return false;
 
 	for (i = 0; i < obj->mm.n_placements; i++) {
 		/* Compression is not allowed for the objects with smem placement */

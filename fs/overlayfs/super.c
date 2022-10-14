@@ -908,7 +908,7 @@ static int ovl_mount_dir(const char *name, struct path *path)
 	return err;
 }
 
-static int ovl_check_namelen(struct path *path, struct ovl_fs *ofs,
+static int ovl_check_namelen(const struct path *path, struct ovl_fs *ofs,
 			     const char *name)
 {
 	struct kstatfs statfs;
@@ -1022,7 +1022,20 @@ ovl_posix_acl_xattr_set(const struct xattr_handler *handler,
 
 	/* Check that everything is OK before copy-up */
 	if (value) {
-		acl = posix_acl_from_xattr(&init_user_ns, value, size);
+		/* The above comment can be understood in two ways:
+		 *
+		 * 1. We just want to check whether the basic POSIX ACL format
+		 *    is ok. For example, if the header is correct and the size
+		 *    is sane.
+		 * 2. We want to know whether the ACL_{GROUP,USER} entries can
+		 *    be mapped according to the underlying filesystem.
+		 *
+		 * Currently, we only check 1. If we wanted to check 2. we
+		 * would need to pass the mnt_userns and the fs_userns of the
+		 * underlying filesystem. But frankly, I think checking 1. is
+		 * enough to start the copy-up.
+		 */
+		acl = vfs_set_acl_prepare(&init_user_ns, &init_user_ns, value, size);
 		if (IS_ERR(acl))
 			return PTR_ERR(acl);
 	}
@@ -1353,7 +1366,7 @@ static int ovl_create_volatile_dirty(struct ovl_fs *ofs)
 }
 
 static int ovl_make_workdir(struct super_block *sb, struct ovl_fs *ofs,
-			    struct path *workpath)
+			    const struct path *workpath)
 {
 	struct vfsmount *mnt = ovl_upper_mnt(ofs);
 	struct dentry *temp, *workdir;
@@ -1482,7 +1495,7 @@ out:
 }
 
 static int ovl_get_workdir(struct super_block *sb, struct ovl_fs *ofs,
-			   struct path *upperpath)
+			   const struct path *upperpath)
 {
 	int err;
 	struct path workpath = { };
@@ -1525,7 +1538,7 @@ out:
 }
 
 static int ovl_get_indexdir(struct super_block *sb, struct ovl_fs *ofs,
-			    struct ovl_entry *oe, struct path *upperpath)
+			    struct ovl_entry *oe, const struct path *upperpath)
 {
 	struct vfsmount *mnt = ovl_upper_mnt(ofs);
 	struct dentry *indexdir;

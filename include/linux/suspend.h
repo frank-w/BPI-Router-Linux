@@ -75,7 +75,7 @@ extern struct suspend_stats suspend_stats;
 
 static inline void dpm_save_failed_dev(const char *name)
 {
-	strlcpy(suspend_stats.failed_devs[suspend_stats.last_failed_dev],
+	strscpy(suspend_stats.failed_devs[suspend_stats.last_failed_dev],
 		name,
 		sizeof(suspend_stats.failed_devs[0]));
 	suspend_stats.last_failed_dev++;
@@ -191,6 +191,7 @@ struct platform_s2idle_ops {
 	int (*begin)(void);
 	int (*prepare)(void);
 	int (*prepare_late)(void);
+	void (*check)(void);
 	bool (*wake)(void);
 	void (*restore_early)(void);
 	void (*restore)(void);
