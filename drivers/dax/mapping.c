@@ -266,6 +266,7 @@ void dax_unlock_entry(struct xa_state *xas, void *entry)
 	WARN_ON(!dax_is_locked(old));
 	dax_wake_entry(xas, entry, WAKE_NEXT);
 }
+EXPORT_SYMBOL_NS_GPL(dax_unlock_entry, DAX);
 
 /*
  * Return: The entry stored at this location before it was locked.
@@ -663,6 +664,7 @@ fallback:
 	xas_unlock_irq(xas);
 	return vmfault_to_dax_err(VM_FAULT_FALLBACK);
 }
+EXPORT_SYMBOL_NS_GPL(dax_grab_mapping_entry, DAX);
 
 static void *dax_zap_entry(struct xa_state *xas, void *entry)
 {
@@ -814,15 +816,21 @@ out:
  * wait indefinitely for all pins to drop, the alternative to waiting is
  * a potential use-after-free scenario
  */
-static void dax_break_layout(struct address_space *mapping, pgoff_t index)
+void dax_break_layouts(struct address_space *mapping, pgoff_t index,
+		       pgoff_t end)
 {
-	/* To do this without locks, the inode needs to be unreferenced */
-	WARN_ON(atomic_read(&mapping->host->i_count));
+	struct inode *inode = mapping->host;
+
+	/*
+	 * To do this without filesystem locks, the inode needs to be
+	 * unreferenced, or device-dax.
+	 */
+	WARN_ON(atomic_read(&inode->i_count) && !S_ISCHR(inode->i_mode));
 	do {
 		struct page *page;
 
 		page = dax_zap_mappings_range(mapping, index << PAGE_SHIFT,
-					      (index + 1) << PAGE_SHIFT);
+					      end << PAGE_SHIFT);
 		if (!page)
 			return;
 		wait_var_event(page, dax_page_idle(page));
@@ -838,7 +846,7 @@ int dax_delete_mapping_entry(struct address_space *mapping, pgoff_t index)
 	int ret;
 
 	if (mapping_exiting(mapping))
-		dax_break_layout(mapping, index);
+		dax_break_layouts(mapping, index, index + 1);
 
 	ret = __dax_invalidate_entry(mapping, index, true);
 
@@ -932,6 +940,7 @@ out:
 
 	return ret;
 }
+EXPORT_SYMBOL_NS_GPL(dax_insert_entry, DAX);
 
 int dax_writeback_one(struct xa_state *xas, struct dax_device *dax_dev,
 		      struct address_space *mapping, void *entry) __must_hold(xas)

@@ -382,9 +382,16 @@ void kill_dev_dax(struct dev_dax *dev_dax)
 {
 	struct dax_device *dax_dev = dev_dax->dax_dev;
 	struct inode *inode = dax_inode(dax_dev);
+	struct address_space *mapping = inode->i_mapping;
 
 	kill_dax(dax_dev);
-	unmap_mapping_range(inode->i_mapping, 0, 0, 1);
+
+	/*
+	 * The dax device inode can outlive the next reuse of the memory
+	 * fronted by this device, force it idle now.
+	 */
+	dax_break_layouts(mapping, 0, ULONG_MAX >> PAGE_SHIFT);
+	truncate_inode_pages(mapping, 0);
 
 	/*
 	 * Dynamic dax region have the pgmap allocated via dev_kzalloc()

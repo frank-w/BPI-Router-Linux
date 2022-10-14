@@ -181,7 +181,6 @@ dax_entry_t dax_lock_mapping_entry(struct address_space *mapping,
 		unsigned long index, struct page **page);
 void dax_unlock_mapping_entry(struct address_space *mapping,
 		unsigned long index, dax_entry_t cookie);
-void dax_break_layouts(struct inode *inode);
 struct page *dax_zap_mappings(struct address_space *mapping);
 struct page *dax_zap_mappings_range(struct address_space *mapping, loff_t start,
 				    loff_t end);
@@ -286,6 +285,8 @@ void dax_unlock_entry(struct xa_state *xas, void *entry);
 int dax_delete_mapping_entry(struct address_space *mapping, pgoff_t index);
 int dax_invalidate_mapping_entry_sync(struct address_space *mapping,
 				      pgoff_t index);
+void dax_break_layouts(struct address_space *mapping, pgoff_t index,
+		       pgoff_t end);
 int dax_dedupe_file_range_compare(struct inode *src, loff_t srcoff,
 				  struct inode *dest, loff_t destoff,
 				  loff_t len, bool *is_same,
