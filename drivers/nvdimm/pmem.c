@@ -468,6 +468,32 @@ static const struct dev_pagemap_ops fsdax_pagemap_ops = {
 	.memory_failure		= pmem_pagemap_memory_failure,
 };
 
+static int setup_dax(struct pmem_device *pmem, struct gendisk *disk,
+		     struct nd_region *nd_region)
+{
+	struct dax_device *dax_dev;
+	int rc;
+
+	dax_dev = alloc_dax(pmem, &pmem_dax_ops);
+	if (IS_ERR(dax_dev))
+		return PTR_ERR(dax_dev);
+	if (!dax_dev)
+		return 0;
+	set_dax_nocache(dax_dev);
+	set_dax_nomc(dax_dev);
+	if (is_nvdimm_sync(nd_region))
+		set_dax_synchronous(dax_dev);
+	rc = dax_add_host(dax_dev, disk);
+	if (rc) {
+		kill_dax(dax_dev);
+		put_dax(dax_dev);
+		return rc;
+	}
+	dax_write_cache(dax_dev, nvdimm_has_cache(nd_region));
+	pmem->dax_dev = dax_dev;
+	return 0;
+}
+
 static int pmem_attach_disk(struct device *dev,
 		struct nd_namespace_common *ndns)
 {
@@ -477,7 +503,6 @@ static int pmem_attach_disk(struct device *dev,
 	struct resource *res = &nsio->res;
 	struct range bb_range;
 	struct nd_pfn *nd_pfn = NULL;
-	struct dax_device *dax_dev;
 	struct nd_pfn_sb *pfn_sb;
 	struct pmem_device *pmem;
 	struct request_queue *q;
@@ -578,24 +603,13 @@ static int pmem_attach_disk(struct device *dev,
 	nvdimm_badblocks_populate(nd_region, &pmem->bb, &bb_range);
 	disk->bb = &pmem->bb;
 
-	dax_dev = alloc_dax(pmem, &pmem_dax_ops);
-	if (IS_ERR(dax_dev)) {
-		rc = PTR_ERR(dax_dev);
-		goto out;
-	}
-	set_dax_nocache(dax_dev);
-	set_dax_nomc(dax_dev);
-	if (is_nvdimm_sync(nd_region))
-		set_dax_synchronous(dax_dev);
-	rc = dax_add_host(dax_dev, disk);
+	rc = setup_dax(pmem, disk, nd_region);
 	if (rc)
-		goto out_cleanup_dax;
-	dax_write_cache(dax_dev, nvdimm_has_cache(nd_region));
-	pmem->dax_dev = dax_dev;
+		goto out;
 
 	rc = device_add_disk(dev, disk, pmem_attribute_groups);
 	if (rc)
-		goto out_remove_host;
+		goto out_dax;
 	if (devm_add_action_or_reset(dev, pmem_release_disk, pmem))
 		return -ENOMEM;
 
@@ -607,9 +621,8 @@ static int pmem_attach_disk(struct device *dev,
 		dev_warn(dev, "'badblocks' notification disabled\n");
 	return 0;
 
-out_remove_host:
+out_dax:
 	dax_remove_host(pmem->disk);
-out_cleanup_dax:
 	kill_dax(pmem->dax_dev);
 	put_dax(pmem->dax_dev);
 out:
