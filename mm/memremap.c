@@ -94,19 +94,6 @@ bool pgmap_pfn_valid(struct dev_pagemap *pgmap, unsigned long pfn)
 	return false;
 }
 
-static unsigned long pfn_end(struct dev_pagemap *pgmap, int range_id)
-{
-	const struct range *range = &pgmap->ranges[range_id];
-
-	return (range->start + range_len(range)) >> PAGE_SHIFT;
-}
-
-static unsigned long pfn_len(struct dev_pagemap *pgmap, unsigned long range_id)
-{
-	return (pfn_end(pgmap, range_id) -
-		pfn_first(pgmap, range_id)) >> pgmap->vmemmap_shift;
-}
-
 static void pageunmap_range(struct dev_pagemap *pgmap, int range_id)
 {
 	struct range *range = &pgmap->ranges[range_id];
@@ -138,10 +125,6 @@ void memunmap_pages(struct dev_pagemap *pgmap)
 	int i;
 
 	percpu_ref_kill(&pgmap->ref);
-	if (pgmap->type != MEMORY_DEVICE_PRIVATE &&
-	    pgmap->type != MEMORY_DEVICE_COHERENT)
-		for (i = 0; i < pgmap->nr_range; i++)
-			percpu_ref_put_many(&pgmap->ref, pfn_len(pgmap, i));
 
 	wait_for_completion(&pgmap->done);
 
@@ -267,9 +250,6 @@ static int pagemap_range(struct dev_pagemap *pgmap, struct mhp_params *params,
 	memmap_init_zone_device(&NODE_DATA(nid)->node_zones[ZONE_DEVICE],
 				PHYS_PFN(range->start),
 				PHYS_PFN(range_len(range)), pgmap);
-	if (pgmap->type != MEMORY_DEVICE_PRIVATE &&
-	    pgmap->type != MEMORY_DEVICE_COHERENT)
-		percpu_ref_get_many(&pgmap->ref, pfn_len(pgmap, range_id));
 	return 0;
 
 err_add_memory:
@@ -586,21 +566,3 @@ void pgmap_release_folios(struct folio *folio, int nr_folios)
 	for (iter = folio, i = 0; i < nr_folios; iter = folio_next(folio), i++)
 		folio_put(iter);
 }
-
-#ifdef CONFIG_FS_DAX
-bool __put_devmap_managed_page_refs(struct page *page, int refs)
-{
-	if (page->pgmap->type != MEMORY_DEVICE_FS_DAX)
-		return false;
-
-	/*
-	 * fsdax page refcounts are 1-based, rather than 0-based: if
-	 * refcount is 1, then the page is free and the refcount is
-	 * stable because nobody holds a reference on the page.
-	 */
-	if (page_ref_sub_return(page, refs) == 1)
-		wake_up_var(page);
-	return true;
-}
-EXPORT_SYMBOL(__put_devmap_managed_page_refs);
-#endif /* CONFIG_FS_DAX */
