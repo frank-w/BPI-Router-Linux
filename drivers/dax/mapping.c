@@ -213,7 +213,7 @@ static void *get_unlocked_entry(struct xa_state *xas, unsigned int order)
  * (it's cycled in clear_inode() after removing the entries from i_pages)
  * After we call xas_unlock_irq(), we cannot touch xas->xa.
  */
-static void wait_entry_unlocked(struct xa_state *xas, void *entry)
+static void wait_entry_unlocked(struct xa_state *xas, void *entry) __releases(xas)
 {
 	struct wait_exceptional_entry_queue ewait;
 	wait_queue_head_t *wq;
@@ -910,7 +910,7 @@ out:
 }
 
 int dax_writeback_one(struct xa_state *xas, struct dax_device *dax_dev,
-		      struct address_space *mapping, void *entry)
+		      struct address_space *mapping, void *entry) __must_hold(xas)
 {
 	unsigned long pfn, index, count, end;
 	long ret = 0;
