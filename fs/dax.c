@@ -1107,10 +1107,9 @@ static int dax_iomap_direct_access(const struct iomap *iomap, loff_t pos,
 		size_t size, void **kaddr, pfn_t *pfnp)
 {
 	pgoff_t pgoff = dax_iomap_pgoff(iomap, pos);
-	int id, rc = 0;
 	long length;
+	int rc = 0;
 
-	id = dax_read_lock();
 	length = dax_direct_access(iomap->dax_dev, pgoff, PHYS_PFN(size),
 				   DAX_ACCESS, kaddr, pfnp);
 	if (length < 0) {
@@ -1135,7 +1134,6 @@ out_check_addr:
 	if (!*kaddr)
 		rc = -EFAULT;
 out:
-	dax_read_unlock(id);
 	return rc;
 }
 
@@ -1591,7 +1589,7 @@ static vm_fault_t dax_fault_iter(struct vm_fault *vmf,
 	loff_t pos = (loff_t)xas->xa_index << PAGE_SHIFT;
 	bool write = iter->flags & IOMAP_WRITE;
 	unsigned long entry_flags = pmd ? DAX_PMD : 0;
-	int err = 0;
+	int err = 0, id;
 	pfn_t pfn;
 	void *kaddr;
 
@@ -1611,11 +1609,15 @@ static vm_fault_t dax_fault_iter(struct vm_fault *vmf,
 		return pmd ? VM_FAULT_FALLBACK : VM_FAULT_SIGBUS;
 	}
 
+	id = dax_read_lock();
 	err = dax_iomap_direct_access(iomap, pos, size, &kaddr, &pfn);
-	if (err)
+	if (err) {
+		dax_read_unlock(id);
 		return pmd ? VM_FAULT_FALLBACK : dax_fault_return(err);
+	}
 
 	*entry = dax_insert_entry(xas, vmf, iter, *entry, pfn, entry_flags);
+	dax_read_unlock(id);
 
 	if (write &&
 	    srcmap->type != IOMAP_HOLE && srcmap->addr != iomap->addr) {
