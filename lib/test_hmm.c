@@ -632,7 +632,8 @@ static struct page *dmirror_devmem_alloc_page(struct dmirror_device *mdevice)
 			goto error;
 	}
 
-	zone_device_page_init(dpage);
+	pgmap_request_folios(dpage->pgmap, page_folio(dpage), 1);
+	lock_page(dpage);
 	dpage->zone_device_data = rpage;
 	return dpage;
 

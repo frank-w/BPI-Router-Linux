@@ -325,7 +325,8 @@ nouveau_dmem_page_alloc_locked(struct nouveau_drm *drm)
 			return NULL;
 	}
 
-	zone_device_page_init(page);
+	pgmap_request_folios(page->pgmap, page_folio(page), 1);
+	lock_page(page);
 	return page;
 }
 

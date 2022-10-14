@@ -588,6 +588,7 @@ bool pgmap_request_folios(struct dev_pagemap *pgmap, struct folio *folio,
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(pgmap_request_folios);
 
 void pgmap_release_folios(struct dev_pagemap *pgmap, struct folio *folio, int nr_folios)
 {
