@@ -468,6 +468,11 @@ properties:
           - const: hardkernel,rk3326-odroid-go2
           - const: rockchip,rk3326
 
+      - description: Hardkernel Odroid M1
+        items:
+          - const: rockchip,rk3568-odroid-m1
+          - const: rockchip,rk3568
+
       - description: Hugsun X99 TV Box
         items:
           - const: hugsun,x99
@@ -708,6 +713,11 @@ properties:
         items:
           - const: rockchip,rv1108-evb
           - const: rockchip,rv1108
+
+      - description: Theobroma Systems PX30-uQ7 with Haikou baseboard
+        items:
+          - const: tsd,px30-ringneck-haikou
+          - const: rockchip,px30
 
       - description: Theobroma Systems RK3368-uQ7 with Haikou baseboard
         items:
