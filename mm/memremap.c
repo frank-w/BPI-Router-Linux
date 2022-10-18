@@ -531,8 +531,9 @@ void zone_device_page_init(struct page *page)
 }
 EXPORT_SYMBOL_GPL(zone_device_page_init);
 
-static bool folio_span_valid(struct dev_pagemap *pgmap, struct folio *folio,
-			     int nr_folios)
+static __maybe_unused bool folio_span_valid(struct dev_pagemap *pgmap,
+					    struct folio *folio,
+					    int nr_folios)
 {
 	unsigned long pfn_start, pfn_end;
 
