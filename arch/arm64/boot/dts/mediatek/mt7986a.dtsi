@@ -324,13 +324,14 @@
 			bus-range = <0x00 0xff>;
 			ranges = <0x82000000 0x00 0x20000000 0x00
 				  0x20000000 0x00 0x10000000>;
-			clocks = <&infracfg CLK_INFRA_PCIE_SEL>,
+			clocks = <&infracfg CLK_INFRA_IPCIE_PIPE_CK>,
 				 <&infracfg CLK_INFRA_IPCIE_CK>,
-				 <&infracfg CLK_INFRA_IPCIE_PIPE_CK>,
+				 <&clk40m>,
+				 <&clk40m>,
 				 <&infracfg CLK_INFRA_IPCIER_CK>,
 				 <&infracfg CLK_INFRA_IPCIEB_CK>;
 			clock-names = "pl_250m", "tl_26m", "tl_96m",
-				      "tl_32k", "peri_26m";
+				      "tl_32k", "peri_26m", "top_133m";
 			status = "disabled";
 
 			phys = <&pcie_port PHY_TYPE_PCIE>;
