@@ -291,13 +291,11 @@
 			interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&infracfg CLK_INFRA_MSDC_CK>,
 				 <&infracfg CLK_INFRA_MSDC_HCK_CK>,
+				 <&clk40m>,<&clk40m>,<&clk40m>,<&clk40m>,
 				 <&infracfg CLK_INFRA_MSDC_66M_CK>,
 				 <&infracfg CLK_INFRA_MSDC_133M_CK>;
-			clock-names = "source", "hclk", "axi_cg", "ahb_cg";
-			assigned-clocks = <&topckgen CLK_TOP_EMMC_416M_SEL>,
-					  <&topckgen CLK_TOP_EMMC_250M_SEL>;
-			assigned-clock-parents = <&apmixedsys CLK_APMIXED_MPLL>,
-						 <&topckgen CLK_TOP_NET1PLL_D5_D2>;
+			clock-names = "source", "hclk", "source_cg", "bus_clk",
+				      "sys_cg", "pclk_cg", "axi_cg", "ahb_cg";
 			status = "disabled";
 		};
 
