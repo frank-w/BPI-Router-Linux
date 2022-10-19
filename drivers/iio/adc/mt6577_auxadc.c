@@ -42,6 +42,7 @@ struct mtk_auxadc_compatible {
 struct mt6577_auxadc_device {
 	void __iomem *reg_base;
 	struct clk *adc_clk;
+	struct clk *adc_32k_clk;
 	struct mutex lock;
 	const struct mtk_auxadc_compatible *dev_comp;
 };
@@ -227,6 +228,12 @@ static int mt6577_auxadc_resume(struct device *dev)
 		return ret;
 	}
 
+	ret = clk_prepare_enable(adc_dev->adc_32k_clk);
+	if (ret) {
+		pr_err("failed to enable auxadc clock\n");
+		return ret;
+	}
+
 	mt6577_auxadc_mod_reg(adc_dev->reg_base + MT6577_AUXADC_MISC,
 			      MT6577_AUXADC_PDN_EN, 0);
 	mdelay(MT6577_AUXADC_POWER_READY_MS);
@@ -241,6 +248,8 @@ static int mt6577_auxadc_suspend(struct device *dev)
 
 	mt6577_auxadc_mod_reg(adc_dev->reg_base + MT6577_AUXADC_MISC,
 			      0, MT6577_AUXADC_PDN_EN);
+
+	clk_disable_unprepare(adc_dev->adc_32k_clk);
 	clk_disable_unprepare(adc_dev->adc_clk);
 
 	return 0;
@@ -282,6 +291,17 @@ static int mt6577_auxadc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	adc_dev->adc_32k_clk = devm_clk_get_optional(&pdev->dev, "32k");
+	if (IS_ERR(adc_dev->adc_32k_clk)) {
+		dev_err(&pdev->dev, "failed to get auxadc 32k clock\n");
+		return PTR_ERR(adc_dev->adc_32k_clk);
+	}
+	ret = clk_prepare_enable(adc_dev->adc_32k_clk);
+	if (ret) {
+		dev_err(&pdev->dev, "failed to enable auxadc 32k clock\n");
+		return ret;
+	}
+
 	adc_clk_rate = clk_get_rate(adc_dev->adc_clk);
 	if (!adc_clk_rate) {
 		ret = -EINVAL;
@@ -311,6 +331,7 @@ err_power_off:
 	mt6577_auxadc_mod_reg(adc_dev->reg_base + MT6577_AUXADC_MISC,
 			      0, MT6577_AUXADC_PDN_EN);
 err_disable_clk:
+	clk_disable_unprepare(adc_dev->adc_32k_clk);
 	clk_disable_unprepare(adc_dev->adc_clk);
 	return ret;
 }
@@ -325,6 +346,7 @@ static int mt6577_auxadc_remove(struct platform_device *pdev)
 	mt6577_auxadc_mod_reg(adc_dev->reg_base + MT6577_AUXADC_MISC,
 			      0, MT6577_AUXADC_PDN_EN);
 
+	clk_disable_unprepare(adc_dev->adc_32k_clk);
 	clk_disable_unprepare(adc_dev->adc_clk);
 
 	return 0;
