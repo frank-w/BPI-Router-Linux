@@ -181,6 +181,16 @@
 	status = "okay";
 };
 
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie_pins>;
+	status = "okay";
+};
+
+&pcie_phy {
+	status = "okay";
+};
+
 &pio {
 	i2c_pins: i2c-pins {
 		mux {
@@ -244,6 +254,13 @@
 			pins = "EMMC_RSTB";
 			drive-strength = <4>;
 			mediatek,pull-up-adv = <1>;	/* pull-up 10K */
+		};
+	};
+
+	pcie_pins: pcie-pins {
+		mux {
+			function = "pcie";
+			groups = "pcie_clk", "pcie_pereset";
 		};
 	};
 
