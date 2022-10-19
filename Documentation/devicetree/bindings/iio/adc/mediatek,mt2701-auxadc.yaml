@@ -44,10 +44,14 @@ properties:
     maxItems: 1
 
   clocks:
-    maxItems: 1
+    maxItems: 2
+    minItems: 1
 
   clock-names:
-    const: main
+    items:
+      - const: main
+      - const: 32k
+    minItems: 1
 
   "#io-channel-cells":
     const: 1
