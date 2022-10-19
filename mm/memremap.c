@@ -519,18 +519,6 @@ void free_zone_device_page(struct page *page)
 		put_dev_pagemap(page->pgmap);
 }
 
-void zone_device_page_init(struct page *page)
-{
-	/*
-	 * Drivers shouldn't be allocating pages after calling
-	 * memunmap_pages().
-	 */
-	WARN_ON_ONCE(!percpu_ref_tryget_live(&page->pgmap->ref));
-	set_page_count(page, 1);
-	lock_page(page);
-}
-EXPORT_SYMBOL_GPL(zone_device_page_init);
-
 static __maybe_unused bool folio_span_valid(struct dev_pagemap *pgmap,
 					    struct folio *folio,
 					    int nr_folios)
