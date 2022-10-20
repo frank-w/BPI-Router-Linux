@@ -376,8 +376,14 @@ static vm_fault_t dax_associate_entry(void *entry,
 		if (flags & DAX_COW) {
 			dax_mapping_set_cow(folio);
 		} else {
+			struct dev_pagemap *pgmap = folio_pgmap(folio);
+			unsigned long pfn = page_to_pfn(&folio->page);
+
 			WARN_ON_ONCE(folio->mapping);
-			if (!pgmap_request_folios(folio_pgmap(folio), folio, 1))
+			if (folio !=
+			    pgmap_request_folio(pgmap,
+						pfn_to_pgmap_offset(pgmap, pfn),
+						folio_order(folio)))
 				return VM_FAULT_SIGBUS;
 			folio->mapping = mapping;
 			folio->index = index + i;
@@ -691,7 +697,7 @@ static struct page *dax_zap_pages(struct xa_state *xas, void *entry)
 
 	dax_for_each_folio(entry, folio, i) {
 		if (zap)
-			pgmap_release_folios(folio, 1);
+			folio_put(folio);
 		if (!ret && !dax_folio_idle(folio))
 			ret = folio_page(folio, 0);
 	}

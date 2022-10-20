@@ -466,76 +466,60 @@ void free_zone_device_page(struct page *page)
 	put_dev_pagemap(page->pgmap);
 }
 
-static __maybe_unused bool folio_span_valid(struct dev_pagemap *pgmap,
-					    struct folio *folio,
-					    int nr_folios)
+static unsigned long pgmap_offset_to_pfn(struct dev_pagemap *pgmap,
+					 pgoff_t pgmap_offset)
 {
-	unsigned long pfn_start, pfn_end;
+	u64 sum = 0, offset = PFN_PHYS(pgmap_offset);
+	int i;
 
-	pfn_start = page_to_pfn(folio_page(folio, 0));
-	pfn_end = pfn_start + (1 << folio_order(folio)) * nr_folios - 1;
+	for (i = 0; i < pgmap->nr_range; i++) {
+		struct range *range = &pgmap->ranges[i];
 
-	if (pgmap != xa_load(&pgmap_array, pfn_start))
-		return false;
+		if (offset >= sum && offset < (sum + range_len(range)))
+			return PHYS_PFN(range->start + offset - sum);
+		sum += range_len(range);
+	}
 
-	if (pfn_end > pfn_start && pgmap != xa_load(&pgmap_array, pfn_end))
-		return false;
-
-	return true;
+	return -1;
 }
 
 /**
- * pgmap_request_folios - activate an contiguous span of folios in @pgmap
- * @pgmap: host page map for the folio array
- * @folio: start of the folio list, all subsequent folios have same folio_size()
+ * pgmap_request_folio - activate a folio of a given order in @pgmap
+ * @pgmap: host page map of the folio to activate
+ * @pgmap_offset: page-offset into the pgmap to request
+ * @order: expected folio_order() of the folio
  *
  * Caller is responsible for @pgmap remaining live for the duration of
- * this call. Caller is also responsible for not racing requests for the
- * same folios.
+ * this call. The order (size) of the folios in the pgmap are assumed
+ * stable before this call.
  */
-bool pgmap_request_folios(struct dev_pagemap *pgmap, struct folio *folio,
-			  int nr_folios)
+struct folio *pgmap_request_folio(struct dev_pagemap *pgmap,
+				  pgoff_t pgmap_offset, int order)
 {
-	struct folio *iter;
-	int i;
+	unsigned long pfn = pgmap_offset_to_pfn(pgmap, pgmap_offset);
+	struct page *page = pfn_to_page(pfn);
+	struct folio *folio;
+	int v;
 
-	/*
-	 * All of the WARNs below are for catching bugs in future
-	 * development that changes the assumptions of:
-	 * 1/ uniform folios in @pgmap
-	 * 2/ @pgmap death does not race this routine.
-	 */
-	VM_WARN_ON_ONCE(!folio_span_valid(pgmap, folio, nr_folios));
+	if (WARN_ON_ONCE(page->pgmap != pgmap))
+		return NULL;
 
 	if (WARN_ON_ONCE(percpu_ref_is_dying(&pgmap->ref)))
-		return false;
+		return NULL;
 
-	for (iter = folio_next(folio), i = 1; i < nr_folios;
-	     iter = folio_next(folio), i++)
-		if (WARN_ON_ONCE(folio_order(iter) != folio_order(folio)))
-			return false;
+	folio = page_folio(page);
+	if (WARN_ON_ONCE(folio_order(folio) != order))
+		return NULL;
 
-	for (iter = folio, i = 0; i < nr_folios; iter = folio_next(iter), i++) {
-		folio_ref_inc(iter);
-		if (folio_ref_count(iter) == 1)
-			percpu_ref_tryget(&pgmap->ref);
+	v = folio_ref_inc_return(folio);
+	if (v > 1)
+		return folio;
+
+	if (WARN_ON_ONCE(!percpu_ref_tryget(&pgmap->ref))) {
+		folio_put(folio);
+		return NULL;
 	}
 
-	return true;
+	return folio;
 }
-EXPORT_SYMBOL_GPL(pgmap_request_folios);
-
-/*
- * A symmetric helper to undo the page references acquired by
- * pgmap_request_folios(), but the caller can also just arrange
- * folio_put() on all the folios it acquired previously for the same
- * effect.
- */
-void pgmap_release_folios(struct folio *folio, int nr_folios)
-{
-	struct folio *iter;
-	int i;
-
-	for (iter = folio, i = 0; i < nr_folios; iter = folio_next(folio), i++)
-		folio_put(iter);
-}
+EXPORT_SYMBOL_GPL(pgmap_request_folio);

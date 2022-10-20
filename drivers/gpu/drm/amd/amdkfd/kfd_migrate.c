@@ -215,15 +215,17 @@ svm_migrate_addr_to_pfn(struct amdgpu_device *adev, unsigned long addr)
 	return (addr + adev->kfd.dev->pgmap.range.start) >> PAGE_SHIFT;
 }
 
-static void
-svm_migrate_get_vram_page(struct svm_range *prange, unsigned long pfn)
+static void svm_migrate_get_vram_page(struct dev_pagemap *pgmap,
+				      struct svm_range *prange,
+				      unsigned long pfn)
 {
+	struct folio *folio;
 	struct page *page;
 
-	page = pfn_to_page(pfn);
+	folio = pgmap_request_folio(pgmap, pfn_to_pgmap_offset(pgmap, pfn), 0);
+	page = &folio->page;
 	svm_range_bo_ref(prange->svm_bo);
 	page->zone_device_data = prange->svm_bo;
-	pgmap_request_folios(page->pgmap, page_folio(page), 1);
 	lock_page(page);
 }
 
@@ -298,6 +300,7 @@ svm_migrate_copy_to_vram(struct amdgpu_device *adev, struct svm_range *prange,
 			 struct migrate_vma *migrate, struct dma_fence **mfence,
 			 dma_addr_t *scratch)
 {
+	struct kfd_dev *kfddev = adev->kfd.dev;
 	uint64_t npages = migrate->npages;
 	struct device *dev = adev->dev;
 	struct amdgpu_res_cursor cursor;
@@ -325,7 +328,8 @@ svm_migrate_copy_to_vram(struct amdgpu_device *adev, struct svm_range *prange,
 
 		dst[i] = cursor.start + (j << PAGE_SHIFT);
 		migrate->dst[i] = svm_migrate_addr_to_pfn(adev, dst[i]);
-		svm_migrate_get_vram_page(prange, migrate->dst[i]);
+			svm_migrate_get_vram_page(&kfddev->pgmap, prange,
+						  migrate->dst[i]);
 		migrate->dst[i] = migrate_pfn(migrate->dst[i]);
 
 		spage = migrate_pfn_to_page(migrate->src[i]);
