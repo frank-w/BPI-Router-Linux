@@ -133,6 +133,13 @@ static void mtk_pcs_get_state(struct phylink_pcs *pcs, struct phylink_link_state
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val);
 	state->an_complete = !!(val & SGMII_AN_COMPLETE);
 	state->link = !!(val & SGMII_LINK_STATYS);
+
+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val);
+	printk(KERN_ALERT "offset:0 0x%x",val);
+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1+4, &val);
+	printk(KERN_ALERT "offset:4 0x%x",val);
+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1+8, &val);
+	printk(KERN_ALERT "offset:8 0x%x",val);
 }
 
 static const struct phylink_pcs_ops mtk_pcs_ops = {
@@ -145,6 +152,7 @@ static const struct phylink_pcs_ops mtk_pcs_ops = {
 int mtk_sgmii_init(struct mtk_sgmii *ss, struct device_node *r, u32 ana_rgc3)
 {
 	struct device_node *np;
+	unsigned int val;
 	int i;
 
 	for (i = 0; i < MTK_MAX_DEVS; i++) {
@@ -158,6 +166,12 @@ int mtk_sgmii_init(struct mtk_sgmii *ss, struct device_node *r, u32 ana_rgc3)
 		if (IS_ERR(ss->pcs[i].regmap))
 			return PTR_ERR(ss->pcs[i].regmap);
 
+		regmap_read(ss->pcs[i].regmap, SGMSYS_PCS_CONTROL_1, &val);
+		printk(KERN_ALERT "dev: %d offset:0 0x%x",i,val);
+		regmap_read(ss->pcs[i].regmap, SGMSYS_PCS_CONTROL_1+4, &val);
+		printk(KERN_ALERT "dev: %d offset:4 0x%x",i,val);
+		regmap_read(ss->pcs[i].regmap, SGMSYS_PCS_CONTROL_1+8, &val);
+		printk(KERN_ALERT "dev: %d offset:8 0x%x",i,val);
 		ss->pcs[i].pcs.ops = &mtk_pcs_ops;
 	}
 
