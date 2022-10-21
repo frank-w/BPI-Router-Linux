@@ -52,6 +52,8 @@ properties:
     minItems: 2
     maxItems: 7
 
+  drv-type: true
+
   interrupts:
     description:
       Should at least contain MSDC GIC interrupt. To support SDIO in-band wakeup, an extended
@@ -159,6 +161,8 @@ properties:
 
   reset-names:
     const: hrst
+
+  r_smpl: true
 
 required:
   - compatible
