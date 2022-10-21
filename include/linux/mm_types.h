@@ -861,7 +861,6 @@ typedef __bitwise unsigned int vm_fault_t;
  * @VM_FAULT_OOM:		Out Of Memory
  * @VM_FAULT_SIGBUS:		Bad access
  * @VM_FAULT_MAJOR:		Page read from storage
- * @VM_FAULT_WRITE:		Special case for get_user_pages
  * @VM_FAULT_HWPOISON:		Hit poisoned small page
  * @VM_FAULT_HWPOISON_LARGE:	Hit poisoned large page. Index encoded
  *				in upper bits
@@ -882,7 +881,6 @@ enum vm_fault_reason {
 	VM_FAULT_OOM            = (__force vm_fault_t)0x000001,
 	VM_FAULT_SIGBUS         = (__force vm_fault_t)0x000002,
 	VM_FAULT_MAJOR          = (__force vm_fault_t)0x000004,
-	VM_FAULT_WRITE          = (__force vm_fault_t)0x000008,
 	VM_FAULT_HWPOISON       = (__force vm_fault_t)0x000010,
 	VM_FAULT_HWPOISON_LARGE = (__force vm_fault_t)0x000020,
 	VM_FAULT_SIGSEGV        = (__force vm_fault_t)0x000040,
@@ -908,7 +906,6 @@ enum vm_fault_reason {
 	{ (__force unsigned int) VM_FAULT_OOM,                 "OOM" },	\
 	{ (__force unsigned int) VM_FAULT_SIGBUS,              "SIGBUS" },	\
 	{ (__force unsigned int) VM_FAULT_MAJOR,               "MAJOR" },	\
-	{ (__force unsigned int) VM_FAULT_WRITE,               "WRITE" },	\
 	{ (__force unsigned int) VM_FAULT_HWPOISON,            "HWPOISON" },	\
 	{ (__force unsigned int) VM_FAULT_HWPOISON_LARGE,      "HWPOISON_LARGE" },	\
 	{ (__force unsigned int) VM_FAULT_SIGSEGV,             "SIGSEGV" },	\
