@@ -258,9 +258,8 @@ allOf:
           items:
             - const: source
             - const: hclk
-            - const: source_cg
-            - const: bus_clk
-            - const: sys_cg
+            - const: axi_cg
+            - const: ahb_cg
   - if:
       not:
         properties:
