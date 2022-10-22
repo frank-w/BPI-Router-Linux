@@ -377,6 +377,56 @@ static int emit_indirect(int op, int reg, u8 *bytes)
 	return i;
 }
 
+static inline bool is_jcc32(struct insn *insn)
+{
+	/* Jcc.d32 second opcode byte is in the range: 0x80-0x8f */
+	return insn->opcode.bytes[0] == 0x0f && (insn->opcode.bytes[1] & 0xf0) == 0x80;
+}
+
+static int emit_call_track_retpoline(void *addr, struct insn *insn, int reg, u8 *bytes)
+{
+	u8 op = insn->opcode.bytes[0];
+	int i = 0;
+
+	/*
+	 * Clang does 'weird' Jcc __x86_indirect_thunk_r11 conditional
+	 * tail-calls. Deal with them.
+	 */
+	if (is_jcc32(insn)) {
+		bytes[i++] = op;
+		op = insn->opcode.bytes[1];
+		goto clang_jcc;
+	}
+
+	if (insn->length == 6)
+		bytes[i++] = 0x2e; /* CS-prefix */
+
+	switch (op) {
+	case CALL_INSN_OPCODE:
+		__text_gen_insn(bytes+i, op, addr+i,
+				__x86_indirect_call_thunk_array[reg],
+				CALL_INSN_SIZE);
+		i += CALL_INSN_SIZE;
+		break;
+
+	case JMP32_INSN_OPCODE:
+clang_jcc:
+		__text_gen_insn(bytes+i, op, addr+i,
+				__x86_indirect_jump_thunk_array[reg],
+				JMP32_INSN_SIZE);
+		i += JMP32_INSN_SIZE;
+		break;
+
+	default:
+		WARN("%pS %px %*ph\n", addr, addr, 6, addr);
+		return -1;
+	}
+
+	WARN_ON_ONCE(i != insn->length);
+
+	return i;
+}
+
 /*
  * Rewrite the compiler generated retpoline thunk calls.
  *
@@ -409,8 +459,12 @@ static int patch_retpoline(void *addr, struct insn *insn, u8 *bytes)
 	BUG_ON(reg == 4);
 
 	if (cpu_feature_enabled(X86_FEATURE_RETPOLINE) &&
-	    !cpu_feature_enabled(X86_FEATURE_RETPOLINE_LFENCE))
+	    !cpu_feature_enabled(X86_FEATURE_RETPOLINE_LFENCE)) {
+		if (cpu_feature_enabled(X86_FEATURE_CALL_DEPTH))
+			return emit_call_track_retpoline(addr, insn, reg, bytes);
+
 		return -1;
+	}
 
 	op = insn->opcode.bytes[0];
 
@@ -427,8 +481,7 @@ static int patch_retpoline(void *addr, struct insn *insn, u8 *bytes)
 	 *   [ NOP ]
 	 * 1:
 	 */
-	/* Jcc.d32 second opcode byte is in the range: 0x80-0x8f */
-	if (op == 0x0f && (insn->opcode.bytes[1] & 0xf0) == 0x80) {
+	if (is_jcc32(insn)) {
 		cc = insn->opcode.bytes[1] & 0xf;
 		cc ^= 1; /* invert condition */
 
@@ -518,6 +571,11 @@ void __init_or_module noinline apply_retpolines(s32 *start, s32 *end)
 }
 
 #ifdef CONFIG_RETHUNK
+
+#ifdef CONFIG_CALL_THUNKS
+void (*x86_return_thunk)(void) __ro_after_init = &__x86_return_thunk;
+#endif
+
 /*
  * Rewrite the compiler generated return thunk tail-calls.
  *
@@ -533,14 +591,18 @@ static int patch_return(void *addr, struct insn *insn, u8 *bytes)
 {
 	int i = 0;
 
-	if (cpu_feature_enabled(X86_FEATURE_RETHUNK))
-		return -1;
+	if (cpu_feature_enabled(X86_FEATURE_RETHUNK)) {
+		if (x86_return_thunk == __x86_return_thunk)
+			return -1;
 
-	bytes[i++] = RET_INSN_OPCODE;
+		i = JMP32_INSN_SIZE;
+		__text_gen_insn(bytes, JMP32_INSN_OPCODE, addr, x86_return_thunk, i);
+	} else {
+		bytes[i++] = RET_INSN_OPCODE;
+	}
 
 	for (; i < insn->length;)
 		bytes[i++] = INT3_INSN_OPCODE;
-
 	return i;
 }
 
@@ -947,6 +1009,12 @@ void __init alternative_instructions(void)
 	 */
 	apply_alternatives(__alt_instructions, __alt_instructions_end);
 
+	/*
+	 * Now all calls are established. Apply the call thunks if
+	 * required.
+	 */
+	callthunks_patch_builtin_calls();
+
 	apply_ibt_endbr(__ibt_endbr_seal, __ibt_endbr_seal_end);
 
 #ifdef CONFIG_SMP
@@ -1236,6 +1304,27 @@ void *text_poke_kgdb(void *addr, const void *opcode, size_t len)
 	return __text_poke(text_poke_memcpy, addr, opcode, len);
 }
 
+void *text_poke_copy_locked(void *addr, const void *opcode, size_t len,
+			    bool core_ok)
+{
+	unsigned long start = (unsigned long)addr;
+	size_t patched = 0;
+
+	if (WARN_ON_ONCE(!core_ok && core_kernel_text(start)))
+		return NULL;
+
+	while (patched < len) {
+		unsigned long ptr = start + patched;
+		size_t s;
+
+		s = min_t(size_t, PAGE_SIZE * 2 - offset_in_page(ptr), len - patched);
+
+		__text_poke(text_poke_memcpy, (void *)ptr, opcode + patched, s);
+		patched += s;
+	}
+	return addr;
+}
+
 /**
  * text_poke_copy - Copy instructions into (an unused part of) RX memory
  * @addr: address to modify
@@ -1250,22 +1339,8 @@ void *text_poke_kgdb(void *addr, const void *opcode, size_t len)
  */
 void *text_poke_copy(void *addr, const void *opcode, size_t len)
 {
-	unsigned long start = (unsigned long)addr;
-	size_t patched = 0;
-
-	if (WARN_ON_ONCE(core_kernel_text(start)))
-		return NULL;
-
 	mutex_lock(&text_mutex);
-	while (patched < len) {
-		unsigned long ptr = start + patched;
-		size_t s;
-
-		s = min_t(size_t, PAGE_SIZE * 2 - offset_in_page(ptr), len - patched);
-
-		__text_poke(text_poke_memcpy, (void *)ptr, opcode + patched, s);
-		patched += s;
-	}
+	addr = text_poke_copy_locked(addr, opcode, len, false);
 	mutex_unlock(&text_mutex);
 	return addr;
 }

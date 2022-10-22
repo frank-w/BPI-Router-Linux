@@ -132,18 +132,19 @@ SECTIONS
 		CPUIDLE_TEXT
 		LOCK_TEXT
 		KPROBES_TEXT
-		ALIGN_ENTRY_TEXT_BEGIN
-		ENTRY_TEXT
-		ALIGN_ENTRY_TEXT_END
 		SOFTIRQENTRY_TEXT
-		STATIC_CALL_TEXT
-		*(.gnu.warning)
-
 #ifdef CONFIG_RETPOLINE
 		__indirect_thunk_start = .;
 		*(.text.__x86.*)
 		__indirect_thunk_end = .;
 #endif
+		STATIC_CALL_TEXT
+
+		ALIGN_ENTRY_TEXT_BEGIN
+		ENTRY_TEXT
+		ALIGN_ENTRY_TEXT_END
+		*(.gnu.warning)
+
 	} :text =0xcccc
 
 	/* End of text section, which should occupy whole number of pages */
@@ -289,6 +290,13 @@ SECTIONS
 		__return_sites = .;
 		*(.return_sites)
 		__return_sites_end = .;
+	}
+
+	. = ALIGN(8);
+	.call_sites : AT(ADDR(.call_sites) - LOAD_OFFSET) {
+		__call_sites = .;
+		*(.call_sites)
+		__call_sites_end = .;
 	}
 #endif
 
@@ -493,11 +501,3 @@ INIT_PER_CPU(irq_stack_backing_store);
 #endif
 
 #endif /* CONFIG_X86_64 */
-
-#ifdef CONFIG_KEXEC_CORE
-#include <asm/kexec.h>
-
-. = ASSERT(kexec_control_code_size <= KEXEC_CONTROL_CODE_MAX_SIZE,
-           "kexec control code size is too big");
-#endif
-
