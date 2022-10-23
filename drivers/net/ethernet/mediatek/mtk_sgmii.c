@@ -39,7 +39,7 @@ static int mtk_pcs_setup_mode_an(struct mtk_pcs *mpcs,
 
 	/* Setup the link timer and QPHY power up inside SGMIISYS */
 	regmap_write(mpcs->regmap, SGMSYS_PCS_LINK_TIMER, val);
-
+	printk(KERN_ALERT "timer 0x%x",val);
 	regmap_read(mpcs->regmap, SGMSYS_SGMII_MODE, &val);
 	val |= SGMII_REMOTE_FAULT_DIS;
 	regmap_write(mpcs->regmap, SGMSYS_SGMII_MODE, val);
@@ -48,7 +48,7 @@ static int mtk_pcs_setup_mode_an(struct mtk_pcs *mpcs,
 			   advertise);
 
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val);
-	val |= SGMII_AN_ENABLE;
+	//val |= SGMII_AN_ENABLE;
 	val |= SGMII_AN_RESTART;
 	regmap_write(mpcs->regmap, SGMSYS_PCS_CONTROL_1, val);
 
@@ -150,6 +150,8 @@ static void mtk_pcs_get_state(struct phylink_pcs *pcs, struct phylink_link_state
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val);
 	state->an_complete = !!(val & SGMII_AN_COMPLETE);
 	state->link = !!(val & SGMII_LINK_STATYS);
+
+	state->duplex=DUPLEX_FULL;
 
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val);
 	printk(KERN_ALERT "offset:0 0x%x",val);
