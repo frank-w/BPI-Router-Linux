@@ -32,10 +32,11 @@ static int mtk_pcs_setup_mode_an(struct mtk_pcs *mpcs,
 	if (advertise < 0)
 		advertise = 0;
 
-	if (interface == PHY_INTERFACE_MODE_SGMII)
+	printk(KERN_ALERT "interface-mode %d (sgmii:%d)",interface,PHY_INTERFACE_MODE_SGMII); //mode was 21=PHY_INTERFACE_MODE_1000BASEX (sgmii:4)
+	//if (interface == PHY_INTERFACE_MODE_SGMII)
 		val = 1600000 / 2 / 8;
-	else
-		val = 10000000 / 2 / 8;
+	//else
+	//	val = 10000000 / 2 / 8;
 
 	/* Setup the link timer and QPHY power up inside SGMIISYS */
 	regmap_write(mpcs->regmap, SGMSYS_PCS_LINK_TIMER, val);
