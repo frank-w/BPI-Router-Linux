@@ -149,7 +149,7 @@ static void mtk_pcs_link_up(struct phylink_pcs *pcs, unsigned int mode,
 static void mtk_pcs_get_state(struct phylink_pcs *pcs, struct phylink_link_state *state)
 {
 	struct mtk_pcs *mpcs = pcs_to_mtk_pcs(pcs);
-	unsigned int val;
+	unsigned int val,bm,adv;
 
 	regmap_read(mpcs->regmap, mpcs->ana_rgc3, &val);
 	state->speed = val & RG_PHY_SPEED_3_125G ? SPEED_2500 : SPEED_1000;
@@ -167,7 +167,11 @@ static void mtk_pcs_get_state(struct phylink_pcs *pcs, struct phylink_link_state
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1+32, &val);
 	printk(KERN_ALERT "offset:32 0x%x",val);
 
-	state->duplex = DUPLEX_FULL;
+	//state->duplex = DUPLEX_FULL;
+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm);
+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1 + 8, &adv);
+	printk(KERN_ALERT "bm:0x%x adv:0x%x",bm >> 16,adv >> 16);
+	phylink_mii_c22_pcs_decode_state(state, bm >> 16, adv >> 16);
 }
 
 static const struct phylink_pcs_ops mtk_pcs_ops = {
