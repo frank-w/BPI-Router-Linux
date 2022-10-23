@@ -33,7 +33,7 @@ static int mtk_pcs_setup_mode_an(struct mtk_pcs *mpcs,
 		advertise = 0;
 
 	if (interface == PHY_INTERFACE_MODE_SGMII)
-		val = 16000000 / 2 / 8;
+		val = 1600000 / 2 / 8;
 	else
 		val = 10000000 / 2 / 8;
 
