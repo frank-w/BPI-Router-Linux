@@ -37,7 +37,7 @@ static int mtk_pcs_setup_mode_an(struct mtk_pcs *mpcs,
 		link_timer = 1600000 / 2 / 8;
 	else
 		link_timer = 10000000 / 2 / 8;
-
+	printk(KERN_ALERT "interface-mode: %d advertise: 0x%x link timer:0x%x",interface,advertise,link_timer);
 	/* Setup the link timer and QPHY power up inside SGMIISYS */
 	regmap_write(mpcs->regmap, SGMSYS_PCS_LINK_TIMER, link_timer);
 
@@ -164,6 +164,10 @@ static void mtk_pcs_get_state(struct phylink_pcs *pcs, struct phylink_link_state
 	printk(KERN_ALERT "offset:4 0x%x",val);
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1+8, &val);
 	printk(KERN_ALERT "offset:8 0x%x",val);
+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1+32, &val);
+	printk(KERN_ALERT "offset:32 0x%x",val);
+
+	state->duplex = DUPLEX_FULL;
 }
 
 static const struct phylink_pcs_ops mtk_pcs_ops = {
@@ -196,6 +200,8 @@ int mtk_sgmii_init(struct mtk_sgmii *ss, struct device_node *r, u32 ana_rgc3)
 		printk(KERN_ALERT "dev: %d offset:4 0x%x",i,val);
 		regmap_read(ss->pcs[i].regmap, SGMSYS_PCS_CONTROL_1+8, &val);
 		printk(KERN_ALERT "dev: %d offset:8 0x%x",i,val);
+		regmap_read(ss->pcs[i].regmap, SGMSYS_PCS_CONTROL_1+32, &val);
+		printk(KERN_ALERT "dev: %d offset:32 0x%x",i,val);
 		ss->pcs[i].pcs.ops = &mtk_pcs_ops;
 	}
 
