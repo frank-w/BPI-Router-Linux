@@ -42,7 +42,7 @@ static int mtk_pcs_setup_mode_an(struct mtk_pcs *mpcs,
 	regmap_write(mpcs->regmap, SGMSYS_PCS_LINK_TIMER, link_timer);
 
 	regmap_read(mpcs->regmap, SGMSYS_SGMII_MODE, &val);
-	if (interface = == PHY_INTERFACE_MODE_SGMII)
+	if (interface == PHY_INTERFACE_MODE_SGMII)
 		val |= SGMII_IF_MODE_BIT0;
 	else
 		val &= ~SGMII_IF_MODE_BIT0;
