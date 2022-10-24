@@ -611,6 +611,22 @@ int phylink_speed_up(struct phylink *pl);
 
 void phylink_set_port_modes(unsigned long *bits);
 
+static inline int phylink_get_link_timer_ns(phy_interface_t interface)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_QSGMII:
+		return 1600000;
+
+	case PHY_INTERFACE_MODE_1000BASEX:
+	case PHY_INTERFACE_MODE_2500BASEX:
+		return 10000000;
+
+	default:
+		return -EINVAL;
+	}
+}
+
 void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,
 				      u16 bmsr, u16 lpa);
 void phylink_mii_c22_pcs_get_state(struct mdio_device *pcs,

@@ -466,8 +466,10 @@
 #define ETHSYS_DMA_AG_MAP_PPE	BIT(2)
 
 /* SGMII subsystem config registers */
-/* Register to auto-negotiation restart */
+/* BMCR (low 16) BMSR (high 16) */
 #define SGMSYS_PCS_CONTROL_1	0x0
+#define SGMII_BMCR		GENMASK(15, 0)
+#define SGMII_BMSR		GENMASK(31, 16)
 #define SGMII_AN_RESTART	BIT(9)
 #define SGMII_ISOLATE		BIT(10)
 #define SGMII_AN_ENABLE		BIT(12)
@@ -477,9 +479,13 @@
 #define SGMII_PCS_FAULT		BIT(23)
 #define SGMII_AN_EXPANSION_CLR	BIT(30)
 
+#define SGMSYS_PCS_ADVERTISE	0x8
+#define SGMII_ADVERTISE		GENMASK(15, 0)
+#define SGMII_LPA		GENMASK(31, 16)
+
 /* Register to programmable link timer, the unit in 2 * 8ns */
 #define SGMSYS_PCS_LINK_TIMER	0x18
-#define SGMII_LINK_TIMER_DEFAULT	(0x186a0 & GENMASK(19, 0))
+#define SGMII_LINK_TIMER_MASK	GENMASK(19, 0)
 
 /* Register to control remote fault */
 #define SGMSYS_SGMII_MODE		0x20
