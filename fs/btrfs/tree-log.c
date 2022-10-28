@@ -5422,7 +5422,7 @@ again:
 			}
 
 			if (!need_log_inode(trans, BTRFS_I(di_inode))) {
-				btrfs_add_delayed_iput(di_inode);
+				btrfs_add_delayed_iput(BTRFS_I(di_inode));
 				break;
 			}
 
@@ -5431,7 +5431,7 @@ again:
 				log_mode = LOG_INODE_ALL;
 			ret = btrfs_log_inode(trans, BTRFS_I(di_inode),
 					      log_mode, ctx);
-			btrfs_add_delayed_iput(di_inode);
+			btrfs_add_delayed_iput(BTRFS_I(di_inode));
 			if (ret)
 				goto out;
 			if (ctx->log_new_dentries) {
@@ -5625,11 +5625,11 @@ static int add_conflicting_inode(struct btrfs_trans_handle *trans,
 	 * so that the log ends up with the new name and without the old name.
 	 */
 	if (!need_log_inode(trans, BTRFS_I(inode))) {
-		btrfs_add_delayed_iput(inode);
+		btrfs_add_delayed_iput(BTRFS_I(inode));
 		return 0;
 	}
 
-	btrfs_add_delayed_iput(inode);
+	btrfs_add_delayed_iput(BTRFS_I(inode));
 
 	ino_elem = kmalloc(sizeof(*ino_elem), GFP_NOFS);
 	if (!ino_elem)
@@ -5704,7 +5704,7 @@ static int log_conflicting_inodes(struct btrfs_trans_handle *trans,
 			 */
 			ret = btrfs_log_inode(trans, BTRFS_I(inode),
 					      LOG_INODE_ALL, ctx);
-			btrfs_add_delayed_iput(inode);
+			btrfs_add_delayed_iput(BTRFS_I(inode));
 			if (ret)
 				break;
 			continue;
@@ -5721,7 +5721,7 @@ static int log_conflicting_inodes(struct btrfs_trans_handle *trans,
 		 * that, we can avoid doing it again.
 		 */
 		if (!need_log_inode(trans, BTRFS_I(inode))) {
-			btrfs_add_delayed_iput(inode);
+			btrfs_add_delayed_iput(BTRFS_I(inode));
 			continue;
 		}
 
@@ -5733,7 +5733,7 @@ static int log_conflicting_inodes(struct btrfs_trans_handle *trans,
 		 * log with the new name before we unpin it.
 		 */
 		ret = btrfs_log_inode(trans, BTRFS_I(inode), LOG_INODE_EXISTS, ctx);
-		btrfs_add_delayed_iput(inode);
+		btrfs_add_delayed_iput(BTRFS_I(inode));
 		if (ret)
 			break;
 	}
@@ -6243,7 +6243,7 @@ static int log_new_delayed_dentries(struct btrfs_trans_handle *trans,
 		}
 
 		if (!need_log_inode(trans, BTRFS_I(di_inode))) {
-			btrfs_add_delayed_iput(di_inode);
+			btrfs_add_delayed_iput(BTRFS_I(di_inode));
 			continue;
 		}
 
@@ -6256,7 +6256,7 @@ static int log_new_delayed_dentries(struct btrfs_trans_handle *trans,
 		if (!ret && ctx->log_new_dentries)
 			ret = log_new_dir_dentries(trans, BTRFS_I(di_inode), ctx);
 
-		btrfs_add_delayed_iput(di_inode);
+		btrfs_add_delayed_iput(BTRFS_I(di_inode));
 
 		if (ret)
 			break;
@@ -6717,7 +6717,7 @@ static int btrfs_log_all_parents(struct btrfs_trans_handle *trans,
 			}
 
 			if (!need_log_inode(trans, BTRFS_I(dir_inode))) {
-				btrfs_add_delayed_iput(dir_inode);
+				btrfs_add_delayed_iput(BTRFS_I(dir_inode));
 				continue;
 			}
 
@@ -6727,7 +6727,7 @@ static int btrfs_log_all_parents(struct btrfs_trans_handle *trans,
 			if (!ret && ctx->log_new_dentries)
 				ret = log_new_dir_dentries(trans,
 						   BTRFS_I(dir_inode), ctx);
-			btrfs_add_delayed_iput(dir_inode);
+			btrfs_add_delayed_iput(BTRFS_I(dir_inode));
 			if (ret)
 				goto out;
 		}
@@ -6772,7 +6772,7 @@ static int log_new_ancestors(struct btrfs_trans_handle *trans,
 		    need_log_inode(trans, BTRFS_I(inode)))
 			ret = btrfs_log_inode(trans, BTRFS_I(inode),
 					      LOG_INODE_EXISTS, ctx);
-		btrfs_add_delayed_iput(inode);
+		btrfs_add_delayed_iput(BTRFS_I(inode));
 		if (ret)
 			return ret;
 
