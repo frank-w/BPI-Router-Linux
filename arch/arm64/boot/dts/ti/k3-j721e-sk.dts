@@ -475,46 +475,22 @@
 	status = "reserved";
 };
 
+&mcu_uart0 {
+	status = "okay";
+	/* Default pinmux */
+};
+
 &main_uart0 {
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_uart0_pins_default>;
 	/* Shared with ATF on this platform */
 	power-domains = <&k3_pds 146 TI_SCI_PD_SHARED>;
 };
 
-&main_uart2 {
-	/* Brought out on RPi header */
-	status = "disabled";
-};
-
-&main_uart3 {
-	/* UART not brought out */
-	status = "disabled";
-};
-
-&main_uart5 {
-	/* UART not brought out */
-	status = "disabled";
-};
-
-&main_uart6 {
-	/* UART not brought out */
-	status = "disabled";
-};
-
-&main_uart7 {
-	/* UART not brought out */
-	status = "disabled";
-};
-
-&main_uart8 {
-	/* UART not brought out */
-	status = "disabled";
-};
-
-&main_uart9 {
-	/* Brought out on M.2 E Key */
-	status = "disabled";
+&main_uart1 {
+	status = "okay";
+	/* Default pinmux */
 };
 
 &main_sdhci0 {
@@ -561,6 +537,7 @@
 };
 
 &main_i2c0 {
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_i2c0_pins_default>;
 	clock-frequency = <400000>;
@@ -588,18 +565,15 @@
 };
 
 &main_i2c1 {
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_i2c1_pins_default>;
 	/* i2c1 is used for DVI DDC, so we need to use 100kHz */
 	clock-frequency = <100000>;
 };
 
-&main_i2c2 {
-	/* Unused */
-	status = "disabled";
-};
-
 &main_i2c3 {
+	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_i2c3_pins_default>;
 	clock-frequency = <400000>;
@@ -624,21 +598,6 @@
 			reg = <1>;
 		};
 	};
-};
-
-&main_i2c4 {
-	/* Unused */
-	status = "disabled";
-};
-
-&main_i2c5 {
-	/* Brought out on RPi Header */
-	status = "disabled";
-};
-
-&main_i2c6 {
-	/* Unused */
-	status = "disabled";
 };
 
 &main_gpio2 {
@@ -837,66 +796,6 @@
 	};
 };
 
-&mcasp0 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp1 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp2 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp3 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp4 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp5 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp6 {
-	/* Brought out on RPi header */
-	status = "disabled";
-};
-
-&mcasp7 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp8 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp9 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp10 {
-	/* Unused */
-	status = "disabled";
-};
-
-&mcasp11 {
-	/* Brought out on M.2 E Key */
-	status = "disabled";
-};
-
 &serdes0 {
 	serdes0_pcie_link: phy@0 {
 		reg = <0>;
@@ -984,6 +883,7 @@
 };
 
 &mailbox0_cluster0 {
+	status = "okay";
 	interrupts = <436>;
 
 	mbox_mcu_r5fss0_core0: mbox-mcu-r5fss0-core0 {
@@ -998,6 +898,7 @@
 };
 
 &mailbox0_cluster1 {
+	status = "okay";
 	interrupts = <432>;
 
 	mbox_main_r5fss0_core0: mbox-main-r5fss0-core0 {
@@ -1012,6 +913,7 @@
 };
 
 &mailbox0_cluster2 {
+	status = "okay";
 	interrupts = <428>;
 
 	mbox_main_r5fss1_core0: mbox-main-r5fss1-core0 {
@@ -1026,6 +928,7 @@
 };
 
 &mailbox0_cluster3 {
+	status = "okay";
 	interrupts = <424>;
 
 	mbox_c66_0: mbox-c66-0 {
@@ -1040,40 +943,13 @@
 };
 
 &mailbox0_cluster4 {
+	status = "okay";
 	interrupts = <420>;
 
 	mbox_c71_0: mbox-c71-0 {
 		ti,mbox-rx = <0 0 0>;
 		ti,mbox-tx = <1 0 0>;
 	};
-};
-
-&mailbox0_cluster5 {
-	status = "disabled";
-};
-
-&mailbox0_cluster6 {
-	status = "disabled";
-};
-
-&mailbox0_cluster7 {
-	status = "disabled";
-};
-
-&mailbox0_cluster8 {
-	status = "disabled";
-};
-
-&mailbox0_cluster9 {
-	status = "disabled";
-};
-
-&mailbox0_cluster10 {
-	status = "disabled";
-};
-
-&mailbox0_cluster11 {
-	status = "disabled";
 };
 
 &mcu_r5fss0_core0 {
