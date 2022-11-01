@@ -1292,7 +1292,7 @@ static int damon_sysfs_before_damos_apply(struct damon_ctx *ctx,
 }
 
 /* Called from damon_sysfs_cmd_request_callback under damon_sysfs_lock */
-int damon_sysfs_schemes_update_regions_start(
+int damon_sysfs_schemes_clear_regions(
 		struct damon_sysfs_schemes *sysfs_schemes,
 		struct damon_ctx *ctx)
 {
@@ -1306,7 +1306,15 @@ int damon_sysfs_schemes_update_regions_start(
 		damon_sysfs_scheme_regions_rm_dirs(
 				sysfs_scheme->tried_regions);
 	}
+	return 0;
+}
 
+/* Called from damon_sysfs_cmd_request_callback under damon_sysfs_lock */
+int damon_sysfs_schemes_update_regions_start(
+		struct damon_sysfs_schemes *sysfs_schemes,
+		struct damon_ctx *ctx)
+{
+	damon_sysfs_schemes_clear_regions(sysfs_schemes, ctx);
 	damon_sysfs_schemes_for_damos_callback = sysfs_schemes;
 	ctx->callback.before_damos_apply = damon_sysfs_before_damos_apply;
 	return 0;
