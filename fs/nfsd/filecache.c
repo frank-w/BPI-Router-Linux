@@ -707,14 +707,13 @@ static struct shrinker	nfsd_file_shrinker = {
  * The nfsd_file objects on the list will be unhashed, and each will have a
  * reference taken.
  */
-static unsigned int
+static void
 __nfsd_file_close_inode(struct inode *inode, struct list_head *dispose)
 {
 	struct nfsd_file_lookup_key key = {
 		.type	= NFSD_FILE_KEY_INODE,
 		.inode	= inode,
 	};
-	unsigned int count = 0;
 	struct nfsd_file *nf;
 
 	rcu_read_lock();
@@ -724,11 +723,9 @@ __nfsd_file_close_inode(struct inode *inode, struct list_head *dispose)
 		if (!nf)
 			break;
 
-		if (nfsd_file_unhash_and_queue(nf, dispose))
-			count++;
+		nfsd_file_unhash_and_queue(nf, dispose);
 	} while (1);
 	rcu_read_unlock();
-	return count;
 }
 
 /**
@@ -743,11 +740,9 @@ static void
 nfsd_file_close_inode(struct inode *inode)
 {
 	struct nfsd_file *nf, *tmp;
-	unsigned int count;
 	LIST_HEAD(dispose);
 
-	count = __nfsd_file_close_inode(inode, &dispose);
-	trace_nfsd_file_close_inode(inode, count);
+	__nfsd_file_close_inode(inode, &dispose);
 	list_for_each_entry_safe(nf, tmp, &dispose, nf_lru) {
 		trace_nfsd_file_closing(nf);
 		if (!refcount_dec_and_test(&nf->nf_ref))
@@ -766,11 +761,11 @@ void
 nfsd_file_close_inode_sync(struct inode *inode)
 {
 	struct nfsd_file *nf;
-	unsigned int count;
 	LIST_HEAD(dispose);
 
-	count = __nfsd_file_close_inode(inode, &dispose);
-	trace_nfsd_file_close_inode(inode, count);
+	trace_nfsd_file_close(inode);
+
+	__nfsd_file_close_inode(inode, &dispose);
 	while (!list_empty(&dispose)) {
 		nf = list_first_entry(&dispose, struct nfsd_file, nf_lru);
 		list_del_init(&nf->nf_lru);
