@@ -91,6 +91,7 @@
 		clock-frequency = <48000000>;
 		current-speed = <115200>;
 		power-domains = <&k3_pds 146 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	main_uart1: serial@2810000 {
@@ -99,6 +100,7 @@
 		interrupts = <GIC_SPI 193 IRQ_TYPE_LEVEL_HIGH>;
 		clock-frequency = <48000000>;
 		power-domains = <&k3_pds 147 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	main_uart2: serial@2820000 {
@@ -107,6 +109,7 @@
 		interrupts = <GIC_SPI 194 IRQ_TYPE_LEVEL_HIGH>;
 		clock-frequency = <48000000>;
 		power-domains = <&k3_pds 148 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	crypto: crypto@4e00000 {
@@ -156,6 +159,7 @@
 		clock-names = "fck";
 		clocks = <&k3_clks 110 1>;
 		power-domains = <&k3_pds 110 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	main_i2c1: i2c@2010000 {
@@ -167,6 +171,7 @@
 		clock-names = "fck";
 		clocks = <&k3_clks 111 1>;
 		power-domains = <&k3_pds 111 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	main_i2c2: i2c@2020000 {
@@ -178,6 +183,7 @@
 		clock-names = "fck";
 		clocks = <&k3_clks 112 1>;
 		power-domains = <&k3_pds 112 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	main_i2c3: i2c@2030000 {
@@ -189,6 +195,7 @@
 		clock-names = "fck";
 		clocks = <&k3_clks 113 1>;
 		power-domains = <&k3_pds 113 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	ecap0: pwm@3100000 {
@@ -198,6 +205,7 @@
 		power-domains = <&k3_pds 39 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 39 0>;
 		clock-names = "fck";
+		status = "disabled";
 	};
 
 	main_spi0: spi@2100000 {
@@ -210,6 +218,7 @@
 		#size-cells = <0>;
 		dmas = <&main_udmap 0xc500>, <&main_udmap 0x4500>;
 		dma-names = "tx0", "rx0";
+		status = "disabled";
 	};
 
 	main_spi1: spi@2110000 {
@@ -222,6 +231,7 @@
 		#size-cells = <0>;
 		assigned-clocks = <&k3_clks 137 1>;
 		assigned-clock-rates = <48000000>;
+		status = "disabled";
 	};
 
 	main_spi2: spi@2120000 {
@@ -232,6 +242,7 @@
 		power-domains = <&k3_pds 139 TI_SCI_PD_EXCLUSIVE>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		status = "disabled";
 	};
 
 	main_spi3: spi@2130000 {
@@ -242,6 +253,7 @@
 		power-domains = <&k3_pds 140 TI_SCI_PD_EXCLUSIVE>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		status = "disabled";
 	};
 
 	main_spi4: spi@2140000 {
@@ -252,6 +264,7 @@
 		power-domains = <&k3_pds 141 TI_SCI_PD_EXCLUSIVE>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		status = "disabled";
 	};
 
 	sdhci0: mmc@4f80000 {
@@ -501,6 +514,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster1: mailbox@31f81000 {
@@ -510,6 +524,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster2: mailbox@31f82000 {
@@ -519,6 +534,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster3: mailbox@31f83000 {
@@ -528,6 +544,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster4: mailbox@31f84000 {
@@ -537,6 +554,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster5: mailbox@31f85000 {
@@ -546,6 +564,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster6: mailbox@31f86000 {
@@ -555,6 +574,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster7: mailbox@31f87000 {
@@ -564,6 +584,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster8: mailbox@31f88000 {
@@ -573,6 +594,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster9: mailbox@31f89000 {
@@ -582,6 +604,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster10: mailbox@31f8a000 {
@@ -591,6 +614,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		mailbox0_cluster11: mailbox@31f8b000 {
@@ -600,6 +624,7 @@
 			ti,mbox-num-users = <4>;
 			ti,mbox-num-fifos = <16>;
 			interrupt-parent = <&intr_main_navss>;
+			status = "disabled";
 		};
 
 		ringacc: ringacc@3c000000 {
@@ -707,6 +732,7 @@
 		interrupts = <GIC_SPI 340 IRQ_TYPE_EDGE_RISING>;
 		msi-map = <0x0 &gic_its 0x0 0x10000>;
 		device_type = "pci";
+		status = "disabled";
 	};
 
 	pcie0_ep: pcie-ep@5500000 {
@@ -720,6 +746,7 @@
 		max-link-speed = <2>;
 		dma-coherent;
 		interrupts = <GIC_SPI 340 IRQ_TYPE_EDGE_RISING>;
+		status = "disabled";
 	};
 
 	pcie1_rc: pcie@5600000 {
@@ -740,6 +767,7 @@
 		interrupts = <GIC_SPI 355 IRQ_TYPE_EDGE_RISING>;
 		msi-map = <0x0 &gic_its 0x10000 0x10000>;
 		device_type = "pci";
+		status = "disabled";
 	};
 
 	pcie1_ep: pcie-ep@5600000 {
@@ -753,6 +781,7 @@
 		max-link-speed = <2>;
 		dma-coherent;
 		interrupts = <GIC_SPI 355 IRQ_TYPE_EDGE_RISING>;
+		status = "disabled";
 	};
 
 	mcasp0: mcasp@2b00000 {
@@ -770,6 +799,7 @@
 		clocks = <&k3_clks 104 0>;
 		clock-names = "fck";
 		power-domains = <&k3_pds 104 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	mcasp1: mcasp@2b10000 {
@@ -787,6 +817,7 @@
 		clocks = <&k3_clks 105 0>;
 		clock-names = "fck";
 		power-domains = <&k3_pds 105 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	mcasp2: mcasp@2b20000 {
@@ -804,6 +835,7 @@
 		clocks = <&k3_clks 106 0>;
 		clock-names = "fck";
 		power-domains = <&k3_pds 106 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	cal: cal@6f03000 {
@@ -874,6 +906,7 @@
 		power-domains = <&k3_pds 40 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&ehrpwm_tbclk 0>, <&k3_clks 40 0>;
 		clock-names = "tbclk", "fck";
+		status = "disabled";
 	};
 
 	ehrpwm1: pwm@3010000 {
@@ -883,6 +916,7 @@
 		power-domains = <&k3_pds 41 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&ehrpwm_tbclk 1>, <&k3_clks 41 0>;
 		clock-names = "tbclk", "fck";
+		status = "disabled";
 	};
 
 	ehrpwm2: pwm@3020000 {
@@ -892,6 +926,7 @@
 		power-domains = <&k3_pds 42 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&ehrpwm_tbclk 2>, <&k3_clks 42 0>;
 		clock-names = "tbclk", "fck";
+		status = "disabled";
 	};
 
 	ehrpwm3: pwm@3030000 {
@@ -901,6 +936,7 @@
 		power-domains = <&k3_pds 43 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&ehrpwm_tbclk 3>, <&k3_clks 43 0>;
 		clock-names = "tbclk", "fck";
+		status = "disabled";
 	};
 
 	ehrpwm4: pwm@3040000 {
@@ -910,6 +946,7 @@
 		power-domains = <&k3_pds 44 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&ehrpwm_tbclk 4>, <&k3_clks 44 0>;
 		clock-names = "tbclk", "fck";
+		status = "disabled";
 	};
 
 	ehrpwm5: pwm@3050000 {
@@ -919,6 +956,7 @@
 		power-domains = <&k3_pds 45 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&ehrpwm_tbclk 5>, <&k3_clks 45 0>;
 		clock-names = "tbclk", "fck";
+		status = "disabled";
 	};
 
 	icssg0: icssg@b000000 {
@@ -1059,6 +1097,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			bus_freq = <1000000>;
+			status = "disabled";
 		};
 	};
 
@@ -1200,6 +1239,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			bus_freq = <1000000>;
+			status = "disabled";
 		};
 	};
 
@@ -1341,6 +1381,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			bus_freq = <1000000>;
+			status = "disabled";
 		};
 	};
 };
