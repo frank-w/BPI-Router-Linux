@@ -125,7 +125,7 @@ static void fprobe_init(struct fprobe *fp)
 
 static int fprobe_init_rethook(struct fprobe *fp, int num)
 {
-	int i, size;
+	int size;
 
 	if (num < 0)
 		return -EINVAL;
@@ -140,20 +140,11 @@ static int fprobe_init_rethook(struct fprobe *fp, int num)
 	if (size < 0)
 		return -E2BIG;
 
-	fp->rethook = rethook_alloc((void *)fp, fprobe_exit_handler);
+	fp->rethook = rethook_alloc((void *)fp, fprobe_exit_handler, GFP_KERNEL,
+				sizeof(struct fprobe_rethook_node), size);
 	if (!fp->rethook)
 		return -ENOMEM;
-	for (i = 0; i < size; i++) {
-		struct fprobe_rethook_node *node;
 
-		node = kzalloc(sizeof(*node), GFP_KERNEL);
-		if (!node) {
-			rethook_free(fp->rethook);
-			fp->rethook = NULL;
-			return -ENOMEM;
-		}
-		rethook_add_node(fp->rethook, &node->node);
-	}
 	return 0;
 }
 
