@@ -22,7 +22,6 @@
  *
  * @remap_pte:		called for each lowest-level entry (PTE).
  * @nr_walked:		the number of walked pte.
- * @head_page:		the page which replaces the head vmemmap page.
  * @reuse_page:		the page which is reused for the tail vmemmap pages.
  * @reuse_addr:		the virtual address of the @reuse_page page.
  * @vmemmap_pages:	the list head of the vmemmap pages that can be freed
@@ -32,7 +31,6 @@ struct vmemmap_remap_walk {
 	void			(*remap_pte)(pte_t *pte, unsigned long addr,
 					     struct vmemmap_remap_walk *walk);
 	unsigned long		nr_walked;
-	struct page		*head_page;
 	struct page		*reuse_page;
 	unsigned long		reuse_addr;
 	struct list_head	*vmemmap_pages;
@@ -107,26 +105,10 @@ static void vmemmap_pte_range(pmd_t *pmd, unsigned long addr,
 	 * remapping (which is calling @walk->remap_pte).
 	 */
 	if (!walk->reuse_page) {
-		struct page *page = pte_page(*pte);
-
+		walk->reuse_page = pte_page(*pte);
 		/*
-		 * Copy the data from the original head, and remap to
-		 * the newly allocated page.
-		 */
-		if (walk->head_page) {
-			memcpy(page_address(walk->head_page),
-			       page_address(page), PAGE_SIZE);
-			walk->remap_pte(pte, addr, walk);
-			page = walk->head_page;
-		}
-
-		walk->reuse_page = page;
-
-		/*
-		 * Because the reuse address is part of the range that
-		 * we are walking or the head page was remapped to a
-		 * new page, skip the reuse address range.
-		 * .
+		 * Because the reuse address is part of the range that we are
+		 * walking, skip the reuse address range.
 		 */
 		addr += PAGE_SIZE;
 		pte++;
@@ -221,11 +203,6 @@ static int vmemmap_remap_range(unsigned long start, unsigned long end,
 			return ret;
 	} while (pgd++, addr = next, addr != end);
 
-	/*
-	 * We change the mapping of the vmemmap virtual address range
-	 * [@start, end], so we only need to flush the TLB which
-	 * belongs to the range.
-	 */
 	flush_tlb_kernel_range(start, end);
 
 	return 0;
@@ -262,21 +239,16 @@ static void vmemmap_remap_pte(pte_t *pte, unsigned long addr,
 	 * to the tail pages.
 	 */
 	pgprot_t pgprot = PAGE_KERNEL_RO;
-	struct page *reuse = walk->reuse_page;
 	struct page *page = pte_page(*pte);
 	pte_t entry;
 
-	/*
-	 * When there's no walk::reuse_page, it means we allocated a new head
-	 * page (stored in walk::head_page) and copied from the old head page.
-	 * In that case use the walk::head_page as the page to remap.
-	 */
-	if (!reuse) {
+	/* Remapping the head page requires r/w */
+	if (unlikely(addr == walk->reuse_addr)) {
 		pgprot = PAGE_KERNEL;
-		reuse = walk->head_page;
+		list_del(&walk->reuse_page->lru);
 	}
 
-	entry = mk_pte(reuse, pgprot);
+	entry = mk_pte(walk->reuse_page, pgprot);
 	list_add_tail(&page->lru, walk->vmemmap_pages);
 	set_pte_at(&init_mm, addr, pte, entry);
 }
@@ -345,9 +317,9 @@ static int vmemmap_remap_free(unsigned long start, unsigned long end,
 		.reuse_addr	= reuse,
 		.vmemmap_pages	= &vmemmap_pages,
 	};
-	gfp_t gfp_mask = GFP_KERNEL|__GFP_RETRY_MAYFAIL|__GFP_NOWARN;
 	int nid = page_to_nid((struct page *)start);
-	struct page *page = NULL;
+	gfp_t gfp_mask = GFP_KERNEL | __GFP_THISNODE | __GFP_NORETRY |
+			__GFP_NOWARN;
 
 	/*
 	 * Allocate a new head vmemmap page to avoid breaking a contiguous
@@ -357,9 +329,12 @@ static int vmemmap_remap_free(unsigned long start, unsigned long end,
 	 * more allocations of hugepages. Fallback to the currently
 	 * mapped head page in case should it fail to allocate.
 	 */
-	if (IS_ALIGNED((unsigned long)start, PAGE_SIZE))
-		page = alloc_pages_node(nid, gfp_mask, 0);
-	walk.head_page = page;
+	walk.reuse_page = alloc_pages_node(nid, gfp_mask, 0);
+	if (walk.reuse_page) {
+		copy_page(page_to_virt(walk.reuse_page),
+			  (void *)walk.reuse_addr);
+		list_add(&walk.reuse_page->lru, &vmemmap_pages);
+	}
 
 	/*
 	 * In order to make remapping routine most efficient for the huge pages,
