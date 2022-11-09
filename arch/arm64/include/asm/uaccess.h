@@ -44,7 +44,7 @@ static inline int access_ok(const void __user *addr, unsigned long size)
 	 */
 	if (IS_ENABLED(CONFIG_ARM64_TAGGED_ADDR_ABI) &&
 	    (current->flags & PF_KTHREAD || test_thread_flag(TIF_TAGGED_ADDR)))
-		addr = untagged_addr(addr);
+		addr = untagged_addr(current->mm, addr);
 
 	return likely(__access_ok(addr, size));
 }

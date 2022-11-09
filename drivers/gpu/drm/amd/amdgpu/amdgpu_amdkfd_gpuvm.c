@@ -1659,7 +1659,7 @@ int amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu(
 		if (flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR) {
 			if (!offset || !*offset)
 				return -EINVAL;
-			user_addr = untagged_addr(*offset);
+			user_addr = untagged_addr(current->mm, *offset);
 		} else if (flags & (KFD_IOC_ALLOC_MEM_FLAGS_DOORBELL |
 				    KFD_IOC_ALLOC_MEM_FLAGS_MMIO_REMAP)) {
 			bo_type = ttm_bo_type_sg;

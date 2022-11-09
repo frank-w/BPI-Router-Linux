@@ -18,7 +18,7 @@ static inline void __user *arch_untagged_si_addr(void __user *addr,
 	if (sig == SIGTRAP && si_code == TRAP_BRKPT)
 		return addr;
 
-	return untagged_addr(addr);
+	return untagged_addr(current->mm, addr);
 }
 #define arch_untagged_si_addr arch_untagged_si_addr
 

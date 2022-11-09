@@ -379,7 +379,7 @@ static struct ib_umem *mlx4_get_umem_mr(struct ib_device *device, u64 start,
 	 * again
 	 */
 	if (!ib_access_writable(access_flags)) {
-		unsigned long untagged_start = untagged_addr(start);
+		unsigned long untagged_start = untagged_addr(current->mm, start);
 		struct vm_area_struct *vma;
 
 		mmap_read_lock(current->mm);
