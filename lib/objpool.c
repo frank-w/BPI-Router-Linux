@@ -414,7 +414,7 @@ static inline void *__objpool_try_get_slot(struct objpool_slot *os)
  * objpool_pop: allocate an object from objects pool
  *
  * args:
- * @oh:  object pool
+ * @head:  object pool used to allocate an object
  *
  * return:
  *   object: NULL if failed (object pool is empty)
