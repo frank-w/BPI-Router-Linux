@@ -1839,7 +1839,7 @@ static ssize_t recompress_store(struct device *dev,
 
 	ret = len;
 	for (index = 0; index < nr_pages; index++) {
-		int err;
+		int err = 0;
 
 		zram_slot_lock(zram, index);
 
