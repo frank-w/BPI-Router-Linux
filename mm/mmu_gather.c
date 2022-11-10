@@ -48,6 +48,7 @@ static bool tlb_next_batch(struct mmu_gather *tlb)
 	return true;
 }
 
+#ifdef CONFIG_SMP
 /**
  * tlb_flush_rmaps - do pending rmap removals after we have flushed the TLB
  * @tlb: the current mmu_gather
@@ -72,6 +73,7 @@ void tlb_flush_rmaps(struct mmu_gather *tlb, struct vm_area_struct *vma)
 
 	tlb->delayed_rmap = 0;
 }
+#endif
 
 static void tlb_batch_pages_flush(struct mmu_gather *tlb)
 {
