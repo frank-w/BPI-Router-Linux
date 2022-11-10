@@ -273,6 +273,8 @@ struct page {
  * @_total_mapcount: Do not use directly, call folio_entire_mapcount().
  * @_pincount: Do not use directly, call folio_maybe_dma_pinned().
  * @_folio_nr_pages: Do not use directly, call folio_nr_pages().
+ * @_flags_2: For alignment.  Do not use.
+ * @_head_2: Points to the folio.  Do not use.
  * @_hugetlb_subpool: Do not use directly, use accessor in hugetlb.h.
  * @_hugetlb_cgroup: Do not use directly, use accessor in hugetlb_cgroup.h.
  * @_hugetlb_cgroup_rsvd: Do not use directly, use accessor in hugetlb_cgroup.h.
@@ -327,7 +329,7 @@ struct folio {
 			unsigned int _folio_nr_pages;
 #endif
 		};
-		struct page page_1;
+		struct page __page_1;
 	};
 	union {
 		struct {
@@ -338,7 +340,7 @@ struct folio {
 			void *_hugetlb_cgroup_rsvd;
 			void *_hugetlb_hwpoison;
 		};
-		struct page page_2;
+		struct page __page_2;
 	};
 };
 
