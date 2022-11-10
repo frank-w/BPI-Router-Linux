@@ -246,6 +246,13 @@ static void vmemmap_remap_pte(pte_t *pte, unsigned long addr,
 	if (unlikely(addr == walk->reuse_addr)) {
 		pgprot = PAGE_KERNEL;
 		list_del(&walk->reuse_page->lru);
+
+		/*
+		 * Makes sure that preceding stores to the page contents from
+		 * vmemmap_remap_free() become visible before the set_pte_at()
+		 * write.
+		 */
+		smp_wmb();
 	}
 
 	entry = mk_pte(walk->reuse_page, pgprot);
