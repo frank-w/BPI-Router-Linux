@@ -1273,6 +1273,11 @@ static int damon_sysfs_before_damos_apply(struct damon_ctx *ctx,
 			break;
 		schemes_idx++;
 	}
+
+	/* user could have removed the scheme sysfs dir */
+	if (schemes_idx >= sysfs_schemes->nr)
+		return 0;
+
 	sysfs_regions = sysfs_schemes->schemes_arr[schemes_idx]->tried_regions;
 	region = damon_sysfs_scheme_region_alloc(r);
 	list_add_tail(&region->list, &sysfs_regions->regions_list);
