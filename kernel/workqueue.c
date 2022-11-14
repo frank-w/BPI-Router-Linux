@@ -4838,6 +4838,8 @@ void show_one_workqueue(struct workqueue_struct *wq)
 	}
 
 }
+/* Temporary export for flush_scheduled_work(). */
+EXPORT_SYMBOL(show_one_workqueue);
 
 /**
  * show_one_worker_pool - dump state of specified worker pool
