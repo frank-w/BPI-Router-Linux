@@ -1982,14 +1982,19 @@ static long __gup_longterm_locked(struct mm_struct *mm,
 				  unsigned long nr_pages,
 				  struct page **pages,
 				  struct vm_area_struct **vmas,
+				  int *locked,
 				  unsigned int gup_flags)
 {
+	bool must_unlock = false;
 	unsigned int flags;
 	long rc, nr_pinned_pages;
 
+	if (locked && WARN_ON_ONCE(!*locked))
+		return -EINVAL;
+
 	if (!(gup_flags & FOLL_LONGTERM))
 		return __get_user_pages_locked(mm, start, nr_pages, pages, vmas,
-					       NULL, gup_flags);
+					       locked, gup_flags);
 
 	/*
 	 * If we get to this point then FOLL_LONGTERM is set, and FOLL_LONGTERM
@@ -2003,8 +2008,13 @@ static long __gup_longterm_locked(struct mm_struct *mm,
 		return -EINVAL;
 	flags = memalloc_pin_save();
 	do {
+		if (locked && !*locked) {
+			mmap_read_lock(mm);
+			must_unlock = true;
+			*locked = 1;
+		}
 		nr_pinned_pages = __get_user_pages_locked(mm, start, nr_pages,
-							  pages, vmas, NULL,
+							  pages, vmas, locked,
 							  gup_flags);
 		if (nr_pinned_pages <= 0) {
 			rc = nr_pinned_pages;
@@ -2014,6 +2024,10 @@ static long __gup_longterm_locked(struct mm_struct *mm,
 	} while (rc == -EAGAIN);
 	memalloc_pin_restore(flags);
 
+	if (locked && *locked && must_unlock) {
+		mmap_read_unlock(mm);
+		*locked = 0;
+	}
 	return rc ? rc : nr_pinned_pages;
 }
 
@@ -2037,35 +2051,6 @@ static bool is_valid_gup_flags(unsigned int gup_flags)
 }
 
 #ifdef CONFIG_MMU
-static long __get_user_pages_remote(struct mm_struct *mm,
-				    unsigned long start, unsigned long nr_pages,
-				    unsigned int gup_flags, struct page **pages,
-				    struct vm_area_struct **vmas, int *locked)
-{
-	/*
-	 * Parts of FOLL_LONGTERM behavior are incompatible with
-	 * FAULT_FLAG_ALLOW_RETRY because of the FS DAX check requirement on
-	 * vmas. However, this only comes up if locked is set, and there are
-	 * callers that do request FOLL_LONGTERM, but do not set locked. So,
-	 * allow what we can.
-	 */
-	if (gup_flags & FOLL_LONGTERM) {
-		if (WARN_ON_ONCE(locked))
-			return -EINVAL;
-		/*
-		 * This will check the vmas (even if our vmas arg is NULL)
-		 * and return -ENOTSUPP if DAX isn't allowed in this case:
-		 */
-		return __gup_longterm_locked(mm, start, nr_pages, pages,
-					     vmas, gup_flags | FOLL_TOUCH |
-					     FOLL_REMOTE);
-	}
-
-	return __get_user_pages_locked(mm, start, nr_pages, pages, vmas,
-				       locked,
-				       gup_flags | FOLL_TOUCH | FOLL_REMOTE);
-}
-
 /**
  * get_user_pages_remote() - pin user pages in memory
  * @mm:		mm_struct of target mm
@@ -2134,8 +2119,8 @@ long get_user_pages_remote(struct mm_struct *mm,
 	if (!is_valid_gup_flags(gup_flags))
 		return -EINVAL;
 
-	return __get_user_pages_remote(mm, start, nr_pages, gup_flags,
-				       pages, vmas, locked);
+	return __gup_longterm_locked(mm, start, nr_pages, pages, vmas, locked,
+				     gup_flags | FOLL_TOUCH | FOLL_REMOTE);
 }
 EXPORT_SYMBOL(get_user_pages_remote);
 
@@ -2144,14 +2129,6 @@ long get_user_pages_remote(struct mm_struct *mm,
 			   unsigned long start, unsigned long nr_pages,
 			   unsigned int gup_flags, struct page **pages,
 			   struct vm_area_struct **vmas, int *locked)
-{
-	return 0;
-}
-
-static long __get_user_pages_remote(struct mm_struct *mm,
-				    unsigned long start, unsigned long nr_pages,
-				    unsigned int gup_flags, struct page **pages,
-				    struct vm_area_struct **vmas, int *locked)
 {
 	return 0;
 }
@@ -2181,7 +2158,7 @@ long get_user_pages(unsigned long start, unsigned long nr_pages,
 		return -EINVAL;
 
 	return __gup_longterm_locked(current->mm, start, nr_pages,
-				     pages, vmas, gup_flags | FOLL_TOUCH);
+				     pages, vmas, NULL, gup_flags | FOLL_TOUCH);
 }
 EXPORT_SYMBOL(get_user_pages);
 
@@ -2207,18 +2184,9 @@ long get_user_pages_unlocked(unsigned long start, unsigned long nr_pages,
 	int locked = 1;
 	long ret;
 
-	/*
-	 * FIXME: Current FOLL_LONGTERM behavior is incompatible with
-	 * FAULT_FLAG_ALLOW_RETRY because of the FS DAX check requirement on
-	 * vmas.  As there are no users of this flag in this call we simply
-	 * disallow this option for now.
-	 */
-	if (WARN_ON_ONCE(gup_flags & FOLL_LONGTERM))
-		return -EINVAL;
-
 	mmap_read_lock(mm);
-	ret = __get_user_pages_locked(mm, start, nr_pages, pages, NULL,
-				      &locked, gup_flags | FOLL_TOUCH);
+	ret = __gup_longterm_locked(mm, start, nr_pages, pages, NULL, &locked,
+				    gup_flags | FOLL_TOUCH);
 	if (locked)
 		mmap_read_unlock(mm);
 	return ret;
@@ -2787,29 +2755,6 @@ static bool gup_fast_permitted(unsigned long start, unsigned long end)
 }
 #endif
 
-static int __gup_longterm_unlocked(unsigned long start, int nr_pages,
-				   unsigned int gup_flags, struct page **pages)
-{
-	int ret;
-
-	/*
-	 * FIXME: FOLL_LONGTERM does not work with
-	 * get_user_pages_unlocked() (see comments in that function)
-	 */
-	if (gup_flags & FOLL_LONGTERM) {
-		mmap_read_lock(current->mm);
-		ret = __gup_longterm_locked(current->mm,
-					    start, nr_pages,
-					    pages, NULL, gup_flags);
-		mmap_read_unlock(current->mm);
-	} else {
-		ret = get_user_pages_unlocked(start, nr_pages,
-					      pages, gup_flags);
-	}
-
-	return ret;
-}
-
 static unsigned long lockless_pages_from_mm(unsigned long start,
 					    unsigned long end,
 					    unsigned int gup_flags,
@@ -2893,8 +2838,8 @@ static int internal_get_user_pages_fast(unsigned long start,
 	/* Slow path: try to get the remaining pages with get_user_pages */
 	start += nr_pinned << PAGE_SHIFT;
 	pages += nr_pinned;
-	ret = __gup_longterm_unlocked(start, nr_pages - nr_pinned, gup_flags,
-				      pages);
+	ret = get_user_pages_unlocked(start, nr_pages - nr_pinned, pages,
+				      gup_flags);
 	if (ret < 0) {
 		/*
 		 * The caller has to unpin the pages we already pinned so
@@ -3093,9 +3038,9 @@ long pin_user_pages_remote(struct mm_struct *mm,
 	if (WARN_ON_ONCE(!pages))
 		return -EINVAL;
 
-	gup_flags |= FOLL_PIN;
-	return __get_user_pages_remote(mm, start, nr_pages, gup_flags,
-				       pages, vmas, locked);
+	return __gup_longterm_locked(mm, start, nr_pages, pages, vmas, locked,
+				     gup_flags | FOLL_PIN | FOLL_TOUCH |
+					     FOLL_REMOTE);
 }
 EXPORT_SYMBOL(pin_user_pages_remote);
 
@@ -3129,7 +3074,7 @@ long pin_user_pages(unsigned long start, unsigned long nr_pages,
 
 	gup_flags |= FOLL_PIN;
 	return __gup_longterm_locked(current->mm, start, nr_pages,
-				     pages, vmas, gup_flags);
+				     pages, vmas, NULL, gup_flags);
 }
 EXPORT_SYMBOL(pin_user_pages);
 
