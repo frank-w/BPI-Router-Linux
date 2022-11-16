@@ -1,0 +1,4 @@
+pktcdvd.c:		if (!bdev->bd_disk->fops->ioctl)
+pktcdvd.c:			ret = bdev->bd_disk->fops->ioctl(bdev, mode, cmd, arg);
+pktcdvd.c:	if (!attached_disk || !attached_disk->fops->check_events)
+pktcdvd.c:	return attached_disk->fops->check_events(attached_disk, clearing);
