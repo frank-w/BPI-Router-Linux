@@ -8,13 +8,13 @@ config PCIE_CADENCE
 
 config PCIE_CADENCE_HOST
 	bool
-	depends on OF
+	depends on OF || COMPILE_TEST
 	select IRQ_DOMAIN
 	select PCIE_CADENCE
 
 config PCIE_CADENCE_EP
 	bool
-	depends on OF
+	depends on OF || COMPILE_TEST
 	depends on PCI_ENDPOINT
 	select PCIE_CADENCE
 
@@ -23,7 +23,7 @@ config PCIE_CADENCE_PLAT
 
 config PCIE_CADENCE_PLAT_HOST
 	bool "Cadence PCIe platform host controller"
-	depends on OF
+	depends on OF || COMPILE_TEST
 	select PCIE_CADENCE_HOST
 	select PCIE_CADENCE_PLAT
 	help
@@ -33,7 +33,7 @@ config PCIE_CADENCE_PLAT_HOST
 
 config PCIE_CADENCE_PLAT_EP
 	bool "Cadence PCIe platform endpoint controller"
-	depends on OF
+	depends on OF || COMPILE_TEST
 	depends on PCI_ENDPOINT
 	select PCIE_CADENCE_EP
 	select PCIE_CADENCE_PLAT
@@ -47,7 +47,7 @@ config PCI_J721E
 
 config PCI_J721E_HOST
 	bool "TI J721E PCIe platform host controller"
-	depends on OF
+	depends on OF || COMPILE_TEST
 	select PCIE_CADENCE_HOST
 	select PCI_J721E
 	help
@@ -57,7 +57,7 @@ config PCI_J721E_HOST
 
 config PCI_J721E_EP
 	bool "TI J721E PCIe platform endpoint controller"
-	depends on OF
+	depends on OF || COMPILE_TEST
 	depends on PCI_ENDPOINT
 	select PCIE_CADENCE_EP
 	select PCI_J721E
