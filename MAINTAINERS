@@ -27092,6 +27092,12 @@ F:	Documentation/filesystems/ubifs-authentication.rst
 F:	Documentation/filesystems/ubifs.rst
 F:	fs/ubifs/
 
+U-BOOT UIMAGE.FIT PARSER
+M:	Daniel Golle <daniel@makrotopia.org>
+L:	linux-block@vger.kernel.org
+S:	Maintained
+F:	drivers/block/fitblk.c
+
 UBLK USERSPACE BLOCK DRIVER
 M:	Ming Lei <tom.leiming@gmail.com>
 L:	linux-block@vger.kernel.org
