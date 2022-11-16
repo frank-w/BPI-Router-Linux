@@ -3828,13 +3828,13 @@ lpfc_vport_param_store(devloss_tmo)
 static DEVICE_ATTR_RW(lpfc_devloss_tmo);
 
 /*
- * lpfc_suppress_rsp: Enable suppress rsp feature is firmware supports it
- * lpfc_suppress_rsp = 0  Disable
- * lpfc_suppress_rsp = 1  Enable (default)
+ * lpfc_suppress_rsp: Enable suppress rsp feature if firmware supports it
+ * lpfc_suppress_rsp = 0  Disable (default)
+ * lpfc_suppress_rsp = 1  Enable
  *
  */
-LPFC_ATTR_R(suppress_rsp, 1, 0, 1,
-	    "Enable suppress rsp feature is firmware supports it");
+LPFC_ATTR_R(suppress_rsp, 0, 0, 1,
+	    "Enable suppress rsp feature if firmware supports it");
 
 /*
  * lpfc_nvmet_mrq: Specify number of RQ pairs for processing NVMET cmds
