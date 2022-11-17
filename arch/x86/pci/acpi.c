@@ -189,6 +189,19 @@ static const struct dmi_system_id pci_crs_quirks[] __initconst = {
 			DMI_MATCH(DMI_BOARD_NAME, "X170KM-G"),
 		},
 	},
+
+	/*
+	 * Clevo NL4XLU barebones have the same E820 reservation covering
+	 * the entire _CRS 32-bit window issue as the Lenovo *IIL* models.
+	 * See https://bugzilla.kernel.org/show_bug.cgi?id=216565
+	 */
+	{
+		.callback = set_no_e820,
+		.ident = "Clevo NL4XLU Barebone",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_NAME, "NL4XLU"),
+		},
+	},
 	{}
 };
 
