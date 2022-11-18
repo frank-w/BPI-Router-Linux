@@ -673,8 +673,7 @@ next_iface:
 		goto out;
 	}
 
-	/* Azure rounds the buffer size up 8, to a 16 byte boundary */
-	if ((bytes_left > 8) || p->Next)
+	if (bytes_left > 0)
 		cifs_dbg(VFS, "%s: incomplete interface info\n", __func__);
 
 
