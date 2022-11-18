@@ -111,16 +111,6 @@
 		vin-supply = <&dcin>;
 	};
 
-	reg_5v: regulator-5v {
-		compatible = "regulator-fixed";
-		regulator-name  = "fixed-5p1";
-		regulator-min-microvolt = <5100000>;
-		regulator-max-microvolt = <5100000>;
-		regulator-boot-on;
-		regulator-always-on;
-		vin-supply = <&dcin>;
-	};
-
 	/* left SFP cage (wan) */
 	sfp1: sfp-1 {
 		compatible = "sff,sfp";
@@ -381,8 +371,6 @@
 };
 
 &ssusb {
-	vusb33-supply = <&reg_3p3v>;
-	vbus-supply = <&reg_5v>;
 	status = "okay";
 };
 
