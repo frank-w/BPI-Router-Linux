@@ -53,7 +53,7 @@ case $board in
 		ARCH=arm64
 		CONFIGPATH=arch/$ARCH/configs
 		DEFCONFIG=$CONFIGPATH/mt7986a_bpi-r3_defconfig
-		DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dtsi
+		DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dts
 		#DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dts
 		DTSI=arch/arm64/boot/dts/mediatek/mt7986a.dtsi
 		;;
@@ -820,8 +820,8 @@ function build {
 					ENTRY=40080000
 					if [[ -e mt7986a-bananapi-bpi-r3-nor.dts ]];then
 						echo "compiling r3 dt overlays"
-						dtc -O dtb -o bpi-r3-nor.dtbo mt7986a-bananapi-bpi-r3-nor.dts
-						dtc -O dtb -o bpi-r3-nand.dtbo mt7986a-bananapi-bpi-r3-nand.dts
+						#dtc -O dtb -o bpi-r3-nor.dtbo mt7986a-bananapi-bpi-r3-nor.dts
+						#dtc -O dtb -o bpi-r3-nand.dtbo mt7986a-bananapi-bpi-r3-nand.dts
 					fi
 				;;
 				"bpi-r2")
@@ -838,12 +838,9 @@ function build {
 				if [[ -e $builddir/${DTBBASE}.dtb ]];then
 					cp $builddir/${DTBBASE}.dtb ${DTBFILE%/*}
 					cp $builddir/{$DTBFILE,$board.dtb}
-				elif [[ $builddir/${DTBBASE}-sd.dtb ]];then
-					cp $builddir/${DTBBASE}-sd.dtb ${DTBFILE%/*}
 				fi
-				#second dts (and overlays)
-				if [[ -e $builddir/${DTBBASE}-emmc.dtb ]];then
-					cp $builddir/${DTBBASE}-*.dtb* ${DTBFILE%/*}
+				if [[ $builddir/${DTBBASE}-sd.dtbo ]];then
+					cp $builddir/${DTBBASE}-*.dtbo ${DTBFILE%/*}
 				fi
 			elif [[ -e $DTBFILE ]];then
 				cp $DTBFILE $board.dtb
