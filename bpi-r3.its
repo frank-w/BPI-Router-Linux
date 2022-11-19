@@ -18,9 +18,9 @@
 				algo = "sha1";
 			};
 		};
-		fdt-sd {
+		fdt-base {
 			description = "Flattened Device Tree blob";
-			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dtb");
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dtb");
 			type = "flat_dt";
 			arch = "arm64";
 			load = <0x47000000>;
@@ -29,16 +29,15 @@
 				algo = "sha1";
 			};
 		};
-		fdt-emmc {
+		fdt-ov-sd {
 			description = "Flattened Device Tree blob";
-			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtb");
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dtbo");
 			type = "flat_dt";
-			arch = "arm64";
-			load = <0x47000000>;
-			compression = "none";
-			hash-1 {
-				algo = "sha1";
-			};
+		};
+		fdt-ov-emmc {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtbo");
+			type = "flat_dt";
 		};
 		fdt-ov-nand{
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-nand.dtbo");
@@ -67,7 +66,7 @@
 		conf-sd {
 			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-sd";
+			fdt = "fdt-base", "fdt-ov-sd";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
@@ -76,7 +75,7 @@
 		conf-emmc {
 			description = "Boot Linux kernel with EMMC FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-emmc";
+			fdt = "fdt-base", "fdt-ov-emmc";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
@@ -85,7 +84,7 @@
 		conf-sd-nand {
 			description = "Boot Linux kernel with SD+NAND FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-sd", "fdt-ov-nand";
+			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-nand";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
@@ -94,7 +93,7 @@
 		conf-emmc-nand {
 			description = "Boot Linux kernel with EMMC+NAND FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-emmc", "fdt-ov-nand";
+			fdt = "fdt-base", "fdt-ov-emmc", "fdt-ov-nand";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
@@ -103,7 +102,7 @@
 		conf-sd-nor {
 			description = "Boot Linux kernel with SD+NOR FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-sd", "fdt-ov-nor";
+			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-nor";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
@@ -112,7 +111,7 @@
 		conf-emmc-nor {
 			description = "Boot Linux kernel with EMMC+NOR FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-emmc", "fdt-ov-nor";
+			fdt = "fdt-base", "fdt-ov-emmc", "fdt-ov-nor";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
