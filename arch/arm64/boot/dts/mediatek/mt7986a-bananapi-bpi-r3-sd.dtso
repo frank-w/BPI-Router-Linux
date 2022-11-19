@@ -5,19 +5,20 @@
  */
 
 /dts-v1/;
-#include <dt-bindings/input/input.h>
-#include <dt-bindings/gpio/gpio.h>
-
-#include "mt7986a-bananapi-bpi-r3.dtsi"
+/plugin/;
 
 / {
+	compatible = "bananapi,bpi-r3", "mediatek,mt7986a";
 	model = "Bananapi BPI-R3 (sdmmc)";
-};
 
-&mmc0 {
-	bus-width = <4>;
-	max-frequency = <52000000>;
-	cap-sd-highspeed;
-	status = "okay";
+	fragment@0 {
+		target-path = "/soc/mmc@11230000";
+		__overlay__ {
+			bus-width = <4>;
+			max-frequency = <52000000>;
+			cap-sd-highspeed;
+			status = "okay";
+		};
+	};
 };
 
