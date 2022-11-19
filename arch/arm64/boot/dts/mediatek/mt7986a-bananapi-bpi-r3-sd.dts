@@ -18,8 +18,6 @@
 	bus-width = <4>;
 	max-frequency = <52000000>;
 	cap-sd-highspeed;
-	vmmc-supply = <&reg_3p3v>;
-	vqmmc-supply = <&reg_1p8v>;
 	status = "okay";
 };
 
