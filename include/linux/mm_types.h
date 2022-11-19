@@ -251,7 +251,7 @@ struct page {
 #endif
 } _struct_page_alignment;
 
-/**
+/*
  * struct encoded_page - a nonexistent type marking this pointer
  *
  * An 'encoded_page' pointer is a pointer to a regular 'struct page', but
