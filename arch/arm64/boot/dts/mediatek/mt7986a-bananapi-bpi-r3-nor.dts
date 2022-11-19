@@ -60,7 +60,6 @@
 					partition@c00000 {
 						label = "fit";
 						reg = <0xc00000 0x1400000>;
-						compatible = "denx,fit";
 					};
 				};
 			};
