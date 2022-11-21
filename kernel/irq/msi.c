@@ -120,7 +120,7 @@ static int msi_add_simple_msi_descs(struct device *dev, unsigned int index, unsi
 fail_mem:
 	ret = -ENOMEM;
 fail:
-	msi_free_msi_descs_range(dev, MSI_DESC_NOTASSOCIATED, index, last);
+	msi_free_msi_descs_range(dev, index, last);
 	return ret;
 }
 
@@ -141,12 +141,11 @@ static bool msi_desc_match(struct msi_desc *desc, enum msi_desc_filter filter)
 /**
  * msi_free_msi_descs_range - Free MSI descriptors of a device
  * @dev:		Device to free the descriptors
- * @filter:		Descriptor state filter
  * @first_index:	Index to start freeing from
  * @last_index:		Last index to be freed
  */
-void msi_free_msi_descs_range(struct device *dev, enum msi_desc_filter filter,
-			      unsigned int first_index, unsigned int last_index)
+void msi_free_msi_descs_range(struct device *dev, unsigned int first_index,
+			      unsigned int last_index)
 {
 	struct xarray *xa = &dev->msi.data->__store;
 	struct msi_desc *desc;
@@ -155,10 +154,12 @@ void msi_free_msi_descs_range(struct device *dev, enum msi_desc_filter filter,
 	lockdep_assert_held(&dev->msi.data->mutex);
 
 	xa_for_each_range(xa, idx, desc, first_index, last_index) {
-		if (msi_desc_match(desc, filter)) {
-			xa_erase(xa, idx);
-			msi_free_desc(desc);
-		}
+		xa_erase(xa, idx);
+
+		/* Leak the descriptor when it is still referenced */
+		if (WARN_ON_ONCE(msi_desc_match(desc, MSI_DESC_ASSOCIATED)))
+			continue;
+		msi_free_desc(desc);
 	}
 }
 
@@ -281,6 +282,7 @@ EXPORT_SYMBOL_GPL(msi_first_desc);
 /**
  * msi_next_desc - Get the next MSI descriptor of a device
  * @dev:	Device to operate on
+ * @filter:	Descriptor state filter
  *
  * The first invocation of msi_next_desc() has to be preceeded by a
  * successful invocation of __msi_first_desc(). Consecutive invocations are
@@ -459,7 +461,9 @@ static inline int msi_sysfs_populate_desc(struct device *dev, struct msi_desc *d
 static inline void msi_sysfs_remove_desc(struct device *dev, struct msi_desc *desc) { }
 #endif /* !CONFIG_SYSFS */
 
-#ifdef CONFIG_GENERIC_MSI_IRQ_DOMAIN
+static int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev, int nvec);
+static void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev);
+
 static inline void irq_chip_write_msi_msg(struct irq_data *data,
 					  struct msi_msg *msg)
 {
@@ -613,17 +617,9 @@ static int msi_domain_ops_init(struct irq_domain *domain,
 	return 0;
 }
 
-static int msi_domain_ops_check(struct irq_domain *domain,
-				struct msi_domain_info *info,
-				struct device *dev)
-{
-	return 0;
-}
-
 static struct msi_domain_ops msi_domain_ops_default = {
 	.get_hwirq		= msi_domain_ops_get_hwirq,
 	.msi_init		= msi_domain_ops_init,
-	.msi_check		= msi_domain_ops_check,
 	.msi_prepare		= msi_domain_ops_prepare,
 	.set_desc		= msi_domain_ops_set_desc,
 	.domain_alloc_irqs	= __msi_domain_alloc_irqs,
@@ -651,8 +647,6 @@ static void msi_domain_update_dom_ops(struct msi_domain_info *info)
 		ops->get_hwirq = msi_domain_ops_default.get_hwirq;
 	if (ops->msi_init == NULL)
 		ops->msi_init = msi_domain_ops_default.msi_init;
-	if (ops->msi_check == NULL)
-		ops->msi_check = msi_domain_ops_default.msi_check;
 	if (ops->msi_prepare == NULL)
 		ops->msi_prepare = msi_domain_ops_default.msi_prepare;
 	if (ops->set_desc == NULL)
@@ -689,8 +683,11 @@ struct irq_domain *msi_create_irq_domain(struct fwnode_handle *fwnode,
 	domain = irq_domain_create_hierarchy(parent, IRQ_DOMAIN_FLAG_MSI, 0,
 					     fwnode, &msi_domain_ops, info);
 
-	if (domain && !domain->name && info->chip)
-		domain->name = info->chip->name;
+	if (domain) {
+		if (!domain->name && info->chip)
+			domain->name = info->chip->name;
+		irq_domain_update_bus_token(domain, info->bus_token);
+	}
 
 	return domain;
 }
@@ -700,13 +697,8 @@ int msi_domain_prepare_irqs(struct irq_domain *domain, struct device *dev,
 {
 	struct msi_domain_info *info = domain->host_data;
 	struct msi_domain_ops *ops = info->ops;
-	int ret;
 
-	ret = ops->msi_check(domain, info, dev);
-	if (ret == 0)
-		ret = ops->msi_prepare(domain, dev, nvec, arg);
-
-	return ret;
+	return ops->msi_prepare(domain, dev, nvec, arg);
 }
 
 int msi_domain_populate_irqs(struct irq_domain *domain, struct device *dev,
@@ -739,7 +731,7 @@ int msi_domain_populate_irqs(struct irq_domain *domain, struct device *dev,
 fail:
 	for (--virq; virq >= virq_base; virq--)
 		irq_domain_free_irqs_common(domain, virq, 1);
-	msi_free_msi_descs_range(dev, MSI_DESC_ALL, virq_base, virq_base + nvec - 1);
+	msi_free_msi_descs_range(dev, virq_base, virq_base + nvec - 1);
 unlock:
 	msi_unlock_descs(dev);
 	return ret;
@@ -850,8 +842,8 @@ static int msi_init_virq(struct irq_domain *domain, int virq, unsigned int vflag
 	return 0;
 }
 
-int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
-			    int nvec)
+static int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+				   int nvec)
 {
 	struct msi_domain_info *info = domain->host_data;
 	struct msi_domain_ops *ops = info->ops;
@@ -974,7 +966,7 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev, int nve
 	return ret;
 }
 
-void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+static void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
 {
 	struct msi_domain_info *info = domain->host_data;
 	struct irq_data *irqd;
@@ -1022,6 +1014,8 @@ void msi_domain_free_irqs_descs_locked(struct irq_domain *domain, struct device 
 	lockdep_assert_held(&dev->msi.data->mutex);
 
 	ops->domain_free_irqs(domain, dev);
+	if (ops->msi_post_free)
+		ops->msi_post_free(domain, dev);
 	msi_domain_free_msi_descs(info, dev);
 }
 
@@ -1048,5 +1042,3 @@ struct msi_domain_info *msi_get_domain_info(struct irq_domain *domain)
 {
 	return (struct msi_domain_info *)domain->host_data;
 }
-
-#endif /* CONFIG_GENERIC_MSI_IRQ_DOMAIN */
