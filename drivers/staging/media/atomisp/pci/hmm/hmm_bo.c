@@ -668,7 +668,7 @@ static int alloc_user_pages(struct hmm_buffer_object *bo,
 {
 	int page_nr;
 
-	userptr = untagged_addr(userptr);
+	userptr = untagged_addr(current->mm, userptr);
 
 	/* Handle frame buffer allocated in user space */
 	mutex_unlock(&bo->mutex);

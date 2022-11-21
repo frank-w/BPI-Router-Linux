@@ -458,7 +458,7 @@ static void set_thread_esr(unsigned long address, unsigned long esr)
 static void do_bad_area(unsigned long far, unsigned long esr,
 			struct pt_regs *regs)
 {
-	unsigned long addr = untagged_addr(far);
+	unsigned long addr = untagged_addr(current->mm, far);
 
 	/*
 	 * If we are in kernel mode at this point, we have no context to
@@ -528,7 +528,7 @@ static int __kprobes do_page_fault(unsigned long far, unsigned long esr,
 	vm_fault_t fault;
 	unsigned long vm_flags;
 	unsigned int mm_flags = FAULT_FLAG_DEFAULT;
-	unsigned long addr = untagged_addr(far);
+	unsigned long addr = untagged_addr(mm, far);
 
 	if (kprobe_page_fault(regs, esr))
 		return 0;
@@ -683,7 +683,7 @@ static int __kprobes do_translation_fault(unsigned long far,
 					  unsigned long esr,
 					  struct pt_regs *regs)
 {
-	unsigned long addr = untagged_addr(far);
+	unsigned long addr = untagged_addr(current->mm, far);
 
 	if (is_ttbr0_addr(addr))
 		return do_page_fault(far, esr, regs);
@@ -730,7 +730,7 @@ static int do_sea(unsigned long far, unsigned long esr, struct pt_regs *regs)
 		 * UNKNOWN for synchronous external aborts. Mask them out now
 		 * so that userspace doesn't see them.
 		 */
-		siaddr  = untagged_addr(far);
+		siaddr  = untagged_addr(current->mm, far);
 	}
 	arm64_notify_die(inf->name, regs, inf->sig, inf->code, siaddr, esr);
 
@@ -820,7 +820,7 @@ static const struct fault_info fault_info[] = {
 void do_mem_abort(unsigned long far, unsigned long esr, struct pt_regs *regs)
 {
 	const struct fault_info *inf = esr_to_fault_info(esr);
-	unsigned long addr = untagged_addr(far);
+	unsigned long addr = untagged_addr(current->mm, far);
 
 	if (!inf->fn(far, esr, regs))
 		return;

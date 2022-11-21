@@ -1392,7 +1392,7 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
 	size_t len;
 	struct blk_plug plug;
 
-	start = untagged_addr(start);
+	start = untagged_addr(mm, start);
 
 	if (!madvise_behavior_valid(behavior))
 		return -EINVAL;
