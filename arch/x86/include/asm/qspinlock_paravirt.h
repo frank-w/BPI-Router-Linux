@@ -37,10 +37,10 @@ __PV_CALLEE_SAVE_REGS_THUNK(__pv_queued_spin_unlock_slowpath, ".spinlock.text");
  *   rsi = lockval           (second argument)
  *   rdx = internal variable (set to 0)
  */
-asm    (".pushsection .spinlock.text;"
+asm    (".pushsection .spinlock.text, \"ax\";"
 	".globl " PV_UNLOCK ";"
 	".type " PV_UNLOCK ", @function;"
-	".align 4,0x90;"
+	ASM_FUNC_ALIGN
 	PV_UNLOCK ": "
 	ASM_ENDBR
 	FRAME_BEGIN

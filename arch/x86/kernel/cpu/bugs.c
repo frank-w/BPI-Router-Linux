@@ -196,21 +196,14 @@ void __init check_bugs(void)
 }
 
 /*
- * NOTE: This function is *only* called for SVM.  VMX spec_ctrl handling is
- * done in vmenter.S.
+ * NOTE: This function is *only* called for SVM, since Intel uses
+ * MSR_IA32_SPEC_CTRL for SSBD.
  */
 void
-x86_virt_spec_ctrl(u64 guest_spec_ctrl, u64 guest_virt_spec_ctrl, bool setguest)
+x86_virt_spec_ctrl(u64 guest_virt_spec_ctrl, bool setguest)
 {
-	u64 msrval, guestval = guest_spec_ctrl, hostval = spec_ctrl_current();
+	u64 guestval, hostval;
 	struct thread_info *ti = current_thread_info();
-
-	if (static_cpu_has(X86_FEATURE_MSR_SPEC_CTRL)) {
-		if (hostval != guestval) {
-			msrval = setguest ? guestval : hostval;
-			wrmsrl(MSR_IA32_SPEC_CTRL, msrval);
-		}
-	}
 
 	/*
 	 * If SSBD is not handled in MSR_SPEC_CTRL on AMD, update
@@ -787,6 +780,7 @@ enum retbleed_mitigation {
 	RETBLEED_MITIGATION_IBPB,
 	RETBLEED_MITIGATION_IBRS,
 	RETBLEED_MITIGATION_EIBRS,
+	RETBLEED_MITIGATION_STUFF,
 };
 
 enum retbleed_mitigation_cmd {
@@ -794,6 +788,7 @@ enum retbleed_mitigation_cmd {
 	RETBLEED_CMD_AUTO,
 	RETBLEED_CMD_UNRET,
 	RETBLEED_CMD_IBPB,
+	RETBLEED_CMD_STUFF,
 };
 
 static const char * const retbleed_strings[] = {
@@ -802,6 +797,7 @@ static const char * const retbleed_strings[] = {
 	[RETBLEED_MITIGATION_IBPB]	= "Mitigation: IBPB",
 	[RETBLEED_MITIGATION_IBRS]	= "Mitigation: IBRS",
 	[RETBLEED_MITIGATION_EIBRS]	= "Mitigation: Enhanced IBRS",
+	[RETBLEED_MITIGATION_STUFF]	= "Mitigation: Stuffing",
 };
 
 static enum retbleed_mitigation retbleed_mitigation __ro_after_init =
@@ -831,8 +827,12 @@ static int __init retbleed_parse_cmdline(char *str)
 			retbleed_cmd = RETBLEED_CMD_UNRET;
 		} else if (!strcmp(str, "ibpb")) {
 			retbleed_cmd = RETBLEED_CMD_IBPB;
+		} else if (!strcmp(str, "stuff")) {
+			retbleed_cmd = RETBLEED_CMD_STUFF;
 		} else if (!strcmp(str, "nosmt")) {
 			retbleed_nosmt = true;
+		} else if (!strcmp(str, "force")) {
+			setup_force_cpu_bug(X86_BUG_RETBLEED);
 		} else {
 			pr_err("Ignoring unknown retbleed option (%s).", str);
 		}
@@ -879,6 +879,21 @@ static void __init retbleed_select_mitigation(void)
 		}
 		break;
 
+	case RETBLEED_CMD_STUFF:
+		if (IS_ENABLED(CONFIG_CALL_DEPTH_TRACKING) &&
+		    spectre_v2_enabled == SPECTRE_V2_RETPOLINE) {
+			retbleed_mitigation = RETBLEED_MITIGATION_STUFF;
+
+		} else {
+			if (IS_ENABLED(CONFIG_CALL_DEPTH_TRACKING))
+				pr_err("WARNING: retbleed=stuff depends on spectre_v2=retpoline\n");
+			else
+				pr_err("WARNING: kernel not compiled with CALL_DEPTH_TRACKING.\n");
+
+			goto do_cmd_auto;
+		}
+		break;
+
 do_cmd_auto:
 	case RETBLEED_CMD_AUTO:
 	default:
@@ -916,6 +931,12 @@ do_cmd_auto:
 		mitigate_smt = true;
 		break;
 
+	case RETBLEED_MITIGATION_STUFF:
+		setup_force_cpu_cap(X86_FEATURE_RETHUNK);
+		setup_force_cpu_cap(X86_FEATURE_CALL_DEPTH);
+		x86_set_skl_return_thunk();
+		break;
+
 	default:
 		break;
 	}
@@ -926,7 +947,7 @@ do_cmd_auto:
 
 	/*
 	 * Let IBRS trump all on Intel without affecting the effects of the
-	 * retbleed= cmdline option.
+	 * retbleed= cmdline option except for call depth based stuffing
 	 */
 	if (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL) {
 		switch (spectre_v2_enabled) {
@@ -939,7 +960,8 @@ do_cmd_auto:
 			retbleed_mitigation = RETBLEED_MITIGATION_EIBRS;
 			break;
 		default:
-			pr_err(RETBLEED_INTEL_MSG);
+			if (retbleed_mitigation != RETBLEED_MITIGATION_STUFF)
+				pr_err(RETBLEED_INTEL_MSG);
 		}
 	}
 
@@ -1413,6 +1435,7 @@ static void __init spectre_v2_select_mitigation(void)
 		if (IS_ENABLED(CONFIG_CPU_IBRS_ENTRY) &&
 		    boot_cpu_has_bug(X86_BUG_RETBLEED) &&
 		    retbleed_cmd != RETBLEED_CMD_OFF &&
+		    retbleed_cmd != RETBLEED_CMD_STUFF &&
 		    boot_cpu_has(X86_FEATURE_IBRS) &&
 		    boot_cpu_data.x86_vendor == X86_VENDOR_INTEL) {
 			mode = SPECTRE_V2_IBRS;
