@@ -470,6 +470,9 @@ static ssize_t queue_wb_lat_show(struct request_queue *q, char *page)
 	if (!wbt_rq_qos(q))
 		return -EINVAL;
 
+	if (wbt_disabled(q))
+		return sprintf(page, "0\n");
+
 	return sprintf(page, "%llu\n", div_u64(wbt_get_min_lat(q), 1000));
 }
 
@@ -739,10 +742,8 @@ queue_attr_store(struct kobject *kobj, struct attribute *attr,
 
 static void blk_free_queue_rcu(struct rcu_head *rcu_head)
 {
-	struct request_queue *q = container_of(rcu_head, struct request_queue,
-					       rcu_head);
-
-	kmem_cache_free(blk_get_queue_kmem_cache(blk_queue_has_srcu(q)), q);
+	kmem_cache_free(blk_requestq_cachep,
+			container_of(rcu_head, struct request_queue, rcu_head));
 }
 
 /**
@@ -778,9 +779,6 @@ static void blk_release_queue(struct kobject *kobj)
 
 	if (queue_is_mq(q))
 		blk_mq_release(q);
-
-	if (blk_queue_has_srcu(q))
-		cleanup_srcu_struct(q->srcu);
 
 	ida_free(&blk_queue_ida, q->id);
 	call_rcu(&q->rcu_head, blk_free_queue_rcu);
