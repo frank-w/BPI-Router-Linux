@@ -252,15 +252,13 @@ int module_finalize(const Elf_Ehdr *hdr,
 		    const Elf_Shdr *sechdrs,
 		    struct module *me)
 {
-	const Elf_Shdr *s, *text = NULL, *alt = NULL, *locks = NULL,
+	const Elf_Shdr *s, *alt = NULL, *locks = NULL,
 		*para = NULL, *orc = NULL, *orc_ip = NULL,
 		*retpolines = NULL, *returns = NULL, *ibt_endbr = NULL,
 		*calls = NULL, *cfi = NULL;
 	char *secstrings = (void *)hdr + sechdrs[hdr->e_shstrndx].sh_offset;
 
 	for (s = sechdrs; s < sechdrs + hdr->e_shnum; s++) {
-		if (!strcmp(".text", secstrings + s->sh_name))
-			text = s;
 		if (!strcmp(".altinstructions", secstrings + s->sh_name))
 			alt = s;
 		if (!strcmp(".smp_locks", secstrings + s->sh_name))
@@ -339,12 +337,13 @@ int module_finalize(const Elf_Ehdr *hdr,
 		void *iseg = (void *)ibt_endbr->sh_addr;
 		apply_ibt_endbr(iseg, iseg + ibt_endbr->sh_size);
 	}
-	if (locks && text) {
+	if (locks) {
 		void *lseg = (void *)locks->sh_addr;
-		void *tseg = (void *)text->sh_addr;
+		void *text = me->core_layout.base;
+		void *text_end = text + me->core_layout.text_size;
 		alternatives_smp_module_add(me, me->name,
 					    lseg, lseg + locks->sh_size,
-					    tseg, tseg + text->sh_size);
+					    text, text_end);
 	}
 
 	if (orc && orc_ip)
