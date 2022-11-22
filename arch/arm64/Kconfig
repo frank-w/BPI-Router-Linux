@@ -371,6 +371,9 @@ config KASAN_SHADOW_OFFSET
 	default 0xeffffff800000000 if ARM64_VA_BITS_36 && KASAN_SW_TAGS
 	default 0xffffffffffffffff
 
+config UNWIND_TABLES
+	bool
+
 source "arch/arm64/Kconfig.platforms"
 
 menu "Kernel Features"
@@ -962,6 +965,22 @@ config ARM64_ERRATUM_2457168
 	  Work around this problem by returning 0 when reading the affected counter in
 	  key locations that results in disabling all users of this counter. This effect
 	  is the same to firmware disabling affected counters.
+
+	  If unsure, say Y.
+
+config ARM64_ERRATUM_2645198
+	bool "Cortex-A715: 2645198: Workaround possible [ESR|FAR]_ELx corruption"
+	default y
+	help
+	  This option adds the workaround for ARM Cortex-A715 erratum 2645198.
+
+	  If a Cortex-A715 cpu sees a page mapping permissions change from executable
+	  to non-executable, it may corrupt the ESR_ELx and FAR_ELx registers on the
+	  next instruction abort caused by permission fault.
+
+	  Only user-space does executable to non-executable permission transition via
+	  mprotect() system call. Workaround the problem by doing a break-before-make
+	  TLB invalidation, for all changes to executable user space mappings.
 
 	  If unsure, say Y.
 
@@ -1715,7 +1734,6 @@ config ARM64_LSE_ATOMICS
 
 config ARM64_USE_LSE_ATOMICS
 	bool "Atomic instructions"
-	depends on JUMP_LABEL
 	default y
 	help
 	  As part of the Large System Extensions, ARMv8.1 introduces new
@@ -2157,6 +2175,15 @@ config ARCH_NR_GPIO
           Maximum number of GPIOs in the system.
 
           If unsure, leave the default value.
+
+config UNWIND_PATCH_PAC_INTO_SCS
+	bool "Enable shadow call stack dynamically using code patching"
+	# needs Clang with https://reviews.llvm.org/D111780 incorporated
+	depends on CC_IS_CLANG && CLANG_VERSION >= 150000
+	depends on ARM64_PTR_AUTH_KERNEL && CC_HAS_BRANCH_PROT_PAC_RET
+	depends on SHADOW_CALL_STACK
+	select UNWIND_TABLES
+	select DYNAMIC_SCS
 
 endmenu # "Kernel Features"
 
