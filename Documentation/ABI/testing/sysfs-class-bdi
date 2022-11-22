@@ -67,7 +67,7 @@ Description:
 
 	The 'min_bytes' parameter allows assigning a minimum
 	percentage of the write-back cache to a particular device
-    expressed in bytes.
+	expressed in bytes.
 	For example, this is useful for providing a minimum QoS.
 
 	(read-write)
