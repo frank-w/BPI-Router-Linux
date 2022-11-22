@@ -63,10 +63,10 @@ Contact:	Stefan Roesch <shr@devkernel.io>
 Description:
 	Allows limiting a particular device to use not more than the
 	given value of the write-back cache.  The value is given as part
-    of 1 million. This is useful in situations where we want to avoid
-    one device taking all or most of the write-back cache.  For example
-    in case of an NFS mount that is prone to get stuck, or a FUSE mount
-    which cannot be trusted to play fair.
+	of 1 million. This is useful in situations where we want to avoid
+	one device taking all or most of the write-back cache.  For example
+	in case of an NFS mount that is prone to get stuck, or a FUSE mount
+	which cannot be trusted to play fair.
 
 	(read-write)
 
