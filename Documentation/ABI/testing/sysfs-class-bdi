@@ -54,8 +54,8 @@ Description:
 
 	The 'min_ratio_fine' parameter allows assigning a minimum reserve
 	of the write-back cache to a particular device. The value is
-    expressed as part of 1 million. For example, this is useful for
-    providing a minimum QoS.
+	expressed as part of 1 million. For example, this is useful for
+	providing a minimum QoS.
 
 	(read-write)
 
