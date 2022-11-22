@@ -1137,6 +1137,7 @@ int acpi_subsys_freeze(struct device *dev);
 int acpi_subsys_poweroff(struct device *dev);
 void acpi_ec_mark_gpe_for_wake(void);
 void acpi_ec_set_gpe_wake_mask(u8 action);
+int acpi_subsys_restore_early(struct device *dev);
 #else
 static inline int acpi_subsys_prepare(struct device *dev) { return 0; }
 static inline void acpi_subsys_complete(struct device *dev) {}
@@ -1145,6 +1146,7 @@ static inline int acpi_subsys_suspend_noirq(struct device *dev) { return 0; }
 static inline int acpi_subsys_suspend(struct device *dev) { return 0; }
 static inline int acpi_subsys_freeze(struct device *dev) { return 0; }
 static inline int acpi_subsys_poweroff(struct device *dev) { return 0; }
+static inline int acpi_subsys_restore_early(struct device *dev) { return 0; }
 static inline void acpi_ec_mark_gpe_for_wake(void) {}
 static inline void acpi_ec_set_gpe_wake_mask(u8 action) {}
 #endif
@@ -1491,6 +1493,10 @@ static inline void acpi_init_pcc(void) { }
 
 #ifdef CONFIG_ACPI_FFH
 void acpi_init_ffh(void);
+extern int acpi_ffh_address_space_arch_setup(void *handler_ctxt,
+					     void **region_ctxt);
+extern int acpi_ffh_address_space_arch_handler(acpi_integer *value,
+					       void *region_context);
 #else
 static inline void acpi_init_ffh(void) { }
 #endif
