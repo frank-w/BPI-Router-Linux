@@ -210,14 +210,18 @@ alloc_pages_bulk_array_node(gfp_t gfp, int nid, unsigned long nr_pages, struct p
 	return __alloc_pages_bulk(gfp, nid, NULL, nr_pages, NULL, page_array);
 }
 
-static inline void warn_if_node_offline(int nid, gfp_t gfp_mask)
+static inline void warn_if_node_offline(int this_node, gfp_t gfp_mask)
 {
-	gfp_t gfp = gfp_mask & (__GFP_THISNODE|__GFP_NOWARN);
+	gfp_t warn_gfp = gfp_mask & (__GFP_THISNODE|__GFP_NOWARN);
 
-	if ((gfp == (__GFP_THISNODE|__GFP_NOWARN)) && !node_online(nid)) {
-		pr_warn("%pGg allocation from offline node %d\n", &gfp, nid);
-		dump_stack();
-	}
+	if (warn_gfp != (__GFP_THISNODE|__GFP_NOWARN))
+		return;
+
+	if(node_online(this_node))
+		return;
+
+	pr_warn("%pGg allocation from offline node %d\n", &warn_gfp, this_node);
+	dump_stack();
 }
 
 /*
