@@ -13,6 +13,8 @@ arm/soc
 	patch
 		MAINTAINERS: Add DHCOR to the DH electronic i.MX6 board support
 		ARM: ixp4xx: Remove unused debug iomap
+	keystone/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-soc-for-v6.2
 
 soc/dt
 	renesas/dt
@@ -77,6 +79,8 @@ soc/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.2
 	nuvoton/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/joel/bmc tags/nuvoton-6.2-devicetree
+	amlogic/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm64-dt-for-v6.2
 
 soc/drivers
 	patch
@@ -110,6 +114,8 @@ soc/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v6.1-next-soc
 	qcom/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.2
+	k3/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.2-v2
 
 arm/defconfig
 	at91/defconfig
