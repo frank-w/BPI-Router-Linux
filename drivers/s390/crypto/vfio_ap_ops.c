@@ -1535,13 +1535,35 @@ static int vfio_ap_mdev_set_kvm(struct ap_matrix_mdev *matrix_mdev,
 	return 0;
 }
 
+static void unmap_iova(struct ap_matrix_mdev *matrix_mdev, u64 iova, u64 length)
+{
+	struct ap_queue_table *qtable = &matrix_mdev->qtable;
+	u64 iova_pfn_end = (iova + length - 1) >> PAGE_SHIFT;
+	u64 iova_pfn_start = iova >> PAGE_SHIFT;
+	struct vfio_ap_queue *q;
+	int loop_cursor;
+	u64 pfn;
+
+	hash_for_each(qtable->queues, loop_cursor, q, mdev_qnode) {
+		pfn = q->saved_iova >> PAGE_SHIFT;
+		if (pfn >= iova_pfn_start && pfn <= iova_pfn_end) {
+			vfio_ap_irq_disable(q);
+			break;
+		}
+	}
+}
+
 static void vfio_ap_mdev_dma_unmap(struct vfio_device *vdev, u64 iova,
 				   u64 length)
 {
 	struct ap_matrix_mdev *matrix_mdev =
 		container_of(vdev, struct ap_matrix_mdev, vdev);
 
-	vfio_unpin_pages(&matrix_mdev->vdev, iova, 1);
+	mutex_lock(&matrix_dev->mdevs_lock);
+
+	unmap_iova(matrix_mdev, iova, length);
+
+	mutex_unlock(&matrix_dev->mdevs_lock);
 }
 
 /**
