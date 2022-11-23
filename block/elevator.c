@@ -91,12 +91,11 @@ static inline bool elv_support_features(struct request_queue *q,
 }
 
 /**
- * elevator_match - Test an elevator name and features
+ * elevator_match - Check whether @e's name or alias matches @name
  * @e: Scheduler to test
  * @name: Elevator name to test
  *
- * Return true if the elevator @e name matches @name and if @e provides all
- * the features specified by @required_features.
+ * Return true if the elevator @e's name or alias matches @name.
  */
 static bool elevator_match(const struct elevator_type *e, const char *name)
 {
@@ -650,10 +649,10 @@ void elevator_init_mq(struct request_queue *q)
 }
 
 /*
- * switch to new_e io scheduler. be careful not to introduce deadlocks -
- * we don't free the old io scheduler, before we have allocated what we
- * need for the new one. this way we have a chance of going back to the old
- * one, if the new one fails init for some reason.
+ * Switch to new_e io scheduler.
+ *
+ * If switching fails, we are most likely running out of memory and not able
+ * to restore the old io scheduler, so leaving the io scheduler being none.
  */
 int elevator_switch(struct request_queue *q, struct elevator_type *new_e)
 {
@@ -683,6 +682,12 @@ int elevator_switch(struct request_queue *q, struct elevator_type *new_e)
 out_unfreeze:
 	blk_mq_unquiesce_queue(q);
 	blk_mq_unfreeze_queue(q);
+
+	if (ret) {
+		pr_warn("elv: switch to \"%s\" failed, falling back to \"none\"\n",
+			new_e->elevator_name);
+	}
+
 	return ret;
 }
 
@@ -716,9 +721,6 @@ static int elevator_change(struct request_queue *q, const char *elevator_name)
 	if (!blk_queue_registered(q))
 		return -ENOENT;
 
-	/*
-	 * Special case for mq, turn off scheduling
-	 */
 	if (!strncmp(elevator_name, "none", 4)) {
 		if (q->elevator)
 			elevator_disable(q);
