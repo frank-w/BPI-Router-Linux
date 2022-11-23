@@ -1421,6 +1421,7 @@ static void collapse_and_free_pmd(struct mm_struct *mm, struct vm_area_struct *v
 {
 	pmd_t pmd;
 	struct mmu_gather tlb;
+	struct mmu_notifier_range range;
 
 	mmap_assert_write_locked(mm);
 	if (vma->vm_file)
@@ -1433,12 +1434,16 @@ static void collapse_and_free_pmd(struct mm_struct *mm, struct vm_area_struct *v
 		lockdep_assert_held_write(&vma->anon_vma->root->rwsem);
 	page_table_check_pte_clear_range(mm, addr, pmd);
 
+	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, NULL, mm, addr,
+				addr + HPAGE_PMD_SIZE);
+	mmu_notifier_invalidate_range_start(&range);
 	tlb_gather_mmu(&tlb, mm);
 	pmd = READ_ONCE(*pmdp);
 	pmd_clear(pmdp);
 	tlb_flush_pte_range(&tlb, addr, HPAGE_PMD_SIZE);
 	pte_free_tlb(&tlb, pmd_pgtable(pmd), addr);
 	tlb_finish_mmu(&tlb);
+	mmu_notifier_invalidate_range_end(&range);
 	mm_dec_nr_ptes(mm);
 }
 
