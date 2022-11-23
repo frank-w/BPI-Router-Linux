@@ -12,29 +12,19 @@
 #include <asm/page.h>		/* for PAGE0 */
 #include <asm/pdc.h>		/* for iodc_call() proto and friends */
 
-static DEFINE_SPINLOCK(pdc_console_lock);
-
 static void pdc_console_write(struct console *co, const char *s, unsigned count)
 {
 	int i = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pdc_console_lock, flags);
 	do {
 		i += pdc_iodc_print(s + i, count - i);
 	} while (i < count);
-	spin_unlock_irqrestore(&pdc_console_lock, flags);
 }
 
 #ifdef CONFIG_KGDB
 static int kgdb_pdc_read_char(void)
 {
-	int c;
-	unsigned long flags;
-
-	spin_lock_irqsave(&pdc_console_lock, flags);
-	c = pdc_iodc_getc();
-	spin_unlock_irqrestore(&pdc_console_lock, flags);
+	int c = pdc_iodc_getc_unlocked();
 
 	return (c <= 0) ? NO_POLL_CHAR : c;
 }
@@ -42,7 +32,7 @@ static int kgdb_pdc_read_char(void)
 static void kgdb_pdc_write_char(u8 chr)
 {
 	if (PAGE0->mem_cons.cl_class != CL_DUPLEX)
-		pdc_console_write(NULL, &chr, 1);
+		pdc_iodc_print_unlocked(&chr, 1);
 }
 
 static struct kgdb_io kgdb_pdc_io_ops = {
