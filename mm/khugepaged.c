@@ -975,6 +975,8 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 	int result = SCAN_FAIL;
 	struct vm_area_struct *vma;
 	struct mmu_notifier_range range;
+	struct mmu_gather tlb;
+	pgtable_t deposit_table = NULL;
 
 	VM_BUG_ON(address & ~HPAGE_PMD_MASK);
 
@@ -989,6 +991,11 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 	result = alloc_charge_hpage(&hpage, mm, cc);
 	if (result != SCAN_SUCCEED)
 		goto out_nolock;
+	deposit_table = pte_alloc_one(mm);
+	if (!deposit_table) {
+		result = SCAN_FAIL;
+		goto out_nolock;
+	}
 
 	mmap_read_lock(mm);
 	result = hugepage_vma_revalidate(mm, address, true, &vma, cc);
@@ -1041,12 +1048,12 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 
 	pmd_ptl = pmd_lock(mm, pmd); /* probably unnecessary */
 	/*
-	 * This removes any huge TLB entry from the CPU so we won't allow
-	 * huge and small TLB entries for the same virtual address to
-	 * avoid the risk of CPU bugs in that area.
-	 *
-	 * Parallel fast GUP is fine since fast GUP will back off when
-	 * it detects PMD is changed.
+	 * Unlink the page table from the PMD and do a TLB flush.
+	 * This ensures that the CPUs can't write to the old pages anymore by
+	 * the time __collapse_huge_page_copy() copies their contents, and it
+	 * allows __collapse_huge_page_copy() to free the old pages.
+	 * This also prevents lockless_pages_from_mm() from grabbing references
+	 * on the old pages from here on.
 	 */
 	_pmd = pmdp_collapse_flush(vma, address, pmd);
 	spin_unlock(pmd_ptl);
@@ -1090,6 +1097,16 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 	__SetPageUptodate(hpage);
 	pgtable = pmd_pgtable(_pmd);
 
+	/*
+	 * Discard the old page table.
+	 * The TLB flush that's implied here is redundant, but hard to avoid
+	 * with the current API.
+	 */
+	tlb_gather_mmu(&tlb, mm);
+	tlb_flush_pte_range(&tlb, address, HPAGE_PMD_SIZE);
+	pte_free_tlb(&tlb, pgtable, address);
+	tlb_finish_mmu(&tlb);
+
 	_pmd = mk_huge_pmd(hpage, vma->vm_page_prot);
 	_pmd = maybe_pmd_mkwrite(pmd_mkdirty(_pmd), vma);
 
@@ -1097,7 +1114,8 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 	BUG_ON(!pmd_none(*pmd));
 	page_add_new_anon_rmap(hpage, vma, address);
 	lru_cache_add_inactive_or_unevictable(hpage, vma);
-	pgtable_trans_huge_deposit(mm, pmd, pgtable);
+	pgtable_trans_huge_deposit(mm, pmd, deposit_table);
+	deposit_table = NULL;
 	set_pmd_at(mm, address, pmd, _pmd);
 	update_mmu_cache_pmd(vma, address, pmd);
 	spin_unlock(pmd_ptl);
@@ -1112,6 +1130,8 @@ out_nolock:
 		mem_cgroup_uncharge(page_folio(hpage));
 		put_page(hpage);
 	}
+	if (deposit_table)
+		pte_free(mm, deposit_table);
 	trace_mm_collapse_huge_page(mm, result == SCAN_SUCCEED, result);
 	return result;
 }
@@ -1393,11 +1413,14 @@ static int set_huge_pmd(struct vm_area_struct *vma, unsigned long addr,
  * The mmap lock together with this VMA's rmap locks covers all paths towards
  * the page table entries we're messing with here, except for hardware page
  * table walks and lockless_pages_from_mm().
+ *
+ * This function is similar to free_pte_range().
  */
 static void collapse_and_free_pmd(struct mm_struct *mm, struct vm_area_struct *vma,
 				  unsigned long addr, pmd_t *pmdp)
 {
 	pmd_t pmd;
+	struct mmu_gather tlb;
 
 	mmap_assert_write_locked(mm);
 	if (vma->vm_file)
@@ -1408,11 +1431,15 @@ static void collapse_and_free_pmd(struct mm_struct *mm, struct vm_area_struct *v
 	 */
 	if (vma->anon_vma)
 		lockdep_assert_held_write(&vma->anon_vma->root->rwsem);
-
-	pmd = pmdp_collapse_flush(vma, addr, pmdp);
-	mm_dec_nr_ptes(mm);
 	page_table_check_pte_clear_range(mm, addr, pmd);
-	pte_free(mm, pmd_pgtable(pmd));
+
+	tlb_gather_mmu(&tlb, mm);
+	pmd = READ_ONCE(*pmdp);
+	pmd_clear(pmdp);
+	tlb_flush_pte_range(&tlb, addr, HPAGE_PMD_SIZE);
+	pte_free_tlb(&tlb, pmd_pgtable(pmd), addr);
+	tlb_finish_mmu(&tlb);
+	mm_dec_nr_ptes(mm);
 }
 
 /**
