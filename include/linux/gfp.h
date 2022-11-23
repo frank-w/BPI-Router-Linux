@@ -217,7 +217,7 @@ static inline void warn_if_node_offline(int this_node, gfp_t gfp_mask)
 	if (warn_gfp != (__GFP_THISNODE|__GFP_NOWARN))
 		return;
 
-	if(node_online(this_node))
+	if (node_online(this_node))
 		return;
 
 	pr_warn("%pGg allocation from offline node %d\n", &warn_gfp, this_node);
