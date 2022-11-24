@@ -24,6 +24,7 @@
 #include "util/data.h"
 #include "util/string2.h"
 #include "util/map.h"
+#include "util/util.h"
 
 #include <sys/types.h>
 #include <sys/prctl.h>
@@ -1389,6 +1390,34 @@ static int dump_info(void)
 	return rc;
 }
 
+static const struct evsel_str_handler lock_tracepoints[] = {
+	{ "lock:lock_acquire",	 evsel__process_lock_acquire,   }, /* CONFIG_LOCKDEP */
+	{ "lock:lock_acquired",	 evsel__process_lock_acquired,  }, /* CONFIG_LOCKDEP, CONFIG_LOCK_STAT */
+	{ "lock:lock_contended", evsel__process_lock_contended, }, /* CONFIG_LOCKDEP, CONFIG_LOCK_STAT */
+	{ "lock:lock_release",	 evsel__process_lock_release,   }, /* CONFIG_LOCKDEP */
+};
+
+static const struct evsel_str_handler contention_tracepoints[] = {
+	{ "lock:contention_begin", evsel__process_contention_begin, },
+	{ "lock:contention_end",   evsel__process_contention_end,   },
+};
+
+static int process_event_update(struct perf_tool *tool,
+				union perf_event *event,
+				struct evlist **pevlist)
+{
+	int ret;
+
+	ret = perf_event__process_event_update(tool, event, pevlist);
+	if (ret < 0)
+		return ret;
+
+	/* this can return -EEXIST since we call it for each evsel */
+	perf_session__set_tracepoints_handlers(session, lock_tracepoints);
+	perf_session__set_tracepoints_handlers(session, contention_tracepoints);
+	return 0;
+}
+
 typedef int (*tracepoint_handler)(struct evsel *evsel,
 				  struct perf_sample *sample);
 
@@ -1544,28 +1573,19 @@ next:
 	print_bad_events(bad, total);
 }
 
-static const struct evsel_str_handler lock_tracepoints[] = {
-	{ "lock:lock_acquire",	 evsel__process_lock_acquire,   }, /* CONFIG_LOCKDEP */
-	{ "lock:lock_acquired",	 evsel__process_lock_acquired,  }, /* CONFIG_LOCKDEP, CONFIG_LOCK_STAT */
-	{ "lock:lock_contended", evsel__process_lock_contended, }, /* CONFIG_LOCKDEP, CONFIG_LOCK_STAT */
-	{ "lock:lock_release",	 evsel__process_lock_release,   }, /* CONFIG_LOCKDEP */
-};
-
-static const struct evsel_str_handler contention_tracepoints[] = {
-	{ "lock:contention_begin", evsel__process_contention_begin, },
-	{ "lock:contention_end",   evsel__process_contention_end,   },
-};
-
 static bool force;
 
 static int __cmd_report(bool display_info)
 {
 	int err = -EINVAL;
 	struct perf_tool eops = {
+		.attr		 = perf_event__process_attr,
+		.event_update	 = process_event_update,
 		.sample		 = process_sample_event,
 		.comm		 = perf_event__process_comm,
 		.mmap		 = perf_event__process_mmap,
 		.namespaces	 = perf_event__process_namespaces,
+		.tracing_data	 = perf_event__process_tracing_data,
 		.ordered_events	 = true,
 	};
 	struct perf_data data = {
@@ -1584,17 +1604,19 @@ static int __cmd_report(bool display_info)
 	symbol_conf.sort_by_name = true;
 	symbol__init(&session->header.env);
 
-	if (!perf_session__has_traces(session, "lock record"))
-		goto out_delete;
+	if (!data.is_pipe) {
+		if (!perf_session__has_traces(session, "lock record"))
+			goto out_delete;
 
-	if (perf_session__set_tracepoints_handlers(session, lock_tracepoints)) {
-		pr_err("Initializing perf session tracepoint handlers failed\n");
-		goto out_delete;
-	}
+		if (perf_session__set_tracepoints_handlers(session, lock_tracepoints)) {
+			pr_err("Initializing perf session tracepoint handlers failed\n");
+			goto out_delete;
+		}
 
-	if (perf_session__set_tracepoints_handlers(session, contention_tracepoints)) {
-		pr_err("Initializing perf session tracepoint handlers failed\n");
-		goto out_delete;
+		if (perf_session__set_tracepoints_handlers(session, contention_tracepoints)) {
+			pr_err("Initializing perf session tracepoint handlers failed\n");
+			goto out_delete;
+		}
 	}
 
 	if (setup_output_field(false, output_fields))
@@ -1632,9 +1654,12 @@ static int __cmd_contention(int argc, const char **argv)
 {
 	int err = -EINVAL;
 	struct perf_tool eops = {
+		.attr		 = perf_event__process_attr,
+		.event_update	 = process_event_update,
 		.sample		 = process_sample_event,
 		.comm		 = perf_event__process_comm,
 		.mmap		 = perf_event__process_mmap,
+		.tracing_data	 = perf_event__process_tracing_data,
 		.ordered_events	 = true,
 	};
 	struct perf_data data = {
@@ -1697,7 +1722,7 @@ static int __cmd_contention(int argc, const char **argv)
 			pr_err("lock contention BPF setup failed\n");
 			goto out_delete;
 		}
-	} else {
+	} else if (!data.is_pipe) {
 		if (!perf_session__has_traces(session, "lock record"))
 			goto out_delete;
 
@@ -1858,6 +1883,29 @@ static int parse_map_entry(const struct option *opt, const char *str,
 	return 0;
 }
 
+static int parse_max_stack(const struct option *opt, const char *str,
+			   int unset __maybe_unused)
+{
+	unsigned long *len = (unsigned long *)opt->value;
+	long val;
+	char *endptr;
+
+	errno = 0;
+	val = strtol(str, &endptr, 0);
+	if (*endptr != '\0' || errno != 0) {
+		pr_err("invalid max stack depth: %s\n", str);
+		return -1;
+	}
+
+	if (val < 0 || val > sysctl__max_stack()) {
+		pr_err("invalid max stack depth: %ld\n", val);
+		return -1;
+	}
+
+	*len = val;
+	return 0;
+}
+
 int cmd_lock(int argc, const char **argv)
 {
 	const struct option lock_options[] = {
@@ -1869,7 +1917,7 @@ int cmd_lock(int argc, const char **argv)
 		   "file", "vmlinux pathname"),
 	OPT_STRING(0, "kallsyms", &symbol_conf.kallsyms_name,
 		   "file", "kallsyms pathname"),
-	OPT_BOOLEAN('q', "quiet", &quiet, "Do not show any message"),
+	OPT_BOOLEAN('q', "quiet", &quiet, "Do not show any warnings or messages"),
 	OPT_END()
 	};
 
@@ -1913,9 +1961,9 @@ int cmd_lock(int argc, const char **argv)
 		   "Trace on existing thread id (exclusive to --pid)"),
 	OPT_CALLBACK(0, "map-nr-entries", &bpf_map_entries, "num",
 		     "Max number of BPF map entries", parse_map_entry),
-	OPT_INTEGER(0, "max-stack", &max_stack_depth,
-		    "Set the maximum stack depth when collecting lock contention, "
-		    "Default: " __stringify(CONTENTION_STACK_DEPTH)),
+	OPT_CALLBACK(0, "max-stack", &max_stack_depth, "num",
+		     "Set the maximum stack depth when collecting lopck contention, "
+		     "Default: " __stringify(CONTENTION_STACK_DEPTH), parse_max_stack),
 	OPT_INTEGER(0, "stack-skip", &stack_skip,
 		    "Set the number of stack depth to skip when finding a lock caller, "
 		    "Default: " __stringify(CONTENTION_STACK_SKIP)),
