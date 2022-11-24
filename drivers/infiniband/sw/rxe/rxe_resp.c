@@ -91,7 +91,10 @@ void rxe_resp_queue_pkt(struct rxe_qp *qp, struct sk_buff *skb)
 	must_sched = (pkt->opcode == IB_OPCODE_RC_RDMA_READ_REQUEST) ||
 			(skb_queue_len(&qp->req_pkts) > 1);
 
-	rxe_run_task(&qp->resp.task, must_sched);
+	if (must_sched)
+		rxe_sched_task(&qp->resp.task);
+	else
+		rxe_run_task(&qp->resp.task);
 }
 
 static inline enum resp_states get_req(struct rxe_qp *qp,
@@ -314,7 +317,7 @@ static enum resp_states get_srq_wqe(struct rxe_qp *qp)
 	/* don't trust user space data */
 	if (unlikely(wqe->dma.num_sge > srq->rq.max_sge)) {
 		spin_unlock_irqrestore(&srq->rq.consumer_lock, flags);
-		pr_warn("%s: invalid num_sge in SRQ entry\n", __func__);
+		rxe_dbg_qp(qp, "invalid num_sge in SRQ entry\n");
 		return RESPST_ERR_MALFORMED_WQE;
 	}
 	size = sizeof(*wqe) + wqe->dma.num_sge*sizeof(struct rxe_sge);
@@ -390,16 +393,36 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 static enum resp_states check_length(struct rxe_qp *qp,
 				     struct rxe_pkt_info *pkt)
 {
-	switch (qp_type(qp)) {
-	case IB_QPT_RC:
-		return RESPST_CHK_RKEY;
+	int mtu = qp->mtu;
+	u32 payload = payload_size(pkt);
+	u32 dmalen = reth_len(pkt);
 
-	case IB_QPT_UC:
-		return RESPST_CHK_RKEY;
+	/* RoCEv2 packets do not have LRH.
+	 * Let's skip checking it.
+	 */
 
-	default:
-		return RESPST_CHK_RKEY;
+	if ((pkt->opcode & RXE_START_MASK) &&
+	    (pkt->opcode & RXE_END_MASK)) {
+		/* "only" packets */
+		if (payload > mtu)
+			return RESPST_ERR_LENGTH;
+	} else if ((pkt->opcode & RXE_START_MASK) ||
+		   (pkt->opcode & RXE_MIDDLE_MASK)) {
+		/* "first" or "middle" packets */
+		if (payload != mtu)
+			return RESPST_ERR_LENGTH;
+	} else if (pkt->opcode & RXE_END_MASK) {
+		/* "last" packets */
+		if ((payload == 0) || (payload > mtu))
+			return RESPST_ERR_LENGTH;
 	}
+
+	if (pkt->opcode & (RXE_WRITE_MASK | RXE_READ_MASK)) {
+		if (dmalen > (1 << 31))
+			return RESPST_ERR_LENGTH;
+	}
+
+	return RESPST_CHK_RKEY;
 }
 
 static enum resp_states check_rkey(struct rxe_qp *qp,
@@ -450,15 +473,14 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 	if (rkey_is_mw(rkey)) {
 		mw = rxe_lookup_mw(qp, access, rkey);
 		if (!mw) {
-			pr_debug("%s: no MW matches rkey %#x\n",
-					__func__, rkey);
+			rxe_dbg_qp(qp, "no MW matches rkey %#x\n", rkey);
 			state = RESPST_ERR_RKEY_VIOLATION;
 			goto err;
 		}
 
 		mr = mw->mr;
 		if (!mr) {
-			pr_err("%s: MW doesn't have an MR\n", __func__);
+			rxe_dbg_qp(qp, "MW doesn't have an MR\n");
 			state = RESPST_ERR_RKEY_VIOLATION;
 			goto err;
 		}
@@ -471,8 +493,7 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 	} else {
 		mr = lookup_mr(qp->pd, access, rkey, RXE_LOOKUP_REMOTE);
 		if (!mr) {
-			pr_debug("%s: no MR matches rkey %#x\n",
-					__func__, rkey);
+			rxe_dbg_qp(qp, "no MR matches rkey %#x\n", rkey);
 			state = RESPST_ERR_RKEY_VIOLATION;
 			goto err;
 		}
@@ -811,10 +832,13 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 		return RESPST_ERR_RNR;
 	}
 
-	rxe_mr_copy(mr, res->read.va, payload_addr(&ack_pkt),
-		    payload, RXE_FROM_MR_OBJ);
-	if (mr)
-		rxe_put(mr);
+	err = rxe_mr_copy(mr, res->read.va, payload_addr(&ack_pkt),
+			  payload, RXE_FROM_MR_OBJ);
+	rxe_put(mr);
+	if (err) {
+		kfree_skb(skb);
+		return RESPST_ERR_RKEY_VIOLATION;
+	}
 
 	if (bth_pad(&ack_pkt)) {
 		u8 *pad = payload_addr(&ack_pkt) + payload;
@@ -1040,7 +1064,7 @@ static int send_common_ack(struct rxe_qp *qp, u8 syndrome, u32 psn,
 
 	err = rxe_xmit_packet(qp, &ack_pkt, skb);
 	if (err)
-		pr_err_ratelimited("Failed sending %s\n", msg);
+		rxe_dbg_qp(qp, "Failed sending %s\n", msg);
 
 	return err;
 }
@@ -1286,8 +1310,7 @@ int rxe_responder(void *arg)
 	}
 
 	while (1) {
-		pr_debug("qp#%d state = %s\n", qp_num(qp),
-			 resp_state_name[state]);
+		rxe_dbg_qp(qp, "state = %s\n", resp_state_name[state]);
 		switch (state) {
 		case RESPST_GET_REQ:
 			state = get_req(qp, &pkt);
@@ -1444,7 +1467,7 @@ int rxe_responder(void *arg)
 
 		case RESPST_ERROR:
 			qp->resp.goto_error = 0;
-			pr_debug("qp#%d moved to error state\n", qp_num(qp));
+			rxe_dbg_qp(qp, "moved to error state\n");
 			rxe_qp_error(qp);
 			goto exit;
 
