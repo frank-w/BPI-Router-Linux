@@ -21,6 +21,36 @@
  */
 
 /*
+ * Optional: only supported since gcc >= 10
+ * Optional: not supported by Clang
+ *
+ *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-access-function-attribute
+ *
+ * While it is legal to provide only the pointer argument position and
+ * access type, the kernel macros are designed to require also the bounds
+ * (element count) argument position; if a function has no bounds argument,
+ * refactor the code to include one.
+ *
+ * These can be used multiple times. For example:
+ *
+ * __access_wo(2, 3) __access_ro(4, 5)
+ * int copy_something(struct context *ctx, u32 *dst, size_t dst_count,
+ *		      const u8 *src, int src_len);
+ *
+ * If "dst" will also be read from, it could use __access_rw(2, 3) instead.
+ *
+ */
+#if __has_attribute(__access__)
+# define __access_rw(ptr, count)	__attribute__((__access__(read_write, ptr, count)))
+# define __access_ro(ptr, count)	__attribute__((__access__(read_only,  ptr, count)))
+# define __access_wo(ptr, count)	__attribute__((__access__(write_only, ptr, count)))
+#else
+# define __access_rw(ptr, count)
+# define __access_ro(ptr, count)
+# define __access_wo(ptr, count)
+#endif
+
+/*
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-alias-function-attribute
  */
 #define __alias(symbol)                 __attribute__((__alias__(#symbol)))
