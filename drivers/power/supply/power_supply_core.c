@@ -870,7 +870,6 @@ EXPORT_SYMBOL_GPL(power_supply_temp2resist_simple);
  * power_supply_vbat2ri() - find the battery internal resistance
  * from the battery voltage
  * @info: The battery information container
- * @table: Pointer to battery resistance temperature table
  * @vbat_uv: The battery voltage in microvolt
  * @charging: If we are charging (true) or not (false)
  *
@@ -1387,8 +1386,8 @@ create_triggers_failed:
 register_cooler_failed:
 	psy_unregister_thermal(psy);
 register_thermal_failed:
-	device_del(dev);
 wakeup_init_failed:
+	device_del(dev);
 device_add_failed:
 check_supplies_failed:
 dev_set_name_failed:
