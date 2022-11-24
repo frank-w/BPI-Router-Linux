@@ -1288,25 +1288,14 @@ void pdc_io_reset_devices(void)
 
 #endif /* defined(BOOTLOADER) */
 
-/* locked by pdc_console_lock */
-static int __attribute__((aligned(8)))   iodc_retbuf[32];
-static char __attribute__((aligned(64))) iodc_dbuf[4096];
+/* locked by pdc_lock */
+static char __attribute__((aligned(64))) iodc_dbuf[1024];
 
-/**
- * pdc_iodc_print - Console print using IODC.
- * @str: the string to output.
- * @count: length of str
- *
- * Note that only these special chars are architected for console IODC io:
- * BEL, BS, CR, and LF. Others are passed through.
- * Since the HP console requires CR+LF to perform a 'newline', we translate
- * "\n" to "\r\n".
- */
-int pdc_iodc_print(const unsigned char *str, unsigned count)
+int pdc_iodc_print_unlocked(const unsigned char *str, unsigned count)
 {
 	unsigned int i;
-	unsigned long flags;
 
+	count = min(count, sizeof(iodc_dbuf));
 	for (i = 0; i < count;) {
 		switch(str[i]) {
 		case '\n':
@@ -1322,17 +1311,60 @@ int pdc_iodc_print(const unsigned char *str, unsigned count)
 	}
 
 print:
-        spin_lock_irqsave(&pdc_lock, flags);
-        real32_call(PAGE0->mem_cons.iodc_io,
-                    (unsigned long)PAGE0->mem_cons.hpa, ENTRY_IO_COUT,
-                    PAGE0->mem_cons.spa, __pa(PAGE0->mem_cons.dp.layers),
-                    __pa(iodc_retbuf), 0, __pa(iodc_dbuf), i, 0);
-        spin_unlock_irqrestore(&pdc_lock, flags);
+	real32_call(PAGE0->mem_cons.iodc_io,
+		(unsigned long)PAGE0->mem_cons.hpa, ENTRY_IO_COUT,
+		PAGE0->mem_cons.spa, __pa(PAGE0->mem_cons.dp.layers),
+		__pa(pdc_result), 0, __pa(iodc_dbuf), i, 0);
 
 	return i;
 }
 
+/**
+ * pdc_iodc_print - Console print using IODC.
+ * @str: the string to output.
+ * @count: length of str
+ *
+ * Note that only these special chars are architected for console IODC io:
+ * BEL, BS, CR, and LF. Others are passed through.
+ * Since the HP console requires CR+LF to perform a 'newline', we translate
+ * "\n" to "\r\n".
+ */
+int pdc_iodc_print(const unsigned char *str, unsigned count)
+{
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&pdc_lock, flags);
+	ret = pdc_iodc_print_unlocked(str, count);
+	spin_unlock_irqrestore(&pdc_lock, flags);
+	return ret;
+}
+
 #if !defined(BOOTLOADER)
+int pdc_iodc_getc_unlocked(void)
+{
+	int ch;
+	int status;
+
+	/* Bail if no console input device. */
+	if (!PAGE0->mem_kbd.iodc_io)
+		return 0;
+	
+	/* wait for a keyboard (rs232)-input */
+	real32_call(PAGE0->mem_kbd.iodc_io,
+		    (unsigned long)PAGE0->mem_kbd.hpa, ENTRY_IO_CIN,
+		    PAGE0->mem_kbd.spa, __pa(PAGE0->mem_kbd.dp.layers), 
+		    __pa(pdc_result), 0, __pa(iodc_dbuf), 1, 0);
+
+	ch = *iodc_dbuf;
+	status = *pdc_result;
+
+	if (status == 0)
+	    return -1;
+	
+	return ch;
+}
+
 /**
  * pdc_iodc_getc - Read a character (non-blocking) from the PDC console.
  *
@@ -1341,28 +1373,12 @@ print:
  */
 int pdc_iodc_getc(void)
 {
-	int ch;
-	int status;
 	unsigned long flags;
+	int ch;
 
-	/* Bail if no console input device. */
-	if (!PAGE0->mem_kbd.iodc_io)
-		return 0;
-	
-	/* wait for a keyboard (rs232)-input */
 	spin_lock_irqsave(&pdc_lock, flags);
-	real32_call(PAGE0->mem_kbd.iodc_io,
-		    (unsigned long)PAGE0->mem_kbd.hpa, ENTRY_IO_CIN,
-		    PAGE0->mem_kbd.spa, __pa(PAGE0->mem_kbd.dp.layers), 
-		    __pa(iodc_retbuf), 0, __pa(iodc_dbuf), 1, 0);
-
-	ch = *iodc_dbuf;
-	status = *iodc_retbuf;
+	ch = pdc_iodc_getc_unlocked();
 	spin_unlock_irqrestore(&pdc_lock, flags);
-
-	if (status == 0)
-	    return -1;
-	
 	return ch;
 }
 
