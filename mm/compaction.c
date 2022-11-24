@@ -990,7 +990,7 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		 * admittedly racy check.
 		 */
 		mapping = page_mapping(page);
-		if (!mapping && page_count(page) > page_mapcount(page))
+		if (!mapping && page_count(page) > total_mapcount(page))
 			goto isolate_fail;
 
 		/*
