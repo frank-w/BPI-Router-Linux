@@ -528,7 +528,7 @@ static struct vpbe_enc_mode_info dm365evm_enc_preset_timing[] = {
 
 /*
  * The outputs available from VPBE + ecnoders. Keep the
- * the order same as that of encoders. First those from venc followed by that
+ * order same as that of encoders. First those from venc followed by that
  * from encoders. Index in the output refers to index on a particular
  * encoder.Driver uses this index to pass it to encoder when it supports more
  * than one output. Application uses index of the array to set an output.
