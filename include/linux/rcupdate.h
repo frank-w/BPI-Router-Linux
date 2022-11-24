@@ -108,6 +108,15 @@ static inline int rcu_preempt_depth(void)
 
 #endif /* #else #ifdef CONFIG_PREEMPT_RCU */
 
+#ifdef CONFIG_RCU_LAZY
+void call_rcu_flush(struct rcu_head *head, rcu_callback_t func);
+#else
+static inline void call_rcu_flush(struct rcu_head *head, rcu_callback_t func)
+{
+	call_rcu(head, func);
+}
+#endif
+
 /* Internal to kernel */
 void rcu_init(void);
 extern int rcu_scheduler_active;
@@ -1002,8 +1011,7 @@ do {									\
 									\
 	if (___p) {									\
 		BUILD_BUG_ON(!__is_kvfree_rcu_offset(offsetof(typeof(*(ptr)), rhf)));	\
-		kvfree_call_rcu(&((___p)->rhf), (rcu_callback_t)(unsigned long)		\
-			(offsetof(typeof(*(ptr)), rhf)));				\
+		kvfree_call_rcu(&((___p)->rhf), (void *) (___p));			\
 	}										\
 } while (0)
 
@@ -1012,7 +1020,7 @@ do {								\
 	typeof(ptr) ___p = (ptr);				\
 								\
 	if (___p)						\
-		kvfree_call_rcu(NULL, (rcu_callback_t) (___p));	\
+		kvfree_call_rcu(NULL, (void *) (___p));		\
 } while (0)
 
 /*

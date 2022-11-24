@@ -144,14 +144,16 @@ static int rcu_scheduler_fully_active __read_mostly;
 
 static void rcu_report_qs_rnp(unsigned long mask, struct rcu_node *rnp,
 			      unsigned long gps, unsigned long flags);
-static void rcu_init_new_rnp(struct rcu_node *rnp_leaf);
-static void rcu_cleanup_dead_rnp(struct rcu_node *rnp_leaf);
 static void rcu_boost_kthread_setaffinity(struct rcu_node *rnp, int outgoingcpu);
 static void invoke_rcu_core(void);
 static void rcu_report_exp_rdp(struct rcu_data *rdp);
 static void sync_sched_exp_online_cleanup(int cpu);
 static void check_cb_ovld_locked(struct rcu_data *rdp, struct rcu_node *rnp);
 static bool rcu_rdp_is_offloaded(struct rcu_data *rdp);
+static bool rcu_rdp_cpu_online(struct rcu_data *rdp);
+static bool rcu_init_invoked(void);
+static void rcu_cleanup_dead_rnp(struct rcu_node *rnp_leaf);
+static void rcu_init_new_rnp(struct rcu_node *rnp_leaf);
 
 /*
  * rcuc/rcub/rcuop kthread realtime priority. The "rcuop"
@@ -213,27 +215,6 @@ EXPORT_SYMBOL_GPL(rcu_get_gp_kthreads_prio);
  * need for fast grace periods to increase other race probabilities.
  */
 #define PER_RCU_NODE_PERIOD 3	/* Number of grace periods between delays for debugging. */
-
-/*
- * Compute the mask of online CPUs for the specified rcu_node structure.
- * This will not be stable unless the rcu_node structure's ->lock is
- * held, but the bit corresponding to the current CPU will be stable
- * in most contexts.
- */
-static unsigned long rcu_rnp_online_cpus(struct rcu_node *rnp)
-{
-	return READ_ONCE(rnp->qsmaskinitnext);
-}
-
-/*
- * Is the CPU corresponding to the specified rcu_data structure online
- * from RCU's perspective?  This perspective is given by that structure's
- * ->qsmaskinitnext field rather than by the global cpu_online_mask.
- */
-static bool rcu_rdp_cpu_online(struct rcu_data *rdp)
-{
-	return !!(rdp->grpmask & rcu_rnp_online_cpus(rdp->mynode));
-}
 
 /*
  * Return true if an RCU grace period is in progress.  The READ_ONCE()s
@@ -299,12 +280,6 @@ static int rcu_dynticks_snap(int cpu)
 static bool rcu_dynticks_in_eqs(int snap)
 {
 	return !(snap & RCU_DYNTICKS_IDX);
-}
-
-/* Return true if the specified CPU is currently idle from an RCU viewpoint.  */
-bool rcu_is_idle_cpu(int cpu)
-{
-	return rcu_dynticks_in_eqs(rcu_dynticks_snap(cpu));
 }
 
 /*
@@ -740,46 +715,6 @@ void rcu_request_urgent_qs_task(struct task_struct *t)
 	smp_store_release(per_cpu_ptr(&rcu_data.rcu_urgent_qs, cpu), true);
 }
 
-#if defined(CONFIG_PROVE_RCU) && defined(CONFIG_HOTPLUG_CPU)
-
-/*
- * Is the current CPU online as far as RCU is concerned?
- *
- * Disable preemption to avoid false positives that could otherwise
- * happen due to the current CPU number being sampled, this task being
- * preempted, its old CPU being taken offline, resuming on some other CPU,
- * then determining that its old CPU is now offline.
- *
- * Disable checking if in an NMI handler because we cannot safely
- * report errors from NMI handlers anyway.  In addition, it is OK to use
- * RCU on an offline processor during initial boot, hence the check for
- * rcu_scheduler_fully_active.
- */
-bool rcu_lockdep_current_cpu_online(void)
-{
-	struct rcu_data *rdp;
-	bool ret = false;
-
-	if (in_nmi() || !rcu_scheduler_fully_active)
-		return true;
-	preempt_disable_notrace();
-	rdp = this_cpu_ptr(&rcu_data);
-	/*
-	 * Strictly, we care here about the case where the current CPU is
-	 * in rcu_cpu_starting() and thus has an excuse for rdp->grpmask
-	 * not being up to date. So arch_spin_is_locked() might have a
-	 * false positive if it's held by some *other* CPU, but that's
-	 * OK because that just means a false *negative* on the warning.
-	 */
-	if (rcu_rdp_cpu_online(rdp) || arch_spin_is_locked(&rcu_state.ofl_lock))
-		ret = true;
-	preempt_enable_notrace();
-	return ret;
-}
-EXPORT_SYMBOL_GPL(rcu_lockdep_current_cpu_online);
-
-#endif /* #if defined(CONFIG_PROVE_RCU) && defined(CONFIG_HOTPLUG_CPU) */
-
 /*
  * When trying to report a quiescent state on behalf of some other CPU,
  * it is our responsibility to check for and handle potential overflow
@@ -930,6 +865,24 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp)
 			rdp->rcu_iw_pending = true;
 			rdp->rcu_iw_gp_seq = rnp->gp_seq;
 			irq_work_queue_on(&rdp->rcu_iw, rdp->cpu);
+		}
+
+		if (rcu_cpu_stall_cputime && rdp->snap_record.gp_seq != rdp->gp_seq) {
+			int cpu = rdp->cpu;
+			struct rcu_snap_record *rsrp;
+			struct kernel_cpustat *kcsp;
+
+			kcsp = &kcpustat_cpu(cpu);
+
+			rsrp = &rdp->snap_record;
+			rsrp->cputime_irq     = kcpustat_field(kcsp, CPUTIME_IRQ, cpu);
+			rsrp->cputime_softirq = kcpustat_field(kcsp, CPUTIME_SOFTIRQ, cpu);
+			rsrp->cputime_system  = kcpustat_field(kcsp, CPUTIME_SYSTEM, cpu);
+			rsrp->nr_hardirqs = kstat_cpu_irqs_sum(rdp->cpu);
+			rsrp->nr_softirqs = kstat_cpu_softirqs_sum(rdp->cpu);
+			rsrp->nr_csw = nr_context_switches_cpu(rdp->cpu);
+			rsrp->jiffies = jiffies;
+			rsrp->gp_seq = rdp->gp_seq;
 		}
 	}
 
@@ -1354,13 +1307,6 @@ static void rcu_gp_torture_wait(void)
 static void rcu_strict_gp_boundary(void *unused)
 {
 	invoke_rcu_core();
-}
-
-// Has rcu_init() been invoked?  This is used (for example) to determine
-// whether spinlocks may be acquired safely.
-static bool rcu_init_invoked(void)
-{
-	return !!rcu_state.n_online_cpus;
 }
 
 // Make the polled API aware of the beginning of a grace period.
@@ -2096,92 +2042,6 @@ rcu_check_quiescent_state(struct rcu_data *rdp)
 }
 
 /*
- * Near the end of the offline process.  Trace the fact that this CPU
- * is going offline.
- */
-int rcutree_dying_cpu(unsigned int cpu)
-{
-	bool blkd;
-	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
-	struct rcu_node *rnp = rdp->mynode;
-
-	if (!IS_ENABLED(CONFIG_HOTPLUG_CPU))
-		return 0;
-
-	blkd = !!(rnp->qsmask & rdp->grpmask);
-	trace_rcu_grace_period(rcu_state.name, READ_ONCE(rnp->gp_seq),
-			       blkd ? TPS("cpuofl-bgp") : TPS("cpuofl"));
-	return 0;
-}
-
-/*
- * All CPUs for the specified rcu_node structure have gone offline,
- * and all tasks that were preempted within an RCU read-side critical
- * section while running on one of those CPUs have since exited their RCU
- * read-side critical section.  Some other CPU is reporting this fact with
- * the specified rcu_node structure's ->lock held and interrupts disabled.
- * This function therefore goes up the tree of rcu_node structures,
- * clearing the corresponding bits in the ->qsmaskinit fields.  Note that
- * the leaf rcu_node structure's ->qsmaskinit field has already been
- * updated.
- *
- * This function does check that the specified rcu_node structure has
- * all CPUs offline and no blocked tasks, so it is OK to invoke it
- * prematurely.  That said, invoking it after the fact will cost you
- * a needless lock acquisition.  So once it has done its work, don't
- * invoke it again.
- */
-static void rcu_cleanup_dead_rnp(struct rcu_node *rnp_leaf)
-{
-	long mask;
-	struct rcu_node *rnp = rnp_leaf;
-
-	raw_lockdep_assert_held_rcu_node(rnp_leaf);
-	if (!IS_ENABLED(CONFIG_HOTPLUG_CPU) ||
-	    WARN_ON_ONCE(rnp_leaf->qsmaskinit) ||
-	    WARN_ON_ONCE(rcu_preempt_has_tasks(rnp_leaf)))
-		return;
-	for (;;) {
-		mask = rnp->grpmask;
-		rnp = rnp->parent;
-		if (!rnp)
-			break;
-		raw_spin_lock_rcu_node(rnp); /* irqs already disabled. */
-		rnp->qsmaskinit &= ~mask;
-		/* Between grace periods, so better already be zero! */
-		WARN_ON_ONCE(rnp->qsmask);
-		if (rnp->qsmaskinit) {
-			raw_spin_unlock_rcu_node(rnp);
-			/* irqs remain disabled. */
-			return;
-		}
-		raw_spin_unlock_rcu_node(rnp); /* irqs remain disabled. */
-	}
-}
-
-/*
- * The CPU has been completely removed, and some other CPU is reporting
- * this fact from process context.  Do the remainder of the cleanup.
- * There can only be one CPU hotplug operation at a time, so no need for
- * explicit locking.
- */
-int rcutree_dead_cpu(unsigned int cpu)
-{
-	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
-	struct rcu_node *rnp = rdp->mynode;  /* Outgoing CPU's rdp & rnp. */
-
-	if (!IS_ENABLED(CONFIG_HOTPLUG_CPU))
-		return 0;
-
-	WRITE_ONCE(rcu_state.n_online_cpus, rcu_state.n_online_cpus - 1);
-	/* Adjust any no-longer-needed kthreads. */
-	rcu_boost_kthread_setaffinity(rnp, -1);
-	// Stop-machine done, so allow nohz_full to disable tick.
-	tick_dep_clear(TICK_DEP_BIT_RCU);
-	return 0;
-}
-
-/*
  * Invoke any RCU callbacks that have made it to the end of their grace
  * period.  Throttle as specified by rdp->blimit.
  */
@@ -2213,7 +2073,7 @@ static void rcu_do_batch(struct rcu_data *rdp)
 	 */
 	rcu_nocb_lock_irqsave(rdp, flags);
 	WARN_ON_ONCE(cpu_is_offline(smp_processor_id()));
-	pending = rcu_segcblist_n_cbs(&rdp->cblist);
+	pending = rcu_segcblist_get_seglen(&rdp->cblist, RCU_DONE_TAIL);
 	div = READ_ONCE(rcu_divisor);
 	div = div < 0 ? 7 : div > sizeof(long) * 8 - 2 ? sizeof(long) * 8 - 2 : div;
 	bl = max(rdp->blimit, pending >> div);
@@ -2418,7 +2278,7 @@ void rcu_force_quiescent_state(void)
 	struct rcu_node *rnp_old = NULL;
 
 	/* Funnel through hierarchy to reduce memory contention. */
-	rnp = __this_cpu_read(rcu_data.mynode);
+	rnp = raw_cpu_read(rcu_data.mynode);
 	for (; rnp != NULL; rnp = rnp->parent) {
 		ret = (READ_ONCE(rcu_state.gp_flags) & RCU_GP_FLAG_FQS) ||
 		       !raw_spin_trylock(&rnp->fqslock);
@@ -2730,47 +2590,8 @@ static void check_cb_ovld(struct rcu_data *rdp)
 	raw_spin_unlock_rcu_node(rnp);
 }
 
-/**
- * call_rcu() - Queue an RCU callback for invocation after a grace period.
- * @head: structure to be used for queueing the RCU updates.
- * @func: actual callback function to be invoked after the grace period
- *
- * The callback function will be invoked some time after a full grace
- * period elapses, in other words after all pre-existing RCU read-side
- * critical sections have completed.  However, the callback function
- * might well execute concurrently with RCU read-side critical sections
- * that started after call_rcu() was invoked.
- *
- * RCU read-side critical sections are delimited by rcu_read_lock()
- * and rcu_read_unlock(), and may be nested.  In addition, but only in
- * v5.0 and later, regions of code across which interrupts, preemption,
- * or softirqs have been disabled also serve as RCU read-side critical
- * sections.  This includes hardware interrupt handlers, softirq handlers,
- * and NMI handlers.
- *
- * Note that all CPUs must agree that the grace period extended beyond
- * all pre-existing RCU read-side critical section.  On systems with more
- * than one CPU, this means that when "func()" is invoked, each CPU is
- * guaranteed to have executed a full memory barrier since the end of its
- * last RCU read-side critical section whose beginning preceded the call
- * to call_rcu().  It also means that each CPU executing an RCU read-side
- * critical section that continues beyond the start of "func()" must have
- * executed a memory barrier after the call_rcu() but before the beginning
- * of that RCU read-side critical section.  Note that these guarantees
- * include CPUs that are offline, idle, or executing in user mode, as
- * well as CPUs that are executing in the kernel.
- *
- * Furthermore, if CPU A invoked call_rcu() and CPU B invoked the
- * resulting RCU callback function "func()", then both CPU A and CPU B are
- * guaranteed to execute a full memory barrier during the time interval
- * between the call to call_rcu() and the invocation of "func()" -- even
- * if CPU A and CPU B are the same CPU (but again only if the system has
- * more than one CPU).
- *
- * Implementation of these memory-ordering guarantees is described here:
- * Documentation/RCU/Design/Memory-Ordering/Tree-RCU-Memory-Ordering.rst.
- */
-void call_rcu(struct rcu_head *head, rcu_callback_t func)
+static void
+__call_rcu_common(struct rcu_head *head, rcu_callback_t func, bool lazy)
 {
 	static atomic_t doublefrees;
 	unsigned long flags;
@@ -2811,7 +2632,7 @@ void call_rcu(struct rcu_head *head, rcu_callback_t func)
 	}
 
 	check_cb_ovld(rdp);
-	if (rcu_nocb_try_bypass(rdp, head, &was_alldone, flags))
+	if (rcu_nocb_try_bypass(rdp, head, &was_alldone, flags, lazy))
 		return; // Enqueued onto ->nocb_bypass, so just leave.
 	// If no-CBs CPU gets here, rcu_nocb_try_bypass() acquired ->nocb_lock.
 	rcu_segcblist_enqueue(&rdp->cblist, head);
@@ -2833,8 +2654,84 @@ void call_rcu(struct rcu_head *head, rcu_callback_t func)
 		local_irq_restore(flags);
 	}
 }
-EXPORT_SYMBOL_GPL(call_rcu);
 
+#ifdef CONFIG_RCU_LAZY
+/**
+ * call_rcu_flush() - Queue RCU callback for invocation after grace period, and
+ * flush all lazy callbacks (including the new one) to the main ->cblist while
+ * doing so.
+ *
+ * @head: structure to be used for queueing the RCU updates.
+ * @func: actual callback function to be invoked after the grace period
+ *
+ * The callback function will be invoked some time after a full grace
+ * period elapses, in other words after all pre-existing RCU read-side
+ * critical sections have completed.
+ *
+ * Use this API instead of call_rcu() if you don't want the callback to be
+ * invoked after very long periods of time, which can happen on systems without
+ * memory pressure and on systems which are lightly loaded or mostly idle.
+ * This function will cause callbacks to be invoked sooner than later at the
+ * expense of extra power. Other than that, this function is identical to, and
+ * reuses call_rcu()'s logic. Refer to call_rcu() for more details about memory
+ * ordering and other functionality.
+ */
+void call_rcu_flush(struct rcu_head *head, rcu_callback_t func)
+{
+	return __call_rcu_common(head, func, false);
+}
+EXPORT_SYMBOL_GPL(call_rcu_flush);
+#endif
+
+/**
+ * call_rcu() - Queue an RCU callback for invocation after a grace period.
+ * By default the callbacks are 'lazy' and are kept hidden from the main
+ * ->cblist to prevent starting of grace periods too soon.
+ * If you desire grace periods to start very soon, use call_rcu_flush().
+ *
+ * @head: structure to be used for queueing the RCU updates.
+ * @func: actual callback function to be invoked after the grace period
+ *
+ * The callback function will be invoked some time after a full grace
+ * period elapses, in other words after all pre-existing RCU read-side
+ * critical sections have completed.  However, the callback function
+ * might well execute concurrently with RCU read-side critical sections
+ * that started after call_rcu() was invoked.
+ *
+ * RCU read-side critical sections are delimited by rcu_read_lock()
+ * and rcu_read_unlock(), and may be nested.  In addition, but only in
+ * v5.0 and later, regions of code across which interrupts, preemption,
+ * or softirqs have been disabled also serve as RCU read-side critical
+ * sections.  This includes hardware interrupt handlers, softirq handlers,
+ * and NMI handlers.
+ *
+ * Note that all CPUs must agree that the grace period extended beyond
+ * all pre-existing RCU read-side critical section.  On systems with more
+ * than one CPU, this means that when "func()" is invoked, each CPU is
+ * guaranteed to have executed a full memory barrier since the end of its
+ * last RCU read-side critical section whose beginning preceded the call
+ * to call_rcu().  It also means that each CPU executing an RCU read-side
+ * critical section that continues beyond the start of "func()" must have
+ * executed a memory barrier after the call_rcu() but before the beginning
+ * of that RCU read-side critical section.  Note that these guarantees
+ * include CPUs that are offline, idle, or executing in user mode, as
+ * well as CPUs that are executing in the kernel.
+ *
+ * Furthermore, if CPU A invoked call_rcu() and CPU B invoked the
+ * resulting RCU callback function "func()", then both CPU A and CPU B are
+ * guaranteed to execute a full memory barrier during the time interval
+ * between the call to call_rcu() and the invocation of "func()" -- even
+ * if CPU A and CPU B are the same CPU (but again only if the system has
+ * more than one CPU).
+ *
+ * Implementation of these memory-ordering guarantees is described here:
+ * Documentation/RCU/Design/Memory-Ordering/Tree-RCU-Memory-Ordering.rst.
+ */
+void call_rcu(struct rcu_head *head, rcu_callback_t func)
+{
+	return __call_rcu_common(head, func, IS_ENABLED(CONFIG_RCU_LAZY));
+}
+EXPORT_SYMBOL_GPL(call_rcu);
 
 /* Maximum number of jiffies to wait before draining a batch. */
 #define KFREE_DRAIN_JIFFIES (5 * HZ)
@@ -3070,8 +2967,8 @@ static void kfree_rcu_work(struct work_struct *work)
 	 * This list is named "Channel 3".
 	 */
 	for (; head; head = next) {
-		unsigned long offset = (unsigned long)head->func;
-		void *ptr = (void *)head - offset;
+		void *ptr = (void *) head->func;
+		unsigned long offset = (void *) head - ptr;
 
 		next = head->next;
 		debug_rcu_head_unqueue((struct rcu_head *)ptr);
@@ -3309,26 +3206,21 @@ add_ptr_to_bulk_krc_lock(struct kfree_rcu_cpu **krcp,
  * be free'd in workqueue context. This allows us to: batch requests together to
  * reduce the number of grace periods during heavy kfree_rcu()/kvfree_rcu() load.
  */
-void kvfree_call_rcu(struct rcu_head *head, rcu_callback_t func)
+void kvfree_call_rcu(struct rcu_head *head, void *ptr)
 {
 	unsigned long flags;
 	struct kfree_rcu_cpu *krcp;
 	bool success;
-	void *ptr;
 
-	if (head) {
-		ptr = (void *) head - (unsigned long) func;
-	} else {
-		/*
-		 * Please note there is a limitation for the head-less
-		 * variant, that is why there is a clear rule for such
-		 * objects: it can be used from might_sleep() context
-		 * only. For other places please embed an rcu_head to
-		 * your data.
-		 */
+	/*
+	 * Please note there is a limitation for the head-less
+	 * variant, that is why there is a clear rule for such
+	 * objects: it can be used from might_sleep() context
+	 * only. For other places please embed an rcu_head to
+	 * your data.
+	 */
+	if (!head)
 		might_sleep();
-		ptr = (unsigned long *) func;
-	}
 
 	// Queue the object but don't yet schedule the batch.
 	if (debug_rcu_head_queue(ptr)) {
@@ -3349,7 +3241,7 @@ void kvfree_call_rcu(struct rcu_head *head, rcu_callback_t func)
 			// Inline if kvfree_rcu(one_arg) call.
 			goto unlock_return;
 
-		head->func = func;
+		head->func = ptr;
 		head->next = krcp->head;
 		krcp->head = head;
 		success = true;
@@ -3509,7 +3401,7 @@ void synchronize_rcu(void)
 		if (rcu_gp_is_expedited())
 			synchronize_rcu_expedited();
 		else
-			wait_rcu_gp(call_rcu);
+			wait_rcu_gp(call_rcu_flush);
 		return;
 	}
 
@@ -3896,6 +3788,8 @@ static void rcu_barrier_entrain(struct rcu_data *rdp)
 {
 	unsigned long gseq = READ_ONCE(rcu_state.barrier_sequence);
 	unsigned long lseq = READ_ONCE(rdp->barrier_seq_snap);
+	bool wake_nocb = false;
+	bool was_alldone = false;
 
 	lockdep_assert_held(&rcu_state.barrier_lock);
 	if (rcu_seq_state(lseq) || !rcu_seq_state(gseq) || rcu_seq_ctr(lseq) != rcu_seq_ctr(gseq))
@@ -3904,7 +3798,14 @@ static void rcu_barrier_entrain(struct rcu_data *rdp)
 	rdp->barrier_head.func = rcu_barrier_callback;
 	debug_rcu_head_queue(&rdp->barrier_head);
 	rcu_nocb_lock(rdp);
-	WARN_ON_ONCE(!rcu_nocb_flush_bypass(rdp, NULL, jiffies));
+	/*
+	 * Flush bypass and wakeup rcuog if we add callbacks to an empty regular
+	 * queue. This way we don't wait for bypass timer that can reach seconds
+	 * if it's fully lazy.
+	 */
+	was_alldone = rcu_rdp_is_offloaded(rdp) && !rcu_segcblist_pend_cbs(&rdp->cblist);
+	WARN_ON_ONCE(!rcu_nocb_flush_bypass(rdp, NULL, jiffies, false));
+	wake_nocb = was_alldone && rcu_segcblist_pend_cbs(&rdp->cblist);
 	if (rcu_segcblist_entrain(&rdp->cblist, &rdp->barrier_head)) {
 		atomic_inc(&rcu_state.barrier_cpu_count);
 	} else {
@@ -3912,6 +3813,8 @@ static void rcu_barrier_entrain(struct rcu_data *rdp)
 		rcu_barrier_trace(TPS("IRQNQ"), -1, rcu_state.barrier_sequence);
 	}
 	rcu_nocb_unlock(rdp);
+	if (wake_nocb)
+		wake_nocb_gp(rdp, false);
 	smp_store_release(&rdp->barrier_seq_snap, gseq);
 }
 
@@ -4034,6 +3937,160 @@ retry:
 	mutex_unlock(&rcu_state.barrier_mutex);
 }
 EXPORT_SYMBOL_GPL(rcu_barrier);
+
+/*
+ * Compute the mask of online CPUs for the specified rcu_node structure.
+ * This will not be stable unless the rcu_node structure's ->lock is
+ * held, but the bit corresponding to the current CPU will be stable
+ * in most contexts.
+ */
+static unsigned long rcu_rnp_online_cpus(struct rcu_node *rnp)
+{
+	return READ_ONCE(rnp->qsmaskinitnext);
+}
+
+/*
+ * Is the CPU corresponding to the specified rcu_data structure online
+ * from RCU's perspective?  This perspective is given by that structure's
+ * ->qsmaskinitnext field rather than by the global cpu_online_mask.
+ */
+static bool rcu_rdp_cpu_online(struct rcu_data *rdp)
+{
+	return !!(rdp->grpmask & rcu_rnp_online_cpus(rdp->mynode));
+}
+
+#if defined(CONFIG_PROVE_RCU) && defined(CONFIG_HOTPLUG_CPU)
+
+/*
+ * Is the current CPU online as far as RCU is concerned?
+ *
+ * Disable preemption to avoid false positives that could otherwise
+ * happen due to the current CPU number being sampled, this task being
+ * preempted, its old CPU being taken offline, resuming on some other CPU,
+ * then determining that its old CPU is now offline.
+ *
+ * Disable checking if in an NMI handler because we cannot safely
+ * report errors from NMI handlers anyway.  In addition, it is OK to use
+ * RCU on an offline processor during initial boot, hence the check for
+ * rcu_scheduler_fully_active.
+ */
+bool rcu_lockdep_current_cpu_online(void)
+{
+	struct rcu_data *rdp;
+	bool ret = false;
+
+	if (in_nmi() || !rcu_scheduler_fully_active)
+		return true;
+	preempt_disable_notrace();
+	rdp = this_cpu_ptr(&rcu_data);
+	/*
+	 * Strictly, we care here about the case where the current CPU is
+	 * in rcu_cpu_starting() and thus has an excuse for rdp->grpmask
+	 * not being up to date. So arch_spin_is_locked() might have a
+	 * false positive if it's held by some *other* CPU, but that's
+	 * OK because that just means a false *negative* on the warning.
+	 */
+	if (rcu_rdp_cpu_online(rdp) || arch_spin_is_locked(&rcu_state.ofl_lock))
+		ret = true;
+	preempt_enable_notrace();
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rcu_lockdep_current_cpu_online);
+
+#endif /* #if defined(CONFIG_PROVE_RCU) && defined(CONFIG_HOTPLUG_CPU) */
+
+// Has rcu_init() been invoked?  This is used (for example) to determine
+// whether spinlocks may be acquired safely.
+static bool rcu_init_invoked(void)
+{
+	return !!rcu_state.n_online_cpus;
+}
+
+/*
+ * Near the end of the offline process.  Trace the fact that this CPU
+ * is going offline.
+ */
+int rcutree_dying_cpu(unsigned int cpu)
+{
+	bool blkd;
+	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
+	struct rcu_node *rnp = rdp->mynode;
+
+	if (!IS_ENABLED(CONFIG_HOTPLUG_CPU))
+		return 0;
+
+	blkd = !!(READ_ONCE(rnp->qsmask) & rdp->grpmask);
+	trace_rcu_grace_period(rcu_state.name, READ_ONCE(rnp->gp_seq),
+			       blkd ? TPS("cpuofl-bgp") : TPS("cpuofl"));
+	return 0;
+}
+
+/*
+ * All CPUs for the specified rcu_node structure have gone offline,
+ * and all tasks that were preempted within an RCU read-side critical
+ * section while running on one of those CPUs have since exited their RCU
+ * read-side critical section.  Some other CPU is reporting this fact with
+ * the specified rcu_node structure's ->lock held and interrupts disabled.
+ * This function therefore goes up the tree of rcu_node structures,
+ * clearing the corresponding bits in the ->qsmaskinit fields.  Note that
+ * the leaf rcu_node structure's ->qsmaskinit field has already been
+ * updated.
+ *
+ * This function does check that the specified rcu_node structure has
+ * all CPUs offline and no blocked tasks, so it is OK to invoke it
+ * prematurely.  That said, invoking it after the fact will cost you
+ * a needless lock acquisition.  So once it has done its work, don't
+ * invoke it again.
+ */
+static void rcu_cleanup_dead_rnp(struct rcu_node *rnp_leaf)
+{
+	long mask;
+	struct rcu_node *rnp = rnp_leaf;
+
+	raw_lockdep_assert_held_rcu_node(rnp_leaf);
+	if (!IS_ENABLED(CONFIG_HOTPLUG_CPU) ||
+	    WARN_ON_ONCE(rnp_leaf->qsmaskinit) ||
+	    WARN_ON_ONCE(rcu_preempt_has_tasks(rnp_leaf)))
+		return;
+	for (;;) {
+		mask = rnp->grpmask;
+		rnp = rnp->parent;
+		if (!rnp)
+			break;
+		raw_spin_lock_rcu_node(rnp); /* irqs already disabled. */
+		rnp->qsmaskinit &= ~mask;
+		/* Between grace periods, so better already be zero! */
+		WARN_ON_ONCE(rnp->qsmask);
+		if (rnp->qsmaskinit) {
+			raw_spin_unlock_rcu_node(rnp);
+			/* irqs remain disabled. */
+			return;
+		}
+		raw_spin_unlock_rcu_node(rnp); /* irqs remain disabled. */
+	}
+}
+
+/*
+ * The CPU has been completely removed, and some other CPU is reporting
+ * this fact from process context.  Do the remainder of the cleanup.
+ * There can only be one CPU hotplug operation at a time, so no need for
+ * explicit locking.
+ */
+int rcutree_dead_cpu(unsigned int cpu)
+{
+	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
+	struct rcu_node *rnp = rdp->mynode;  /* Outgoing CPU's rdp & rnp. */
+
+	if (!IS_ENABLED(CONFIG_HOTPLUG_CPU))
+		return 0;
+
+	WRITE_ONCE(rcu_state.n_online_cpus, rcu_state.n_online_cpus - 1);
+	/* Adjust any no-longer-needed kthreads. */
+	rcu_boost_kthread_setaffinity(rnp, -1);
+	// Stop-machine done, so allow nohz_full to disable tick.
+	tick_dep_clear(TICK_DEP_BIT_RCU);
+	return 0;
+}
 
 /*
  * Propagate ->qsinitmask bits up the rcu_node tree to account for the
@@ -4278,8 +4335,6 @@ void rcu_report_dead(unsigned int cpu)
 	// Do any dangling deferred wakeups.
 	do_nocb_deferred_wakeup(rdp);
 
-	/* QS for any half-done expedited grace period. */
-	rcu_report_exp_rdp(rdp);
 	rcu_preempt_deferred_qs(current);
 
 	/* Remove outgoing CPU from mask in the leaf rcu_node structure. */
@@ -4327,7 +4382,7 @@ void rcutree_migrate_callbacks(int cpu)
 	my_rdp = this_cpu_ptr(&rcu_data);
 	my_rnp = my_rdp->mynode;
 	rcu_nocb_lock(my_rdp); /* irqs already disabled. */
-	WARN_ON_ONCE(!rcu_nocb_flush_bypass(my_rdp, NULL, jiffies));
+	WARN_ON_ONCE(!rcu_nocb_flush_bypass(my_rdp, NULL, jiffies, false));
 	raw_spin_lock_rcu_node(my_rnp); /* irqs already disabled. */
 	/* Leverage recent GPs and set GP for new callbacks. */
 	needwake = rcu_advance_cbs(my_rnp, rdp) ||

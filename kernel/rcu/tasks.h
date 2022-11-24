@@ -728,7 +728,7 @@ static void rcu_tasks_wait_gp(struct rcu_tasks *rtp)
 		if (rtsi > 0 && !reported && time_after(j, lastinfo + rtsi)) {
 			lastinfo = j;
 			rtsi = rtsi * rcu_task_stall_info_mult;
-			pr_info("%s: %s grace period %lu is %lu jiffies old.\n",
+			pr_info("%s: %s grace period number %lu (since boot) is %lu jiffies old.\n",
 				__func__, rtp->kname, rtp->tasks_gp_seq, j - rtp->gp_start);
 		}
 	}
@@ -1815,23 +1815,21 @@ static void test_rcu_tasks_callback(struct rcu_head *rhp)
 
 static void rcu_tasks_initiate_self_tests(void)
 {
-	unsigned long j = jiffies;
-
 	pr_info("Running RCU-tasks wait API self tests\n");
 #ifdef CONFIG_TASKS_RCU
-	tests[0].runstart = j;
+	tests[0].runstart = jiffies;
 	synchronize_rcu_tasks();
 	call_rcu_tasks(&tests[0].rh, test_rcu_tasks_callback);
 #endif
 
 #ifdef CONFIG_TASKS_RUDE_RCU
-	tests[1].runstart = j;
+	tests[1].runstart = jiffies;
 	synchronize_rcu_tasks_rude();
 	call_rcu_tasks_rude(&tests[1].rh, test_rcu_tasks_callback);
 #endif
 
 #ifdef CONFIG_TASKS_TRACE_RCU
-	tests[2].runstart = j;
+	tests[2].runstart = jiffies;
 	synchronize_rcu_tasks_trace();
 	call_rcu_tasks_trace(&tests[2].rh, test_rcu_tasks_callback);
 #endif
