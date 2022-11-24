@@ -1153,7 +1153,7 @@ out:
 	nvme_change_ctrl_state(&anv->ctrl, NVME_CTRL_DELETING);
 	nvme_get_ctrl(&anv->ctrl);
 	apple_nvme_disable(anv, false);
-	nvme_kill_queues(&anv->ctrl);
+	nvme_mark_namespaces_dead(&anv->ctrl);
 	if (!queue_work(nvme_wq, &anv->remove_work))
 		nvme_put_ctrl(&anv->ctrl);
 }
@@ -1504,14 +1504,6 @@ static int apple_nvme_probe(struct platform_device *pdev)
 	anv->ctrl.admin_q = blk_mq_init_queue(&anv->admin_tagset);
 	if (IS_ERR(anv->ctrl.admin_q)) {
 		ret = -ENOMEM;
-		goto put_dev;
-	}
-
-	if (!blk_get_queue(anv->ctrl.admin_q)) {
-		nvme_start_admin_queue(&anv->ctrl);
-		blk_mq_destroy_queue(anv->ctrl.admin_q);
-		anv->ctrl.admin_q = NULL;
-		ret = -ENODEV;
 		goto put_dev;
 	}
 
