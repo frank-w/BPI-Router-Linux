@@ -99,6 +99,10 @@ properties:
     type: object
     $ref: /schemas/regulator/qcom,spmi-regulator.yaml#
 
+  pwm:
+    type: object
+    $ref: /schemas/leds/leds-qcom-lpg.yaml#
+
 patternProperties:
   "^adc@[0-9a-f]+$":
     type: object
@@ -116,17 +120,13 @@ patternProperties:
     type: object
     $ref: /schemas/extcon/qcom,pm8941-misc.yaml#
 
-  "gpio(s)?@[0-9a-f]+$":
+  "gpio@[0-9a-f]+$":
     type: object
     $ref: /schemas/pinctrl/qcom,pmic-gpio.yaml#
 
   "pon@[0-9a-f]+$":
     type: object
     $ref: /schemas/power/reset/qcom,pon.yaml#
-
-  "pwm@[0-9a-f]+$":
-    type: object
-    $ref: /schemas/leds/leds-qcom-lpg.yaml#
 
   "^rtc@[0-9a-f]+$":
     type: object
@@ -200,7 +200,7 @@ examples:
             #address-cells = <1>;
             #size-cells = <0>;
 
-            pmi8998_gpio: gpios@c000 {
+            pmi8998_gpio: gpio@c000 {
                 compatible = "qcom,pmi8998-gpio", "qcom,spmi-gpio";
                 reg = <0xc000>;
                 gpio-controller;
@@ -285,7 +285,7 @@ examples:
             };
         };
 
-        pm6150_gpio: gpios@c000 {
+        pm6150_gpio: gpio@c000 {
             compatible = "qcom,pm6150-gpio", "qcom,spmi-gpio";
             reg = <0xc000>;
             gpio-controller;
