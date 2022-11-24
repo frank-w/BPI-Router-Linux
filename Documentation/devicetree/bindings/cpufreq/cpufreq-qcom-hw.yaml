@@ -56,6 +56,9 @@ properties:
   '#freq-domain-cells':
     const: 1
 
+  '#clock-cells':
+    const: 1
+
 required:
   - compatible
   - reg
@@ -83,11 +86,16 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_0>;
         qcom,freq-domain = <&cpufreq_hw 0>;
+        clocks = <&cpufreq_hw 0>;
         L2_0: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
           L3_0: l3-cache {
             compatible = "cache";
+            cache-unified;
+            cache-level = <3>;
           };
         };
       };
@@ -99,8 +107,11 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_100>;
         qcom,freq-domain = <&cpufreq_hw 0>;
+        clocks = <&cpufreq_hw 0>;
         L2_100: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
         };
       };
@@ -112,8 +123,11 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_200>;
         qcom,freq-domain = <&cpufreq_hw 0>;
+        clocks = <&cpufreq_hw 0>;
         L2_200: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
         };
       };
@@ -125,8 +139,11 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_300>;
         qcom,freq-domain = <&cpufreq_hw 0>;
+        clocks = <&cpufreq_hw 0>;
         L2_300: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
         };
       };
@@ -138,8 +155,11 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_400>;
         qcom,freq-domain = <&cpufreq_hw 1>;
+        clocks = <&cpufreq_hw 1>;
         L2_400: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
         };
       };
@@ -151,8 +171,11 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_500>;
         qcom,freq-domain = <&cpufreq_hw 1>;
+        clocks = <&cpufreq_hw 1>;
         L2_500: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
         };
       };
@@ -164,8 +187,11 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_600>;
         qcom,freq-domain = <&cpufreq_hw 1>;
+        clocks = <&cpufreq_hw 1>;
         L2_600: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
         };
       };
@@ -177,8 +203,11 @@ examples:
         enable-method = "psci";
         next-level-cache = <&L2_700>;
         qcom,freq-domain = <&cpufreq_hw 1>;
+        clocks = <&cpufreq_hw 1>;
         L2_700: l2-cache {
           compatible = "cache";
+          cache-unified;
+          cache-level = <2>;
           next-level-cache = <&L3_0>;
         };
       };
@@ -197,6 +226,7 @@ examples:
         clock-names = "xo", "alternate";
 
         #freq-domain-cells = <1>;
+        #clock-cells = <1>;
       };
     };
 ...
