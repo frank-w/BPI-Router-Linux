@@ -1121,7 +1121,7 @@ static int shmem_setattr(struct user_namespace *mnt_userns,
 
 	setattr_copy(&init_user_ns, inode, attr);
 	if (attr->ia_valid & ATTR_MODE)
-		error = posix_acl_chmod(&init_user_ns, inode, inode->i_mode);
+		error = posix_acl_chmod(&init_user_ns, dentry, inode->i_mode);
 	if (!error && update_ctime) {
 		inode->i_ctime = current_time(inode);
 		if (update_mtime)
@@ -3272,7 +3272,7 @@ static int shmem_initxattrs(struct inode *inode,
 		memcpy(new_xattr->name + XATTR_SECURITY_PREFIX_LEN,
 		       xattr->name, len);
 
-		simple_xattr_list_add(&info->xattrs, new_xattr);
+		simple_xattr_add(&info->xattrs, new_xattr);
 	}
 
 	return 0;
