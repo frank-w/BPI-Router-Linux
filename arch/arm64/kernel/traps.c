@@ -441,7 +441,7 @@ void arm64_notify_segfault(unsigned long addr)
 	int code;
 
 	mmap_read_lock(current->mm);
-	if (find_vma(current->mm, untagged_addr(addr)) == NULL)
+	if (find_vma(current->mm, untagged_addr(current->mm, addr)) == NULL)
 		code = SEGV_MAPERR;
 	else
 		code = SEGV_ACCERR;
@@ -532,7 +532,7 @@ static void user_cache_maint_handler(unsigned long esr, struct pt_regs *regs)
 	int ret = 0;
 
 	tagged_address = pt_regs_read_reg(regs, rt);
-	address = untagged_addr(tagged_address);
+	address = untagged_addr(current->mm, tagged_address);
 
 	switch (crm) {
 	case ESR_ELx_SYS64_ISS_CRM_DC_CVAU:	/* DC CVAU, gets promoted */

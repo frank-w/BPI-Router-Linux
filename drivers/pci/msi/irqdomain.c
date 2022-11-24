@@ -24,11 +24,12 @@ void pci_msi_teardown_msi_irqs(struct pci_dev *dev)
 	struct irq_domain *domain;
 
 	domain = dev_get_msi_domain(&dev->dev);
-	if (domain && irq_domain_is_hierarchy(domain))
+	if (domain && irq_domain_is_hierarchy(domain)) {
 		msi_domain_free_irqs_descs_locked(domain, &dev->dev);
-	else
+	} else {
 		pci_msi_legacy_teardown_msi_irqs(dev);
-	msi_free_msi_descs(&dev->dev);
+		msi_free_msi_descs(&dev->dev);
+	}
 }
 
 /**
@@ -63,51 +64,6 @@ static irq_hw_number_t pci_msi_domain_calc_hwirq(struct msi_desc *desc)
 		(pci_domain_nr(dev->bus) & 0xFFFFFFFF) << 27;
 }
 
-static inline bool pci_msi_desc_is_multi_msi(struct msi_desc *desc)
-{
-	return !desc->pci.msi_attrib.is_msix && desc->nvec_used > 1;
-}
-
-/**
- * pci_msi_domain_check_cap - Verify that @domain supports the capabilities
- *			      for @dev
- * @domain:	The interrupt domain to check
- * @info:	The domain info for verification
- * @dev:	The device to check
- *
- * Returns:
- *  0 if the functionality is supported
- *  1 if Multi MSI is requested, but the domain does not support it
- *  -ENOTSUPP otherwise
- */
-static int pci_msi_domain_check_cap(struct irq_domain *domain,
-				    struct msi_domain_info *info,
-				    struct device *dev)
-{
-	struct msi_desc *desc = msi_first_desc(dev, MSI_DESC_ALL);
-
-	/* Special handling to support __pci_enable_msi_range() */
-	if (pci_msi_desc_is_multi_msi(desc) &&
-	    !(info->flags & MSI_FLAG_MULTI_PCI_MSI))
-		return 1;
-
-	if (desc->pci.msi_attrib.is_msix) {
-		if (!(info->flags & MSI_FLAG_PCI_MSIX))
-			return -ENOTSUPP;
-
-		if (info->flags & MSI_FLAG_MSIX_CONTIGUOUS) {
-			unsigned int idx = 0;
-
-			/* Check for gaps in the entry indices */
-			msi_for_each_desc(desc, dev, MSI_DESC_ALL) {
-				if (desc->msi_index != idx++)
-					return -ENOTSUPP;
-			}
-		}
-	}
-	return 0;
-}
-
 static void pci_msi_domain_set_desc(msi_alloc_info_t *arg,
 				    struct msi_desc *desc)
 {
@@ -117,7 +73,6 @@ static void pci_msi_domain_set_desc(msi_alloc_info_t *arg,
 
 static struct msi_domain_ops pci_msi_domain_ops_default = {
 	.set_desc	= pci_msi_domain_set_desc,
-	.msi_check	= pci_msi_domain_check_cap,
 };
 
 static void pci_msi_domain_update_dom_ops(struct msi_domain_info *info)
@@ -129,8 +84,6 @@ static void pci_msi_domain_update_dom_ops(struct msi_domain_info *info)
 	} else {
 		if (ops->set_desc == NULL)
 			ops->set_desc = pci_msi_domain_set_desc;
-		if (ops->msi_check == NULL)
-			ops->msi_check = pci_msi_domain_check_cap;
 	}
 }
 
@@ -162,8 +115,6 @@ struct irq_domain *pci_msi_create_irq_domain(struct fwnode_handle *fwnode,
 					     struct msi_domain_info *info,
 					     struct irq_domain *parent)
 {
-	struct irq_domain *domain;
-
 	if (WARN_ON(info->flags & MSI_FLAG_LEVEL_CAPABLE))
 		info->flags &= ~MSI_FLAG_LEVEL_CAPABLE;
 
@@ -172,21 +123,43 @@ struct irq_domain *pci_msi_create_irq_domain(struct fwnode_handle *fwnode,
 	if (info->flags & MSI_FLAG_USE_DEF_CHIP_OPS)
 		pci_msi_domain_update_chip_ops(info);
 
+	/* Let the core code free MSI descriptors when freeing interrupts */
+	info->flags |= MSI_FLAG_FREE_MSI_DESCS;
+
 	info->flags |= MSI_FLAG_ACTIVATE_EARLY | MSI_FLAG_DEV_SYSFS;
 	if (IS_ENABLED(CONFIG_GENERIC_IRQ_RESERVATION_MODE))
 		info->flags |= MSI_FLAG_MUST_REACTIVATE;
 
 	/* PCI-MSI is oneshot-safe */
 	info->chip->flags |= IRQCHIP_ONESHOT_SAFE;
+	/* Let the core update the bus token */
+	info->bus_token = DOMAIN_BUS_PCI_MSI;
 
-	domain = msi_create_irq_domain(fwnode, info, parent);
-	if (!domain)
-		return NULL;
-
-	irq_domain_update_bus_token(domain, DOMAIN_BUS_PCI_MSI);
-	return domain;
+	return msi_create_irq_domain(fwnode, info, parent);
 }
 EXPORT_SYMBOL_GPL(pci_msi_create_irq_domain);
+
+/**
+ * pci_msi_domain_supports - Check for support of a particular feature flag
+ * @pdev:		The PCI device to operate on
+ * @feature_mask:	The feature mask to check for (full match)
+ * @mode:		If ALLOW_LEGACY this grants the feature when there is no irq domain
+ *			associated to the device. If DENY_LEGACY the lack of an irq domain
+ *			makes the feature unsupported
+ */
+bool pci_msi_domain_supports(struct pci_dev *pdev, unsigned int feature_mask,
+			     enum support_mode mode)
+{
+	struct msi_domain_info *info;
+	struct irq_domain *domain;
+
+	domain = dev_get_msi_domain(&pdev->dev);
+
+	if (!domain || !irq_domain_is_hierarchy(domain))
+		return mode == ALLOW_LEGACY;
+	info = domain->host_data;
+	return (info->flags & feature_mask) == feature_mask;
+}
 
 /*
  * Users of the generic MSI infrastructure expect a device to have a single ID,

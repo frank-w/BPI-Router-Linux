@@ -426,8 +426,6 @@ struct irq_stack {
 	char		stack[IRQ_STACK_SIZE];
 } __aligned(IRQ_STACK_SIZE);
 
-DECLARE_PER_CPU(unsigned long, cpu_current_top_of_stack);
-
 #ifdef CONFIG_X86_64
 struct fixed_percpu_data {
 	/*
@@ -450,8 +448,6 @@ static inline unsigned long cpu_kernelmode_gs_base(int cpu)
 	return (unsigned long)per_cpu(fixed_percpu_data.gs_base, cpu);
 }
 
-DECLARE_PER_CPU(void *, hardirq_stack_ptr);
-DECLARE_PER_CPU(bool, hardirq_stack_inuse);
 extern asmlinkage void ignore_sysret(void);
 
 /* Save actual FS/GS selectors and bases to current->thread */
@@ -460,8 +456,6 @@ void current_save_fsgs(void);
 #ifdef CONFIG_STACKPROTECTOR
 DECLARE_PER_CPU(unsigned long, __stack_chk_guard);
 #endif
-DECLARE_PER_CPU(struct irq_stack *, hardirq_stack_ptr);
-DECLARE_PER_CPU(struct irq_stack *, softirq_stack_ptr);
 #endif	/* !X86_64 */
 
 struct perf_event;
@@ -566,7 +560,7 @@ static __always_inline unsigned long current_top_of_stack(void)
 	 *  and around vm86 mode and sp0 on x86_64 is special because of the
 	 *  entry trampoline.
 	 */
-	return this_cpu_read_stable(cpu_current_top_of_stack);
+	return this_cpu_read_stable(pcpu_hot.top_of_stack);
 }
 
 static __always_inline bool on_thread_stack(void)
@@ -667,10 +661,9 @@ extern int sysenter_setup(void);
 /* Defined in head.S */
 extern struct desc_ptr		early_gdt_descr;
 
-extern void switch_to_new_gdt(int);
+extern void switch_gdt_and_percpu_base(int);
 extern void load_direct_gdt(int);
 extern void load_fixmap_gdt(int);
-extern void load_percpu_segment(int);
 extern void cpu_init(void);
 extern void cpu_init_secondary(void);
 extern void cpu_init_exception_handling(void);

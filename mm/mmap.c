@@ -2800,7 +2800,7 @@ EXPORT_SYMBOL(vm_munmap);
 
 SYSCALL_DEFINE2(munmap, unsigned long, addr, size_t, len)
 {
-	addr = untagged_addr(addr);
+	addr = untagged_addr(current->mm, addr);
 	return __vm_munmap(addr, len, true);
 }
 

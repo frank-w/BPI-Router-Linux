@@ -1472,7 +1472,7 @@ static long kernel_mbind(unsigned long start, unsigned long len,
 	int lmode = mode;
 	int err;
 
-	start = untagged_addr(start);
+	start = untagged_addr(current->mm, start);
 	err = sanitize_mpol_flags(&lmode, &mode_flags);
 	if (err)
 		return err;
@@ -1496,7 +1496,7 @@ SYSCALL_DEFINE4(set_mempolicy_home_node, unsigned long, start, unsigned long, le
 	int err = -ENOENT;
 	VMA_ITERATOR(vmi, mm, start);
 
-	start = untagged_addr(start);
+	start = untagged_addr(mm, start);
 	if (start & ~PAGE_MASK)
 		return -EINVAL;
 	/*
@@ -1697,7 +1697,7 @@ static int kernel_get_mempolicy(int __user *policy,
 	if (nmask != NULL && maxnode < nr_node_ids)
 		return -EINVAL;
 
-	addr = untagged_addr(addr);
+	addr = untagged_addr(current->mm, addr);
 
 	err = do_get_mempolicy(&pval, &nodes, addr, flags);
 

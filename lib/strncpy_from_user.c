@@ -121,7 +121,7 @@ long strncpy_from_user(char *dst, const char __user *src, long count)
 		return 0;
 
 	max_addr = TASK_SIZE_MAX;
-	src_addr = (unsigned long)untagged_addr(src);
+	src_addr = (unsigned long)untagged_addr(current->mm, src);
 	if (likely(src_addr < max_addr)) {
 		unsigned long max = max_addr - src_addr;
 		long retval;
