@@ -102,8 +102,6 @@ patternProperties:
           SAW controlled gang leader. Will be configured as SAW regulator.
         type: boolean
 
-      unevaluatedProperties: false
-
 required:
   - compatible
 
