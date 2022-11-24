@@ -1431,7 +1431,6 @@ static void collapse_and_free_pmd(struct mm_struct *mm, struct vm_area_struct *v
 	 */
 	if (vma->anon_vma)
 		lockdep_assert_held_write(&vma->anon_vma->root->rwsem);
-	page_table_check_pte_clear_range(mm, addr, pmd);
 
 	tlb_gather_mmu(&tlb, mm);
 	pmd = READ_ONCE(*pmdp);
