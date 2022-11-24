@@ -252,8 +252,8 @@ static int io_poll_check_events(struct io_kiocb *req, bool *locked)
 			__poll_t mask = mangle_poll(req->cqe.res &
 						    req->apoll_events);
 
-			if (!io_post_aux_cqe(ctx, req->cqe.user_data,
-					     mask, IORING_CQE_F_MORE, false)) {
+			if (!io_aux_cqe(ctx, *locked, req->cqe.user_data,
+					mask, IORING_CQE_F_MORE, false)) {
 				io_req_set_res(req, mask, 0);
 				return IOU_POLL_REMOVE_POLL_USE_RES;
 			}
@@ -308,15 +308,16 @@ static void io_apoll_task_func(struct io_kiocb *req, bool *locked)
 	if (ret == IOU_POLL_NO_ACTION)
 		return;
 
+	io_tw_lock(req->ctx, locked);
 	io_poll_remove_entries(req);
 	io_poll_tw_hash_eject(req, locked);
 
 	if (ret == IOU_POLL_REMOVE_POLL_USE_RES)
-		io_req_complete_post_tw(req, locked);
+		io_req_task_complete(req, locked);
 	else if (ret == IOU_POLL_DONE)
 		io_req_task_submit(req, locked);
 	else
-		io_req_complete_failed(req, ret);
+		io_req_defer_failed(req, ret);
 }
 
 static void __io_poll_execute(struct io_kiocb *req, int mask)

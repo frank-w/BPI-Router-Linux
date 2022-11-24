@@ -167,7 +167,8 @@ EXPORT_SYMBOL(io_uring_get_socket);
 
 static inline void io_submit_flush_completions(struct io_ring_ctx *ctx)
 {
-	if (!wq_list_empty(&ctx->submit_state.compl_reqs))
+	if (!wq_list_empty(&ctx->submit_state.compl_reqs) ||
+	    ctx->submit_state.cqes_count)
 		__io_submit_flush_completions(ctx);
 }
 
@@ -769,10 +770,12 @@ struct io_uring_cqe *__io_get_cqe(struct io_ring_ctx *ctx, bool overflow)
 	return &rings->cqes[off];
 }
 
-bool io_fill_cqe_aux(struct io_ring_ctx *ctx, u64 user_data, s32 res, u32 cflags,
-		     bool allow_overflow)
+static bool io_fill_cqe_aux(struct io_ring_ctx *ctx, u64 user_data, s32 res, u32 cflags,
+			    bool allow_overflow)
 {
 	struct io_uring_cqe *cqe;
+
+	lockdep_assert_held(&ctx->completion_lock);
 
 	ctx->cq_extra++;
 
@@ -802,9 +805,23 @@ bool io_fill_cqe_aux(struct io_ring_ctx *ctx, u64 user_data, s32 res, u32 cflags
 	return false;
 }
 
-bool io_post_aux_cqe(struct io_ring_ctx *ctx,
-		     u64 user_data, s32 res, u32 cflags,
-		     bool allow_overflow)
+static void __io_flush_post_cqes(struct io_ring_ctx *ctx)
+	__must_hold(&ctx->uring_lock)
+{
+	struct io_submit_state *state = &ctx->submit_state;
+	unsigned int i;
+
+	lockdep_assert_held(&ctx->uring_lock);
+	for (i = 0; i < state->cqes_count; i++) {
+		struct io_uring_cqe *cqe = &state->cqes[i];
+
+		io_fill_cqe_aux(ctx, cqe->user_data, cqe->res, cqe->flags, true);
+	}
+	state->cqes_count = 0;
+}
+
+static bool __io_post_aux_cqe(struct io_ring_ctx *ctx, u64 user_data, s32 res, u32 cflags,
+			      bool allow_overflow)
 {
 	bool filled;
 
@@ -812,6 +829,45 @@ bool io_post_aux_cqe(struct io_ring_ctx *ctx,
 	filled = io_fill_cqe_aux(ctx, user_data, res, cflags, allow_overflow);
 	io_cq_unlock_post(ctx);
 	return filled;
+}
+
+bool io_post_aux_cqe(struct io_ring_ctx *ctx, u64 user_data, s32 res, u32 cflags)
+{
+	return __io_post_aux_cqe(ctx, user_data, res, cflags, true);
+}
+
+bool io_aux_cqe(struct io_ring_ctx *ctx, bool defer, u64 user_data, s32 res, u32 cflags,
+		bool allow_overflow)
+{
+	struct io_uring_cqe *cqe;
+	unsigned int length;
+
+	if (!defer)
+		return __io_post_aux_cqe(ctx, user_data, res, cflags, allow_overflow);
+
+	length = ARRAY_SIZE(ctx->submit_state.cqes);
+
+	lockdep_assert_held(&ctx->uring_lock);
+
+	if (ctx->submit_state.cqes_count == length) {
+		io_cq_lock(ctx);
+		__io_flush_post_cqes(ctx);
+		/* no need to flush - flush is deferred */
+		spin_unlock(&ctx->completion_lock);
+	}
+
+	/* For defered completions this is not as strict as it is otherwise,
+	 * however it's main job is to prevent unbounded posted completions,
+	 * and in that it works just as well.
+	 */
+	if (!allow_overflow && test_bit(IO_CHECK_CQ_OVERFLOW_BIT, &ctx->check_cq))
+		return false;
+
+	cqe = &ctx->submit_state.cqes[ctx->submit_state.cqes_count++];
+	cqe->user_data = user_data;
+	cqe->res = res;
+	cqe->flags = cflags;
+	return true;
 }
 
 static void __io_req_complete_post(struct io_kiocb *req)
@@ -852,7 +908,9 @@ static void __io_req_complete_post(struct io_kiocb *req)
 
 void io_req_complete_post(struct io_kiocb *req, unsigned issue_flags)
 {
-	if (!(issue_flags & IO_URING_F_UNLOCKED) ||
+	if (issue_flags & IO_URING_F_COMPLETE_DEFER) {
+		io_req_complete_defer(req);
+	} else if (!(issue_flags & IO_URING_F_UNLOCKED) ||
 	    !(req->ctx->flags & IORING_SETUP_IOPOLL)) {
 		__io_req_complete_post(req);
 	} else {
@@ -864,7 +922,7 @@ void io_req_complete_post(struct io_kiocb *req, unsigned issue_flags)
 	}
 }
 
-void io_req_complete_failed(struct io_kiocb *req, s32 res)
+void io_req_defer_failed(struct io_kiocb *req, s32 res)
 	__must_hold(&ctx->uring_lock)
 {
 	const struct io_op_def *def = &io_op_defs[req->opcode];
@@ -875,7 +933,7 @@ void io_req_complete_failed(struct io_kiocb *req, s32 res)
 	io_req_set_res(req, res, io_put_kbuf(req, IO_URING_F_UNLOCKED));
 	if (def->fail)
 		def->fail(req);
-	io_req_complete_post(req, 0);
+	io_req_complete_defer(req);
 }
 
 /*
@@ -1231,9 +1289,8 @@ int io_run_local_work(struct io_ring_ctx *ctx)
 
 static void io_req_task_cancel(struct io_kiocb *req, bool *locked)
 {
-	/* not needed for normal modes, but SQPOLL depends on it */
 	io_tw_lock(req->ctx, locked);
-	io_req_complete_failed(req, req->cqe.res);
+	io_req_defer_failed(req, req->cqe.res);
 }
 
 void io_req_task_submit(struct io_kiocb *req, bool *locked)
@@ -1243,7 +1300,7 @@ void io_req_task_submit(struct io_kiocb *req, bool *locked)
 	if (likely(!(req->task->flags & PF_EXITING)))
 		io_queue_sqe(req);
 	else
-		io_req_complete_failed(req, -EFAULT);
+		io_req_defer_failed(req, -EFAULT);
 }
 
 void io_req_task_queue_fail(struct io_kiocb *req, int ret)
@@ -1324,6 +1381,9 @@ static void __io_submit_flush_completions(struct io_ring_ctx *ctx)
 	struct io_submit_state *state = &ctx->submit_state;
 
 	io_cq_lock(ctx);
+	/* must come first to preserve CQE ordering in failure cases */
+	if (state->cqes_count)
+		__io_flush_post_cqes(ctx);
 	wq_list_for_each(node, prev, &state->compl_reqs) {
 		struct io_kiocb *req = container_of(node, struct io_kiocb,
 					    comp_list);
@@ -1333,8 +1393,10 @@ static void __io_submit_flush_completions(struct io_ring_ctx *ctx)
 	}
 	io_cq_unlock_post(ctx);
 
-	io_free_batch_list(ctx, state->compl_reqs.first);
-	INIT_WQ_LIST(&state->compl_reqs);
+	if (!wq_list_empty(&ctx->submit_state.compl_reqs)) {
+		io_free_batch_list(ctx, state->compl_reqs.first);
+		INIT_WQ_LIST(&state->compl_reqs);
+	}
 }
 
 /*
@@ -1630,7 +1692,7 @@ queue:
 	ret = io_req_prep_async(req);
 	if (ret) {
 fail:
-		io_req_complete_failed(req, ret);
+		io_req_defer_failed(req, ret);
 		return;
 	}
 	io_prep_async_link(req);
@@ -1743,7 +1805,8 @@ int io_poll_issue(struct io_kiocb *req, bool *locked)
 	io_tw_lock(req->ctx, locked);
 	if (unlikely(req->task->flags & PF_EXITING))
 		return -EFAULT;
-	return io_issue_sqe(req, IO_URING_F_NONBLOCK|IO_URING_F_MULTISHOT);
+	return io_issue_sqe(req, IO_URING_F_NONBLOCK|IO_URING_F_MULTISHOT|
+				 IO_URING_F_COMPLETE_DEFER);
 }
 
 struct io_wq_work *io_wq_free_work(struct io_wq_work *work)
@@ -1860,7 +1923,7 @@ static void io_queue_async(struct io_kiocb *req, int ret)
 	struct io_kiocb *linked_timeout;
 
 	if (ret != -EAGAIN || (req->flags & REQ_F_NOWAIT)) {
-		io_req_complete_failed(req, ret);
+		io_req_defer_failed(req, ret);
 		return;
 	}
 
@@ -1910,14 +1973,14 @@ static void io_queue_sqe_fallback(struct io_kiocb *req)
 		 */
 		req->flags &= ~REQ_F_HARDLINK;
 		req->flags |= REQ_F_LINK;
-		io_req_complete_failed(req, req->cqe.res);
+		io_req_defer_failed(req, req->cqe.res);
 	} else if (unlikely(req->ctx->drain_active)) {
 		io_drain_req(req);
 	} else {
 		int ret = io_req_prep_async(req);
 
 		if (unlikely(ret))
-			io_req_complete_failed(req, ret);
+			io_req_defer_failed(req, ret);
 		else
 			io_queue_iowq(req, NULL);
 	}
