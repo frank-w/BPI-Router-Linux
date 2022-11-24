@@ -367,6 +367,7 @@ struct gdma_context {
 	void __iomem		*db_page_base;
 	phys_addr_t		phys_db_page_base;
 	u32 db_page_size;
+	int                     numa_node;
 
 	/* Shared memory chanenl (used to bootstrap HWC) */
 	struct shm_channel	shm_channel;

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /* Copyright (C) 2017-2018 Netronome Systems, Inc. */
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/err.h>
@@ -519,9 +518,8 @@ static int show_map_close_json(int fd, struct bpf_map_info *info)
 
 		jsonw_name(json_wtr, "pinned");
 		jsonw_start_array(json_wtr);
-		hashmap__for_each_key_entry(map_table, entry,
-					    u32_as_hash_field(info->id))
-			jsonw_string(json_wtr, entry->value);
+		hashmap__for_each_key_entry(map_table, entry, info->id)
+			jsonw_string(json_wtr, entry->pvalue);
 		jsonw_end_array(json_wtr);
 	}
 
@@ -596,9 +594,8 @@ static int show_map_close_plain(int fd, struct bpf_map_info *info)
 	if (!hashmap__empty(map_table)) {
 		struct hashmap_entry *entry;
 
-		hashmap__for_each_key_entry(map_table, entry,
-					    u32_as_hash_field(info->id))
-			printf("\n\tpinned %s", (char *)entry->value);
+		hashmap__for_each_key_entry(map_table, entry, info->id)
+			printf("\n\tpinned %s", (char *)entry->pvalue);
 	}
 
 	if (frozen_str) {
@@ -1459,7 +1456,7 @@ static int do_help(int argc, char **argv)
 		"                 devmap | devmap_hash | sockmap | cpumap | xskmap | sockhash |\n"
 		"                 cgroup_storage | reuseport_sockarray | percpu_cgroup_storage |\n"
 		"                 queue | stack | sk_storage | struct_ops | ringbuf | inode_storage |\n"
-		"                 task_storage | bloom_filter | user_ringbuf }\n"
+		"                 task_storage | bloom_filter | user_ringbuf | cgrp_storage }\n"
 		"       " HELP_SPEC_OPTIONS " |\n"
 		"                    {-f|--bpffs} | {-n|--nomount} }\n"
 		"",

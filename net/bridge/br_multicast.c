@@ -2669,7 +2669,7 @@ static int br_ip4_multicast_igmp3_report(struct net_bridge_mcast *brmctx,
 		if (!pmctx || igmpv2)
 			continue;
 
-		spin_lock_bh(&brmctx->br->multicast_lock);
+		spin_lock(&brmctx->br->multicast_lock);
 		if (!br_multicast_ctx_should_use(brmctx, pmctx))
 			goto unlock_continue;
 
@@ -2717,7 +2717,7 @@ static int br_ip4_multicast_igmp3_report(struct net_bridge_mcast *brmctx,
 		if (changed)
 			br_mdb_notify(brmctx->br->dev, mdst, pg, RTM_NEWMDB);
 unlock_continue:
-		spin_unlock_bh(&brmctx->br->multicast_lock);
+		spin_unlock(&brmctx->br->multicast_lock);
 	}
 
 	return err;
@@ -2807,7 +2807,7 @@ static int br_ip6_multicast_mld2_report(struct net_bridge_mcast *brmctx,
 		if (!pmctx || mldv1)
 			continue;
 
-		spin_lock_bh(&brmctx->br->multicast_lock);
+		spin_lock(&brmctx->br->multicast_lock);
 		if (!br_multicast_ctx_should_use(brmctx, pmctx))
 			goto unlock_continue;
 
@@ -2859,7 +2859,7 @@ static int br_ip6_multicast_mld2_report(struct net_bridge_mcast *brmctx,
 		if (changed)
 			br_mdb_notify(brmctx->br->dev, mdst, pg, RTM_NEWMDB);
 unlock_continue:
-		spin_unlock_bh(&brmctx->br->multicast_lock);
+		spin_unlock(&brmctx->br->multicast_lock);
 	}
 
 	return err;
@@ -4899,9 +4899,9 @@ void br_multicast_get_stats(const struct net_bridge *br,
 		unsigned int start;
 
 		do {
-			start = u64_stats_fetch_begin_irq(&cpu_stats->syncp);
+			start = u64_stats_fetch_begin(&cpu_stats->syncp);
 			memcpy(&temp, &cpu_stats->mstats, sizeof(temp));
-		} while (u64_stats_fetch_retry_irq(&cpu_stats->syncp, start));
+		} while (u64_stats_fetch_retry(&cpu_stats->syncp, start));
 
 		mcast_stats_add_dir(tdst.igmp_v1queries, temp.igmp_v1queries);
 		mcast_stats_add_dir(tdst.igmp_v2queries, temp.igmp_v2queries);

@@ -105,6 +105,7 @@ static struct fwnode_handle *dpaa2_mac_get_node(struct device *dev,
 		 * thus the fwnode field is not yet set. Defer probe if we are
 		 * facing this situation.
 		 */
+		dev_dbg(dev, "dprc not finished probing\n");
 		return ERR_PTR(-EPROBE_DEFER);
 	}
 
@@ -235,7 +236,6 @@ static void dpaa2_mac_link_down(struct phylink_config *config,
 }
 
 static const struct phylink_mac_ops dpaa2_mac_phylink_ops = {
-	.validate = phylink_generic_validate,
 	.mac_select_pcs = dpaa2_mac_select_pcs,
 	.mac_config = dpaa2_mac_config,
 	.mac_link_up = dpaa2_mac_link_up,
@@ -264,8 +264,10 @@ static int dpaa2_pcs_create(struct dpaa2_mac *mac,
 
 	mdiodev = fwnode_mdio_find_device(node);
 	fwnode_handle_put(node);
-	if (!mdiodev)
+	if (!mdiodev) {
+		netdev_dbg(mac->net_dev, "missing PCS device\n");
 		return -EPROBE_DEFER;
+	}
 
 	mac->pcs = lynx_pcs_create(mdiodev);
 	if (!mac->pcs) {

@@ -135,8 +135,6 @@ struct rte_console {
 
 #define BRCMF_FIRSTREAD	(1 << 6)
 
-#define BRCMF_CONSOLE	10	/* watchdog interval to poll console */
-
 /* SBSDIO_DEVICE_CTL */
 
 /* 1: device will assert busy signal when receiving CMD53 */
@@ -1886,7 +1884,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 		}
 
 		rd->len_left = rd->len;
-		/* read header first for unknow frame length */
+		/* read header first for unknown frame length */
 		sdio_claim_host(bus->sdiodev->func1);
 		if (!rd->len) {
 			ret = brcmf_sdiod_recv_buf(bus->sdiodev,

@@ -299,20 +299,6 @@ static int ice_clear_promisc(struct ice_vsi *vsi, u8 promisc_m)
 }
 
 /**
- * ice_get_devlink_port - Get devlink port from netdev
- * @netdev: the netdevice structure
- */
-static struct devlink_port *ice_get_devlink_port(struct net_device *netdev)
-{
-	struct ice_pf *pf = ice_netdev_to_pf(netdev);
-
-	if (!ice_is_switchdev_running(pf))
-		return NULL;
-
-	return &pf->devlink_port;
-}
-
-/**
  * ice_vsi_sync_fltr - Update the VSI filter list to the HW
  * @vsi: ptr to the VSI
  *
@@ -4603,6 +4589,7 @@ static int ice_register_netdev(struct ice_pf *pf)
 	if (err)
 		goto err_devlink_create;
 
+	SET_NETDEV_DEVLINK_PORT(vsi->netdev, &pf->devlink_port);
 	err = register_netdev(vsi->netdev);
 	if (err)
 		goto err_register_netdev;
@@ -4610,8 +4597,6 @@ static int ice_register_netdev(struct ice_pf *pf)
 	set_bit(ICE_VSI_NETDEV_REGISTERED, vsi->state);
 	netif_carrier_off(vsi->netdev);
 	netif_tx_stop_all_queues(vsi->netdev);
-
-	devlink_port_type_eth_set(&pf->devlink_port, vsi->netdev);
 
 	return 0;
 err_register_netdev:
@@ -6370,10 +6355,10 @@ ice_fetch_u64_stats_per_ring(struct u64_stats_sync *syncp,
 	unsigned int start;
 
 	do {
-		start = u64_stats_fetch_begin_irq(syncp);
+		start = u64_stats_fetch_begin(syncp);
 		*pkts = stats.pkts;
 		*bytes = stats.bytes;
-	} while (u64_stats_fetch_retry_irq(syncp, start));
+	} while (u64_stats_fetch_retry(syncp, start));
 }
 
 /**
@@ -8283,7 +8268,7 @@ static void ice_rem_all_chnl_fltrs(struct ice_pf *pf)
 
 		rule.rid = fltr->rid;
 		rule.rule_id = fltr->rule_id;
-		rule.vsi_handle = fltr->dest_id;
+		rule.vsi_handle = fltr->dest_vsi_handle;
 		status = ice_rem_adv_rule_by_id(&pf->hw, &rule);
 		if (status) {
 			if (status == -ENOENT)
@@ -8594,6 +8579,12 @@ static int ice_setup_tc_mqprio_qdisc(struct net_device *netdev, void *type_data)
 
 	switch (mode) {
 	case TC_MQPRIO_MODE_CHANNEL:
+
+		if (pf->hw.port_info->is_custom_tx_enabled) {
+			dev_err(dev, "Custom Tx scheduler feature enabled, can't configure ADQ\n");
+			return -EBUSY;
+		}
+		ice_tear_down_devlink_rate_tree(pf);
 
 		ret = ice_validate_mqprio_qopt(vsi, mqprio_qopt);
 		if (ret) {
@@ -9108,5 +9099,4 @@ static const struct net_device_ops ice_netdev_ops = {
 	.ndo_bpf = ice_xdp,
 	.ndo_xdp_xmit = ice_xdp_xmit,
 	.ndo_xsk_wakeup = ice_xsk_wakeup,
-	.ndo_get_devlink_port = ice_get_devlink_port,
 };

@@ -39,7 +39,7 @@ atomic_t rxrpc_debug_id;
 EXPORT_SYMBOL(rxrpc_debug_id);
 
 /* count of skbs currently in use */
-atomic_t rxrpc_n_tx_skbs, rxrpc_n_rx_skbs;
+atomic_t rxrpc_n_rx_skbs;
 
 struct workqueue_struct *rxrpc_workqueue;
 
@@ -93,12 +93,11 @@ static int rxrpc_validate_address(struct rxrpc_sock *rx,
 	    srx->transport_len > len)
 		return -EINVAL;
 
-	if (srx->transport.family != rx->family &&
-	    srx->transport.family == AF_INET && rx->family != AF_INET6)
-		return -EAFNOSUPPORT;
-
 	switch (srx->transport.family) {
 	case AF_INET:
+		if (rx->family != AF_INET &&
+		    rx->family != AF_INET6)
+			return -EAFNOSUPPORT;
 		if (srx->transport_len < sizeof(struct sockaddr_in))
 			return -EINVAL;
 		tail = offsetof(struct sockaddr_rxrpc, transport.sin.__pad);
@@ -106,6 +105,8 @@ static int rxrpc_validate_address(struct rxrpc_sock *rx,
 
 #ifdef CONFIG_AF_RXRPC_IPV6
 	case AF_INET6:
+		if (rx->family != AF_INET6)
+			return -EAFNOSUPPORT;
 		if (srx->transport_len < sizeof(struct sockaddr_in6))
 			return -EINVAL;
 		tail = offsetof(struct sockaddr_rxrpc, transport) +
@@ -979,7 +980,7 @@ static int __init af_rxrpc_init(void)
 		goto error_call_jar;
 	}
 
-	rxrpc_workqueue = alloc_workqueue("krxrpcd", 0, 1);
+	rxrpc_workqueue = alloc_workqueue("krxrpcd", WQ_HIGHPRI | WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
 	if (!rxrpc_workqueue) {
 		pr_notice("Failed to allocate work queue\n");
 		goto error_work_queue;
@@ -1059,7 +1060,6 @@ static void __exit af_rxrpc_exit(void)
 	sock_unregister(PF_RXRPC);
 	proto_unregister(&rxrpc_proto);
 	unregister_pernet_device(&rxrpc_net_ops);
-	ASSERTCMP(atomic_read(&rxrpc_n_tx_skbs), ==, 0);
 	ASSERTCMP(atomic_read(&rxrpc_n_rx_skbs), ==, 0);
 
 	/* Make sure the local and peer records pinned by any dying connections

@@ -366,9 +366,9 @@ void copy_map_value_locked(struct bpf_map *map, void *dst, void *src,
 	struct bpf_spin_lock *lock;
 
 	if (lock_src)
-		lock = src + map->spin_lock_off;
+		lock = src + map->record->spin_lock_off;
 	else
-		lock = dst + map->spin_lock_off;
+		lock = dst + map->record->spin_lock_off;
 	preempt_disable();
 	__bpf_spin_lock_irqsave(lock);
 	copy_map_value(map, dst, src);
@@ -1169,7 +1169,7 @@ BPF_CALL_3(bpf_timer_init, struct bpf_timer_kern *, timer, struct bpf_map *, map
 		ret = -ENOMEM;
 		goto out;
 	}
-	t->value = (void *)timer - map->timer_off;
+	t->value = (void *)timer - map->record->timer_off;
 	t->map = map;
 	t->prog = NULL;
 	rcu_assign_pointer(t->callback_fn, NULL);
@@ -1663,6 +1663,12 @@ bpf_base_func_proto(enum bpf_func_id func_id)
 		return &bpf_dynptr_write_proto;
 	case BPF_FUNC_dynptr_data:
 		return &bpf_dynptr_data_proto;
+#ifdef CONFIG_CGROUPS
+	case BPF_FUNC_cgrp_storage_get:
+		return &bpf_cgrp_storage_get_proto;
+	case BPF_FUNC_cgrp_storage_delete:
+		return &bpf_cgrp_storage_delete_proto;
+#endif
 	default:
 		break;
 	}

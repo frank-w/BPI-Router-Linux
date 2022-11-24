@@ -84,6 +84,7 @@ enum rtw89_subband {
 	RTW89_CH_6G_BAND_IDX7, /* Ultra-high */
 
 	RTW89_SUBBAND_NR,
+	RTW89_SUBBAND_2GHZ_5GHZ_NR = RTW89_CH_5G_BAND_4 + 1,
 };
 
 enum rtw89_gain_offset {
@@ -177,7 +178,9 @@ enum rtw89_upd_mode {
 	RTW89_ROLE_REMOVE,
 	RTW89_ROLE_TYPE_CHANGE,
 	RTW89_ROLE_INFO_CHANGE,
-	RTW89_ROLE_CON_DISCONN
+	RTW89_ROLE_CON_DISCONN,
+	RTW89_ROLE_BAND_SW,
+	RTW89_ROLE_FW_RESTORE,
 };
 
 enum rtw89_self_role {
@@ -476,6 +479,20 @@ enum rtw89_regulation_type {
 	RTW89_REGD_NUM,
 };
 
+enum rtw89_fw_pkt_ofld_type {
+	RTW89_PKT_OFLD_TYPE_PROBE_RSP = 0,
+	RTW89_PKT_OFLD_TYPE_PS_POLL = 1,
+	RTW89_PKT_OFLD_TYPE_NULL_DATA = 2,
+	RTW89_PKT_OFLD_TYPE_QOS_NULL = 3,
+	RTW89_PKT_OFLD_TYPE_CTS2SELF = 4,
+	RTW89_PKT_OFLD_TYPE_ARP_RSP = 5,
+	RTW89_PKT_OFLD_TYPE_NDP = 6,
+	RTW89_PKT_OFLD_TYPE_EAPOL_KEY = 7,
+	RTW89_PKT_OFLD_TYPE_SA_QUERY = 8,
+	RTW89_PKT_OFLD_TYPE_PROBE_REQ = 12,
+	RTW89_PKT_OFLD_TYPE_NUM,
+};
+
 struct rtw89_txpwr_byrate {
 	s8 cck[RTW89_RATE_CCK_MAX];
 	s8 ofdm[RTW89_RATE_OFDM_MAX];
@@ -490,6 +507,8 @@ enum rtw89_bandwidth_section_num {
 	RTW89_BW80_SEC_NUM = 2,
 };
 
+#define RTW89_TXPWR_LMT_PAGE_SIZE 40
+
 struct rtw89_txpwr_limit {
 	s8 cck_20m[RTW89_BF_NUM];
 	s8 cck_40m[RTW89_BF_NUM];
@@ -503,6 +522,8 @@ struct rtw89_txpwr_limit {
 };
 
 #define RTW89_RU_SEC_NUM 8
+
+#define RTW89_TXPWR_LMT_RU_PAGE_SIZE 24
 
 struct rtw89_txpwr_limit_ru {
 	s8 ru26[RTW89_RU_SEC_NUM];
@@ -629,6 +650,13 @@ enum rtw89_sc_offset {
 	RTW89_SC_20_LOW3X	= 8,
 	RTW89_SC_40_UPPER	= 9,
 	RTW89_SC_40_LOWER	= 10,
+};
+
+enum rtw89_wow_flags {
+	RTW89_WOW_FLAG_EN_MAGIC_PKT,
+	RTW89_WOW_FLAG_EN_REKEY_PKT,
+	RTW89_WOW_FLAG_EN_DISCONNECT,
+	RTW89_WOW_FLAG_NUM,
 };
 
 struct rtw89_chan {
@@ -2192,6 +2220,7 @@ struct rtw89_sta {
 
 struct rtw89_efuse {
 	bool valid;
+	bool power_k_valid;
 	u8 xtal_cap;
 	u8 addr[ETH_ALEN];
 	u8 rfe_type;
@@ -2280,6 +2309,16 @@ struct rtw89_hci_ops {
 	 */
 	void (*recovery_start)(struct rtw89_dev *rtwdev);
 	void (*recovery_complete)(struct rtw89_dev *rtwdev);
+
+	void (*ctrl_txdma_ch)(struct rtw89_dev *rtwdev, bool enable);
+	void (*ctrl_txdma_fw_ch)(struct rtw89_dev *rtwdev, bool enable);
+	void (*ctrl_trxhci)(struct rtw89_dev *rtwdev, bool enable);
+	int (*poll_txdma_ch)(struct rtw89_dev *rtwdev);
+	void (*clr_idx_all)(struct rtw89_dev *rtwdev);
+	void (*clear)(struct rtw89_dev *rtwdev, struct pci_dev *pdev);
+	void (*disable_intr)(struct rtw89_dev *rtwdev);
+	void (*enable_intr)(struct rtw89_dev *rtwdev);
+	int (*rst_bdram)(struct rtw89_dev *rtwdev);
 };
 
 struct rtw89_hci_info {
@@ -2357,7 +2396,6 @@ struct rtw89_chip_ops {
 	void (*btc_set_wl_pri)(struct rtw89_dev *rtwdev, u8 map, bool state);
 	void (*btc_set_wl_txpwr_ctrl)(struct rtw89_dev *rtwdev, u32 txpwr_val);
 	s8 (*btc_get_bt_rssi)(struct rtw89_dev *rtwdev, s8 val);
-	void (*btc_bt_aci_imp)(struct rtw89_dev *rtwdev);
 	void (*btc_update_bt_cnt)(struct rtw89_dev *rtwdev);
 	void (*btc_wl_s1_standby)(struct rtw89_dev *rtwdev, bool state);
 	void (*btc_set_policy)(struct rtw89_dev *rtwdev, u16 policy_type);
@@ -2384,6 +2422,7 @@ enum rtw89_dma_ch {
 enum rtw89_qta_mode {
 	RTW89_QTA_SCC,
 	RTW89_QTA_DLFW,
+	RTW89_QTA_WOW,
 
 	/* keep last */
 	RTW89_QTA_INVALID,
@@ -2618,6 +2657,8 @@ struct rtw89_chip_info {
 	u32 rsvd_ple_ofst;
 	const struct rtw89_hfc_param_ini *hfc_param_ini;
 	const struct rtw89_dle_mem *dle_mem;
+	u8 wde_qempty_acq_num;
+	u8 wde_qempty_mgq_sel;
 	u32 rf_base_addr[2];
 	u8 support_chanctx_num;
 	u8 support_bands;
@@ -2719,6 +2760,7 @@ struct rtw89_chip_info {
 	const struct rtw89_imr_info *imr_info;
 	const struct rtw89_rrsr_cfgs *rrsr_cfgs;
 	u32 dma_ch_mask;
+	const struct wiphy_wowlan_support *wowlan_stub;
 };
 
 union rtw89_bus_info {
@@ -2915,6 +2957,8 @@ enum rtw89_flags {
 	RTW89_FLAG_LOW_POWER_MODE,
 	RTW89_FLAG_INACTIVE_PS,
 	RTW89_FLAG_CRASH_SIMULATING,
+	RTW89_FLAG_WOWLAN,
+	RTW89_FLAG_FORBIDDEN_TRACK_WROK,
 
 	NUM_OF_RTW89_FLAGS,
 };
@@ -2943,6 +2987,7 @@ struct rtw89_pkt_drop_params {
 	u8 port;
 	u8 mbssid;
 	bool tf_trs;
+	u32 macid_band_sel[4];
 };
 
 struct rtw89_pkt_stat {
@@ -3044,6 +3089,7 @@ struct rtw89_dpk_bkup_para {
 struct rtw89_dpk_info {
 	bool is_dpk_enable;
 	bool is_dpk_reload_en;
+	u8 dpk_gs[RTW89_PHY_MAX];
 	u16 dc_i[RTW89_DPK_RF_PATH][RTW89_DPK_BKUP_NUM];
 	u16 dc_q[RTW89_DPK_RF_PATH][RTW89_DPK_BKUP_NUM];
 	u8 corr_val[RTW89_DPK_RF_PATH][RTW89_DPK_BKUP_NUM];
@@ -3159,6 +3205,14 @@ struct rtw89_cfo_tracking_info {
 	u8 lock_cnt;
 };
 
+enum rtw89_tssi_alimk_band {
+	TSSI_ALIMK_2G = 0,
+	TSSI_ALIMK_5GL,
+	TSSI_ALIMK_5GM,
+	TSSI_ALIMK_5GH,
+	TSSI_ALIMK_MAX
+};
+
 /* 2GL, 2GH, 5GL1, 5GH1, 5GM1, 5GM2, 5GH1, 5GH2 */
 #define TSSI_TRIM_CH_GROUP_NUM 8
 #define TSSI_TRIM_CH_GROUP_NUM_6G 16
@@ -3169,6 +3223,8 @@ struct rtw89_cfo_tracking_info {
 #define TSSI_MCS_6G_CH_GROUP_NUM 32
 #define TSSI_MCS_CH_GROUP_NUM \
 	(TSSI_MCS_2G_CH_GROUP_NUM + TSSI_MCS_5G_CH_GROUP_NUM)
+#define TSSI_MAX_CH_NUM 67
+#define TSSI_ALIMK_VALUE_NUM 8
 
 struct rtw89_tssi_info {
 	u8 thermal[RF_PATH_MAX];
@@ -3181,6 +3237,11 @@ struct rtw89_tssi_info {
 	bool tssi_tracking_check[RF_PATH_MAX];
 	u8 default_txagc_offset[RF_PATH_MAX];
 	u32 base_thermal[RF_PATH_MAX];
+	bool check_backup_aligmk[RF_PATH_MAX][TSSI_MAX_CH_NUM];
+	u32 alignment_backup_by_ch[RF_PATH_MAX][TSSI_MAX_CH_NUM][TSSI_ALIMK_VALUE_NUM];
+	u32 alignment_value[RF_PATH_MAX][TSSI_ALIMK_MAX][TSSI_ALIMK_VALUE_NUM];
+	bool alignment_done[RF_PATH_MAX][TSSI_ALIMK_MAX];
+	u32 tssi_alimk_time;
 };
 
 struct rtw89_power_trim_info {
@@ -3421,8 +3482,36 @@ struct rtw89_phy_bb_gain_info {
 
 struct rtw89_phy_efuse_gain {
 	bool offset_valid;
+	bool comp_valid;
 	s8 offset[RF_PATH_MAX][RTW89_GAIN_OFFSET_NR]; /* S(8, 0) */
 	s8 offset_base[RTW89_PHY_MAX]; /* S(8, 4) */
+	s8 rssi_base[RTW89_PHY_MAX]; /* S(8, 4) */
+	s8 comp[RF_PATH_MAX][RTW89_SUBBAND_NR]; /* S(8, 0) */
+};
+
+#define RTW89_MAX_PATTERN_NUM             18
+#define RTW89_MAX_PATTERN_MASK_SIZE       4
+#define RTW89_MAX_PATTERN_SIZE            128
+
+struct rtw89_wow_cam_info {
+	bool r_w;
+	u8 idx;
+	u32 mask[RTW89_MAX_PATTERN_MASK_SIZE];
+	u16 crc;
+	bool negative_pattern_match;
+	bool skip_mac_hdr;
+	bool uc;
+	bool mc;
+	bool bc;
+	bool valid;
+};
+
+struct rtw89_wow_param {
+	struct ieee80211_vif *wow_vif;
+	DECLARE_BITMAP(flags, RTW89_WOW_FLAG_NUM);
+	struct rtw89_wow_cam_info patterns[RTW89_MAX_PATTERN_NUM];
+	u8 pattern_cnt;
+	struct list_head pkt_list;
 };
 
 struct rtw89_dev {
@@ -3513,6 +3602,8 @@ struct rtw89_dev {
 	enum rtw89_ps_mode ps_mode;
 	bool lps_enabled;
 
+	struct rtw89_wow_param wow;
+
 	/* napi structure */
 	struct net_device netdev;
 	struct napi_struct napi;
@@ -3593,6 +3684,66 @@ static inline void rtw89_hci_recovery_complete(struct rtw89_dev *rtwdev)
 {
 	if (rtwdev->hci.ops->recovery_complete)
 		rtwdev->hci.ops->recovery_complete(rtwdev);
+}
+
+static inline void rtw89_hci_enable_intr(struct rtw89_dev *rtwdev)
+{
+	if (rtwdev->hci.ops->enable_intr)
+		rtwdev->hci.ops->enable_intr(rtwdev);
+}
+
+static inline void rtw89_hci_disable_intr(struct rtw89_dev *rtwdev)
+{
+	if (rtwdev->hci.ops->disable_intr)
+		rtwdev->hci.ops->disable_intr(rtwdev);
+}
+
+static inline void rtw89_hci_ctrl_txdma_ch(struct rtw89_dev *rtwdev, bool enable)
+{
+	if (rtwdev->hci.ops->ctrl_txdma_ch)
+		rtwdev->hci.ops->ctrl_txdma_ch(rtwdev, enable);
+}
+
+static inline void rtw89_hci_ctrl_txdma_fw_ch(struct rtw89_dev *rtwdev, bool enable)
+{
+	if (rtwdev->hci.ops->ctrl_txdma_fw_ch)
+		rtwdev->hci.ops->ctrl_txdma_fw_ch(rtwdev, enable);
+}
+
+static inline void rtw89_hci_ctrl_trxhci(struct rtw89_dev *rtwdev, bool enable)
+{
+	if (rtwdev->hci.ops->ctrl_trxhci)
+		rtwdev->hci.ops->ctrl_trxhci(rtwdev, enable);
+}
+
+static inline int rtw89_hci_poll_txdma_ch(struct rtw89_dev *rtwdev)
+{
+	int ret = 0;
+
+	if (rtwdev->hci.ops->poll_txdma_ch)
+		ret = rtwdev->hci.ops->poll_txdma_ch(rtwdev);
+	return ret;
+}
+
+static inline void rtw89_hci_clr_idx_all(struct rtw89_dev *rtwdev)
+{
+	if (rtwdev->hci.ops->clr_idx_all)
+		rtwdev->hci.ops->clr_idx_all(rtwdev);
+}
+
+static inline int rtw89_hci_rst_bdram(struct rtw89_dev *rtwdev)
+{
+	int ret = 0;
+
+	if (rtwdev->hci.ops->rst_bdram)
+		ret = rtwdev->hci.ops->rst_bdram(rtwdev);
+	return ret;
+}
+
+static inline void rtw89_hci_clear(struct rtw89_dev *rtwdev, struct pci_dev *pdev)
+{
+	if (rtwdev->hci.ops->clear)
+		rtwdev->hci.ops->clear(rtwdev, pdev);
 }
 
 static inline u8 rtw89_read8(struct rtw89_dev *rtwdev, u32 addr)
