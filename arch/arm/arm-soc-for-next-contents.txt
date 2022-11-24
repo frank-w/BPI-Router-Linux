@@ -1,0 +1,161 @@
+arm/soc
+	ux500/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/ux500-soc-v6.2
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v6.2-tag1
+		contains renesas/drivers
+	ixp4xx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/ixp4xx-for-v6.2
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-6.2
+	renesas/soc-riscv
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-riscv-soc-for-v6.2-tag1
+	patch
+		MAINTAINERS: Add DHCOR to the DH electronic i.MX6 board support
+		ARM: ixp4xx: Remove unused debug iomap
+	keystone/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-soc-for-v6.2
+
+soc/dt
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v6.2-tag1
+	renesas/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v6.2-tag1
+	dt/cleanups
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt-cleanup-6.2
+	at91/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-dt-6.2
+	patch
+		arm: dts: spear600: Fix clcd interrupt
+		arm: dts: spear600: Add ssp controller nodes
+	asahi/dt
+		https://github.com/AsahiLinux/linux tags/asahi-soc-dt-6.2
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/ux500-dts-for-v6.2
+	patch
+		ARM: dts: exynos: Add new SoC specific compatible string for Exynos3250 SoC
+	samsung/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.2
+	patch
+		dt-bindings: arm: uniphier: Add Pro5 boards
+		ARM: dts: uniphier: Add Pro5 board support
+	at91/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-dt-6.2-2
+	sunxi/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-6.2-1
+	dt/dtbo-rename
+		git://git.kernel.org/pub/scm/linux/kernel/git/robh/linux dt/dtbo-rename
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-6.2
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-6.2
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-6.2
+	hisi/dt
+		https://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-6.2
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v6.2-1
+	renesas/dt-bindings-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v6.2-tag2
+	renesas/dt-riscv
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-riscv-dt-for-v6.2-tag1
+	renesas/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-dt-for-v6.2-tag2
+	riscv/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-for-v6.2-mw0
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_updates_for_v6.2
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-dt-bindings-v2
+	tegra/dt64-v2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-arm64-dt-v2
+	mediatek/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v6.1-next-dts64
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-arm-dt
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/bmc tags/aspeed-6.2-devicetree
+	k3/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.2
+	nuvoton/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/bmc tags/nuvoton-6.2-devicetree
+	amlogic/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm64-dt-for-v6.2
+
+soc/drivers
+	patch
+		soc: fsl: qe: Avoid using gpio_to_desc()
+	drivers/memory
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.2
+	renesas/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v6.2-tag1
+	patch
+		soc: loongson: add GUTS driver for loongson-2 platforms
+		dt-bindings: soc: add loongson-2 chipid
+	tee/optee
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-for-6.2
+	renesas/drivers-arm
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v6.2-tag2
+	imx/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-6.2
+	drivers/memory-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.2-2
+	<no branch> (8fbf94fea0b4e187ca9100936c5429f96b8a4e44)
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-soc-for-v6.2-mw0
+	tegra/drivers-soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-soc-v2
+	tegra/firmware-bpmp
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-firmware-v2
+	tegra/clk
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-clk-v2
+	tegra/memory
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-memory-v2
+	mediatek/drivers-soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v6.1-next-soc
+	qcom/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.2
+	k3/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.2-v2
+
+arm/defconfig
+	at91/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-defconfig-6.2
+	patch
+		arm: configs: spear6xx: Refresh defconfig
+		arm: configs: spear6xx: Enable PL110 display controller
+		ARM: multi_v7_defconfig: enable Type-C UCSI and STM32G0 as modules
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v6.2-tag1
+	renesas/riscv-defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-riscv-defconfig-for-v6.2-tag1
+	tegra/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.2-arm64-defconfig
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.2
+	mediatek/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v6.1-next-defconfig
+	k3/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-config-for-v6.2
+	qcom/defconfig-64
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-6.2
+	qcom/defconfig-32
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-defconfig-for-6.2
+
+arm/late
+
+arm/fixes
+	<no branch> (cce616e012c215d65c15e5d1afa73182dea49389)
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-fix-for-6.1
+	<no branch> (40a2226e8bfacb79dd154dea68febeead9d847e9)
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-fixes-6.1-2
+	<no branch> (50edc257a152541b8bcdc84f77de5e4efad7013d)
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-6.1-1
+	<no branch> (e68be7b39f21d8a9291a5a3019787cd3ca999dd7)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-6.1-3
+	<no branch> (8950f345a67d8046d2472dd6ea81fa18ef5b4844)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/am335x-pcm-953-regulators
+	patch
+		bus: ixp4xx: Don't touch bit 7 on IXP42x
+	rockchip/dt-fixes
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.1-rockchip-dtsfixes1
+
