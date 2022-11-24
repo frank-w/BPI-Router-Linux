@@ -852,7 +852,9 @@ static void __io_req_complete_post(struct io_kiocb *req)
 
 void io_req_complete_post(struct io_kiocb *req, unsigned issue_flags)
 {
-	if (!(issue_flags & IO_URING_F_UNLOCKED) ||
+	if (issue_flags & IO_URING_F_COMPLETE_DEFER) {
+		io_req_complete_defer(req);
+	} else if (!(issue_flags & IO_URING_F_UNLOCKED) ||
 	    !(req->ctx->flags & IORING_SETUP_IOPOLL)) {
 		__io_req_complete_post(req);
 	} else {
