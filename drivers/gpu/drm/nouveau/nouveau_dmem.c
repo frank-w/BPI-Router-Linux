@@ -307,6 +307,9 @@ static struct page *
 nouveau_dmem_page_alloc_locked(struct nouveau_drm *drm)
 {
 	struct nouveau_dmem_chunk *chunk;
+	struct dev_pagemap *pgmap;
+	struct folio *folio;
+	unsigned long pfn;
 	struct page *page = NULL;
 	int ret;
 
@@ -316,16 +319,21 @@ nouveau_dmem_page_alloc_locked(struct nouveau_drm *drm)
 		drm->dmem->free_pages = page->zone_device_data;
 		chunk = nouveau_page_to_chunk(page);
 		chunk->callocated++;
+		pfn = page_to_pfn(page);
 		spin_unlock(&drm->dmem->lock);
 	} else {
 		spin_unlock(&drm->dmem->lock);
 		ret = nouveau_dmem_chunk_alloc(drm, &page);
 		if (ret)
 			return NULL;
+		chunk = nouveau_page_to_chunk(page);
+		pfn = page_to_pfn(page);
 	}
 
-	zone_device_page_init(page);
-	return page;
+	pgmap = &chunk->pagemap;
+	folio = pgmap_request_folio(pgmap, pfn_to_pgmap_offset(pgmap, pfn), 0);
+	lock_page(&folio->page);
+	return &folio->page;
 }
 
 static void

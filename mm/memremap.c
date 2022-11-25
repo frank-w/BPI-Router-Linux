@@ -38,30 +38,6 @@ unsigned long memremap_compat_align(void)
 EXPORT_SYMBOL_GPL(memremap_compat_align);
 #endif
 
-#ifdef CONFIG_FS_DAX
-DEFINE_STATIC_KEY_FALSE(devmap_managed_key);
-EXPORT_SYMBOL(devmap_managed_key);
-
-static void devmap_managed_enable_put(struct dev_pagemap *pgmap)
-{
-	if (pgmap->type == MEMORY_DEVICE_FS_DAX)
-		static_branch_dec(&devmap_managed_key);
-}
-
-static void devmap_managed_enable_get(struct dev_pagemap *pgmap)
-{
-	if (pgmap->type == MEMORY_DEVICE_FS_DAX)
-		static_branch_inc(&devmap_managed_key);
-}
-#else
-static void devmap_managed_enable_get(struct dev_pagemap *pgmap)
-{
-}
-static void devmap_managed_enable_put(struct dev_pagemap *pgmap)
-{
-}
-#endif /* CONFIG_FS_DAX */
-
 static void pgmap_array_delete(struct range *range)
 {
 	xa_store_range(&pgmap_array, PHYS_PFN(range->start), PHYS_PFN(range->end),
@@ -92,19 +68,6 @@ bool pgmap_pfn_valid(struct dev_pagemap *pgmap, unsigned long pfn)
 	}
 
 	return false;
-}
-
-static unsigned long pfn_end(struct dev_pagemap *pgmap, int range_id)
-{
-	const struct range *range = &pgmap->ranges[range_id];
-
-	return (range->start + range_len(range)) >> PAGE_SHIFT;
-}
-
-static unsigned long pfn_len(struct dev_pagemap *pgmap, unsigned long range_id)
-{
-	return (pfn_end(pgmap, range_id) -
-		pfn_first(pgmap, range_id)) >> pgmap->vmemmap_shift;
 }
 
 static void pageunmap_range(struct dev_pagemap *pgmap, int range_id)
@@ -138,10 +101,6 @@ void memunmap_pages(struct dev_pagemap *pgmap)
 	int i;
 
 	percpu_ref_kill(&pgmap->ref);
-	if (pgmap->type != MEMORY_DEVICE_PRIVATE &&
-	    pgmap->type != MEMORY_DEVICE_COHERENT)
-		for (i = 0; i < pgmap->nr_range; i++)
-			percpu_ref_put_many(&pgmap->ref, pfn_len(pgmap, i));
 
 	wait_for_completion(&pgmap->done);
 
@@ -150,7 +109,6 @@ void memunmap_pages(struct dev_pagemap *pgmap)
 	percpu_ref_exit(&pgmap->ref);
 
 	WARN_ONCE(pgmap->altmap.alloc, "failed to free all reserved pages\n");
-	devmap_managed_enable_put(pgmap);
 }
 EXPORT_SYMBOL_GPL(memunmap_pages);
 
@@ -267,9 +225,6 @@ static int pagemap_range(struct dev_pagemap *pgmap, struct mhp_params *params,
 	memmap_init_zone_device(&NODE_DATA(nid)->node_zones[ZONE_DEVICE],
 				PHYS_PFN(range->start),
 				PHYS_PFN(range_len(range)), pgmap);
-	if (pgmap->type != MEMORY_DEVICE_PRIVATE &&
-	    pgmap->type != MEMORY_DEVICE_COHERENT)
-		percpu_ref_get_many(&pgmap->ref, pfn_len(pgmap, range_id));
 	return 0;
 
 err_add_memory:
@@ -352,8 +307,6 @@ void *memremap_pages(struct dev_pagemap *pgmap, int nid)
 				GFP_KERNEL);
 	if (error)
 		return ERR_PTR(error);
-
-	devmap_managed_enable_get(pgmap);
 
 	/*
 	 * Clear the pgmap nr_range as it will be incremented for each
@@ -470,8 +423,10 @@ EXPORT_SYMBOL_GPL(get_dev_pagemap);
 
 void free_zone_device_page(struct page *page)
 {
-	if (WARN_ON_ONCE(!page->pgmap->ops || !page->pgmap->ops->page_free))
-		return;
+	struct dev_pagemap *pgmap = page->pgmap;
+
+	/* wake filesystem 'break dax layouts' waiters */
+	wake_up_var(page);
 
 	mem_cgroup_uncharge(page_folio(page));
 
@@ -506,45 +461,65 @@ void free_zone_device_page(struct page *page)
 	 * to clear page->mapping.
 	 */
 	page->mapping = NULL;
-	page->pgmap->ops->page_free(page);
-
-	if (page->pgmap->type != MEMORY_DEVICE_PRIVATE &&
-	    page->pgmap->type != MEMORY_DEVICE_COHERENT)
-		/*
-		 * Reset the page count to 1 to prepare for handing out the page
-		 * again.
-		 */
-		set_page_count(page, 1);
-	else
-		put_dev_pagemap(page->pgmap);
+	if (pgmap->ops && pgmap->ops->page_free)
+		pgmap->ops->page_free(page);
+	put_dev_pagemap(page->pgmap);
 }
 
-void zone_device_page_init(struct page *page)
+static unsigned long pgmap_offset_to_pfn(struct dev_pagemap *pgmap,
+					 pgoff_t pgmap_offset)
 {
-	/*
-	 * Drivers shouldn't be allocating pages after calling
-	 * memunmap_pages().
-	 */
-	WARN_ON_ONCE(!percpu_ref_tryget_live(&page->pgmap->ref));
-	set_page_count(page, 1);
-	lock_page(page);
-}
-EXPORT_SYMBOL_GPL(zone_device_page_init);
+	u64 sum = 0, offset = PFN_PHYS(pgmap_offset);
+	int i;
 
-#ifdef CONFIG_FS_DAX
-bool __put_devmap_managed_page_refs(struct page *page, int refs)
+	for (i = 0; i < pgmap->nr_range; i++) {
+		struct range *range = &pgmap->ranges[i];
+
+		if (offset >= sum && offset < (sum + range_len(range)))
+			return PHYS_PFN(range->start + offset - sum);
+		sum += range_len(range);
+	}
+
+	return -1;
+}
+
+/**
+ * pgmap_request_folio - activate a folio of a given order in @pgmap
+ * @pgmap: host page map of the folio to activate
+ * @pgmap_offset: page-offset into the pgmap to request
+ * @order: expected folio_order() of the folio
+ *
+ * Caller is responsible for @pgmap remaining live for the duration of
+ * this call. The order (size) of the folios in the pgmap are assumed
+ * stable before this call.
+ */
+struct folio *pgmap_request_folio(struct dev_pagemap *pgmap,
+				  pgoff_t pgmap_offset, int order)
 {
-	if (page->pgmap->type != MEMORY_DEVICE_FS_DAX)
-		return false;
+	unsigned long pfn = pgmap_offset_to_pfn(pgmap, pgmap_offset);
+	struct page *page = pfn_to_page(pfn);
+	struct folio *folio;
+	int v;
 
-	/*
-	 * fsdax page refcounts are 1-based, rather than 0-based: if
-	 * refcount is 1, then the page is free and the refcount is
-	 * stable because nobody holds a reference on the page.
-	 */
-	if (page_ref_sub_return(page, refs) == 1)
-		wake_up_var(&page->_refcount);
-	return true;
+	if (WARN_ON_ONCE(page->pgmap != pgmap))
+		return NULL;
+
+	if (WARN_ON_ONCE(percpu_ref_is_dying(&pgmap->ref)))
+		return NULL;
+
+	folio = page_folio(page);
+	if (WARN_ON_ONCE(folio_order(folio) != order))
+		return NULL;
+
+	v = folio_ref_inc_return(folio);
+	if (v > 1)
+		return folio;
+
+	if (WARN_ON_ONCE(!percpu_ref_tryget(&pgmap->ref))) {
+		folio_put(folio);
+		return NULL;
+	}
+
+	return folio;
 }
-EXPORT_SYMBOL(__put_devmap_managed_page_refs);
-#endif /* CONFIG_FS_DAX */
+EXPORT_SYMBOL_GPL(pgmap_request_folio);

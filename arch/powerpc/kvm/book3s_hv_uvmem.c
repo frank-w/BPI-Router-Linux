@@ -689,12 +689,14 @@ unsigned long kvmppc_h_svm_init_abort(struct kvm *kvm)
  */
 static struct page *kvmppc_uvmem_get_page(unsigned long gpa, struct kvm *kvm)
 {
-	struct page *dpage = NULL;
+	struct dev_pagemap *pgmap = &kvmppc_uvmem_pgmap;
 	unsigned long bit, uvmem_pfn;
 	struct kvmppc_uvmem_page_pvt *pvt;
 	unsigned long pfn_last, pfn_first;
+	struct folio *folio;
+	struct page *dpage;
 
-	pfn_first = kvmppc_uvmem_pgmap.range.start >> PAGE_SHIFT;
+	pfn_first = pgmap->range.start >> PAGE_SHIFT;
 	pfn_last = pfn_first +
 		   (range_len(&kvmppc_uvmem_pgmap.range) >> PAGE_SHIFT);
 
@@ -716,9 +718,11 @@ static struct page *kvmppc_uvmem_get_page(unsigned long gpa, struct kvm *kvm)
 	pvt->gpa = gpa;
 	pvt->kvm = kvm;
 
-	dpage = pfn_to_page(uvmem_pfn);
+	folio = pgmap_request_folio(pgmap,
+				    pfn_to_pgmap_offset(pgmap, uvmem_pfn), 0);
+	dpage = &folio->page;
 	dpage->zone_device_data = pvt;
-	zone_device_page_init(dpage);
+	lock_page(dpage);
 	return dpage;
 out_clear:
 	spin_lock(&kvmppc_uvmem_bitmap_lock);

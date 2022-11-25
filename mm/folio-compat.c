@@ -39,12 +39,6 @@ void wait_for_stable_page(struct page *page)
 }
 EXPORT_SYMBOL_GPL(wait_for_stable_page);
 
-bool page_mapped(struct page *page)
-{
-	return folio_mapped(page_folio(page));
-}
-EXPORT_SYMBOL(page_mapped);
-
 void mark_page_accessed(struct page *page)
 {
 	folio_mark_accessed(page_folio(page));
@@ -123,12 +117,6 @@ struct page *grab_cache_page_write_begin(struct address_space *mapping,
 			mapping_gfp_mask(mapping));
 }
 EXPORT_SYMBOL(grab_cache_page_write_begin);
-
-int try_to_release_page(struct page *page, gfp_t gfp)
-{
-	return filemap_release_folio(page_folio(page), gfp);
-}
-EXPORT_SYMBOL(try_to_release_page);
 
 int isolate_lru_page(struct page *page)
 {

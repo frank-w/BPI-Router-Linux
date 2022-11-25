@@ -140,6 +140,10 @@ disabling KASAN altogether or controlling its features:
 - ``kasan.vmalloc=off`` or ``=on`` disables or enables tagging of vmalloc
   allocations (default: ``on``).
 
+- ``kasan.page_alloc.sample=<sampling frequency>`` makes KASAN tag only
+  every Nth page_alloc allocation, where N is the value of the parameter
+  (default: ``1``).
+
 Error reports
 ~~~~~~~~~~~~~
 

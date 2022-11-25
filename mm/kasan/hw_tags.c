@@ -59,6 +59,11 @@ EXPORT_SYMBOL_GPL(kasan_mode);
 /* Whether to enable vmalloc tagging. */
 DEFINE_STATIC_KEY_TRUE(kasan_flag_vmalloc);
 
+/* Frequency of page_alloc allocation poisoning. */
+unsigned long kasan_page_alloc_sample = 1;
+
+DEFINE_PER_CPU(unsigned long, kasan_page_alloc_count);
+
 /* kasan=off/on */
 static int __init early_kasan_flag(char *arg)
 {
@@ -121,6 +126,27 @@ static inline const char *kasan_mode_info(void)
 	else
 		return "sync";
 }
+
+/* kasan.page_alloc.sample=<sampling frequency> */
+static int __init early_kasan_flag_page_alloc_sample(char *arg)
+{
+	int rv;
+
+	if (!arg)
+		return -EINVAL;
+
+	rv = kstrtoul(arg, 0, &kasan_page_alloc_sample);
+	if (rv)
+		return rv;
+
+	if (!kasan_page_alloc_sample) {
+		kasan_page_alloc_sample = 1;
+		return -EINVAL;
+	}
+
+	return 0;
+}
+early_param("kasan.page_alloc.sample", early_kasan_flag_page_alloc_sample);
 
 /*
  * kasan_init_hw_tags_cpu() is called for each CPU.

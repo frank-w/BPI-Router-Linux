@@ -840,12 +840,13 @@ static int truncate_error_page(struct page *p, unsigned long pfn,
 	int ret = MF_FAILED;
 
 	if (mapping->a_ops->error_remove_page) {
+		struct folio *folio = page_folio(p);
 		int err = mapping->a_ops->error_remove_page(mapping, p);
 
 		if (err != 0) {
 			pr_info("%#lx: Failed to punch page: %d\n", pfn, err);
-		} else if (page_has_private(p) &&
-			   !try_to_release_page(p, GFP_NOIO)) {
+		} else if (folio_has_private(folio) &&
+			   !filemap_release_folio(folio, GFP_NOIO)) {
 			pr_info("%#lx: failed to release buffers\n", pfn);
 		} else {
 			ret = MF_RECOVERED;
@@ -1687,8 +1688,7 @@ EXPORT_SYMBOL_GPL(mf_dax_kill_procs);
 #ifdef CONFIG_HUGETLB_PAGE
 /*
  * Struct raw_hwp_page represents information about "raw error page",
- * constructing singly linked list originated from ->private field of
- * SUBPAGE_INDEX_HWPOISON-th tail page.
+ * constructing singly linked list from ->_hugetlb_hwpoison field of folio.
  */
 struct raw_hwp_page {
 	struct llist_node node;
@@ -1697,7 +1697,7 @@ struct raw_hwp_page {
 
 static inline struct llist_head *raw_hwp_list_head(struct page *hpage)
 {
-	return (struct llist_head *)&page_private(hpage + SUBPAGE_INDEX_HWPOISON);
+	return (struct llist_head *)&page_folio(hpage)->_hugetlb_hwpoison;
 }
 
 static unsigned long __free_raw_hwp_pages(struct page *hpage, bool move_flag)
