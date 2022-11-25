@@ -1460,6 +1460,8 @@ sub create_parameterlist($$$$) {
     foreach my $arg (split($splitter, $args)) {
 	# strip comments
 	$arg =~ s/\/\*.*\*\///;
+	# ignore argument attributes
+	$arg =~ s/\sPOS0?\s/ /;
 	# strip leading/trailing spaces
 	$arg =~ s/^\s*//;
 	$arg =~ s/\s*$//;
@@ -1669,6 +1671,7 @@ sub dump_function($$) {
     $prototype =~ s/^__inline +//;
     $prototype =~ s/^__always_inline +//;
     $prototype =~ s/^noinline +//;
+    $prototype =~ s/^__FORTIFY_INLINE +//;
     $prototype =~ s/__init +//;
     $prototype =~ s/__init_or_module +//;
     $prototype =~ s/__deprecated +//;
@@ -1678,7 +1681,8 @@ sub dump_function($$) {
     $prototype =~ s/__weak +//;
     $prototype =~ s/__sched +//;
     $prototype =~ s/__printf\s*\(\s*\d*\s*,\s*\d*\s*\) +//;
-    $prototype =~ s/__alloc_size\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\) +//;
+    $prototype =~ s/__(?:re)?alloc_size\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\) +//;
+    $prototype =~ s/__diagnose_as\s*\(\s*\S+\s*(?:,\s*\d+\s*)*\) +//;
     my $define = $prototype =~ s/^#\s*define\s+//; #ak added
     $prototype =~ s/__attribute_const__ +//;
     $prototype =~ s/__attribute__\s*\(\(
