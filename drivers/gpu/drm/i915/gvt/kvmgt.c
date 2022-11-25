@@ -322,7 +322,7 @@ static void gvt_cache_destroy(struct intel_vgpu *vgpu)
 	}
 }
 
-static void gvt_cache_init(struct intel_vgpu *vgpu)
+void gvt_cache_init(struct intel_vgpu *vgpu)
 {
 	vgpu->gfn_cache = RB_ROOT;
 	vgpu->dma_addr_cache = RB_ROOT;
@@ -330,7 +330,7 @@ static void gvt_cache_init(struct intel_vgpu *vgpu)
 	mutex_init(&vgpu->cache_lock);
 }
 
-static void kvmgt_protect_table_init(struct intel_vgpu *info)
+void kvmgt_protect_table_init(struct intel_vgpu *info)
 {
 	hash_init(info->ptable);
 }
@@ -668,9 +668,6 @@ static int intel_vgpu_open_device(struct vfio_device *vfio_dev)
 		return -EEXIST;
 
 	vgpu->attached = true;
-
-	kvmgt_protect_table_init(vgpu);
-	gvt_cache_init(vgpu);
 
 	vgpu->track_node.track_write = kvmgt_page_track_write;
 	vgpu->track_node.track_flush_slot = kvmgt_page_track_flush_slot;
@@ -1467,6 +1464,9 @@ static const struct vfio_device_ops intel_vgpu_dev_ops = {
 	.mmap		= intel_vgpu_mmap,
 	.ioctl		= intel_vgpu_ioctl,
 	.dma_unmap	= intel_vgpu_dma_unmap,
+	.bind_iommufd	= vfio_iommufd_emulated_bind,
+	.unbind_iommufd = vfio_iommufd_emulated_unbind,
+	.attach_ioas	= vfio_iommufd_emulated_attach_ioas,
 };
 
 static int intel_vgpu_probe(struct mdev_device *mdev)

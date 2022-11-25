@@ -28,6 +28,7 @@ TARGETS += futex
 TARGETS += gpio
 TARGETS += hid
 TARGETS += intel_pstate
+TARGETS += iommu
 TARGETS += ipc
 TARGETS += ir
 TARGETS += kcmp

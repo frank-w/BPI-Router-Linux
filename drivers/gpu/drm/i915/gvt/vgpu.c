@@ -382,6 +382,8 @@ int intel_gvt_create_vgpu(struct intel_vgpu *vgpu,
 
 	intel_gvt_update_reg_whitelist(vgpu);
 	mutex_unlock(&gvt->lock);
+	kvmgt_protect_table_init(vgpu);
+	gvt_cache_init(vgpu);
 	return 0;
 
 out_clean_sched_policy:
