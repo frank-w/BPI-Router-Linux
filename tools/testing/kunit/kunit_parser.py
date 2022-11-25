@@ -10,6 +10,7 @@
 # Author: Rae Moar <rmoar@google.com>
 
 from __future__ import annotations
+from dataclasses import dataclass
 import re
 import sys
 
@@ -58,6 +59,10 @@ class Test:
 		self.counts.errors += 1
 		stdout.print_with_timestamp(stdout.red('[ERROR]') + f' Test: {self.name}: {error_message}')
 
+	def ok_status(self) -> bool:
+		"""Returns true if the status was ok, i.e. passed or skipped."""
+		return self.status in (TestStatus.SUCCESS, TestStatus.SKIPPED)
+
 class TestStatus(Enum):
 	"""An enumeration class to represent the status of a test."""
 	SUCCESS = auto()
@@ -67,27 +72,17 @@ class TestStatus(Enum):
 	NO_TESTS = auto()
 	FAILURE_TO_PARSE_TESTS = auto()
 
+@dataclass
 class TestCounts:
 	"""
 	Tracks the counts of statuses of all test cases and any errors within
 	a Test.
-
-	Attributes:
-	passed : int - the number of tests that have passed
-	failed : int - the number of tests that have failed
-	crashed : int - the number of tests that have crashed
-	skipped : int - the number of tests that have skipped
-	errors : int - the number of errors in the test and subtests
 	"""
-	def __init__(self):
-		"""Creates TestCounts object with counts of all test
-		statuses and test errors set to 0.
-		"""
-		self.passed = 0
-		self.failed = 0
-		self.crashed = 0
-		self.skipped = 0
-		self.errors = 0
+	passed: int = 0
+	failed: int = 0
+	crashed: int = 0
+	skipped: int = 0
+	errors: int = 0
 
 	def __str__(self) -> str:
 		"""Returns the string representation of a TestCounts object."""
@@ -565,6 +560,40 @@ def print_test_footer(test: Test) -> None:
 	stdout.print_with_timestamp(format_test_divider(message,
 		len(message) - stdout.color_len()))
 
+
+
+def _summarize_failed_tests(test: Test) -> str:
+	"""Tries to summarize all the failing subtests in `test`."""
+
+	def failed_names(test: Test, parent_name: str) -> List[str]:
+		# Note: we use 'main' internally for the top-level test.
+		if not parent_name or parent_name == 'main':
+			full_name = test.name
+		else:
+			full_name = parent_name + '.' + test.name
+
+		if not test.subtests:  # this is a leaf node
+			return [full_name]
+
+		# If all the children failed, just say this subtest failed.
+		# Don't summarize it down "the top-level test failed", though.
+		failed_subtests = [sub for sub in test.subtests if not sub.ok_status()]
+		if parent_name and len(failed_subtests) ==  len(test.subtests):
+			return [full_name]
+
+		all_failures = []  # type: List[str]
+		for t in failed_subtests:
+			all_failures.extend(failed_names(t, full_name))
+		return all_failures
+
+	failures = failed_names(test, '')
+	# If there are too many failures, printing them out will just be noisy.
+	if len(failures) > 10:  # this is an arbitrary limit
+		return ''
+
+	return 'Failures: ' + ', '.join(failures)
+
+
 def print_summary_line(test: Test) -> None:
 	"""
 	Prints summary line of test object. Color of line is dependent on
@@ -586,6 +615,15 @@ def print_summary_line(test: Test) -> None:
 	else:
 		color = stdout.red
 	stdout.print_with_timestamp(color(f'Testing complete. {test.counts}'))
+
+	# Summarize failures that might have gone off-screen since we had a lot
+	# of tests (arbitrarily defined as >=100 for now).
+	if test.ok_status() or test.counts.total() < 100:
+		return
+	summarized = _summarize_failed_tests(test)
+	if not summarized:
+		return
+	stdout.print_with_timestamp(color(summarized))
 
 # Other methods:
 
@@ -744,7 +782,7 @@ def parse_run_tests(kernel_output: Iterable[str]) -> Test:
 	test = Test()
 	if not lines:
 		test.name = '<missing>'
-		test.add_error('could not find any KTAP output!')
+		test.add_error('Could not find any KTAP output. Did any KUnit tests run?')
 		test.status = TestStatus.FAILURE_TO_PARSE_TESTS
 	else:
 		test = parse_test(lines, 0, [])
