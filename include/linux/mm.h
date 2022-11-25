@@ -74,6 +74,7 @@ static inline void totalram_pages_add(long count)
 
 extern void * high_memory;
 extern int page_cluster;
+extern const int page_cluster_max;
 
 #ifdef CONFIG_SYSCTL
 extern int sysctl_legacy_va_layout;
@@ -538,7 +539,7 @@ struct vm_operations_struct {
 	/*
 	 * Called by mprotect() to make driver-specific permission
 	 * checks before mprotect() is finalised.   The VMA must not
-	 * be modified.  Returns 0 if eprotect() can proceed.
+	 * be modified.  Returns 0 if mprotect() can proceed.
 	 */
 	int (*mprotect)(struct vm_area_struct *vma, unsigned long start,
 			unsigned long end, unsigned long newflags);
@@ -3288,11 +3289,36 @@ extern void shake_page(struct page *p);
 extern atomic_long_t num_poisoned_pages __read_mostly;
 extern int soft_offline_page(unsigned long pfn, int flags);
 #ifdef CONFIG_MEMORY_FAILURE
-extern int __get_huge_page_for_hwpoison(unsigned long pfn, int flags);
+extern int __get_huge_page_for_hwpoison(unsigned long pfn, int flags,
+					bool *migratable_cleared);
+void num_poisoned_pages_inc(unsigned long pfn);
+void num_poisoned_pages_sub(unsigned long pfn, long i);
 #else
-static inline int __get_huge_page_for_hwpoison(unsigned long pfn, int flags)
+static inline int __get_huge_page_for_hwpoison(unsigned long pfn, int flags,
+					bool *migratable_cleared)
 {
 	return 0;
+}
+
+static inline void num_poisoned_pages_inc(unsigned long pfn)
+{
+}
+
+static inline void num_poisoned_pages_sub(unsigned long pfn, long i)
+{
+}
+#endif
+
+#if defined(CONFIG_MEMORY_FAILURE) && defined(CONFIG_MEMORY_HOTPLUG)
+extern void memblk_nr_poison_inc(unsigned long pfn);
+extern void memblk_nr_poison_sub(unsigned long pfn, long i);
+#else
+static inline void memblk_nr_poison_inc(unsigned long pfn)
+{
+}
+
+static inline void memblk_nr_poison_sub(unsigned long pfn, long i)
+{
 }
 #endif
 
