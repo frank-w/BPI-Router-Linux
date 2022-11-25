@@ -655,16 +655,10 @@ err:
 	return ERR_PTR(rc);
 }
 
-/**
- * devm_cxl_add_port - register a cxl_port in CXL memory decode hierarchy
- * @host: host device for devm operations
- * @uport: "physical" device implementing this upstream port
- * @component_reg_phys: (optional) for configurable cxl_port instances
- * @parent_dport: next hop up in the CXL memory decode hierarchy
- */
-struct cxl_port *devm_cxl_add_port(struct device *host, struct device *uport,
-				   resource_size_t component_reg_phys,
-				   struct cxl_dport *parent_dport)
+static struct cxl_port *__devm_cxl_add_port(struct device *host,
+					    struct device *uport,
+					    resource_size_t component_reg_phys,
+					    struct cxl_dport *parent_dport)
 {
 	struct cxl_port *port;
 	struct device *dev;
@@ -701,6 +695,41 @@ struct cxl_port *devm_cxl_add_port(struct device *host, struct device *uport,
 err:
 	put_device(dev);
 	return ERR_PTR(rc);
+}
+
+/**
+ * devm_cxl_add_port - register a cxl_port in CXL memory decode hierarchy
+ * @host: host device for devm operations
+ * @uport: "physical" device implementing this upstream port
+ * @component_reg_phys: (optional) for configurable cxl_port instances
+ * @parent_dport: next hop up in the CXL memory decode hierarchy
+ */
+struct cxl_port *devm_cxl_add_port(struct device *host, struct device *uport,
+				   resource_size_t component_reg_phys,
+				   struct cxl_dport *parent_dport)
+{
+	struct cxl_port *port, *parent_port;
+
+	port = __devm_cxl_add_port(host, uport, component_reg_phys,
+				   parent_dport);
+
+	parent_port = parent_dport ? parent_dport->port : NULL;
+	if (IS_ERR(port)) {
+		dev_dbg(uport, "Failed to add %s%s%s%s: %ld\n",
+			dev_name(&port->dev),
+			parent_port ? " to " : "",
+			parent_port ? dev_name(&parent_port->dev) : "",
+			parent_port ? "" : " (root port)",
+			PTR_ERR(port));
+	} else {
+		dev_dbg(uport, "%s added%s%s%s\n",
+			dev_name(&port->dev),
+			parent_port ? " to " : "",
+			parent_port ? dev_name(&parent_port->dev) : "",
+			parent_port ? "" : " (root port)");
+	}
+
+	return port;
 }
 EXPORT_SYMBOL_NS_GPL(devm_cxl_add_port, CXL);
 
@@ -870,20 +899,10 @@ static void cxl_dport_unlink(void *data)
 	sysfs_remove_link(&port->dev.kobj, link_name);
 }
 
-/**
- * devm_cxl_add_dport - append downstream port data to a cxl_port
- * @port: the cxl_port that references this dport
- * @dport_dev: firmware or PCI device representing the dport
- * @port_id: identifier for this dport in a decoder's target list
- * @component_reg_phys: optional location of CXL component registers
- *
- * Note that dports are appended to the devm release action's of the
- * either the port's host (for root ports), or the port itself (for
- * switch ports)
- */
-struct cxl_dport *devm_cxl_add_dport(struct cxl_port *port,
-				     struct device *dport_dev, int port_id,
-				     resource_size_t component_reg_phys)
+static struct cxl_dport *__devm_cxl_add_dport(struct cxl_port *port,
+					      struct device *dport_dev,
+					      int port_id,
+					      resource_size_t component_reg_phys)
 {
 	char link_name[CXL_TARGET_STRLEN];
 	struct cxl_dport *dport;
@@ -932,6 +951,36 @@ struct cxl_dport *devm_cxl_add_dport(struct cxl_port *port,
 	rc = devm_add_action_or_reset(host, cxl_dport_unlink, dport);
 	if (rc)
 		return ERR_PTR(rc);
+
+	return dport;
+}
+
+/**
+ * devm_cxl_add_dport - append downstream port data to a cxl_port
+ * @port: the cxl_port that references this dport
+ * @dport_dev: firmware or PCI device representing the dport
+ * @port_id: identifier for this dport in a decoder's target list
+ * @component_reg_phys: optional location of CXL component registers
+ *
+ * Note that dports are appended to the devm release action's of the
+ * either the port's host (for root ports), or the port itself (for
+ * switch ports)
+ */
+struct cxl_dport *devm_cxl_add_dport(struct cxl_port *port,
+				     struct device *dport_dev, int port_id,
+				     resource_size_t component_reg_phys)
+{
+	struct cxl_dport *dport;
+
+	dport = __devm_cxl_add_dport(port, dport_dev, port_id,
+				     component_reg_phys);
+	if (IS_ERR(dport)) {
+		dev_dbg(dport_dev, "failed to add dport to %s: %ld\n",
+			dev_name(&port->dev), PTR_ERR(dport));
+	} else {
+		dev_dbg(dport_dev, "dport added to %s\n",
+			dev_name(&port->dev));
+	}
 
 	return dport;
 }
@@ -1146,8 +1195,6 @@ int devm_cxl_add_endpoint(struct cxl_memdev *cxlmd,
 				     cxlds->component_reg_phys, parent_dport);
 	if (IS_ERR(endpoint))
 		return PTR_ERR(endpoint);
-
-	dev_dbg(&cxlmd->dev, "add: %s\n", dev_name(&endpoint->dev));
 
 	rc = cxl_endpoint_autoremove(cxlmd, endpoint);
 	if (rc)

@@ -439,14 +439,18 @@ mock_acpi_evaluate_integer(acpi_handle handle, acpi_string pathname,
 	return AE_OK;
 }
 
-static struct pci_bus mock_pci_bus[NR_CXL_HOST_BRIDGES];
-static struct acpi_pci_root mock_pci_root[NR_CXL_HOST_BRIDGES] = {
+static struct pci_bus mock_pci_bus[NR_CXL_HOST_BRIDGES + NR_CXL_SINGLE_HOST];
+static struct acpi_pci_root mock_pci_root[ARRAY_SIZE(mock_pci_bus)] = {
 	[0] = {
 		.bus = &mock_pci_bus[0],
 	},
 	[1] = {
 		.bus = &mock_pci_bus[1],
 	},
+	[2] = {
+		.bus = &mock_pci_bus[2],
+	},
+
 };
 
 static bool is_mock_bus(struct pci_bus *bus)
@@ -634,7 +638,6 @@ static int mock_cxl_enumerate_decoders(struct cxl_hdm *cxlhdm)
 
 static int mock_cxl_port_enumerate_dports(struct cxl_port *port)
 {
-	struct device *dev = &port->dev;
 	struct platform_device **array;
 	int i, array_size;
 
@@ -684,14 +687,8 @@ static int mock_cxl_port_enumerate_dports(struct cxl_port *port)
 		dport = devm_cxl_add_dport(port, &pdev->dev, pdev->id,
 					   CXL_RESOURCE_NONE);
 
-		if (IS_ERR(dport)) {
-			dev_err(dev, "failed to add dport: %s (%ld)\n",
-				dev_name(&pdev->dev), PTR_ERR(dport));
+		if (IS_ERR(dport))
 			return PTR_ERR(dport);
-		}
-
-		dev_dbg(dev, "add dport%d: %s\n", pdev->id,
-			dev_name(&pdev->dev));
 	}
 
 	return 0;
@@ -751,6 +748,7 @@ static __init int cxl_single_init(void)
 		}
 
 		cxl_hb_single[i] = pdev;
+		mock_pci_bus[i + NR_CXL_HOST_BRIDGES].bridge = &pdev->dev;
 		rc = sysfs_create_link(&pdev->dev.kobj, &pdev->dev.kobj,
 				       "physical_node");
 		if (rc)
@@ -917,6 +915,7 @@ static __init int cxl_test_init(void)
 		}
 
 		cxl_host_bridge[i] = pdev;
+		mock_pci_bus[i].bridge = &pdev->dev;
 		rc = sysfs_create_link(&pdev->dev.kobj, &pdev->dev.kobj,
 				       "physical_node");
 		if (rc)
