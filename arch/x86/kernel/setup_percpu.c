@@ -11,6 +11,7 @@
 #include <linux/smp.h>
 #include <linux/topology.h>
 #include <linux/pfn.h>
+#include <linux/stackprotector.h>
 #include <asm/sections.h>
 #include <asm/processor.h>
 #include <asm/desc.h>
@@ -21,7 +22,6 @@
 #include <asm/proto.h>
 #include <asm/cpumask.h>
 #include <asm/cpu.h>
-#include <asm/stackprotector.h>
 
 #ifdef CONFIG_X86_64
 #define BOOT_PERCPU_OFFSET ((unsigned long)__per_cpu_load)
