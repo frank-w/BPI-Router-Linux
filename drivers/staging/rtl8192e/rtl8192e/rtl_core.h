@@ -311,7 +311,6 @@ struct r8192_priv {
 	bool		bfirst_after_down;
 	bool		initialized_at_probe;
 	bool		being_init_adapter;
-	bool		bDriverIsGoingToUnload;
 
 	int		irq;
 	short	irq_enabled;
@@ -331,7 +330,7 @@ struct r8192_priv {
 
 	struct work_struct				reset_wq;
 
-	struct log_int_8190 InterruptLog;
+	struct log_int_8190 int_log;
 
 	enum rt_customer_id CustomerID;
 
@@ -410,8 +409,6 @@ struct r8192_priv {
 	short	chan;
 	short	sens;
 	short	max_sens;
-
-	u8 ScanDelay;
 	bool ps_force;
 
 	u32 irq_mask[2];
@@ -470,13 +467,9 @@ struct r8192_priv {
 
 	bool bTXPowerDataReadFromEEPORM;
 
-	u16 RegChannelPlan;
+	u16 reg_chnl_plan;
 	u16 ChannelPlan;
-
-	bool RegRfOff;
-	bool isRFOff;
-	bool bInPowerSaveMode;
-	u8 bHwRfOffAction;
+	u8 hw_rf_off_action;
 
 	bool rf_change_in_progress;
 	bool SetRFPowerStateInProgress;
@@ -490,7 +483,7 @@ struct r8192_priv {
 	u8 CCKPresentAttentuation_20Mdefault;
 	u8 CCKPresentAttentuation_40Mdefault;
 	s8 CCKPresentAttentuation_difference;
-	s8 CCKPresentAttentuation;
+	s8 cck_present_attn;
 	long undecorated_smoothed_pwdb;
 
 	u32 MCSTxPowerLevelOriginalOffset[6];
@@ -543,11 +536,9 @@ struct r8192_priv {
 
 	u32		reset_count;
 
-	enum reset_type ResetProgress;
-	bool		bForcedSilentReset;
-	bool		bDisableNormalResetCheck;
+	enum reset_type rst_progress;
 	u16		TxCounter;
-	u16		RxCounter;
+	u16		rx_ctr;
 	bool		bResetInProgress;
 	bool		force_reset;
 	bool		force_lps;
