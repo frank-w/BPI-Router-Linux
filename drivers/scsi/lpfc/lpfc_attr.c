@@ -134,7 +134,7 @@ lpfc_cmf_info_show(struct device *dev, struct device_attribute *attr,
 	scnprintf(tmp, sizeof(tmp),
 		  "Congestion Mgmt Info: E2Eattr %d Ver %d "
 		  "CMF %d cnt %d\n",
-		  phba->sli4_hba.pc_sli4_params.mi_ver,
+		  phba->sli4_hba.pc_sli4_params.mi_cap,
 		  cp ? cp->cgn_info_version : 0,
 		  phba->sli4_hba.pc_sli4_params.cmf, phba->cmf_timer_cnt);
 
@@ -3828,13 +3828,13 @@ lpfc_vport_param_store(devloss_tmo)
 static DEVICE_ATTR_RW(lpfc_devloss_tmo);
 
 /*
- * lpfc_suppress_rsp: Enable suppress rsp feature is firmware supports it
- * lpfc_suppress_rsp = 0  Disable
- * lpfc_suppress_rsp = 1  Enable (default)
+ * lpfc_suppress_rsp: Enable suppress rsp feature if firmware supports it
+ * lpfc_suppress_rsp = 0  Disable (default)
+ * lpfc_suppress_rsp = 1  Enable
  *
  */
-LPFC_ATTR_R(suppress_rsp, 1, 0, 1,
-	    "Enable suppress rsp feature is firmware supports it");
+LPFC_ATTR_R(suppress_rsp, 0, 0, 1,
+	    "Enable suppress rsp feature if firmware supports it");
 
 /*
  * lpfc_nvmet_mrq: Specify number of RQ pairs for processing NVMET cmds
