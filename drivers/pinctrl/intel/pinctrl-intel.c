@@ -14,12 +14,15 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
+#include <linux/seq_file.h>
+#include <linux/string_helpers.h>
 #include <linux/time.h>
 
-#include <linux/pinctrl/pinctrl.h>
-#include <linux/pinctrl/pinmux.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/pinctrl/pinconf.h>
 #include <linux/pinctrl/pinconf-generic.h>
+#include <linux/pinctrl/pinctrl.h>
+#include <linux/pinctrl/pinmux.h>
 
 #include "../core.h"
 #include "pinctrl-intel.h"
@@ -1165,7 +1168,7 @@ static int intel_gpio_irq_wake(struct irq_data *d, unsigned int on)
 	else
 		disable_irq_wake(pctrl->irq);
 
-	dev_dbg(pctrl->dev, "%sable wake for pin %u\n", on ? "en" : "dis", pin);
+	dev_dbg(pctrl->dev, "%s wake for pin %u\n", str_enable_disable(on), pin);
 	return 0;
 }
 
@@ -1502,14 +1505,15 @@ static int intel_pinctrl_pm_init(struct intel_pinctrl *pctrl)
 static int intel_pinctrl_probe(struct platform_device *pdev,
 			       const struct intel_pinctrl_soc_data *soc_data)
 {
+	struct device *dev = &pdev->dev;
 	struct intel_pinctrl *pctrl;
 	int i, ret, irq;
 
-	pctrl = devm_kzalloc(&pdev->dev, sizeof(*pctrl), GFP_KERNEL);
+	pctrl = devm_kzalloc(dev, sizeof(*pctrl), GFP_KERNEL);
 	if (!pctrl)
 		return -ENOMEM;
 
-	pctrl->dev = &pdev->dev;
+	pctrl->dev = dev;
 	pctrl->soc = soc_data;
 	raw_spin_lock_init(&pctrl->lock);
 
@@ -1518,8 +1522,8 @@ static int intel_pinctrl_probe(struct platform_device *pdev,
 	 * to the registers.
 	 */
 	pctrl->ncommunities = pctrl->soc->ncommunities;
-	pctrl->communities = devm_kcalloc(&pdev->dev, pctrl->ncommunities,
-				  sizeof(*pctrl->communities), GFP_KERNEL);
+	pctrl->communities = devm_kcalloc(dev, pctrl->ncommunities,
+					  sizeof(*pctrl->communities), GFP_KERNEL);
 	if (!pctrl->communities)
 		return -ENOMEM;
 
@@ -1570,7 +1574,7 @@ static int intel_pinctrl_probe(struct platform_device *pdev,
 			offset = (value & CAPLIST_NEXT_MASK) >> CAPLIST_NEXT_SHIFT;
 		} while (offset);
 
-		dev_dbg(&pdev->dev, "Community%d features: %#08x\n", i, community->features);
+		dev_dbg(dev, "Community%d features: %#08x\n", i, community->features);
 
 		/* Read offset of the pad configuration registers */
 		offset = readl(regs + PADBAR);
@@ -1595,14 +1599,13 @@ static int intel_pinctrl_probe(struct platform_device *pdev,
 		return ret;
 
 	pctrl->pctldesc = intel_pinctrl_desc;
-	pctrl->pctldesc.name = dev_name(&pdev->dev);
+	pctrl->pctldesc.name = dev_name(dev);
 	pctrl->pctldesc.pins = pctrl->soc->pins;
 	pctrl->pctldesc.npins = pctrl->soc->npins;
 
-	pctrl->pctldev = devm_pinctrl_register(&pdev->dev, &pctrl->pctldesc,
-					       pctrl);
+	pctrl->pctldev = devm_pinctrl_register(dev, &pctrl->pctldesc, pctrl);
 	if (IS_ERR(pctrl->pctldev)) {
-		dev_err(&pdev->dev, "failed to register pinctrl driver\n");
+		dev_err(dev, "failed to register pinctrl driver\n");
 		return PTR_ERR(pctrl->pctldev);
 	}
 
@@ -1643,10 +1646,11 @@ const struct intel_pinctrl_soc_data *intel_pinctrl_get_soc_data(struct platform_
 {
 	const struct intel_pinctrl_soc_data * const *table;
 	const struct intel_pinctrl_soc_data *data = NULL;
+	struct device *dev = &pdev->dev;
 
-	table = device_get_match_data(&pdev->dev);
+	table = device_get_match_data(dev);
 	if (table) {
-		struct acpi_device *adev = ACPI_COMPANION(&pdev->dev);
+		struct acpi_device *adev = ACPI_COMPANION(dev);
 		unsigned int i;
 
 		for (i = 0; table[i]; i++) {

@@ -18,6 +18,8 @@
 #include <linux/gpio/driver.h>
 #include <linux/slab.h>
 #include <linux/export.h>
+#include <linux/property.h>
+
 #include <soc/fsl/qe/qe.h>
 /*
  * FIXME: this is legacy code that is accessing gpiolib internals in order
@@ -196,7 +198,7 @@ struct qe_pin *qe_pin_request(struct device_node *np, int index)
 	 */
 	qe_pin->num = gpio_chip_hwgpio(gpiod);
 
-	if (!of_device_is_compatible(gc->of_node, "fsl,mpc8323-qe-pario-bank")) {
+	if (!fwnode_device_is_compatible(gc->fwnode, "fsl,mpc8323-qe-pario-bank")) {
 		pr_debug("%s: tried to get a non-qe pin\n", __func__);
 		gpiod_put(gpiod);
 		err = -EINVAL;
