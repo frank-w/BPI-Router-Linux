@@ -512,6 +512,23 @@ mlx5vf_pci_set_device_state(struct vfio_device *vdev,
 	return res;
 }
 
+static int mlx5vf_pci_get_data_size(struct vfio_device *vdev,
+				    unsigned long *stop_copy_length)
+{
+	struct mlx5vf_pci_core_device *mvdev = container_of(
+		vdev, struct mlx5vf_pci_core_device, core_device.vdev);
+	size_t state_size;
+	int ret;
+
+	mutex_lock(&mvdev->state_mutex);
+	ret = mlx5vf_cmd_query_vhca_migration_state(mvdev,
+						    &state_size);
+	if (!ret)
+		*stop_copy_length = state_size;
+	mlx5vf_state_mutex_unlock(mvdev);
+	return ret;
+}
+
 static int mlx5vf_pci_get_device_state(struct vfio_device *vdev,
 				       enum vfio_device_mig_state *curr_state)
 {
@@ -577,6 +594,7 @@ static void mlx5vf_pci_close_device(struct vfio_device *core_vdev)
 static const struct vfio_migration_ops mlx5vf_pci_mig_ops = {
 	.migration_set_state = mlx5vf_pci_set_device_state,
 	.migration_get_state = mlx5vf_pci_get_device_state,
+	.migration_get_data_size = mlx5vf_pci_get_data_size,
 };
 
 static const struct vfio_log_ops mlx5vf_pci_log_ops = {
@@ -676,18 +694,7 @@ static struct pci_driver mlx5vf_pci_driver = {
 	.driver_managed_dma = true,
 };
 
-static void __exit mlx5vf_pci_cleanup(void)
-{
-	pci_unregister_driver(&mlx5vf_pci_driver);
-}
-
-static int __init mlx5vf_pci_init(void)
-{
-	return pci_register_driver(&mlx5vf_pci_driver);
-}
-
-module_init(mlx5vf_pci_init);
-module_exit(mlx5vf_pci_cleanup);
+module_pci_driver(mlx5vf_pci_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Max Gurtovoy <mgurtovoy@nvidia.com>");
