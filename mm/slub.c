@@ -829,6 +829,17 @@ static inline void set_orig_size(struct kmem_cache *s,
 	if (!slub_debug_orig_size(s))
 		return;
 
+#ifdef CONFIG_KASAN_GENERIC
+	/*
+	 * KASAN could save its free meta data in object's data area at
+	 * offset 0, if the size is larger than 'orig_size', it will
+	 * overlap the data redzone in [orig_size+1, object_size], and
+	 * the check should be skipped.
+	 */
+	if (kasan_metadata_size(s, true) > orig_size)
+		orig_size = s->object_size;
+#endif
+
 	p += get_info_end(s);
 	p += sizeof(struct track) * 2;
 
@@ -846,6 +857,11 @@ static inline unsigned int get_orig_size(struct kmem_cache *s, void *object)
 	p += sizeof(struct track) * 2;
 
 	return *(unsigned int *)p;
+}
+
+void skip_orig_size_check(struct kmem_cache *s, const void *object)
+{
+	set_orig_size(s, (void *)object, s->object_size);
 }
 
 static void slab_bug(struct kmem_cache *s, char *fmt, ...)
@@ -910,7 +926,7 @@ static void print_trailer(struct kmem_cache *s, struct slab *slab, u8 *p)
 	if (slub_debug_orig_size(s))
 		off += sizeof(unsigned int);
 
-	off += kasan_metadata_size(s);
+	off += kasan_metadata_size(s, false);
 
 	if (off != size_from_object(s))
 		/* Beginning of the filler is the free pointer */
@@ -966,17 +982,28 @@ static __printf(3, 4) void slab_err(struct kmem_cache *s, struct slab *slab,
 static void init_object(struct kmem_cache *s, void *object, u8 val)
 {
 	u8 *p = kasan_reset_tag(object);
+	unsigned int poison_size = s->object_size;
 
-	if (s->flags & SLAB_RED_ZONE)
+	if (s->flags & SLAB_RED_ZONE) {
 		memset(p - s->red_left_pad, val, s->red_left_pad);
 
+		if (slub_debug_orig_size(s) && val == SLUB_RED_ACTIVE) {
+			/*
+			 * Redzone the extra allocated space by kmalloc than
+			 * requested, and the poison size will be limited to
+			 * the original request size accordingly.
+			 */
+			poison_size = get_orig_size(s, object);
+		}
+	}
+
 	if (s->flags & __OBJECT_POISON) {
-		memset(p, POISON_FREE, s->object_size - 1);
-		p[s->object_size - 1] = POISON_END;
+		memset(p, POISON_FREE, poison_size - 1);
+		p[poison_size - 1] = POISON_END;
 	}
 
 	if (s->flags & SLAB_RED_ZONE)
-		memset(p + s->object_size, val, s->inuse - s->object_size);
+		memset(p + poison_size, val, s->inuse - poison_size);
 }
 
 static void restore_bytes(struct kmem_cache *s, char *message, u8 data,
@@ -1070,7 +1097,7 @@ static int check_pad_bytes(struct kmem_cache *s, struct slab *slab, u8 *p)
 			off += sizeof(unsigned int);
 	}
 
-	off += kasan_metadata_size(s);
+	off += kasan_metadata_size(s, false);
 
 	if (size_from_object(s) == off)
 		return 1;
@@ -1120,6 +1147,7 @@ static int check_object(struct kmem_cache *s, struct slab *slab,
 {
 	u8 *p = object;
 	u8 *endobject = object + s->object_size;
+	unsigned int orig_size;
 
 	if (s->flags & SLAB_RED_ZONE) {
 		if (!check_bytes_and_report(s, slab, object, "Left Redzone",
@@ -1129,6 +1157,17 @@ static int check_object(struct kmem_cache *s, struct slab *slab,
 		if (!check_bytes_and_report(s, slab, object, "Right Redzone",
 			endobject, val, s->inuse - s->object_size))
 			return 0;
+
+		if (slub_debug_orig_size(s) && val == SLUB_RED_ACTIVE) {
+			orig_size = get_orig_size(s, object);
+
+			if (s->object_size > orig_size  &&
+				!check_bytes_and_report(s, slab, object,
+					"kmalloc Redzone", p + orig_size,
+					val, s->object_size - orig_size)) {
+				return 0;
+			}
+		}
 	} else {
 		if ((s->flags & SLAB_POISON) && s->object_size < s->inuse) {
 			check_bytes_and_report(s, slab, p, "Alignment padding",
@@ -1800,6 +1839,8 @@ static inline struct slab *alloc_slab_page(gfp_t flags, int node,
 
 	slab = folio_slab(folio);
 	__folio_set_slab(folio);
+	/* Make the flag visible before any changes to folio->mapping */
+	smp_wmb();
 	if (page_is_pfmemalloc(folio_page(folio, 0)))
 		slab_set_pfmemalloc(slab);
 
@@ -1999,17 +2040,11 @@ static void __free_slab(struct kmem_cache *s, struct slab *slab)
 	int order = folio_order(folio);
 	int pages = 1 << order;
 
-	if (kmem_cache_debug_flags(s, SLAB_CONSISTENCY_CHECKS)) {
-		void *p;
-
-		slab_pad_check(s, slab);
-		for_each_object(p, s, slab_address(slab), slab->objects)
-			check_object(s, slab, p, SLUB_RED_INACTIVE);
-	}
-
 	__slab_clear_pfmemalloc(slab);
-	__folio_clear_slab(folio);
 	folio->mapping = NULL;
+	/* Make the mapping reset visible before clearing the flag */
+	smp_wmb();
+	__folio_clear_slab(folio);
 	if (current->reclaim_state)
 		current->reclaim_state->reclaimed_slab += pages;
 	unaccount_slab(slab, order, s);
@@ -2025,9 +2060,17 @@ static void rcu_free_slab(struct rcu_head *h)
 
 static void free_slab(struct kmem_cache *s, struct slab *slab)
 {
-	if (unlikely(s->flags & SLAB_TYPESAFE_BY_RCU)) {
+	if (kmem_cache_debug_flags(s, SLAB_CONSISTENCY_CHECKS)) {
+		void *p;
+
+		slab_pad_check(s, slab);
+		for_each_object(p, s, slab_address(slab), slab->objects)
+			check_object(s, slab, p, SLUB_RED_INACTIVE);
+	}
+
+	if (unlikely(s->flags & SLAB_TYPESAFE_BY_RCU))
 		call_rcu(&slab->rcu_head, rcu_free_slab);
-	} else
+	else
 		__free_slab(s, slab);
 }
 
@@ -2411,7 +2454,7 @@ static void init_kmem_cache_cpus(struct kmem_cache *s)
 static void deactivate_slab(struct kmem_cache *s, struct slab *slab,
 			    void *freelist)
 {
-	enum slab_modes { M_NONE, M_PARTIAL, M_FULL, M_FREE, M_FULL_NOLIST };
+	enum slab_modes { M_NONE, M_PARTIAL, M_FREE, M_FULL_NOLIST };
 	struct kmem_cache_node *n = get_node(s, slab_nid(slab));
 	int free_delta = 0;
 	enum slab_modes mode = M_NONE;
@@ -2487,14 +2530,6 @@ redo:
 		 * acquire_slab() will see a slab that is frozen
 		 */
 		spin_lock_irqsave(&n->list_lock, flags);
-	} else if (kmem_cache_debug_flags(s, SLAB_STORE_USER)) {
-		mode = M_FULL;
-		/*
-		 * This also ensures that the scanning of full
-		 * slabs from diagnostic functions will not see
-		 * any frozen slabs.
-		 */
-		spin_lock_irqsave(&n->list_lock, flags);
 	} else {
 		mode = M_FULL_NOLIST;
 	}
@@ -2504,7 +2539,7 @@ redo:
 				old.freelist, old.counters,
 				new.freelist, new.counters,
 				"unfreezing slab")) {
-		if (mode == M_PARTIAL || mode == M_FULL)
+		if (mode == M_PARTIAL)
 			spin_unlock_irqrestore(&n->list_lock, flags);
 		goto redo;
 	}
@@ -2518,10 +2553,6 @@ redo:
 		stat(s, DEACTIVATE_EMPTY);
 		discard_slab(s, slab);
 		stat(s, FREE_SLAB);
-	} else if (mode == M_FULL) {
-		add_full(s, n, slab);
-		spin_unlock_irqrestore(&n->list_lock, flags);
-		stat(s, DEACTIVATE_FULL);
 	} else if (mode == M_FULL_NOLIST) {
 		stat(s, DEACTIVATE_FULL);
 	}
@@ -3395,7 +3426,11 @@ redo:
 	init = slab_want_init_on_alloc(gfpflags, s);
 
 out:
-	slab_post_alloc_hook(s, objcg, gfpflags, 1, &object, init);
+	/*
+	 * When init equals 'true', like for kzalloc() family, only
+	 * @orig_size bytes might be zeroed instead of s->object_size
+	 */
+	slab_post_alloc_hook(s, objcg, gfpflags, 1, &object, init, orig_size);
 
 	return object;
 }
@@ -3852,11 +3887,11 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
 	 * Done outside of the IRQ disabled fastpath loop.
 	 */
 	slab_post_alloc_hook(s, objcg, flags, size, p,
-				slab_want_init_on_alloc(flags, s));
+			slab_want_init_on_alloc(flags, s), s->object_size);
 	return i;
 error:
 	slub_put_cpu_ptr(s->cpu_slab);
-	slab_post_alloc_hook(s, objcg, flags, i, p, false);
+	slab_post_alloc_hook(s, objcg, flags, i, p, false, s->object_size);
 	kmem_cache_free_bulk(s, i, p);
 	return 0;
 }
@@ -4017,7 +4052,8 @@ init_kmem_cache_node(struct kmem_cache_node *n)
 static inline int alloc_kmem_cache_cpus(struct kmem_cache *s)
 {
 	BUILD_BUG_ON(PERCPU_DYNAMIC_EARLY_SIZE <
-			KMALLOC_SHIFT_HIGH * sizeof(struct kmem_cache_cpu));
+			NR_KMALLOC_TYPES * KMALLOC_SHIFT_HIGH *
+			sizeof(struct kmem_cache_cpu));
 
 	/*
 	 * Must align to double word boundary for the double cmpxchg
@@ -4202,7 +4238,8 @@ static int calculate_sizes(struct kmem_cache *s)
 	 */
 	s->inuse = size;
 
-	if ((flags & (SLAB_TYPESAFE_BY_RCU | SLAB_POISON)) ||
+	if (slub_debug_orig_size(s) ||
+	    (flags & (SLAB_TYPESAFE_BY_RCU | SLAB_POISON)) ||
 	    ((flags & SLAB_RED_ZONE) && s->object_size < sizeof(void *)) ||
 	    s->ctor) {
 		/*
@@ -5586,7 +5623,21 @@ static ssize_t failslab_show(struct kmem_cache *s, char *buf)
 {
 	return sysfs_emit(buf, "%d\n", !!(s->flags & SLAB_FAILSLAB));
 }
-SLAB_ATTR_RO(failslab);
+
+static ssize_t failslab_store(struct kmem_cache *s, const char *buf,
+				size_t length)
+{
+	if (s->refcount > 1)
+		return -EINVAL;
+
+	if (buf[0] == '1')
+		WRITE_ONCE(s->flags, s->flags | SLAB_FAILSLAB);
+	else
+		WRITE_ONCE(s->flags, s->flags & ~SLAB_FAILSLAB);
+
+	return length;
+}
+SLAB_ATTR(failslab);
 #endif
 
 static ssize_t shrink_show(struct kmem_cache *s, char *buf)
@@ -5920,11 +5971,6 @@ static int sysfs_slab_add(struct kmem_cache *s)
 	struct kset *kset = cache_kset(s);
 	int unmergeable = slab_unmergeable(s);
 
-	if (!kset) {
-		kobject_init(&s->kobj, &slab_ktype);
-		return 0;
-	}
-
 	if (!unmergeable && disable_higher_order_debug &&
 			(slub_debug & DEBUG_METADATA_FLAGS))
 		unmergeable = 1;
@@ -6054,8 +6100,7 @@ static int __init slab_sysfs_init(void)
 	mutex_unlock(&slab_mutex);
 	return 0;
 }
-
-__initcall(slab_sysfs_init);
+late_initcall(slab_sysfs_init);
 #endif /* CONFIG_SYSFS */
 
 #if defined(CONFIG_SLUB_DEBUG) && defined(CONFIG_DEBUG_FS)

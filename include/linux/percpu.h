@@ -41,7 +41,7 @@
  * for this.  Keep PERCPU_DYNAMIC_RESERVE equal to or larger than
  * PERCPU_DYNAMIC_EARLY_SIZE.
  */
-#define PERCPU_DYNAMIC_EARLY_SIZE	(12 << 10)
+#define PERCPU_DYNAMIC_EARLY_SIZE	(20 << 10)
 
 /*
  * PERCPU_DYNAMIC_RESERVE indicates the amount of free area to piggy
