@@ -139,8 +139,8 @@ static void sas_ata_task_done(struct sas_task *task)
 				qc->flags |= ATA_QCFLAG_FAILED;
 			}
 
-			dev->sata_dev.fis[3] = 0x04; /* status err */
-			dev->sata_dev.fis[2] = ATA_ERR;
+			dev->sata_dev.fis[2] = ATA_ERR | ATA_DRDY; /* tf status */
+			dev->sata_dev.fis[3] = ATA_ABORTED; /* tf error */
 		}
 	}
 
@@ -860,6 +860,21 @@ void sas_ata_wait_eh(struct domain_device *dev)
 	ap = dev->sata_dev.ap;
 	ata_port_wait_eh(ap);
 }
+
+void sas_ata_device_link_abort(struct domain_device *device, bool force_reset)
+{
+	struct ata_port *ap = device->sata_dev.ap;
+	struct ata_link *link = &ap->link;
+
+	device->sata_dev.fis[2] = ATA_ERR | ATA_DRDY; /* tf status */
+	device->sata_dev.fis[3] = ATA_ABORTED; /* tf error */
+
+	link->eh_info.err_mask |= AC_ERR_DEV;
+	if (force_reset)
+		link->eh_info.action |= ATA_EH_RESET;
+	ata_link_abort(link);
+}
+EXPORT_SYMBOL_GPL(sas_ata_device_link_abort);
 
 int sas_execute_ata_cmd(struct domain_device *device, u8 *fis, int force_phy_id)
 {
