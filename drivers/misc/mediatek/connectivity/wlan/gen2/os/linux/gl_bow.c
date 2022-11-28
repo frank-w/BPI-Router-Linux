@@ -1071,7 +1071,7 @@ static int bowHardStartXmit(IN struct sk_buff *prSkb, IN struct net_device *prDe
 			DBGLOG(TX, INFO, "netif_stop_subqueue for BOW, Queue len: %d\n",
 				prGlueInfo->ai4TxPendingFrameNumPerQueue[NETWORK_TYPE_BOW_INDEX][u2QueueIdx]);
 
-			netif_stop_subqueue(prDev, u2QueueIdx);
+		netif_stop_subqueue(prDev, u2QueueIdx);
 	} else {
 		GLUE_INC_REF_CNT(prGlueInfo->i4TxPendingSecurityFrameNum);
 	}
