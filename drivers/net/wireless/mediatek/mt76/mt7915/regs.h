@@ -1064,9 +1064,10 @@ enum offs_rev {
 
 #define MT_LED_EN(_n)			MT_LED_PHYS(0x40 + ((_n) * 4))
 
+#define MT_LED_GPIO_MUX0		0x70005050 /* GPIO 1 and GPIO 2 */
+#define MT_LED_GPIO_MUX1		0x70005054 /* GPIO 14 and 15 */
 #define MT_LED_GPIO_MUX2                0x70005058 /* GPIO 18 */
-#define MT_LED_GPIO_MUX3                0x7000505C /* GPIO 26 */
-#define MT_LED_GPIO_SEL_MASK            GENMASK(11, 8)
+#define MT_LED_GPIO_MUX3		0x7000505c /* GPIO 26 */
 
 /* MT TOP */
 #define MT_TOP_BASE			0x18060000
