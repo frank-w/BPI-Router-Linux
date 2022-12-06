@@ -231,7 +231,8 @@ static void mt7915_led_set_config(struct led_classdev *led_cdev,
 	val = MT_LED_CTRL_BLINK_MODE | MT_LED_CTRL_KICK;
 	if (mphy->leds.al)
 		val |= MT_LED_CTRL_POLARITY;
-
+	if (mphy->band_idx)
+		val |= MT_LED_CTRL_BAND;
 	mt76_wr(dev, MT_LED_CTRL(mphy->band_idx), val);
 	mt76_clear(dev, MT_LED_CTRL(mphy->band_idx), MT_LED_CTRL_KICK);
 }
