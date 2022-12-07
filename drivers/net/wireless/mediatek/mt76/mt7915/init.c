@@ -227,7 +227,7 @@ static void mt7915_led_set_config(struct led_classdev *led_cdev,
 
 	/* control LED */
 	val = MT_LED_CTRL_KICK;
-	if (mphy->leds.al)
+	if (dev->mphy.leds.al)
 		val |= MT_LED_CTRL_POLARITY;
 	if (mphy->band_idx)
 		val |= MT_LED_CTRL_BAND;
