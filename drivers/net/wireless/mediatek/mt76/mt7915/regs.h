@@ -1058,6 +1058,13 @@ enum offs_rev {
 #define MT_LED_CTRL_BAND		BIT(4)
 #define MT_LED_CTRL_BLINK_MODE		BIT(2)
 #define MT_LED_CTRL_POLARITY		BIT(1)
+#define MT_LED_CTRL_REPLAY		BIT(0)
+
+#define MT_LED_STATUS_0(_n)		MT_LED_PHYS(0x20 + ((_n) * 8))
+#define MT_LED_STATUS_1(_n)		MT_LED_PHYS(0x24 + ((_n) * 8))
+#define MT_LED_STATUS_OFF		GENMASK(31, 24)
+#define MT_LED_STATUS_ON		GENMASK(23, 16)
+#define MT_LED_STATUS_DURATION		GENMASK(15, 0)
 
 #define MT_LED_TX_BLINK(_n)		MT_LED_PHYS(0x10 + ((_n) * 4))
 #define MT_LED_TX_BLINK_ON_MASK		GENMASK(7, 0)

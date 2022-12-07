@@ -213,26 +213,40 @@ static void mt7915_led_set_config(struct led_classdev *led_cdev,
 	u32 val;
 
 	mphy = container_of(led_cdev, struct mt76_phy, leds.cdev);
-	dev = container_of(mphy->dev, struct mt7915_dev, mt76);
+	dev = container_of(mphy, struct mt7915_dev, mphy);
 
 	/* select TX blink mode, 2: only data frames */
-	mt76_rmw_field(dev, MT_TMAC_TCR0(mphy->band_idx),
-		       MT_TMAC_TCR0_TX_BLINK, 2);
+	if (delay_on || (delay_off != 0xff))  /* blink mode */
+		mt76_rmw_field(dev, MT_TMAC_TCR0(mphy->band_idx), MT_TMAC_TCR0_TX_BLINK, 2);
 
 	/* enable LED */
 	mt76_wr(dev, MT_LED_EN(mphy->band_idx), 1);
 
-	/* set LED Tx blink on/off time */
-	val = FIELD_PREP(MT_LED_TX_BLINK_ON_MASK, delay_on) |
-	      FIELD_PREP(MT_LED_TX_BLINK_OFF_MASK, delay_off);
-	mt76_wr(dev, MT_LED_TX_BLINK(mphy->band_idx), val);
+	if (!delay_on && delay_off == 0xff) {
+		/* set PWM mode */
+		val = FIELD_PREP(MT_LED_STATUS_DURATION, 0xffff) |
+		      FIELD_PREP(MT_LED_STATUS_OFF, delay_off) |
+		      FIELD_PREP(MT_LED_STATUS_ON, delay_on);
+		mt76_wr(dev, MT_LED_STATUS_0(mphy->band_idx), val);
+		mt76_wr(dev, MT_LED_STATUS_1(mphy->band_idx), val);
+	} else { /* blink mode */
+		/* set LED Tx blink on/off time */
+		val = FIELD_PREP(MT_LED_TX_BLINK_ON_MASK, delay_on) |
+		      FIELD_PREP(MT_LED_TX_BLINK_OFF_MASK, delay_off);
+		mt76_wr(dev, MT_LED_TX_BLINK(mphy->band_idx), val);
+	}
 
 	/* control LED */
-	val = MT_LED_CTRL_BLINK_MODE | MT_LED_CTRL_KICK;
+	val = MT_LED_CTRL_KICK;
 	if (mphy->leds.al)
 		val |= MT_LED_CTRL_POLARITY;
 	if (mphy->band_idx)
 		val |= MT_LED_CTRL_BAND;
+	if (delay_on && (delay_off != 0xff)) /* blink mode */
+		val |= MT_LED_CTRL_BLINK_MODE;
+	else /* PWM mode */
+		val |= MT_LED_CTRL_REPLAY;
+
 	mt76_wr(dev, MT_LED_CTRL(mphy->band_idx), val);
 	mt76_clear(dev, MT_LED_CTRL(mphy->band_idx), MT_LED_CTRL_KICK);
 }
