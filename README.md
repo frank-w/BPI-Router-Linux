@@ -148,6 +148,20 @@ R2Pro/R3
 
 P=partial (vlan on r3 only works on dsa-ports, not on left SFP)
 
+## Images
+
+R2:
+Debian Bullseye: https://forum.banana-pi.org/t/bpi-r2-debian-bullseye-image/12592/2
+
+R64:
+Debian Bullseye: https://forum.banana-pi.org/t/bpi-r64-debian-bullseye-image/12797
+
+R2Pro:
+Debian Bullseye/Ubuntu 22.04: https://forum.banana-pi.org/t/bpi-r2-pro-debian-bullseye-ubuntu-22-04/13395
+
+R3:
+none yet
+
 ## Links
 
 * BPI-R2: http://www.banana-pi.org/r2.html | BPI-R64: http://www.banana-pi.org/r64.html
