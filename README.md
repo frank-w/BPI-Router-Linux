@@ -15,6 +15,15 @@ If you build it directly on the BananaPi-R2/R64 (not recommended) you do not nee
 
 ## Issues
 
+Ubuntu 22 seems not set update-alternatives for gcc, so build.sh will report crosscompiler is not installed
+
+```sh
+for i in $(ls /usr/bin/arm-linux-gnueabihf-gcc-{8..12});do sudo update-alternatives --install /usr/bin/arm-linux-gnueabihf-gcc arm-linux-gnueabihf-gcc $i 50;done
+sudo update-alternatives --config arm-linux-gnueabihf-gcc
+
+for i in $(ls /usr/bin/aarch64-linux-gnu-gcc-{8..12});do sudo update-alternatives --install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc $i 50;done
+sudo update-alternatives --config aarch64-linux-gnu-gcc
+```
 ### R2
 
 internal wifi/bt does not work anymore on 6.0+ as there are internal changes in linux which break mt6625 driver
