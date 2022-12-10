@@ -837,9 +837,9 @@ function build {
 				DTBBASE=${DTBFILE%.*}
 				if [[ -e $builddir/${DTBBASE}.dtb ]];then
 					cp $builddir/${DTBBASE}.dtb ${DTBFILE%/*}
-					cp $builddir/{$DTBFILE,$board.dtb}
+					cp $builddir/$DTBFILE $board.dtb
 				fi
-				if [[ $builddir/${DTBBASE}-sd.dtbo ]];then
+				if [[ -e $builddir/${DTBBASE}-sd.dtbo ]];then
 					cp $builddir/${DTBBASE}-*.dtbo ${DTBFILE%/*}
 				fi
 			elif [[ -e $DTBFILE ]];then
