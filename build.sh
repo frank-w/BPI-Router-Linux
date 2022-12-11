@@ -916,6 +916,9 @@ function prepare_SD {
 			cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
 			cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
 		fi
+		if [[ -e ././$board.itb ]];then
+			cp ./$board.itb $SD/BPI-BOOT/bananapi/$board/linux/$board.itb
+		fi
 	fi
 	make modules_install
 
