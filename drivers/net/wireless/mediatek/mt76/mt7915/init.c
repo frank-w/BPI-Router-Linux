@@ -520,7 +520,7 @@ mt7915_init_led_mux(struct mt7915_dev *dev)
 	}
 }
 
-void mt7915_mac_init(struct mt7915_dev *dev)
+static void mt7915_mac_init(struct mt7915_dev *dev)
 {
 	int i;
 	u32 rx_len = is_mt7915(&dev->mt76) ? 0x400 : 0x680;
