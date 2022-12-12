@@ -73,7 +73,7 @@ jobs:
           bash build.sh cryptodev
       - name: Pack for bananapi-r2
         run: |
-          bash build.sh pack_debs
+          #bash build.sh pack_debs
           bash build.sh pack
 
       - name: Build for bananapi-r64
@@ -84,7 +84,7 @@ jobs:
           bash build.sh cryptodev
       - name: Pack for bananapi-r64
         run: |
-          bash build.sh pack_debs
+          #bash build.sh pack_debs
           bash build.sh pack
 
       - name: Build for bananapi-r2pro
