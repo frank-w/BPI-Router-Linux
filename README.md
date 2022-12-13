@@ -67,7 +67,9 @@ Kernel upstream + BPI-R2 / R64
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.14-main">4.14-main</a>
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-main">4.19-main</a> | <a href="https://github.com/frank-w/BPI-R2-4.14/tree/4.19-r64-main">4.19-r64-main</a>
 * <a href="https://github.com/frank-w/BPI-R2-4.14/tree/5.4-main">5.4-main</a>
-* 5.10-main
+* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/5.10-main">5.10-main</a>
+* 5.15-main
+* <a href="https://github.com/frank-w/BPI-R2-4.14/tree/6.1-main">6.1-main</a>
 
 ## Kernel versions
 
