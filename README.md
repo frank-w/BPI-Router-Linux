@@ -169,7 +169,7 @@ R2Pro:
 Debian Bullseye/Ubuntu 22.04: https://forum.banana-pi.org/t/bpi-r2-pro-debian-bullseye-ubuntu-22-04/13395
 
 R3:
-none yet
+Debian Bullseye: https://forum.banana-pi.org/t/bpi-r3-debian-bullseye-image/14541
 
 ## Links
 
