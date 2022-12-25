@@ -62,6 +62,13 @@ The local directory will be mounted into the docker container. All changes will 
     ```sh
     sh ./utils/docker/build_container.sh
     ```
+
+    Note: if you get this error: "Got permission denied while trying to connect to the Docker daemon socket at ..." you have to configure non-root
+    https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user
+    ```sh
+    sudo usermod -aG docker $USER
+    newgrp docker
+    ```
 1. Start and connect to the running docker container: 
     ```sh 
     sh ./utils/docker/run.sh
