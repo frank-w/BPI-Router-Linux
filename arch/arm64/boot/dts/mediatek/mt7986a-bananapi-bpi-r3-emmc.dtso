@@ -9,7 +9,6 @@
 
 / {
 	compatible = "bananapi,bpi-r3", "mediatek,mt7986a";
-	model = "Bananapi BPI-R3 (emmc)";
 
 	fragment@0 {
 		target-path = "/soc/mmc@11230000";
