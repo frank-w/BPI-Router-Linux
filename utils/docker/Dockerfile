@@ -22,6 +22,8 @@ RUN apt-get update               \
     u-boot-tools                 \
     wget                         \
     xz-utils                     \
+    libncurses5-dev              \
+    nano                         \
  && apt-get clean
 
 USER builder
