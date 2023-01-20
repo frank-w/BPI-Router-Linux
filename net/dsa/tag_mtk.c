@@ -35,14 +35,13 @@ static struct sk_buff *mtk_tag_xmit(struct sk_buff *skb,
 	 * the both special and VLAN tag at the same time and then look up VLAN
 	 * table with VID.
 	 */
-	switch (skb->protocol) {
-	case htons(ETH_P_8021Q):
+	if (dsa_port_is_vlan_filtering(dp) &&
+	    skb->protocol == htons(ETH_P_8021Q)) {
 		xmit_tpid = MTK_HDR_XMIT_TAGGED_TPID_8100;
-		break;
-	case htons(ETH_P_8021AD):
+	} else if (dsa_port_is_vlan_filtering(dp) &&
+		   skb->protocol == htons(ETH_P_8021AD)) {
 		xmit_tpid = MTK_HDR_XMIT_TAGGED_TPID_88A8;
-		break;
-	default:
+	} else {
 		xmit_tpid = MTK_HDR_XMIT_UNTAGGED;
 		skb_push(skb, MTK_HDR_LEN);
 		dsa_alloc_etype_header(skb, MTK_HDR_LEN);
