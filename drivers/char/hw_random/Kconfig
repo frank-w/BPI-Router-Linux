@@ -451,6 +451,22 @@ config HW_RANDOM_MTK
 
 	  If unsure, say Y.
 
+config HW_RANDOM_MTK_V2
+	tristate "Mediatek Random Number Generator support (v2/SMC)"
+	depends on HW_RANDOM
+	depends on (ARM64 && ARCH_MEDIATEK) || COMPILE_TEST
+	default y
+	help
+	  This driver provides kernel-side support for the Random Number
+	  Generator hardware found on Mediatek SoCs which have a driver
+	  in ARM TrustedFirmware-A allowing Linux to read using a non-
+	  standard vendor-defined Secure Monitor Call.
+
+	  To compile this driver as a module, choose M here. the
+	  module will be called mtk-rng-v2.
+
+	  If unsure, say Y.
+
 config HW_RANDOM_S390
 	tristate "S390 True Random Number Generator support"
 	depends on S390
