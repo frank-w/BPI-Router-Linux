@@ -1085,6 +1085,7 @@ struct mtk_soc_data {
 	u8		hash_offset;
 	u16		foe_entry_size;
 	netdev_features_t hw_features;
+	bool		has_accounting;
 	struct {
 		u32	txd_size;
 		u32	rxd_size;
