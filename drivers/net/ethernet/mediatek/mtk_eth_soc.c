@@ -4081,6 +4081,7 @@ static int mtk_unreg_dev(struct mtk_eth *eth)
 
 static int mtk_cleanup(struct mtk_eth *eth)
 {
+	mtk_sgmii_destroy(eth->sgmii);
 	mtk_unreg_dev(eth);
 	mtk_free_dev(eth);
 	cancel_work_sync(&eth->pending_work);
@@ -4578,6 +4579,7 @@ static int mtk_probe(struct platform_device *pdev)
 		if (!eth->sgmii)
 			return -ENOMEM;
 
+		eth->sgmii->dev = eth->dev;
 		err = mtk_sgmii_init(eth->sgmii, pdev->dev.of_node,
 				     eth->soc->ana_rgc3);
 
@@ -4590,14 +4592,17 @@ static int mtk_probe(struct platform_device *pdev)
 							    "mediatek,pctl");
 		if (IS_ERR(eth->pctl)) {
 			dev_err(&pdev->dev, "no pctl regmap found\n");
-			return PTR_ERR(eth->pctl);
+			err = PTR_ERR(eth->pctl);
+			goto err_destroy_sgmii;
 		}
 	}
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_V2)) {
 		res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-		if (!res)
-			return -EINVAL;
+		if (!res) {
+			err = -EINVAL;
+			goto err_destroy_sgmii;
+		}
 	}
 
 	if (eth->soc->offload_version) {
@@ -4749,6 +4754,8 @@ static int mtk_probe(struct platform_device *pdev)
 
 	return 0;
 
+err_destroy_sgmii:
+	mtk_sgmii_destroy(eth->sgmii);
 err_deinit_ppe:
 	mtk_ppe_deinit(eth);
 	mtk_mdio_cleanup(eth);
