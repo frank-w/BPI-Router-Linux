@@ -38,7 +38,10 @@ properties:
       MT7986 should contain 3 regions consys, dcm, and sku, in this order.
 
   interrupts:
-    maxItems: 1
+    minItems: 1
+    maxItems: 4
+    description:
+      MT7986 should contain 4 items.
 
   power-domains:
     maxItems: 1
