@@ -1090,6 +1090,35 @@ mt7530_port_disable(struct dsa_switch *ds, int port)
 }
 
 static int
+mt7530_port_change_master(struct dsa_switch *ds, int port,
+			  struct net_device *master,
+			  struct netlink_ext_ack *extack)
+{
+	struct mt7530_priv *priv = ds->priv;
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	struct dsa_port *cpu_dp = master->dsa_ptr;
+
+	if (netif_is_lag_master(master)) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "LAG DSA master not supported");
+		return -EOPNOTSUPP;
+	}
+
+	mutex_lock(&priv->reg_mutex);
+
+	/* Move old to new cpu on User port */
+	priv->ports[port].pm &= ~PCR_MATRIX(BIT(dp->cpu_dp->index));
+	priv->ports[port].pm |= PCR_MATRIX(BIT(cpu_dp->index));
+
+	mt7530_rmw(priv, MT7530_PCR_P(port), PCR_MATRIX_MASK,
+		   priv->ports[port].pm);
+
+	mutex_unlock(&priv->reg_mutex);
+
+	return 0;
+}
+
+static int
 mt7530_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct mt7530_priv *priv = ds->priv;
@@ -3183,6 +3212,7 @@ static const struct dsa_switch_ops mt7530_switch_ops = {
 	.set_ageing_time	= mt7530_set_ageing_time,
 	.port_enable		= mt7530_port_enable,
 	.port_disable		= mt7530_port_disable,
+	.port_change_master	= mt7530_port_change_master,
 	.port_change_mtu	= mt7530_port_change_mtu,
 	.port_max_mtu		= mt7530_port_max_mtu,
 	.port_stp_state_set	= mt7530_stp_state_set,
