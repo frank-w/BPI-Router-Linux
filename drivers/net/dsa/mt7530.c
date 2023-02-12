@@ -1027,6 +1027,12 @@ mt753x_cpu_port_enable(struct dsa_switch *ds, int port)
 	mt7530_rmw(priv, MT7530_PCR_P(port), PCR_PORT_VLAN_MASK,
 		   MT7530_PORT_FALLBACK_MODE);
 
+	mt7530_rmw(priv, MT7530_PVC_P(port),
+		VLAN_ATTR_MASK | PVC_EG_TAG_MASK | ACC_FRM_MASK,
+		VLAN_ATTR(MT7530_VLAN_USER) |
+		PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT) |
+		MT7530_VLAN_ACC_ALL);
+
 	return 0;
 }
 
@@ -1229,10 +1235,6 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
 			   PCR_MATRIX_MASK, PCR_MATRIX(port_bitmap));
 	priv->ports[port].pm |= PCR_MATRIX(port_bitmap);
 
-	/* Set to fallback mode for independent VLAN learning */
-	mt7530_rmw(priv, MT7530_PCR_P(port), PCR_PORT_VLAN_MASK,
-		   MT7530_PORT_FALLBACK_MODE);
-
 	mutex_unlock(&priv->reg_mutex);
 
 	return 0;
@@ -1242,15 +1244,6 @@ static void
 mt7530_port_set_vlan_unaware(struct dsa_switch *ds, int port)
 {
 	struct mt7530_priv *priv = ds->priv;
-	bool all_user_ports_removed = true;
-	int i;
-
-	/* This is called after .port_bridge_leave when leaving a VLAN-aware
-	 * bridge. Don't set standalone ports to fallback mode.
-	 */
-	if (dsa_port_bridge_dev_get(dsa_to_port(ds, port)))
-		mt7530_rmw(priv, MT7530_PCR_P(port), PCR_PORT_VLAN_MASK,
-			   MT7530_PORT_FALLBACK_MODE);
 
 	mt7530_rmw(priv, MT7530_PVC_P(port),
 		   VLAN_ATTR_MASK | PVC_EG_TAG_MASK | ACC_FRM_MASK,
@@ -1261,27 +1254,6 @@ mt7530_port_set_vlan_unaware(struct dsa_switch *ds, int port)
 	/* Set PVID to 0 */
 	mt7530_rmw(priv, MT7530_PPBV1_P(port), G0_PORT_VID_MASK,
 		   G0_PORT_VID_DEF);
-
-	for (i = 0; i < MT7530_NUM_PORTS; i++) {
-		if (dsa_is_user_port(ds, i) &&
-		    dsa_port_is_vlan_filtering(dsa_to_port(ds, i))) {
-			all_user_ports_removed = false;
-			break;
-		}
-	}
-
-	/* CPU port also does the same thing until all user ports belonging to
-	 * the CPU port get out of VLAN filtering mode.
-	 */
-	if (all_user_ports_removed) {
-		struct dsa_port *dp = dsa_to_port(ds, port);
-		struct dsa_port *cpu_dp = dp->cpu_dp;
-
-		mt7530_write(priv, MT7530_PCR_P(cpu_dp->index),
-			     PCR_MATRIX(dsa_user_ports(priv->ds)));
-		mt7530_write(priv, MT7530_PVC_P(cpu_dp->index), PORT_SPEC_TAG
-			     | PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT));
-	}
 }
 
 static void
@@ -1292,36 +1264,24 @@ mt7530_port_set_vlan_aware(struct dsa_switch *ds, int port)
 	/* Trapped into security mode allows packet forwarding through VLAN
 	 * table lookup.
 	 */
-	if (dsa_is_user_port(ds, port)) {
-		mt7530_rmw(priv, MT7530_PCR_P(port), PCR_PORT_VLAN_MASK,
-			   MT7530_PORT_SECURITY_MODE);
-		mt7530_rmw(priv, MT7530_PPBV1_P(port), G0_PORT_VID_MASK,
-			   G0_PORT_VID(priv->ports[port].pvid));
+	mt7530_rmw(priv, MT7530_PCR_P(port), PCR_PORT_VLAN_MASK,
+		   MT7530_PORT_SECURITY_MODE);
+	mt7530_rmw(priv, MT7530_PPBV1_P(port), G0_PORT_VID_MASK,
+		   G0_PORT_VID(priv->ports[port].pvid));
 
-		/* Only accept tagged frames if PVID is not set */
-		if (!priv->ports[port].pvid)
-			mt7530_rmw(priv, MT7530_PVC_P(port), ACC_FRM_MASK,
-				   MT7530_VLAN_ACC_TAGGED);
+	/* Only accept tagged frames if PVID is not set */
+	if (!priv->ports[port].pvid)
+		mt7530_rmw(priv, MT7530_PVC_P(port), ACC_FRM_MASK,
+			   MT7530_VLAN_ACC_TAGGED);
 
-		/* Set the port as a user port which is to be able to recognize
-		 * VID from incoming packets before fetching entry within the
-		 * VLAN table.
-		 */
-		mt7530_rmw(priv, MT7530_PVC_P(port),
-			   VLAN_ATTR_MASK | PVC_EG_TAG_MASK,
-			   VLAN_ATTR(MT7530_VLAN_USER) |
-			   PVC_EG_TAG(MT7530_VLAN_EG_DISABLED));
-	} else {
-		/* Also set CPU ports to the "user" VLAN port attribute, to
-		 * allow VLAN classification, but keep the EG_TAG attribute as
-		 * "consistent" (i.o.w. don't change its value) for packets
-		 * received by the switch from the CPU, so that tagged packets
-		 * are forwarded to user ports as tagged, and untagged as
-		 * untagged.
-		 */
-		mt7530_rmw(priv, MT7530_PVC_P(port), VLAN_ATTR_MASK,
-			   VLAN_ATTR(MT7530_VLAN_USER));
-	}
+	/* Set the port as a user port which is to be able to recognize
+	 * VID from incoming packets before fetching entry within the
+	 * VLAN table.
+	 */
+	mt7530_rmw(priv, MT7530_PVC_P(port),
+		   VLAN_ATTR_MASK | PVC_EG_TAG_MASK,
+		   VLAN_ATTR(MT7530_VLAN_USER) |
+		   PVC_EG_TAG(MT7530_VLAN_EG_DISABLED));
 }
 
 static void
@@ -1526,20 +1486,11 @@ static int
 mt7530_port_vlan_filtering(struct dsa_switch *ds, int port, bool vlan_filtering,
 			   struct netlink_ext_ack *extack)
 {
-	struct dsa_port *dp = dsa_to_port(ds, port);
-	struct dsa_port *cpu_dp = dp->cpu_dp;
-
-	if (vlan_filtering) {
-		/* The port is being kept as VLAN-unaware port when bridge is
-		 * set up with vlan_filtering not being set, Otherwise, the
-		 * port and the corresponding CPU port is required the setup
-		 * for becoming a VLAN-aware port.
-		 */
+	if (vlan_filtering)
 		mt7530_port_set_vlan_aware(ds, port);
-		mt7530_port_set_vlan_aware(ds, cpu_dp->index);
-	} else {
+	else
 		mt7530_port_set_vlan_unaware(ds, port);
-	}
+
 
 	return 0;
 }
@@ -2225,10 +2176,16 @@ mt7530_setup(struct dsa_switch *ds)
 			/* Set default PVID to 0 on all user ports */
 			mt7530_rmw(priv, MT7530_PPBV1_P(i), G0_PORT_VID_MASK,
 				   G0_PORT_VID_DEF);
+
+			mt7530_rmw(priv, MT7530_PVC_P(i),
+				   VLAN_ATTR_MASK | PVC_EG_TAG_MASK | ACC_FRM_MASK,
+				   VLAN_ATTR(MT7530_VLAN_TRANSPARENT) |
+				   PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT) |
+				   MT7530_VLAN_ACC_ALL);
+
+			mt7530_rmw(priv, MT7530_PCR_P(i), PCR_PORT_VLAN_MASK,
+				   MT7530_PORT_MATRIX_MODE);
 		}
-		/* Enable consistent egress tag */
-		mt7530_rmw(priv, MT7530_PVC_P(i), PVC_EG_TAG_MASK,
-			   PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT));
 	}
 
 	/* Setup VLAN ID 0 for VLAN-unaware bridges */
@@ -2412,11 +2369,16 @@ mt7531_setup(struct dsa_switch *ds)
 			/* Set default PVID to 0 on all user ports */
 			mt7530_rmw(priv, MT7530_PPBV1_P(i), G0_PORT_VID_MASK,
 				   G0_PORT_VID_DEF);
-		}
 
-		/* Enable consistent egress tag */
-		mt7530_rmw(priv, MT7530_PVC_P(i), PVC_EG_TAG_MASK,
-			   PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT));
+			mt7530_rmw(priv, MT7530_PVC_P(i),
+				   VLAN_ATTR_MASK | PVC_EG_TAG_MASK | ACC_FRM_MASK,
+				   VLAN_ATTR(MT7530_VLAN_TRANSPARENT) |
+				   PVC_EG_TAG(MT7530_VLAN_EG_CONSISTENT) |
+				   MT7530_VLAN_ACC_ALL);
+
+			mt7530_rmw(priv, MT7530_PCR_P(i), PCR_PORT_VLAN_MASK,
+				   MT7530_PORT_MATRIX_MODE);
+		}
 	}
 
 	/* Setup VLAN ID 0 for VLAN-unaware bridges */
