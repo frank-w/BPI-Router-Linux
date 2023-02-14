@@ -481,6 +481,7 @@ static const struct sfp_quirk sfp_quirks[] = {
 	SFP_QUIRK_M("TP-LINK", "TL-SM410U", sfp_quirk_oem_2_5g),
 	SFP_QUIRK_F("Turris", "RTSFP-10", sfp_fixup_rollball),
 	SFP_QUIRK_F("Turris", "RTSFP-10G", sfp_fixup_rollball),
+	SFP_QUIRK_F("OEM", "SFP-GE-T", sfp_fixup_ignore_tx_fault),
 };
 
 static size_t sfp_strlen(const char *str, size_t maxlen)
@@ -2580,7 +2581,8 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
 			 * or t_start_up, so assume there is a fault.
 			 */
 			sfp_sm_fault(sfp, SFP_S_INIT_TX_FAULT,
-				     sfp->sm_fault_retries == N_FAULT_INIT);
+				     !sfp->tx_fault_ignore &&
+				     (sfp->sm_fault_retries == N_FAULT_INIT));
 		} else if (event == SFP_E_TIMEOUT || event == SFP_E_TX_CLEAR) {
 	init_done:
 			/* Create mdiobus and start trying for PHY */
@@ -2834,10 +2836,12 @@ static void sfp_check_state(struct sfp *sfp)
 	mutex_lock(&sfp->st_mutex);
 	state = sfp_get_state(sfp);
 	changed = state ^ sfp->state;
-	if (sfp->tx_fault_ignore)
+	if (sfp->tx_fault_ignore) {
 		changed &= SFP_F_PRESENT | SFP_F_LOS;
-	else
+		state &= ~SFP_F_TX_FAULT;
+	} else {
 		changed &= SFP_F_PRESENT | SFP_F_LOS | SFP_F_TX_FAULT;
+	}
 
 	for (i = 0; i < GPIO_MAX; i++)
 		if (changed & BIT(i))
