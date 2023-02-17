@@ -129,8 +129,10 @@ then
 	#if builddir is empty then run make mrproper to clean up sourcedir
 	if [[ ! "$(ls -A $builddir)" ]];then make mrproper;fi
 
-	DOTCONFIG="$builddir/$DOTCONFIG"
-	export KBUILD_OUTPUT=$builddir
+	if ! [[ "$1" =~ "updatesrc" ]];then
+		DOTCONFIG="$builddir/$DOTCONFIG"
+		export KBUILD_OUTPUT=$builddir
+	fi
 fi
 
 function edit()
