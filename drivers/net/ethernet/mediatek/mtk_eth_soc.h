@@ -1049,6 +1049,8 @@ struct mtk_reg_map {
  *				the extra setup for those pins used by GMAC.
  * @hash_offset			Flow table hash offset.
  * @foe_entry_size		Foe table entry size.
+ * @has_accounting		Bool indicating support for accounting of
+ *				offloaded flows.
  * @txd_size			Tx DMA descriptor size.
  * @rxd_size			Rx DMA descriptor size.
  * @rx_irq_done_mask		Rx irq done register mask.
@@ -1066,6 +1068,7 @@ struct mtk_soc_data {
 	u8		hash_offset;
 	u16		foe_entry_size;
 	netdev_features_t hw_features;
+	bool		has_accounting;
 	struct {
 		u32	txd_size;
 		u32	rxd_size;
