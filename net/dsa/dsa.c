@@ -395,6 +395,8 @@ static int dsa_tree_setup_default_cpu(struct dsa_switch_tree *dst)
 		if (dp->cpu_dp)
 			continue;
 
+		printk(KERN_ALERT "DEBUG: Passed %s %d firstcpu:%d set to port %s (%d)\n",__FUNCTION__,__LINE__,cpu_dp->index,dp->name,dp->index);
+
 		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
 			dp->cpu_dp = cpu_dp;
 	}
@@ -420,6 +422,8 @@ static int dsa_tree_setup_cpu_ports(struct dsa_switch_tree *dst)
 			/* Prefer the first local CPU port found */
 			if (dp->cpu_dp)
 				continue;
+
+			printk(KERN_ALERT "DEBUG: Passed %s %d firstcpu:%d set to port %s (%d)\n",__FUNCTION__,__LINE__,cpu_dp->index,dp->name,dp->index);
 
 			if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
 				dp->cpu_dp = cpu_dp;
