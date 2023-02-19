@@ -845,8 +845,6 @@ struct dsa_switch_ops {
 				      struct net_device *master,
 				      struct netlink_ext_ack *extack);
 
-	struct dsa_port	*(*get_default_cpu_port)(struct dsa_switch *ds);
-
 	/* Optional switch-wide initialization and destruction methods */
 	int	(*setup)(struct dsa_switch *ds);
 	void	(*teardown)(struct dsa_switch *ds);

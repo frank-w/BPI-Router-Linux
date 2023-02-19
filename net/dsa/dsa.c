@@ -364,22 +364,6 @@ static struct dsa_port *dsa_tree_find_first_cpu(struct dsa_switch_tree *dst)
 	return NULL;
 }
 
-static struct dsa_port *dsa_tree_get_default_cpu(struct dsa_switch *ds)
-{
-	struct dsa_port *cpu_dp;
-	struct dsa_switch_tree *dst = ds->dst;
-
-	//first let driver choose a cpu_port
-	if (ds->ops->get_default_cpu_port)
-		cpu_dp = ds->ops->get_default_cpu_port(ds);
-
-	//if driver callback not implemented or no result fall back to dsa core default
-	if (!cpu_dp)
-		cpu_dp = dsa_tree_find_first_cpu(dst);
-
-	return cpu_dp;
-}
-
 struct net_device *dsa_tree_find_first_master(struct dsa_switch_tree *dst)
 {
 	struct device_node *ethernet;
@@ -430,11 +414,9 @@ static int dsa_tree_setup_cpu_ports(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *cpu_dp, *dp;
 
-	//cpu_dp = dsa_tree_get_default_cpu(ds);// how to get ds from dst
-	cpu_dp = dsa_tree_find_first_cpu(dst);
-	//list_for_each_entry(cpu_dp, &dst->ports, list) {
-	//	if (!dsa_port_is_cpu(cpu_dp))
-	//		continue;
+	list_for_each_entry(cpu_dp, &dst->ports, list) {
+		if (!dsa_port_is_cpu(cpu_dp))
+			continue;
 
 		/* Prefer a local CPU port */
 		dsa_switch_for_each_port(dp, cpu_dp->ds) {
@@ -448,7 +430,7 @@ static int dsa_tree_setup_cpu_ports(struct dsa_switch_tree *dst)
 				printk(KERN_ALERT "DEBUG: Passed %s %d cpu:%d set to port %s (%d)\n",__FUNCTION__,__LINE__,cpu_dp->index,dp->name,dp->index);
 			}
 		}
-	//}
+	}
 
 	return dsa_tree_setup_default_cpu(dst);
 }

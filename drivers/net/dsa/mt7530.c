@@ -1747,21 +1747,6 @@ mtk_get_tag_protocol(struct dsa_switch *ds, int port,
 	return DSA_TAG_PROTO_MTK;
 }
 
-static struct dsa_port *mt753x_get_default_cpu(struct dsa_switch *ds)
-{
-	struct dsa_port *cpu_dp;
-	unsigned int port = 0;
-
-	if (dsa_is_cpu_port(ds, 6))
-		port=6;
-	else if (dsa_is_cpu_port(ds, 5))
-		port =5;
-	if (port)
-		cpu_dp = dsa_to_port(ds, port);
-
-	return cpu_dp;
-}
-
 #ifdef CONFIG_GPIOLIB
 static inline u32
 mt7530_gpio_to_bit(unsigned int offset)
@@ -3130,7 +3115,6 @@ static int mt753x_set_mac_eee(struct dsa_switch *ds, int port,
 
 static const struct dsa_switch_ops mt7530_switch_ops = {
 	.get_tag_protocol	= mtk_get_tag_protocol,
-	.get_default_cpu_port	= mt753x_get_default_cpu,
 	.setup			= mt753x_setup,
 	.get_strings		= mt7530_get_strings,
 	.get_ethtool_stats	= mt7530_get_ethtool_stats,
