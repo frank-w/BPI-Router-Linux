@@ -92,6 +92,19 @@ mt7988a-bananapi-bpi-r4-pro-8x-sd-cn18-dtbs := \
 	mt7988a-bananapi-bpi-r4-pro-cn13.dtbo \
 	mt7988a-bananapi-bpi-r4-pro-cn18.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x-sd-cn18.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-emmc.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth1-aqr.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth1-i2p5g-phy.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth1-mxl.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth1-sfp.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth2-aqr.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth2-mxl.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth2-sfp.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-sd.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-snfi-nand.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-spim-nand.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-spim-nor.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8167-pumpkin.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8173-elm.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8173-elm-hana.dtb
