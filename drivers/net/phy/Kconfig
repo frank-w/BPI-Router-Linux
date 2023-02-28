@@ -273,6 +273,13 @@ config MEDIATEK_GE_SOC_PHY
 	  present in the SoCs efuse and will dynamically calibrate VCM
 	  (common-mode voltage) during startup.
 
+config MEDIATEK_2P5G_PHY
+	tristate "MediaTek 2.5G Ethernet PHY"
+	depends on (ARCH_MEDIATEK && ARM64) || COMPILE_TEST
+	default NET_MEDIATEK_SOC
+	help
+	  Supports the MediaTek 2.5G Ethernet PHY.
+
 config MICREL_PHY
 	tristate "Micrel PHYs"
 	depends on PTP_1588_CLOCK_OPTIONAL
