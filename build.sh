@@ -908,18 +908,24 @@ function prepare_SD {
 		cp ${bindir}arch/arm64/boot/Image.gz $SD/BPI-BOOT/extlinux/
 		cp ./$board.dtb $SD/BPI-BOOT/extlinux/$board.dtb
 	else
-		for createDir in "$SD/BPI-BOOT/bananapi/$board/linux/dtb" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
+		kerndir=$SD/BPI-BOOT/bananapi/$board/linux
+		fdtdir="$kerndir/dtb"
+		if [[ "$board" == "bpi-r3" ]];then
+			kerndir="$SD/BPI_BOOT"
+			fdtdir=$kerndir
+		fi
+		for createDir in "$kerndir" "$fdtdir" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
 			mkdir -p ${createDir} >/dev/null 2>/dev/null
 		done
 		if [[ -e ./uImage ]];then
-			cp ./uImage $SD/BPI-BOOT/bananapi/$board/linux/uImage
+			cp ./uImage $kerndir/uImage
 		fi
 		if [[ -e ./uImage_nodt ]];then
-			cp ./uImage_nodt $SD/BPI-BOOT/bananapi/$board/linux/uImage_nodt
-			cp ./$board.dtb $SD/BPI-BOOT/bananapi/$board/linux/dtb/$board.dtb
+			cp ./uImage_nodt $kerndir/uImage_nodt
+			cp ./$board.dtb $fdtdir/$board.dtb
 		fi
 		if [[ -e ././$board.itb ]];then
-			cp ./$board.itb $SD/BPI-BOOT/bananapi/$board/linux/$board.itb
+			cp ./$board.itb $kerndir/$board.itb
 		fi
 	fi
 	make modules_install
