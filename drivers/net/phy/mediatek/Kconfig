@@ -2,6 +2,13 @@
 config MTK_NET_PHYLIB
 	tristate
 
+config MEDIATEK_2P5G_PHY
+	tristate "MediaTek 2.5G Ethernet PHY"
+	depends on (ARCH_MEDIATEK && ARM64) || COMPILE_TEST
+	default NET_MEDIATEK_SOC
+	help
+	  Supports the MediaTek 2.5G Ethernet PHY.
+
 config MEDIATEK_GE_PHY
 	tristate "MediaTek Gigabit Ethernet PHYs"
 	select MTK_NET_PHYLIB
