@@ -1128,7 +1128,7 @@ if [ -n "$kernver" ]; then
 					disable_option "$disable"
 				fi
 			else
-				echo "file not found"
+				echo "file ${DEFCONFIG} not found"
 			fi
 			;;
 
