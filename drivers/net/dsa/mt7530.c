@@ -2354,7 +2354,7 @@ mt7531_setup(struct dsa_switch *ds)
 	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
 		mt7530_rmw(priv, MT7531_CFC, MT7531_CPU_PMAP_MASK,
 			   BIT(cpu_dp->index));
-		break;
+		//break;
 	}
 	mt7530_rmw(priv, MT753X_BPC, MT753X_BPDU_PORT_FW_MASK,
 		   MT753X_BPDU_CPU_ONLY);
