@@ -959,16 +959,6 @@ function prepare_SD {
 	if [[ "$board" == "bpi-r64" ]];then
 		mkdir -p $SD/BPI-ROOT/lib/firmware/mediatek
 		cp utils/firmware/mediatek/mt7622* $SD/BPI-ROOT/lib/firmware/mediatek/
-	else
-		if [[ -e "utils/wmt/src/wmt_loader" ]];then
-			mkdir -p "$SD/BPI-ROOT/etc/firmware" "$SD/BPI-ROOT/usr/bin" "$SD/BPI-ROOT/system/etc/firmware"
-
-			cp utils/wmt/config/* $SD/BPI-ROOT/system/etc/firmware/
-			cp utils/wmt/src/{wmt_loader,wmt_loopback,stp_uart_launcher} $SD/BPI-ROOT/usr/bin/
-			cp -r utils/wmt/firmware/* $SD/BPI-ROOT/etc/firmware/
-		else
-			echo "WMT-Tools not available"
-		fi
 	fi
 }
 
