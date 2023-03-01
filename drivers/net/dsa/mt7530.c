@@ -472,9 +472,9 @@ mt7530_pad_clk_setup(struct dsa_switch *ds, phy_interface_t interface)
 	core_write(priv, CORE_GSWPLL_GRP1, 0);
 
 	/* Set core clock into 500Mhz */
-	/*core_write(priv, CORE_GSWPLL_GRP2,
+	core_write(priv, CORE_GSWPLL_GRP2,
 		   RG_GSWPLL_POSDIV_500M(1) |
-		   RG_GSWPLL_FBKDIV_500M(25));*/
+		   RG_GSWPLL_FBKDIV_500M(25));
 
 	/* Enable PLL */
 	core_write(priv, CORE_GSWPLL_GRP1,
