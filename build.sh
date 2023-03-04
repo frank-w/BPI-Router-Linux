@@ -194,19 +194,20 @@ function getuenvpath {
 	else
 		uenv_base=/boot/
 	fi
-
-	if [[ "$board" == "bpi-r2pro" ]];then
-		uenv=${uenv_base}/extlinux/extlinux.conf
-	else
-		uenv=${uenv_base}/bananapi/$board/linux/uEnv.txt
-		if [[ ! -e $uenv ]];then
+	if [[ -d $uenv_base ]];then
+		if [[ "$board" == "bpi-r2pro" ]];then
+			uenv=${uenv_base}/extlinux/extlinux.conf
+		elif [[ "$board" == "bpi-r3" ]];then
 			uenv=${uenv_base}/uEnv.txt
-			if [[ ! -e $uenv ]];then
-				uenv="";
-			fi
+		else
+			#r2/r64 uboot: ${bpi}/${board}/${service}/${bootenv}
+			uenv=${uenv_base}/bananapi/$board/linux/uEnv.txt
+		fi
+		if [[ ! -e $uenv ]];then
+			mkdir -p $(dirname ${uenv})
 		fi
 	fi
-	echo "$uenv";
+	echo $uenv
 }
 
 function get_version()
@@ -451,6 +452,7 @@ function install
 				read -e -i "y" -p "install img kernel (img.gz) [yn]? " imginput
 				if [[ "$imginput" == "y" ]];then
 					imgname=${imagename//uImage_/}.gz
+					dtbname=${imgname//.gz/}.dtb
 					imgfile=$targetdir/$imgname
 					if [[ -e ${imgfile} ]];then
 						echo "backup of kernel: $imgfile.bak"
@@ -459,7 +461,7 @@ function install
 					echo "copy new kernel"
 					set -x
 					cp ${bindir}arch/arm64/boot/Image.gz $imgfile
-					cp ${bindir}${DTBFILE} ${targetdir}/${imagename}.dtb
+					cp ${bindir}${DTBFILE} ${targetdir}/${dtbname}
 					set +x
 					if [[ $? -ne 0 ]];then exit 1;fi
 					ndtinput=n
@@ -562,28 +564,43 @@ function install
 			sync
 
 			uenv=$(getuenvpath)
-			echo $uenv
+			echo "using bootfile $uenv"
 			openuenv=n
-			if [[ -n "$uenv" ]];then
+
+			if [[ -e "$uenv" ]];then
 				if [[ "$board" != "bpi-r2pro" ]];then
-				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
-				#grep '^kernel=' /media/${USER}/BPI-BOOT/bananapi/bpi-r2/linux/uEnv.txt|tail -1
-				if [[ "$itbinput" == "y" ]];then
-					curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
+					echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
+					if [[ "$itbinput" == "y" ]];then
+						curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
+					else
+						curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
+						curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
+					fi
+					echo "kernel: " $curkernel
+					echo "dtb: " $curfdt
+					if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
+						echo "no change needed!"
+						openuenv=n
+					else
+						echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
+						openuenv=y
+					fi
 				else
-					curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
-					curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
+					entry=$(grep "$imgname" -B5 $uenv)
+					if [[ $? -ne 0 ]];then
+						echo "you have to add new section for the new kernel":
+						newlabel=$(echo "$imgname" | sed 's/.*_\(.*\).gz/\1/')
+						echo -e "LABEL linux-$newlabel\n	linux $imgname\n	fdt $dtbname\n	append earlycon=uart8250,mmio32,0xfe660000 console=ttyS2,1500000n8 root=/dev/mmcblk1p3 rootwait rw earlyprintk"
+						openuenv=y
+					else
+						entryname=$(echo $entry | sed 's/^.*LABEL\s//' | sed 's/\s.*$//')
+						echo "$imgname loaded by entry $entryname..."
+						openuenv=n
+					fi
 				fi
-				echo "kernel: " $curkernel
-				echo "dtb: " $curfdt
-				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
-					echo "no change needed!"
-					openuenv=n
-				else
-					echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
-					openuenv=y
-				fi
-				fi
+			else
+				echo "no bootconfig...change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
+				openuenv=y
 			fi
 
 			read -e -i "$openuenv" -p "open boot config file (uEnv/extlinux.conf) [yn]? " input
