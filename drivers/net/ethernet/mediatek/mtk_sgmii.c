@@ -38,9 +38,9 @@ static int mtk_pcs_config(struct phylink_pcs *pcs, unsigned int mode,
 			  const unsigned long *advertising,
 			  bool permit_pause_to_mac)
 {
-	bool mode_changed = false, changed, use_an;
 	struct mtk_pcs *mpcs = pcs_to_mtk_pcs(pcs);
-	unsigned int rgc3, sgm_mode, bmcr;
+	unsigned int rgc3, sgm_mode = 0, bmcr = 0;
+	bool mode_changed = false, changed;
 	int advertise, link_timer;
 
 	advertise = phylink_mii_c22_pcs_encode_advertisement(interface,
@@ -55,27 +55,13 @@ static int mtk_pcs_config(struct phylink_pcs *pcs, unsigned int mode,
 	if (interface == PHY_INTERFACE_MODE_SGMII) {
 		sgm_mode = SGMII_IF_MODE_SGMII;
 		if (phylink_autoneg_inband(mode)) {
+			bmcr = SGMII_AN_ENABLE;
 			sgm_mode |= SGMII_REMOTE_FAULT_DIS |
 				    SGMII_SPEED_DUPLEX_AN;
-			use_an = true;
-		} else {
-			use_an = false;
 		}
-	} else if (phylink_autoneg_inband(mode)) {
-		/* 1000base-X or 2500base-X autoneg */
-		sgm_mode = SGMII_REMOTE_FAULT_DIS;
-		use_an = linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
-					   advertising);
-	} else {
+	} else if (!phylink_autoneg_inband(mode)) {
 		/* 1000base-X or 2500base-X without autoneg */
-		sgm_mode = 0;
-		use_an = false;
-	}
-
-	if (use_an) {
-		bmcr = SGMII_AN_ENABLE;
-	} else {
-		bmcr = 0;
+		sgm_mode = SGMII_REMOTE_FAULT_DIS;
 	}
 
 	if (mpcs->interface != interface) {
