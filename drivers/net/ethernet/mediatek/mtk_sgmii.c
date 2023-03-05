@@ -23,14 +23,30 @@ static void mtk_pcs_get_state(struct phylink_pcs *pcs,
 			      struct phylink_link_state *state)
 {
 	struct mtk_pcs *mpcs = pcs_to_mtk_pcs(pcs);
-	unsigned int bm, adv;
+	unsigned int bm, bmsr, adv;
 
-	/* Read the BMSR and LPA */
+	/* Read the BMSR */
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm);
-	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
+	bmsr = FIELD_GET(SGMII_BMSR, bm);
 
-	phylink_mii_c22_pcs_decode_state(state, FIELD_GET(SGMII_BMSR, bm),
-					 FIELD_GET(SGMII_LPA, adv));
+	/* link partner advertised link modes are not reported by the
+	 * hardware when not operating in SGMII mode. Hence we cannot
+	 * use phylink_mii_c22_pcs_decode_state() in this case.
+	 */
+	if (state->interface != PHY_INTERFACE_MODE_SGMII) {
+		state->link = !!(bmsr & BMSR_LSTATUS);
+		state->an_complete = !!(bmsr & BMSR_ANEGCOMPLETE);
+		state->speed = (state->interface ==
+				PHY_INTERFACE_MODE_2500BASEX) ?
+			       SPEED_2500 : SPEED_1000;
+		state->duplex = DUPLEX_FULL;
+
+		return;
+	}
+
+	/* Read LPA and use standard decode function for SGMII mode */
+	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
+	phylink_mii_c22_pcs_decode_state(state, bmsr, FIELD_GET(SGMII_LPA, adv));
 }
 
 static int mtk_pcs_config(struct phylink_pcs *pcs, unsigned int mode,
