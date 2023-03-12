@@ -381,7 +381,7 @@ function upload {
 	if [[ "$board" == "bpi-r2pro" ]];then
 		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
-	elif [[ "$board" == "bpi-r64" ]];then
+	elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
 		if [[ "$fitupload" == "y" ]];
 		then
 			scp ${board}.itb ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
