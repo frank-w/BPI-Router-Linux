@@ -20,6 +20,7 @@ enum {
 	MLO_AN_PHY = 0,	/* Conventional PHY */
 	MLO_AN_FIXED,	/* Fixed-link mode */
 	MLO_AN_INBAND,	/* In-band protocol */
+	MLO_AN_INBAND_DISABLED,
 
 	/* MAC_SYM_PAUSE and MAC_ASYM_PAUSE are used when configuring our
 	 * autonegotiation advertisement. They correspond to the PAUSE and
