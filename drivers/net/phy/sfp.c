@@ -256,6 +256,7 @@ struct sfp {
 	unsigned int module_t_start_up;
 	unsigned int module_t_wait;
 	bool tx_fault_ignore;
+	bool inband_disable;
 
 	const struct sfp_quirk *quirk;
 
@@ -350,6 +351,19 @@ static void sfp_fixup_rollball_cc(struct sfp *sfp)
 	sfp->id.base.extended_cc = SFF8024_ECC_10GBASE_T_SFI;
 }
 
+static void sfp_fixup_inband_disable(struct sfp *sfp)
+{
+	sfp->inband_disable=true;
+}
+
+static void sfp_quirk_inband_disable(const struct sfp_eeprom_id *id,
+				unsigned long *modes,
+				unsigned long *interfaces)
+{
+	//__set_bit(PHY_INTERFACE_MODE_NOINBAND, interfaces);
+	//linkmode_set_bit(ETHTOOL_LINK_MODE_DISABLE_INBAND_BIT, modes);
+}
+
 static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
 				unsigned long *modes,
 				unsigned long *interfaces)
@@ -404,7 +418,7 @@ static const struct sfp_quirk sfp_quirks[] = {
 	SFP_QUIRK_F("Turris", "RTSFP-10", sfp_fixup_rollball),
 	SFP_QUIRK_F("Turris", "RTSFP-10G", sfp_fixup_rollball),
 
-	SFP_QUIRK_M("OEM", "SFP-2.5G-T", sfp_quirk_2500basex),
+	SFP_QUIRK_M("OEM", "SFP-2.5G-T", sfp_quirk_inband_disable),
 };
 
 static size_t sfp_strlen(const char *str, size_t maxlen)
@@ -441,8 +455,10 @@ static const struct sfp_quirk *sfp_lookup_quirk(const struct sfp_eeprom_id *id)
 
 	for (i = 0, q = sfp_quirks; i < ARRAY_SIZE(sfp_quirks); i++, q++)
 		if (sfp_match(q->vendor, id->base.vendor_name, vs) &&
-		    sfp_match(q->part, id->base.vendor_pn, ps))
+		    sfp_match(q->part, id->base.vendor_pn, ps)) {
+			printk(KERN_ALERT "DEBUG: Passed %s %d %s %s",__FUNCTION__,__LINE__,q->vendor,q->part);
 			return q;
+		}
 
 	return NULL;
 }
