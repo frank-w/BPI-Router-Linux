@@ -824,8 +824,6 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
 	struct fwnode_handle *dn;
 	const char *managed;
 
-	printk(KERN_ALERT "DEBUG: Passed %s:%d",__FUNCTION__,__LINE__);
-
 	dn = fwnode_get_named_child_node(fwnode, "fixed-link");
 	if (dn || fwnode_property_present(fwnode, "fixed-link"))
 		pl->cfg_link_an_mode = MLO_AN_FIXED;
@@ -847,13 +845,6 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
 		phylink_set(pl->supported, Pause);
 		pl->link_config.an_enabled = true;
 		pl->cfg_link_an_mode = MLO_AN_INBAND;
-
-		//how to access sfp->inband_disable?
-		printk(KERN_ALERT "DEBUG: Passed %s:%d %d==%d (inband)??",__FUNCTION__,__LINE__, pl->cfg_link_an_mode, MLO_AN_INBAND);
-		/*pl->cfg_link_an_mode = MLO_AN_PHY;
-		pl->link_config.an_enabled = false;
-		phylink_clear(pl->supported, Autoneg);
-		printk(KERN_ALERT "DEBUG: Passed %s:%d %d==%d (inband)?? (forced phy-mode)",__FUNCTION__,__LINE__, pl->cfg_link_an_mode, MLO_AN_INBAND);*/
 
 		switch (pl->link_config.interface) {
 		case PHY_INTERFACE_MODE_SGMII:
@@ -1548,13 +1539,13 @@ struct phylink *phylink_create(struct phylink_config *config,
 	bitmap_fill(pl->supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
 	linkmode_copy(pl->link_config.advertising, pl->supported);
 	phylink_validate(pl, pl->supported, &pl->link_config);
-printk(KERN_ALERT "DEBUG: Passed %s:%d",__FUNCTION__,__LINE__);
+
 	ret = phylink_parse_mode(pl, fwnode);
 	if (ret < 0) {
 		kfree(pl);
 		return ERR_PTR(ret);
 	}
-printk(KERN_ALERT "DEBUG: Passed %s:%d",__FUNCTION__,__LINE__);
+
 	if (pl->cfg_link_an_mode == MLO_AN_FIXED) {
 		ret = phylink_parse_fixedlink(pl, fwnode);
 		if (ret < 0) {
@@ -1562,7 +1553,7 @@ printk(KERN_ALERT "DEBUG: Passed %s:%d",__FUNCTION__,__LINE__);
 			return ERR_PTR(ret);
 		}
 	}
-printk(KERN_ALERT "DEBUG: Passed %s:%d",__FUNCTION__,__LINE__);
+
 	pl->cur_link_an_mode = pl->cfg_link_an_mode;
 
 	ret = phylink_register_sfp(pl, fwnode);
@@ -1570,7 +1561,7 @@ printk(KERN_ALERT "DEBUG: Passed %s:%d",__FUNCTION__,__LINE__);
 		kfree(pl);
 		return ERR_PTR(ret);
 	}
-printk(KERN_ALERT "DEBUG: Passed %s:%d",__FUNCTION__,__LINE__);
+
 	return pl;
 }
 EXPORT_SYMBOL_GPL(phylink_create);
