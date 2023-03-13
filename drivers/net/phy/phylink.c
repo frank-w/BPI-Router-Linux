@@ -151,7 +151,6 @@ static const char *phylink_an_mode_str(unsigned int mode)
 		[MLO_AN_PHY] = "phy",
 		[MLO_AN_FIXED] = "fixed",
 		[MLO_AN_INBAND] = "inband",
-		[MLO_AN_INBAND_DISABLED] = "inband disabled",
 	};
 
 	return mode < ARRAY_SIZE(modestr) ? modestr[mode] : "unknown";
@@ -851,11 +850,10 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
 
 		//how to access sfp->inband_disable?
 		printk(KERN_ALERT "DEBUG: Passed %s:%d %d==%d (inband)??",__FUNCTION__,__LINE__, pl->cfg_link_an_mode, MLO_AN_INBAND);
-
+		/*pl->cfg_link_an_mode = MLO_AN_PHY;
 		pl->link_config.an_enabled = false;
 		phylink_clear(pl->supported, Autoneg);
-		printk(KERN_ALERT "DEBUG: Passed %s:%d %d==%d (inband)?? (forced phy-mode)",__FUNCTION__,__LINE__, pl->cfg_link_an_mode, MLO_AN_INBAND);
-		pl->cfg_link_an_mode = MLO_AN_INBAND_DISABLED;
+		printk(KERN_ALERT "DEBUG: Passed %s:%d %d==%d (inband)?? (forced phy-mode)",__FUNCTION__,__LINE__, pl->cfg_link_an_mode, MLO_AN_INBAND);*/
 
 		switch (pl->link_config.interface) {
 		case PHY_INTERFACE_MODE_SGMII:
@@ -958,8 +956,7 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
 		}
 
 		/* Check if MAC/PCS also supports Autoneg. */
-		//pl->link_config.an_enabled = phylink_test(pl->supported, Autoneg);
-		pl->link_config.an_enabled = false;
+		pl->link_config.an_enabled = phylink_test(pl->supported, Autoneg);
 	}
 
 	return 0;
@@ -1201,7 +1198,6 @@ static void phylink_mac_initial_config(struct phylink *pl, bool force_restart)
 		phylink_get_fixed_state(pl, &link_state);
 		break;
 
-	case MLO_AN_INBAND_DISABLED:
 	case MLO_AN_INBAND:
 		link_state = pl->link_config;
 		if (link_state.interface == PHY_INTERFACE_MODE_SGMII)
@@ -3015,7 +3011,6 @@ static int phylink_sfp_config_optical(struct phylink *pl)
 	config.duplex = DUPLEX_UNKNOWN;
 	config.pause = MLO_PAUSE_AN;
 	config.an_enabled = true;
-	config.an_enabled = false;
 
 	/* For all the interfaces that are supported, reduce the sfp_support
 	 * mask to only those link modes that can be supported.
@@ -3049,7 +3044,7 @@ static int phylink_sfp_config_optical(struct phylink *pl)
 
 	pl->link_port = pl->sfp_port;
 
-	phylink_sfp_set_config(pl, MLO_AN_INBAND_DISABLED, pl->sfp_support, &config);
+	phylink_sfp_set_config(pl, MLO_AN_INBAND, pl->sfp_support, &config);
 
 	return 0;
 }
