@@ -5,6 +5,8 @@
  *
  * Copyright (C) 2015 Russell King
  */
+
+#define DEBUG
 #include <linux/acpi.h>
 #include <linux/ethtool.h>
 #include <linux/export.h>
