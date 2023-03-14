@@ -2917,6 +2917,10 @@ static void phylink_sfp_set_config(struct phylink *pl, u8 mode,
 		changed = true;
 	}
 
+	if (pl->link_config.an_enabled != state->an_enabled)
+		changed = true;
+	pl->link_config.an_enabled = state->an_enabled;
+
 	if (pl->cur_link_an_mode != mode ||
 	    pl->link_config.interface != state->interface) {
 		pl->cur_link_an_mode = mode;
@@ -3020,7 +3024,8 @@ static int phylink_sfp_config_optical(struct phylink *pl)
 	config.speed = SPEED_UNKNOWN;
 	config.duplex = DUPLEX_UNKNOWN;
 	config.pause = MLO_PAUSE_AN;
-	config.an_enabled = true;
+	config.an_enabled = linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+					      support);
 
 	/* For all the interfaces that are supported, reduce the sfp_support
 	 * mask to only those link modes that can be supported.
