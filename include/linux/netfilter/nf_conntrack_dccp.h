@@ -2,6 +2,8 @@
 #ifndef _NF_CONNTRACK_DCCP_H
 #define _NF_CONNTRACK_DCCP_H
 
+#include <uapi/linux/netfilter/nf_conntrack_tuple_common.h>
+
 /* Exposed to userspace over nfnetlink */
 enum ct_dccp_states {
 	CT_DCCP_NONE,
