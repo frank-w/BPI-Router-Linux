@@ -928,7 +928,7 @@ function prepare_SD {
 		kerndir=$SD/BPI-BOOT/bananapi/$board/linux
 		fdtdir="$kerndir/dtb"
 		if [[ "$board" == "bpi-r3" ]];then
-			kerndir="$SD/BPI_BOOT"
+			kerndir="$SD/BPI-BOOT"
 			fdtdir=$kerndir
 		fi
 		for createDir in "$kerndir" "$fdtdir" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
@@ -941,7 +941,7 @@ function prepare_SD {
 			cp ./uImage_nodt $kerndir/uImage_nodt
 			cp ./$board.dtb $fdtdir/$board.dtb
 		fi
-		if [[ -e ././$board.itb ]];then
+		if [[ -e ./$board.itb ]];then
 			cp ./$board.itb $kerndir/$board.itb
 		fi
 	fi
