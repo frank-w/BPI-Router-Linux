@@ -136,6 +136,12 @@
 	status = "okay";
 };
 
+&fan {
+	pwms = <&pwm 0 10000 0>;
+	cooling-levels = <255 96 52 0>;
+	status = "okay";
+};
+
 &eth {
 	status = "okay";
 
