@@ -3093,9 +3093,37 @@ static int phylink_sfp_config_phy(struct phylink *pl, u8 mode,
 
 	iface = sfp_select_interface(pl->sfp_bus, config.advertising);
 	if (iface == PHY_INTERFACE_MODE_NA) {
+		const int num_ids = ARRAY_SIZE(phy->c45_ids.device_ids);
+		u32 id;
+		int i;
+
+		if (phy->is_c45) {
+			for (i = 0; i < num_ids; i++) {
+				id = phy->c45_ids.device_ids[i];
+				if (id != 0xffffffff)
+					break;
+			}
+		} else {
+			id = phy->phy_id;
+		}
+		phylink_err(pl,
+			    "Clause %s PHY [0x%04x:0x%04x] driver %s found but\n",
+			    phy->is_c45 ? "45" : "22",
+			    id >> 16, id & 0xffff,
+			    phy->drv ? phy->drv->name : "[unbound]");
 		phylink_err(pl,
 			    "selection of interface failed, advertisement %*pb\n",
 			    __ETHTOOL_LINK_MODE_MASK_NBITS, config.advertising);
+
+		if (phy->is_c45) {
+			phylink_err(pl, "Further PHY IDs:\n");
+			for (i = 0; i < num_ids; i++) {
+				id = phy->c45_ids.device_ids[i];
+				if (id != 0xffffffff)
+					phylink_err(pl, "  MMD %d [0x%04x:0x%04x]\n",
+						    i, id >> 16, id & 0xffff);
+			}
+		}
 		return -EINVAL;
 	}
 
