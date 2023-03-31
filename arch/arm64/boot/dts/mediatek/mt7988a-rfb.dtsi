@@ -103,12 +103,24 @@
 &pcie2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie2_pins>;
-	status = "okay";
+	status = "disabled";
 };
 
 &pcie3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie3_pins>;
+	status = "okay";
+};
+
+&ssusb0 {
+	status = "okay";
+};
+
+&ssusb1 {
+	status = "okay";
+};
+
+&tphy {
 	status = "okay";
 };
 
@@ -155,5 +167,9 @@
 };
 
 &watchdog {
+	status = "okay";
+};
+
+&xphy {
 	status = "okay";
 };

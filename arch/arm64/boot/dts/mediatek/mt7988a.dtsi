@@ -596,6 +596,78 @@
 			};
 		};
 
+		ssusb0: usb@11190000 {
+			compatible = "mediatek,mt7988-xhci",
+				     "mediatek,mtk-xhci";
+			reg = <0 0x11190000 0 0x2e00>,
+			      <0 0x11193e00 0 0x0100>;
+			reg-names = "mac", "ippc";
+			interrupts = <GIC_SPI 173 IRQ_TYPE_LEVEL_HIGH>;
+			phys = <&xphyu2port0 PHY_TYPE_USB2>,
+			       <&xphyu3port0 PHY_TYPE_USB3>;
+			clocks = <&infracfg CLK_INFRA_USB_SYS>,
+				 <&infracfg CLK_INFRA_USB_XHCI>,
+				 <&infracfg CLK_INFRA_USB_REF>,
+				 <&infracfg CLK_INFRA_66M_USB_HCK>,
+				 <&infracfg CLK_INFRA_133M_USB_HCK>;
+			clock-names = "sys_ck",
+				      "xhci_ck",
+				      "ref_ck",
+				      "mcu_ck",
+				      "dma_ck";
+			#address-cells = <2>;
+			#size-cells = <2>;
+			mediatek,p0_speed_fixup;
+			status = "disabled";
+		};
+
+		ssusb1: usb@11200000 {
+			compatible = "mediatek,mt7988-xhci",
+				     "mediatek,mtk-xhci";
+			reg = <0 0x11200000 0 0x2e00>,
+			      <0 0x11203e00 0 0x0100>;
+			reg-names = "mac", "ippc";
+			interrupts = <GIC_SPI 172 IRQ_TYPE_LEVEL_HIGH>;
+			phys = <&tphyu2port0 PHY_TYPE_USB2>,
+			       <&tphyu3port0 PHY_TYPE_USB3>;
+			clocks = <&infracfg CLK_INFRA_USB_SYS_CK_P1>,
+				 <&infracfg CLK_INFRA_USB_XHCI_CK_P1>,
+				 <&infracfg CLK_INFRA_USB_CK_P1>,
+				 <&infracfg CLK_INFRA_66M_USB_HCK_CK_P1>,
+				 <&infracfg CLK_INFRA_133M_USB_HCK_CK_P1>;
+			clock-names = "sys_ck",
+				      "xhci_ck",
+				      "ref_ck",
+				      "mcu_ck",
+				      "dma_ck";
+			#address-cells = <2>;
+			#size-cells = <2>;
+			status = "disabled";
+		};
+
+		tphy: tphy@11c50000 {
+			compatible = "mediatek,mt7988",
+				     "mediatek,generic-tphy-v2";
+			#address-cells = <2>;
+			#size-cells = <2>;
+			ranges;
+			status = "disabled";
+			tphyu2port0: usb-phy@11c50000 {
+				reg = <0 0x11c50000 0 0x700>;
+				clocks = <&infracfg CLK_INFRA_USB_UTMI_CK_P1>;
+				clock-names = "ref";
+				#phy-cells = <1>;
+			};
+			tphyu3port0: usb-phy@11c50700 {
+				reg = <0 0x11c50700 0 0x900>;
+				clocks = <&infracfg CLK_INFRA_USB_PIPE_CK_P1>;
+				clock-names = "ref";
+				#phy-cells = <1>;
+				mediatek,usb3-pll-ssc-delta;
+				mediatek,usb3-pll-ssc-delta1;
+			};
+		};
+
 		topmisc: topmisc@11d10000 {
 			compatible = "mediatek,mt7988-topmisc", "syscon",
 				     "mediatek,mt7988-power-controller";
@@ -606,20 +678,19 @@
 			#size-cells = <0>;
 		};
 
-		usbxphy: usb-phy@11e10000 {
+		xphy: xphy@11e10000 {
 			compatible = "mediatek,mt7988",
 				     "mediatek,xsphy";
 			#address-cells = <2>;
 			#size-cells = <2>;
 			ranges;
-			status = "okay";
+			status = "disabled";
 
 			xphyu2port0: usb-phy@11e10000 {
 				reg = <0 0x11e10000 0 0x400>;
 				clocks = <&infracfg CLK_INFRA_USB_UTMI>;
 				clock-names = "ref";
 				#phy-cells = <1>;
-				status = "okay";
 			};
 
 			xphyu3port0: usb-phy@11e13000 {
@@ -628,7 +699,6 @@
 				clock-names = "ref";
 				#phy-cells = <1>;
 				mediatek,syscon-type = <&topmisc 0x218 0>;
-				status = "okay";
 			};
 		};
 
