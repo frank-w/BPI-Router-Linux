@@ -911,6 +911,7 @@ static irqreturn_t rtl9000a_handle_interrupt(struct phy_device *phydev)
 static int rtl8221b_config_init(struct phy_device *phydev)
 {
 	u16 option_mode;
+	int val;
 
 	switch (phydev->interface) {
 	case PHY_INTERFACE_MODE_2500BASEX:
@@ -946,6 +947,13 @@ static int rtl8221b_config_init(struct phy_device *phydev)
 		phy_write_mmd(phydev, RTL8221B_MMD_SERDES_CTRL, 0x6f11, 0x8020);
 		break;
 	}
+
+	/* Disable SGMII AN */
+	phy_write_mmd(phydev, RTL8221B_MMD_SERDES_CTRL, 0x7588, 0x2);
+	phy_write_mmd(phydev, RTL8221B_MMD_SERDES_CTRL, 0x7589, 0x71d0);
+	phy_write_mmd(phydev, RTL8221B_MMD_SERDES_CTRL, 0x7587, 0x3);
+	phy_read_mmd_poll_timeout(phydev, RTL8221B_MMD_SERDES_CTRL, 0x7587,
+				  val, !(val & BIT(0)), 500, 100000, false);
 
 	return 0;
 }
