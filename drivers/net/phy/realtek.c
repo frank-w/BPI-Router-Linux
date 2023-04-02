@@ -683,6 +683,7 @@ static int rtl822xb_config_init(struct phy_device *phydev)
 {
 	bool has_2500, has_sgmii;
 	u16 mode;
+	u32 val;
 	int ret;
 
 	has_2500 = test_bit(PHY_INTERFACE_MODE_2500BASEX,
@@ -733,7 +734,25 @@ static int rtl822xb_config_init(struct phy_device *phydev)
 	if (ret < 0)
 		return ret;
 
-	return phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x6f11, 0x8020);
+	ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x6f11, 0x8020);
+	if (ret < 0)
+		return ret;
+
+	/* Disable SGMII AN */
+	ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x7588, 0x2);
+	if (ret < 0)
+		return ret;
+
+	ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x7589, 0x71d0);
+	if (ret < 0)
+		return ret;
+
+	ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x7587, 0x3);
+	if (ret < 0)
+		return ret;
+
+	return phy_read_mmd_poll_timeout(phydev, MDIO_MMD_VEND1, 0x7587,
+					 val, !(val & BIT(0)), 500, 100000, false);
 }
 
 static int rtl822xb_get_rate_matching(struct phy_device *phydev,
