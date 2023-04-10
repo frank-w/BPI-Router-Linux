@@ -865,10 +865,10 @@ function build {
 				cp $DTBFILE $board.dtb
 			fi
 
-			if [[ "$board" == "bpi-r2pro" ]];then
-				#skipping mkimage causes no choice, but uImage is not bootable on r2pro
-				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
-			elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
+			#if [[ "$board" == "bpi-r2pro" ]];then
+			#	#skipping mkimage causes no choice, but uImage is not bootable on r2pro
+			#	mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
+			if [[ -e ${board}.its ]];then #"$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
 				mkimage -f ${board}.its.tmp ${board}.itb
