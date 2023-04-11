@@ -246,8 +246,8 @@
 			#clock-cells = <1>;
 			#pwm-cells = <2>;
 			interrupts = <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&infracfg CLK_TOP_PWM_SEL>,
-				 <&infracfg CLK_INFRA_PWM_BSEL>,
+			clocks = <&topckgen CLK_TOP_PWM_SEL>,
+				 <&infracfg CLK_INFRA_PWM_STA>,
 				 <&infracfg CLK_INFRA_PWM1_CK>,
 				 <&infracfg CLK_INFRA_PWM2_CK>;
 			clock-names = "top", "main", "pwm1", "pwm2";
