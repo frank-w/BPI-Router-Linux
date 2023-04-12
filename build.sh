@@ -941,9 +941,9 @@ function prepare_SD {
 			cp ./uImage_nodt $kerndir/uImage_nodt
 			cp ./$board.dtb $fdtdir/$board.dtb
 		fi
-		if [[ -e ./$board.itb ]];then
-			cp ./$board.itb $kerndir/$board.itb
-		fi
+	fi
+	if [[ -e ./$board.itb ]];then
+		cp ./$board.itb $kerndir/$board.itb
 	fi
 	make modules_install
 
