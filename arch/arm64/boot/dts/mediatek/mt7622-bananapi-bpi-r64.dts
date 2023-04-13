@@ -183,7 +183,8 @@
 
 				port@5 {
 					reg = <5>;
-					label = "aux";
+					label = "cpu";
+					ethernet = <&gmac1>;
 					phy-mode = "rgmii";
 
 					fixed-link {
