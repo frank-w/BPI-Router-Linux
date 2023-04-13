@@ -419,16 +419,19 @@ static void mt7530_pll_setup(struct mt7530_priv *priv)
 	core_set(priv, CORE_TRGMII_GSW_CLK_CG, REG_GSWCK_EN);
 }
 
-/* If port 6 is available as a CPU port, always prefer that as the default,
- * otherwise don't care.
+/* If port 6 is available as a CPU port, prefer that as the default on
+ * MT7530, because it has TRGMII vs. RGMII on p5, otherwise don't care.
  */
 static struct dsa_port *
 mt7530_preferred_default_local_cpu_port(struct dsa_switch *ds)
 {
+	struct mt7530_priv *priv = ds->priv;
 	struct dsa_port *cpu_dp = dsa_to_port(ds, 6);
 
-	if (dsa_port_is_cpu(cpu_dp))
-		return cpu_dp;
+	if (priv->id == ID_MT7530) {
+		if (dsa_port_is_cpu(cpu_dp))
+			return cpu_dp;
+	}
 
 	return NULL;
 }
