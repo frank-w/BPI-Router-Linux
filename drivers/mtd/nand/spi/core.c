@@ -19,6 +19,7 @@
 #include <linux/string.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spi-mem.h>
+#include <linux/mtd/mtk_bmt.h>
 
 static int spinand_read_reg_op(struct spinand_device *spinand, u8 reg, u8 *val)
 {
@@ -1401,6 +1402,7 @@ static int spinand_probe(struct spi_mem *mem)
 	if (ret)
 		return ret;
 
+	mtk_bmt_attach(mtd);
 	ret = mtd_device_register(mtd, NULL, 0);
 	if (ret)
 		goto err_spinand_cleanup;
@@ -1408,6 +1410,7 @@ static int spinand_probe(struct spi_mem *mem)
 	return 0;
 
 err_spinand_cleanup:
+	mtk_bmt_detach(mtd);
 	spinand_cleanup(spinand);
 
 	return ret;
@@ -1426,6 +1429,7 @@ static int spinand_remove(struct spi_mem *mem)
 	if (ret)
 		return ret;
 
+	mtk_bmt_detach(mtd);
 	spinand_cleanup(spinand);
 
 	return 0;
