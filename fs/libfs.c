@@ -1719,9 +1719,63 @@ static int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
 	return 0;
 }
 
+static int generic_ci_d_revalidate(struct dentry *dentry,
+				   const struct qstr *name,
+				   unsigned int flags)
+{
+	const struct dentry *parent;
+	const struct inode *dir;
+
+	if (!d_is_negative(dentry))
+		return 1;
+
+	parent = READ_ONCE(dentry->d_parent);
+	dir = READ_ONCE(parent->d_inode);
+
+	if (!dir || !IS_CASEFOLDED(dir))
+		return 1;
+
+	/*
+	 * Negative dentries created prior to turning the directory
+	 * case-insensitive cannot be trusted, since they don't ensure
+	 * any possible case version of the filename doesn't exist.
+	 */
+	if (!d_is_casefolded_name(dentry))
+		return 0;
+
+	/*
+	 * If the lookup is for creation, then a negative dentry can only be
+	 * reused if it's a case-sensitive match, not just a case-insensitive
+	 * one.  This is needed to make the new file be created with the name
+	 * the user specified, preserving case.
+	 *
+	 * LOOKUP_CREATE or LOOKUP_RENAME_TARGET cover most creations.  In these
+	 * cases, ->d_name is stable and can be compared to 'name' without
+	 * taking ->d_lock because the caller must hold dir->i_rwsem.  (This
+	 * is because the directory lock blocks the dentry from being
+	 * concurrently instantiated, and negative dentries are never moved.)
+	 *
+	 * All other creations actually use flags==0.  These come from the edge
+	 * case of filesystems calling functions like lookup_one() that do a
+	 * lookup without setting the lookup flags at all.  Such lookups might
+	 * or might not be for creation, and if not don't guarantee stable
+	 * ->d_name.  Therefore, invalidate all negative dentries when flags==0.
+	 */
+	if (flags & (LOOKUP_CREATE | LOOKUP_RENAME_TARGET)) {
+		if (dentry->d_name.len != name->len ||
+		    memcmp(dentry->d_name.name, name->name, name->len))
+			return 0;
+	} else if (!flags) {
+		return 0;
+	}
+
+	return 1;
+}
+
 static const struct dentry_operations generic_ci_dentry_ops = {
 	.d_hash = generic_ci_d_hash,
 	.d_compare = generic_ci_d_compare,
+	.d_revalidate = generic_ci_d_revalidate,
 };
 #endif
 
