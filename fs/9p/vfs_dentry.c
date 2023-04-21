@@ -56,7 +56,8 @@ static void v9fs_dentry_release(struct dentry *dentry)
 	dentry->d_fsdata = NULL;
 }
 
-static int v9fs_lookup_revalidate(struct dentry *dentry, unsigned int flags)
+static int v9fs_lookup_revalidate(struct dentry *dentry,
+				  const struct qstr *name, unsigned int flags)
 {
 	struct p9_fid *fid;
 	struct inode *inode;
@@ -97,7 +98,7 @@ out_valid:
 static int v9fs_lookup_weak_revalidate(struct dentry *dentry,
 				       unsigned int flags)
 {
-	return v9fs_lookup_revalidate(dentry, flags);
+	return v9fs_lookup_revalidate(dentry, NULL, flags);
 }
 
 const struct dentry_operations v9fs_cached_dentry_operations = {

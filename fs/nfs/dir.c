@@ -1812,7 +1812,8 @@ __nfs_lookup_revalidate(struct dentry *dentry, unsigned int flags,
 	return ret;
 }
 
-static int nfs_lookup_revalidate(struct dentry *dentry, unsigned int flags)
+static int nfs_lookup_revalidate(struct dentry *dentry,
+				 const struct qstr *name, unsigned int flags)
 {
 	return __nfs_lookup_revalidate(dentry, flags, nfs_do_lookup_revalidate);
 }
@@ -2000,7 +2001,8 @@ void nfs_d_prune_case_insensitive_aliases(struct inode *inode)
 EXPORT_SYMBOL_GPL(nfs_d_prune_case_insensitive_aliases);
 
 #if IS_ENABLED(CONFIG_NFS_V4)
-static int nfs4_lookup_revalidate(struct dentry *, unsigned int);
+static int nfs4_lookup_revalidate(struct dentry *, const struct qstr *name,
+				  unsigned int);
 
 const struct dentry_operations nfs4_dentry_operations = {
 	.d_revalidate	= nfs4_lookup_revalidate,
@@ -2233,7 +2235,8 @@ full_reval:
 	return nfs_do_lookup_revalidate(dir, dentry, flags);
 }
 
-static int nfs4_lookup_revalidate(struct dentry *dentry, unsigned int flags)
+static int nfs4_lookup_revalidate(struct dentry *dentry,
+				  const struct qstr *name, unsigned int flags)
 {
 	return __nfs_lookup_revalidate(dentry, flags,
 			nfs4_do_lookup_revalidate);

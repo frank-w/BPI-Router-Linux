@@ -1861,14 +1861,15 @@ static int dir_lease_is_valid(struct inode *dir, struct dentry *dentry,
 /*
  * Check if cached dentry can be trusted.
  */
-static int ceph_d_revalidate(struct dentry *dentry, unsigned int flags)
+static int ceph_d_revalidate(struct dentry *dentry, const struct qstr *name,
+			     unsigned int flags)
 {
 	int valid = 0;
 	struct dentry *parent;
 	struct inode *dir, *inode;
 	struct ceph_mds_client *mdsc;
 
-	valid = fscrypt_d_revalidate(dentry, flags);
+	valid = fscrypt_d_revalidate(dentry, name, flags);
 	if (valid <= 0)
 		return valid;
 

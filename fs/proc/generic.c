@@ -216,7 +216,8 @@ void proc_free_inum(unsigned int inum)
 	ida_simple_remove(&proc_inum_ida, inum - PROC_DYNAMIC_FIRST);
 }
 
-static int proc_misc_d_revalidate(struct dentry *dentry, unsigned int flags)
+static int proc_misc_d_revalidate(struct dentry *dentry,
+				  const struct qstr *name, unsigned int flags)
 {
 	if (flags & LOOKUP_RCU)
 		return -ECHILD;
@@ -343,7 +344,8 @@ static const struct file_operations proc_dir_operations = {
 	.iterate_shared		= proc_readdir,
 };
 
-static int proc_net_d_revalidate(struct dentry *dentry, unsigned int flags)
+static int proc_net_d_revalidate(struct dentry *dentry,
+				 const struct qstr *name, unsigned int flags)
 {
 	return 0;
 }
