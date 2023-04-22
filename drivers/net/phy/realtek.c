@@ -763,9 +763,11 @@ static bool rtlgen_supports_2_5gbps(struct phy_device *phydev)
 {
 	int val;
 
-	phy_write(phydev, RTL821x_PAGE_SELECT, 0xa61);
-	val = phy_read(phydev, 0x13);
-	phy_write(phydev, RTL821x_PAGE_SELECT, 0);
+	mutex_lock(&phydev->mdio.bus->mdio_lock);
+	rtl821x_write_page(phydev, 0xa61);
+	val = __phy_read(phydev, 0x13);
+	rtl821x_write_page(phydev, 0);
+	mutex_unlock(&phydev->mdio.bus->mdio_lock);
 
 	return val >= 0 && val & RTL_SUPPORTS_2500FULL;
 }
