@@ -95,7 +95,26 @@ install_linux_image () {
 	*)
 		installed_image_path="boot/vmlinuz-${KERNELRELEASE}";;
 	esac
-	cp "$(${MAKE} -s -f ${srctree}/Makefile image_name)" "${pdir}/${installed_image_path}"
+
+	case $board in
+	bpi-r64|bpi-r2)
+		mkdir -p "${pdir}/boot/bananapi/$board/linux/dtb"
+		installed_image_path="boot/bananapi/$board/linux/uImage_nodt-$version"
+
+		cp ./$board.dtb "${pdir}/boot/bananapi/$board/linux/dtb/$board-$version.dtb"
+		if [ "$board" = "bpi-r64" ];
+		then
+			cp ./$board.itb "${pdir}/boot/bananapi/$board/linux/$board-$version.itb"
+		fi
+		source_image_path="./uImage_nodt"
+		;;
+	*)
+		source_image_path="$(${MAKE} -s -f ${srctree}/Makefile image_name)"
+		;;
+	esac
+
+	#cp "$(${MAKE} -s -f ${srctree}/Makefile image_name)" "${pdir}/${installed_image_path}"
+	cp "$source_image_path" "${pdir}/${installed_image_path}"
 
 	# Install the maintainer scripts
 	# Note: hook scripts under /etc/kernel are also executed by official Debian
