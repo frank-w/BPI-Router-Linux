@@ -96,22 +96,47 @@ install_linux_image () {
 		installed_image_path="boot/vmlinuz-${KERNELRELEASE}";;
 	esac
 
-	case $board in
-	bpi-r64|bpi-r2)
+	if [ $board != "bpi-r2pro" ];then
 		mkdir -p "${pdir}/boot/bananapi/$board/linux/dtb"
-		installed_image_path="boot/bananapi/$board/linux/uImage_nodt-$version"
-
-		cp ./$board.dtb "${pdir}/boot/bananapi/$board/linux/dtb/$board-$version.dtb"
-		if [ "$board" = "bpi-r64" ];
-		then
-			cp ./$board.itb "${pdir}/boot/bananapi/$board/linux/$board-$version.itb"
-		fi
+		installed_image_path="boot/bananapi/$board/linux/uImage_nodt-${KERNELRELEASE}"
 		source_image_path="./uImage_nodt"
+	else
+		mkdir -p "${pdir}/boot/extlinux"
+	fi
+
+	case $board in
+	bpi-r2)
+		DTBFILE=arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dtb
+		ls -l ./uImage
+		cp ./uImage "${pdir}/boot/bananapi/$board/linux/uImage-${KERNELRELEASE}"
+		;;
+	bpi-r64)
+		DTBFILE=arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64.dtb
+		cp arch/arm64/boot/dts/mediatek/mt7622-bananapi-bpi-r64-rtl8367.dtb "${pdir}/boot/bananapi/$board/linux/dtb/"
+		cp ./$board.itb "${pdir}/boot/bananapi/$board/linux/$board-${KERNELRELEASE}.itb"
+		;;
+	bpi-r2pro)
+		DTBFILE=arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dtb
+		cp arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro-rtl8367.dtb "${pdir}/boot/extlinux/"
+		installed_image_path="boot/extlinux/Image-${KERNELRELEASE}.gz"
+		source_image_path="arch/arm64/boot/Image.gz"
+		cp ./$board.itb "${pdir}/boot/bananapi/$board/linux/$board-${KERNELRELEASE}.itb"
+		;;
+	bpi-r3)
+		DTBFILE=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dtb
+		cp arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3*.dtbo "${pdir}/boot/bananapi/$board/linux/dtb/"
+		cp ./$board.itb "${pdir}/boot/bananapi/$board/linux/$board-${KERNELRELEASE}.itb"
 		;;
 	*)
 		source_image_path="$(${MAKE} -s -f ${srctree}/Makefile image_name)"
 		;;
 	esac
+
+	if [ $board != "bpi-r2pro" ];then
+	       cp $DTBFILE "${pdir}/boot/bananapi/$board/linux/dtb/$board-${KERNELRELEASE}.dtb"
+	else
+	       cp $DTBFILE "${pdir}/boot/extlinux/$board-${KERNELRELEASE}.dtb"
+	fi
 
 	#cp "$(${MAKE} -s -f ${srctree}/Makefile image_name)" "${pdir}/${installed_image_path}"
 	cp "$source_image_path" "${pdir}/${installed_image_path}"
