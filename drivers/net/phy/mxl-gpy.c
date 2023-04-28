@@ -543,6 +543,8 @@ static int gpy_config_aneg(struct phy_device *phydev)
 	if (phydev->state != PHY_UP)
 		return 0;
 
+//	phydev_info(phydev, "gpy_config_aneg: trigger VSPEC1_SGMII_CTRL_ANRS\n");
+
 	ret = phy_read_poll_timeout(phydev, MII_BMSR, ret, ret & BMSR_LSTATUS,
 				    20000, 4000000, false);
 	if (ret == -ETIMEDOUT)
@@ -581,6 +583,35 @@ static int gpy_update_mdix(struct phy_device *phydev)
 		phydev->mdix = ETH_TP_MDI;
 
 	return 0;
+}
+
+/**
+ * in some cases the GPY211 will link up but not RX packets
+ * 
+ * setting SGMII AN to enabled then back to disabled clears this
+ * for some reason. enable SGMII AN here and let the update
+ * interface poller clear it shortly after. 
+ */
+static void gpy_link_change_notify(struct phy_device *phydev)
+{
+#ifdef GPY_DEBUG
+	int ret;
+
+	phydev_info(phydev, "gpy_link_change_notify phydev->state=%d\n", phydev->state);
+
+	ret = phy_read_mmd(phydev, MDIO_MMD_VEND1, VSPEC1_SGMII_CTRL);
+	phydev_info(phydev, "gpy_link_change_notify VSPEC1_SGMII_CTRL=%04x set ANEN\n", ret);
+
+	ret = phy_set_bits_mmd(phydev, MDIO_MMD_VEND1, VSPEC1_SGMII_CTRL,
+			     VSPEC1_SGMII_CTRL_ANEN);
+
+	ret = phy_read_mmd(phydev, MDIO_MMD_VEND1, VSPEC1_SGMII_CTRL);
+	phydev_info(phydev, "gpy_link_change_notify VSPEC1_SGMII_CTRL=%04x DONE\n", ret);
+#else
+	phy_set_bits_mmd(phydev, MDIO_MMD_VEND1, VSPEC1_SGMII_CTRL,
+			     VSPEC1_SGMII_CTRL_ANEN);
+#endif
+
 }
 
 static int gpy_update_interface(struct phy_device *phydev)
@@ -1126,6 +1157,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		.phy_id		= PHY_ID_GPY115B,
@@ -1153,6 +1185,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY115C),
@@ -1179,6 +1212,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		.phy_id		= PHY_ID_GPY211B,
@@ -1206,6 +1240,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY211C),
@@ -1232,6 +1267,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		.phy_id		= PHY_ID_GPY212B,
@@ -1259,6 +1295,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY212C),
@@ -1285,6 +1322,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		.phy_id		= PHY_ID_GPY215B,
@@ -1312,6 +1350,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY215C),
@@ -1338,6 +1377,7 @@ static struct phy_driver gpy_drivers[] = {
 		.led_polarity_set = gpy_led_polarity_set,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify = gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY241B),
@@ -1359,6 +1399,7 @@ static struct phy_driver gpy_drivers[] = {
 		.set_loopback	= gpy_loopback,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify	= gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY241BM),
@@ -1380,6 +1421,7 @@ static struct phy_driver gpy_drivers[] = {
 		.set_loopback	= gpy_loopback,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify	= gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY245B),
@@ -1401,6 +1443,7 @@ static struct phy_driver gpy_drivers[] = {
 		.set_loopback	= gpy_loopback,
 		.update_stats	= gpy_update_stats,
 		.get_phy_stats	= gpy_get_phy_stats,
+		.link_change_notify	= gpy_link_change_notify,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_MXL86211C),
