@@ -780,6 +780,38 @@ static int rtl8226_match_phy_device(struct phy_device *phydev)
 	       rtlgen_supports_2_5gbps(phydev);
 }
 
+static int rtl8221b_vb_cg_match_phy_device(struct phy_device *phydev)
+{
+	int val;
+	u32 id;
+
+	if (phydev->mdio.bus->read_c45) {
+		val = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_PKGID1);
+		if (val < 0)
+			return 0;
+
+		id = val << 16;
+		val = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_PKGID2);
+		if (val < 0)
+			return 0;
+
+		id |= val;
+	} else {
+		val = phy_read(phydev, MII_PHYSID1);
+		if (val < 0)
+			return 0;
+
+		id = val << 16;
+		val = phy_read(phydev, MII_PHYSID2);
+		if (val < 0)
+			return 0;
+
+		id |= val;
+	}
+
+	return (id == 0x001cc849);
+}
+
 static int rtl822x_probe(struct phy_device *phydev)
 {
 	struct device *dev = &phydev->mdio.dev;
@@ -1134,7 +1166,7 @@ static struct phy_driver realtek_drvs[] = {
 		.write_page     = rtl821x_write_page,
 		.soft_reset     = genphy_soft_reset,
 	}, {
-		PHY_ID_MATCH_EXACT(0x001cc849),
+		.match_phy_device = rtl8221b_vb_cg_match_phy_device,
 		.name           = "RTL8221B-VB-CG 2.5Gbps PHY",
 		.get_features   = rtl822x_get_features,
 		.config_init    = rtl8221b_config_init,
