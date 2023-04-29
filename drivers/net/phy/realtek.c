@@ -88,6 +88,7 @@
 
 #define RTL_GENERIC_PHYID			0x001cc800
 #define RTL_8211FVD_PHYID			0x001cc878
+#define RTL_8221B_VB_CG				0x001cc849
 
 MODULE_DESCRIPTION("Realtek PHY driver");
 MODULE_AUTHOR("Johnson Leung");
@@ -790,6 +791,53 @@ static int rtl8226_match_phy_device(struct phy_device *phydev)
 	       rtlgen_supports_2_5gbps(phydev);
 }
 
+static int rtl8221b_vb_cg_match_phy_device(struct phy_device *phydev)
+{
+	int val;
+	u32 id;
+
+	if (phydev->is_c45) {
+		if (phydev->c45_ids.device_ids[1])
+			return phydev->c45_ids.device_ids[1] == RTL_8221B_VB_CG;
+	} else {
+		if (phydev->phy_id)
+			return phydev->phy_id == RTL_8221B_VB_CG;
+	}
+
+	if (phydev->mdio.bus->read_c45) {
+		val = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_PKGID1);
+		if (val < 0)
+			return 0;
+
+		id = val << 16;
+		val = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_PKGID2);
+		if (val < 0)
+			return 0;
+
+		id |= val;
+	} else {
+		val = phy_read(phydev, MII_PHYSID1);
+		if (val < 0)
+			return 0;
+
+		id = val << 16;
+		val = phy_read(phydev, MII_PHYSID2);
+		if (val < 0)
+			return 0;
+
+		id |= val;
+	}
+
+	if (id != RTL_8221B_VB_CG) return 0;
+
+	if (phydev->is_c45)
+		phydev->c45_ids.device_ids[1] = id;
+	else
+		phydev->phy_id = id;
+
+	return true;
+}
+
 static int rtlgen_resume(struct phy_device *phydev)
 {
 	int ret = genphy_resume(phydev);
@@ -1179,7 +1227,7 @@ static struct phy_driver realtek_drvs[] = {
 		.write_page     = rtl821x_write_page,
 		.soft_reset     = genphy_soft_reset,
 	}, {
-		PHY_ID_MATCH_EXACT(0x001cc849),
+		.match_phy_device = rtl8221b_vb_cg_match_phy_device,
 		.name           = "RTL8221B-VB-CG 2.5Gbps PHY",
 		.get_features   = rtl822x_get_features,
 		.config_init    = rtl8221b_config_init,
