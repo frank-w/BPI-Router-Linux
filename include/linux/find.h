@@ -16,6 +16,9 @@ unsigned long _find_next_andnot_bit(const unsigned long *addr1, const unsigned l
 					unsigned long nbits, unsigned long start);
 unsigned long _find_next_or_bit(const unsigned long *addr1, const unsigned long *addr2,
 					unsigned long nbits, unsigned long start);
+unsigned long _find_next_and_andnot_bit(const unsigned long *addr1, const unsigned long *addr2,
+					const unsigned long *addr3, unsigned long nbits,
+					unsigned long start);
 unsigned long _find_next_zero_bit(const unsigned long *addr, unsigned long nbits,
 					 unsigned long start);
 extern unsigned long _find_first_bit(const unsigned long *addr, unsigned long size);
@@ -156,6 +159,40 @@ unsigned long find_next_or_bit(const unsigned long *addr1,
 	}
 
 	return _find_next_or_bit(addr1, addr2, size, offset);
+}
+#endif
+
+#ifndef find_next_and_andnot_bit
+/**
+ * find_next_and_andnot_bit - find the next bit set in *addr1 and *addr2,
+ *			      excluding all the bits in *addr3
+ * @addr1: The first address to base the search on
+ * @addr2: The second address to base the search on
+ * @addr3: The third address to base the search on
+ * @size: The bitmap size in bits
+ * @offset: The bitnumber to start searching at
+ *
+ * Return: the bit number for the next set bit
+ * If no bits are set, returns @size.
+ */
+static __always_inline
+unsigned long find_next_and_andnot_bit(const unsigned long *addr1,
+				   const unsigned long *addr2,
+				   const unsigned long *addr3,
+				   unsigned long size,
+				   unsigned long offset)
+{
+	if (small_const_nbits(size)) {
+		unsigned long val;
+
+		if (unlikely(offset >= size))
+			return size;
+
+		val = *addr1 & *addr2 & ~*addr3 & GENMASK(size - 1, offset);
+		return val ? __ffs(val) : size;
+	}
+
+	return _find_next_and_andnot_bit(addr1, addr2, addr3, size, offset);
 }
 #endif
 
@@ -566,6 +603,12 @@ unsigned long find_next_bit_le(const void *addr, unsigned
 #define for_each_andnot_bit(bit, addr1, addr2, size) \
 	for ((bit) = 0;									\
 	     (bit) = find_next_andnot_bit((addr1), (addr2), (size), (bit)), (bit) < (size);\
+	     (bit)++)
+
+#define for_each_and_andnot_bit(bit, addr1, addr2, addr3, size) \
+	for ((bit) = 0;									\
+	     (bit) = find_next_and_andnot_bit((addr1), (addr2), (addr3), (size), (bit)),\
+	     (bit) < (size);								\
 	     (bit)++)
 
 #define for_each_or_bit(bit, addr1, addr2, size) \
