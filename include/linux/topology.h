@@ -291,4 +291,28 @@ sched_numa_hop_mask(unsigned int node, unsigned int hops)
 	     !IS_ERR_OR_NULL(mask);					       \
 	     __hops++)
 
+/**
+ * for_each_numa_cpu - iterate over cpus in increasing order taking into account
+ *		       NUMA distances from a given node.
+ * @cpu: the (optionally unsigned) integer iterator
+ * @hop: the iterator variable for nodes, i.e. proximity order to the @node
+ * @node: the NUMA node to start the search from.
+ * @mask: the cpumask pointer
+ *
+ * Where considered as a replacement to for_each_cpu(), the following should be
+ * taken into consideration:
+ *  - Only accessible (i.e. online) CPUs are enumerated.
+ *  - CPUs enumeration may not be a monotonic increasing sequence;
+ *
+ * rcu_lock must be held;
+ */
+#define for_each_numa_cpu(cpu, hop, node, mask)					\
+	for ((cpu) = 0, (hop) = 0;						\
+		(cpu) = sched_numa_find_next_cpu((mask), (cpu), (node), &(hop)),\
+		(cpu) < nr_cpu_ids;						\
+		(cpu)++)
+
+#define for_each_numa_online_cpu(cpu, hop, node)				\
+	for_each_numa_cpu(cpu, hop, node, cpu_online_mask)
+
 #endif /* _LINUX_TOPOLOGY_H */
