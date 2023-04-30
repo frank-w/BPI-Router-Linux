@@ -12,6 +12,7 @@
 #include <linux/printk.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/topology.h>
 #include <linux/uaccess.h>
 
 #include "../tools/testing/selftests/kselftest_module.h"
@@ -71,6 +72,16 @@ __check_eq_uint(const char *srcfile, unsigned int line,
 	return true;
 }
 
+static bool __init
+__check_ge_uint(const char *srcfile, unsigned int line,
+		const unsigned int exp_uint, unsigned int x)
+{
+	if (exp_uint >=  x)
+		return true;
+
+	pr_err("[%s:%u] expected >= %u, got %u\n", srcfile, line, exp_uint, x);
+	return false;
+}
 
 static bool __init
 __check_eq_bitmap(const char *srcfile, unsigned int line,
@@ -84,6 +95,18 @@ __check_eq_bitmap(const char *srcfile, unsigned int line,
 		return false;
 	}
 	return true;
+}
+
+static bool __init
+__check_eq_cpumask(const char *srcfile, unsigned int line,
+		  const struct cpumask *exp_cpumask, const struct cpumask *cpumask)
+{
+	if (cpumask_equal(exp_cpumask, cpumask))
+		return true;
+
+	pr_warn("[%s:%u] cpumasks contents differ: expected \"%*pbl\", got \"%*pbl\"\n",
+		srcfile, line, cpumask_pr_args(exp_cpumask), cpumask_pr_args(cpumask));
+	return false;
 }
 
 static bool __init
@@ -173,11 +196,11 @@ __check_eq_str(const char *srcfile, unsigned int line,
 	return eq;
 }
 
-#define __expect_eq(suffix, ...)					\
+#define __expect(suffix, ...)						\
 	({								\
 		int result = 0;						\
 		total_tests++;						\
-		if (!__check_eq_ ## suffix(__FILE__, __LINE__,		\
+		if (!__check_ ## suffix(__FILE__, __LINE__,		\
 					   ##__VA_ARGS__)) {		\
 			failed_tests++;					\
 			result = 1;					\
@@ -185,12 +208,18 @@ __check_eq_str(const char *srcfile, unsigned int line,
 		result;							\
 	})
 
+#define __expect_eq(suffix, ...)	__expect(eq_ ## suffix, ##__VA_ARGS__)
+#define __expect_ge(suffix, ...)	__expect(ge_ ## suffix, ##__VA_ARGS__)
+
 #define expect_eq_uint(...)		__expect_eq(uint, ##__VA_ARGS__)
 #define expect_eq_bitmap(...)		__expect_eq(bitmap, ##__VA_ARGS__)
+#define expect_eq_cpumask(...)		__expect_eq(cpumask, ##__VA_ARGS__)
 #define expect_eq_pbl(...)		__expect_eq(pbl, ##__VA_ARGS__)
 #define expect_eq_u32_array(...)	__expect_eq(u32_array, ##__VA_ARGS__)
 #define expect_eq_clump8(...)		__expect_eq(clump8, ##__VA_ARGS__)
 #define expect_eq_str(...)		__expect_eq(str, ##__VA_ARGS__)
+
+#define expect_ge_uint(...)		__expect_ge(uint, ##__VA_ARGS__)
 
 static void __init test_zero_clear(void)
 {
@@ -763,6 +792,42 @@ static void __init test_for_each_set_bit_wrap(void)
 	}
 }
 
+static void __init test_for_each_numa_cpu(void)
+{
+	unsigned int node, cpu, hop;
+	cpumask_var_t mask;
+
+	if (!alloc_cpumask_var(&mask, GFP_KERNEL)) {
+		pr_err("Can't allocate cpumask. Skipping for_each_numa_cpu() test");
+		return;
+	}
+
+	for_each_node(node) {
+		unsigned int c = 0, dist, old_dist = node_distance(node, node);
+
+		cpumask_clear(mask);
+
+		rcu_read_lock();
+		for_each_numa_cpu(cpu, hop, node, cpu_possible_mask) {
+			dist = node_distance(cpu_to_node(cpu), node);
+
+			/* Distance between nodes must never decrease */
+			expect_ge_uint(dist, old_dist);
+
+			/* Test for coherence with cpumask_local_spread() */
+			expect_eq_uint(cpumask_local_spread(c++, node), cpu);
+
+			cpumask_set_cpu(cpu, mask);
+			old_dist = dist;
+		}
+		rcu_read_unlock();
+
+		/* Each online CPU must be visited exactly once */
+		expect_eq_uint(c, num_online_cpus());
+		expect_eq_cpumask(mask, cpu_online_mask);
+	}
+}
+
 static void __init test_for_each_set_bit(void)
 {
 	DECLARE_BITMAP(orig, 500);
@@ -1249,6 +1314,7 @@ static void __init selftest(void)
 	test_for_each_clear_bitrange_from();
 	test_for_each_set_clump8();
 	test_for_each_set_bit_wrap();
+	test_for_each_numa_cpu();
 }
 
 KSTM_MODULE_LOADERS(test_bitmap);
