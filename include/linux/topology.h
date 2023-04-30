@@ -245,13 +245,25 @@ static inline const struct cpumask *cpu_cpu_mask(int cpu)
 	return cpumask_of_node(cpu_to_node(cpu));
 }
 
+/*
+ * sched_numa_find_*_cpu() functions family traverses only accessible CPUs,
+ * i.e. those listed in cpu_online_mask.
+ */
 #ifdef CONFIG_NUMA
 int sched_numa_find_nth_cpu(const struct cpumask *cpus, int cpu, int node);
+int sched_numa_find_next_cpu(const struct cpumask *cpus, int cpu, int node, unsigned int *hop);
 extern const struct cpumask *sched_numa_hop_mask(unsigned int node, unsigned int hops);
 #else
 static __always_inline int sched_numa_find_nth_cpu(const struct cpumask *cpus, int cpu, int node)
 {
 	return cpumask_nth_and(cpu, cpus, cpu_online_mask);
+}
+
+static __always_inline
+int sched_numa_find_next_cpu(const struct cpumask *cpus, int cpu, int node, unsigned int *hop)
+{
+	return find_next_and_bit(cpumask_bits(cpus), cpumask_bits(cpu_online_mask),
+						small_cpumask_bits, cpu);
 }
 
 static inline const struct cpumask *
