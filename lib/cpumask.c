@@ -128,11 +128,8 @@ void __init free_bootmem_cpumask_var(cpumask_var_t mask)
  *
  * There's a better alternative based on for_each()-like iterators:
  *
- *	for_each_numa_hop_mask(mask, node) {
- *		for_each_cpu_andnot(cpu, mask, prev)
- *			do_something(cpu);
- *		prev = mask;
- *	}
+ *	for_each_numa_online_cpu(cpu, hop, node)
+ *		do_something(cpu);
  *
  * It's simpler and more verbose than above. Complexity of iterator-based
  * enumeration is O(sched_domains_numa_levels * nr_cpu_ids), while
