@@ -2408,6 +2408,12 @@ void hl_device_fini(struct hl_device *hdev)
 
 	hdev->fw_loader.fw_comp_loaded = FW_TYPE_NONE;
 
+	/* Hide devices and sysfs/debugfs files from user */
+	cdev_sysfs_debugfs_remove(hdev);
+	drm_dev_unregister(&hdev->drm);
+
+	hl_debugfs_device_fini(hdev);
+
 	/* Release kernel context */
 	if ((hdev->kernel_ctx) && (hl_ctx_put(hdev->kernel_ctx) != 1))
 		dev_err(hdev->dev, "kernel ctx is still alive\n");
@@ -2435,12 +2441,6 @@ void hl_device_fini(struct hl_device *hdev)
 	hdev->asic_funcs->sw_fini(hdev);
 
 	device_early_fini(hdev);
-
-	/* Hide devices and sysfs/debugfs files from user */
-	cdev_sysfs_debugfs_remove(hdev);
-	drm_dev_unregister(&hdev->drm);
-
-	hl_debugfs_device_fini(hdev);
 
 	pr_info("removed device successfully\n");
 }
