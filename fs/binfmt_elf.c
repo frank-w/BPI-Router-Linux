@@ -764,7 +764,7 @@ static int parse_elf_properties(struct file *f, const struct elf_phdr *phdr,
 {
 	union {
 		struct elf_note nhdr;
-		char data[NOTE_DATA_SZ];
+		char *data;
 	} note;
 	loff_t pos;
 	ssize_t n;
@@ -784,26 +784,38 @@ static int parse_elf_properties(struct file *f, const struct elf_phdr *phdr,
 	if (phdr->p_filesz > sizeof(note))
 		return -ENOEXEC;
 
+	note.data = kcalloc(NOTE_DATA_SZ, sizeof(*note.data), GFP_KERNEL);
+	if (!note.data)
+		return -ENOMEM;
+
 	pos = phdr->p_offset;
 	n = kernel_read(f, &note, phdr->p_filesz, &pos);
 
 	BUILD_BUG_ON(sizeof(note) < sizeof(note.nhdr) + NOTE_NAME_SZ);
-	if (n < 0 || n < sizeof(note.nhdr) + NOTE_NAME_SZ)
-		return -EIO;
+	if (n < 0 || n < sizeof(note.nhdr) + NOTE_NAME_SZ) {
+		ret = -EIO;
+		goto exit;
+	}
 
 	if (note.nhdr.n_type != NT_GNU_PROPERTY_TYPE_0 ||
 	    note.nhdr.n_namesz != NOTE_NAME_SZ ||
 	    strncmp(note.data + sizeof(note.nhdr),
-		    GNU_PROPERTY_TYPE_0_NAME, n - sizeof(note.nhdr)))
-		return -ENOEXEC;
+		    GNU_PROPERTY_TYPE_0_NAME, n - sizeof(note.nhdr))) {
+		ret = -ENOEXEC;
+		goto exit;
+	}
 
 	off = round_up(sizeof(note.nhdr) + NOTE_NAME_SZ,
 		       ELF_GNU_PROPERTY_ALIGN);
-	if (off > n)
-		return -ENOEXEC;
+	if (off > n) {
+		ret = -ENOEXEC;
+		goto exit;
+	}
 
-	if (note.nhdr.n_descsz > n - off)
-		return -ENOEXEC;
+	if (note.nhdr.n_descsz > n - off) {
+		ret = -ENOEXEC;
+		goto exit;
+	}
 	datasz = off + note.nhdr.n_descsz;
 
 	have_prev_type = false;
@@ -813,6 +825,8 @@ static int parse_elf_properties(struct file *f, const struct elf_phdr *phdr,
 		have_prev_type = true;
 	} while (!ret);
 
+exit:
+	kfree(note.data);
 	return ret == -ENOENT ? 0 : ret;
 }
 
