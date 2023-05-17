@@ -766,10 +766,10 @@ case "\$1" in
 esac
 EOF
 	chmod +x $targetdir/DEBIAN/postrm
-	if [[ "$board" == "bpi-r64" ]];then
-		debarch=arm64
-	else
+	if [[ "$board" == "bpi-r2" ]];then
 		debarch=armhf
+	else
+		debarch=arm64
 	fi
 
     cat > $targetdir/DEBIAN/control << EOF
