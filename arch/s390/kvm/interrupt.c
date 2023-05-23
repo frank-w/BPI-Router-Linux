@@ -3398,7 +3398,6 @@ static void gib_alert_irq_handler(struct airq_struct *airq,
 
 static struct airq_struct gib_alert_irq = {
 	.handler = gib_alert_irq_handler,
-	.lsi_ptr = &gib_alert_irq.lsi_mask,
 };
 
 void kvm_s390_gib_destroy(void)
