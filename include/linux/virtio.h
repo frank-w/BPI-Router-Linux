@@ -55,6 +55,10 @@ struct virtqueue_detach_cursor {
 	unsigned pos:16;
 };
 
+int virtqueue_add_sg(struct virtqueue *vq, struct scatterlist *sg,
+		     unsigned int num, bool out, void *data,
+		     void *ctx, gfp_t gfp);
+
 int virtqueue_add_outbuf(struct virtqueue *vq,
 			 struct scatterlist sg[], unsigned int num,
 			 void *data,

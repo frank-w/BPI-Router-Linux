@@ -2357,6 +2357,29 @@ static inline int virtqueue_add(struct virtqueue *_vq,
 }
 
 /**
+ * virtqueue_add_sg - expose buffers to other end
+ * @vq: the struct virtqueue we're talking about.
+ * @sg: a scatterlist
+ * @num: the number of entries in @sg
+ * @out: whether the sg is readable by other side
+ * @data: the token identifying the buffer.
+ * @ctx: extra context for the token
+ * @gfp: how to do memory allocations (if necessary).
+ *
+ * Caller must ensure we don't call this with other virtqueue operations
+ * at the same time (except where noted).
+ *
+ * Returns zero or a negative error (ie. ENOSPC, ENOMEM, EIO).
+ */
+int virtqueue_add_sg(struct virtqueue *vq, struct scatterlist *sg,
+		     unsigned int num, bool out, void *data,
+		     void *ctx, gfp_t gfp)
+{
+	return virtqueue_add(vq, &sg, num, (int)out, (int)!out, data, ctx, gfp);
+}
+EXPORT_SYMBOL_GPL(virtqueue_add_sg);
+
+/**
  * virtqueue_add_sgs - expose buffers to other end
  * @_vq: the struct virtqueue we're talking about.
  * @sgs: array of terminated scatterlists.
