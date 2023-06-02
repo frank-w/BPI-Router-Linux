@@ -3,6 +3,7 @@
 #define _LINUX_VIRTIO_H
 /* Everything a virtio driver needs to work with any particular virtio
  * implementation. */
+#include <linux/dma-mapping.h>
 #include <linux/types.h>
 #include <linux/scatterlist.h>
 #include <linux/spinlock.h>
@@ -88,6 +89,10 @@ void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len);
 void *virtqueue_get_buf_ctx(struct virtqueue *vq, unsigned int *len,
 			    void **ctx);
 
+void *virtqueue_get_buf_premapped(struct virtqueue *_vq, unsigned int *len,
+				  void **ctx,
+				  struct virtqueue_detach_cursor *cursor);
+
 void virtqueue_disable_cb(struct virtqueue *vq);
 
 bool virtqueue_enable_cb(struct virtqueue *vq);
@@ -101,6 +106,8 @@ bool virtqueue_poll(struct virtqueue *vq, unsigned);
 bool virtqueue_enable_cb_delayed(struct virtqueue *vq);
 
 void *virtqueue_detach_unused_buf(struct virtqueue *vq);
+void *virtqueue_detach_unused_buf_premapped(struct virtqueue *_vq,
+					    struct virtqueue_detach_cursor *cursor);
 
 unsigned int virtqueue_get_vring_size(const struct virtqueue *vq);
 
@@ -113,6 +120,9 @@ dma_addr_t virtqueue_get_used_addr(const struct virtqueue *vq);
 
 int virtqueue_resize(struct virtqueue *vq, u32 num,
 		     void (*recycle)(struct virtqueue *vq, void *buf));
+
+int virtqueue_detach(struct virtqueue *_vq, struct virtqueue_detach_cursor *cursor,
+		     dma_addr_t *addr, u32 *len, enum dma_data_direction *dir);
 
 /**
  * struct virtio_device - representation of a device using virtio

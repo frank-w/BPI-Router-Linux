@@ -2555,6 +2555,66 @@ void *virtqueue_get_buf(struct virtqueue *_vq, unsigned int *len)
 	return virtqueue_get_buf_ctx(_vq, len, NULL);
 }
 EXPORT_SYMBOL_GPL(virtqueue_get_buf);
+
+/**
+ * virtqueue_get_buf_premapped - get the next used buffer
+ * @_vq: the struct virtqueue we're talking about.
+ * @len: the length written into the buffer
+ * @ctx: extra context for the token
+ * @cursor: detach cursor
+ *
+ * If the device wrote data into the buffer, @len will be set to the
+ * amount written.  This means you don't need to clear the buffer
+ * beforehand to ensure there's no data leakage in the case of short
+ * writes.
+ *
+ * Caller must ensure we don't call this with other virtqueue
+ * operations at the same time (except where noted).
+ *
+ * This is used for the premapped vq. The cursor is passed by the dirver, that
+ * is used for virtqueue_detach. That will be initialized by virtio core
+ * internally.
+ *
+ * Returns NULL if there are no used buffers, or the "data" token
+ * handed to virtqueue_add_*().
+ */
+void *virtqueue_get_buf_premapped(struct virtqueue *_vq, unsigned int *len,
+				  void **ctx,
+				  struct virtqueue_detach_cursor *cursor)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	return vq->packed_ring ? virtqueue_get_buf_ctx_packed(_vq, len, ctx, cursor) :
+				 virtqueue_get_buf_ctx_split(_vq, len, ctx, cursor);
+}
+EXPORT_SYMBOL_GPL(virtqueue_get_buf_premapped);
+
+/**
+ * virtqueue_detach - get the dma info of last buf
+ * @_vq: the struct virtqueue we're talking about.
+ * @cursor: detach cursor
+ * @addr: the dma address
+ * @len: the length of the dma address
+ * @dir: the direction of the dma address
+ *
+ * This is used for the premapped vq. The cursor is initialized by
+ * virtqueue_get_buf_premapped or virtqueue_detach_unused_buf_premapped.
+ *
+ * Returns:
+ * -EAGAIN: there are more dma info, this function should be called more.
+ * -EINVAL: the process is done, should not call this function
+ * 0: no more dma info
+ */
+int virtqueue_detach(struct virtqueue *_vq, struct virtqueue_detach_cursor *cursor,
+		     dma_addr_t *addr, u32 *len, enum dma_data_direction *dir)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	return vq->packed_ring ? virtqueue_detach_packed(_vq, cursor, addr, len, dir) :
+				 virtqueue_detach_split(_vq, cursor, addr, len, dir);
+}
+EXPORT_SYMBOL_GPL(virtqueue_detach);
+
 /**
  * virtqueue_disable_cb - disable callbacks
  * @_vq: the struct virtqueue we're talking about.
@@ -2681,6 +2741,29 @@ void *virtqueue_detach_unused_buf(struct virtqueue *_vq)
 				 virtqueue_detach_unused_buf_split(_vq, NULL);
 }
 EXPORT_SYMBOL_GPL(virtqueue_detach_unused_buf);
+
+/**
+ * virtqueue_detach_unused_buf_premapped - detach first unused buffer
+ * @_vq: the struct virtqueue we're talking about.
+ * @cursor: detach cursor
+ *
+ * This is used for the premapped vq. The cursor is passed by the dirver, that
+ * is used for virtqueue_detach. That will be initialized by virtio core
+ * internally.
+ *
+ * Returns NULL or the "data" token handed to virtqueue_add_*().
+ * This is not valid on an active queue; it is useful for device
+ * shutdown or the reset queue.
+ */
+void *virtqueue_detach_unused_buf_premapped(struct virtqueue *_vq,
+					    struct virtqueue_detach_cursor *cursor)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	return vq->packed_ring ? virtqueue_detach_unused_buf_packed(_vq, cursor) :
+				 virtqueue_detach_unused_buf_split(_vq, cursor);
+}
+EXPORT_SYMBOL_GPL(virtqueue_detach_unused_buf_premapped);
 
 static inline bool more_used(const struct vring_virtqueue *vq)
 {
