@@ -1695,8 +1695,85 @@ out:
 	return needs_kick;
 }
 
+static void detach_cursor_init_packed(struct vring_virtqueue *vq,
+				      struct virtqueue_detach_cursor *cursor, u16 id)
+{
+	struct vring_desc_state_packed *state = NULL;
+	u32 len;
+
+	state = &vq->packed.desc_state[id];
+
+	/* Clear data ptr. */
+	state->data = NULL;
+
+	vq->packed.desc_extra[state->last].next = vq->free_head;
+	vq->free_head = id;
+	vq->vq.num_free += state->num;
+
+	/* init cursor */
+	cursor->curr = id;
+	cursor->done = 0;
+	cursor->pos = 0;
+
+	if (vq->packed.desc_extra[id].flags & VRING_DESC_F_INDIRECT) {
+		len = vq->split.desc_extra[id].len;
+
+		cursor->num = len / sizeof(struct vring_packed_desc);
+		cursor->indirect = true;
+
+		vring_unmap_extra_packed(vq, &vq->packed.desc_extra[id]);
+	} else {
+		cursor->num = state->num;
+		cursor->indirect = false;
+	}
+}
+
+static int virtqueue_detach_packed(struct virtqueue *_vq, struct virtqueue_detach_cursor *cursor,
+				   dma_addr_t *addr, u32 *len, enum dma_data_direction *dir)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	if (unlikely(cursor->done))
+		return -EINVAL;
+
+	if (!cursor->indirect) {
+		struct vring_desc_extra *extra;
+
+		extra = &vq->packed.desc_extra[cursor->curr];
+		cursor->curr = extra->next;
+
+		*addr = extra->addr;
+		*len = extra->len;
+		*dir = (extra->flags & VRING_DESC_F_WRITE) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+
+		if (++cursor->pos == cursor->num) {
+			cursor->done = true;
+			return 0;
+		}
+	} else {
+		struct vring_packed_desc *indir_desc, *desc;
+		u16 flags;
+
+		indir_desc = vq->packed.desc_state[cursor->curr].indir_desc;
+		desc = &indir_desc[cursor->pos];
+
+		flags = le16_to_cpu(desc->flags);
+		*addr = le64_to_cpu(desc->addr);
+		*len = le32_to_cpu(desc->len);
+		*dir = (flags & VRING_DESC_F_WRITE) ?  DMA_FROM_DEVICE : DMA_TO_DEVICE;
+
+		if (++cursor->pos == cursor->num) {
+			kfree(indir_desc);
+			cursor->done = true;
+			return 0;
+		}
+	}
+
+	return -EAGAIN;
+}
+
 static void detach_buf_packed(struct vring_virtqueue *vq,
-			      unsigned int id, void **ctx)
+			      unsigned int id)
 {
 	struct vring_desc_state_packed *state = NULL;
 	struct vring_packed_desc *desc;
@@ -1736,8 +1813,6 @@ static void detach_buf_packed(struct vring_virtqueue *vq,
 		}
 		kfree(desc);
 		state->indir_desc = NULL;
-	} else if (ctx) {
-		*ctx = state->indir_desc;
 	}
 }
 
@@ -1768,7 +1843,8 @@ static bool more_used_packed(const struct vring_virtqueue *vq)
 
 static void *virtqueue_get_buf_ctx_packed(struct virtqueue *_vq,
 					  unsigned int *len,
-					  void **ctx)
+					  void **ctx,
+					  struct virtqueue_detach_cursor *cursor)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	u16 last_used, id, last_used_idx;
@@ -1808,7 +1884,14 @@ static void *virtqueue_get_buf_ctx_packed(struct virtqueue *_vq,
 
 	/* detach_buf_packed clears data, so grab it now. */
 	ret = vq->packed.desc_state[id].data;
-	detach_buf_packed(vq, id, ctx);
+
+	if (!vq->indirect && ctx)
+		*ctx = vq->packed.desc_state[id].indir_desc;
+
+	if (vq->premapped)
+		detach_cursor_init_packed(vq, cursor, id);
+	else
+		detach_buf_packed(vq, id);
 
 	last_used += vq->packed.desc_state[id].num;
 	if (unlikely(last_used >= vq->packed.vring.num)) {
@@ -1960,7 +2043,8 @@ static bool virtqueue_enable_cb_delayed_packed(struct virtqueue *_vq)
 	return true;
 }
 
-static void *virtqueue_detach_unused_buf_packed(struct virtqueue *_vq)
+static void *virtqueue_detach_unused_buf_packed(struct virtqueue *_vq,
+						struct virtqueue_detach_cursor *cursor)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	unsigned int i;
@@ -1973,7 +2057,10 @@ static void *virtqueue_detach_unused_buf_packed(struct virtqueue *_vq)
 			continue;
 		/* detach_buf clears data, so grab it now. */
 		buf = vq->packed.desc_state[i].data;
-		detach_buf_packed(vq, i, NULL);
+		if (vq->premapped)
+			detach_cursor_init_packed(vq, cursor, i);
+		else
+			detach_buf_packed(vq, i);
 		END_USE(vq);
 		return buf;
 	}
@@ -2458,7 +2545,7 @@ void *virtqueue_get_buf_ctx(struct virtqueue *_vq, unsigned int *len,
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 
-	return vq->packed_ring ? virtqueue_get_buf_ctx_packed(_vq, len, ctx) :
+	return vq->packed_ring ? virtqueue_get_buf_ctx_packed(_vq, len, ctx, NULL) :
 				 virtqueue_get_buf_ctx_split(_vq, len, ctx, NULL);
 }
 EXPORT_SYMBOL_GPL(virtqueue_get_buf_ctx);
@@ -2590,7 +2677,7 @@ void *virtqueue_detach_unused_buf(struct virtqueue *_vq)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 
-	return vq->packed_ring ? virtqueue_detach_unused_buf_packed(_vq) :
+	return vq->packed_ring ? virtqueue_detach_unused_buf_packed(_vq, NULL) :
 				 virtqueue_detach_unused_buf_split(_vq, NULL);
 }
 EXPORT_SYMBOL_GPL(virtqueue_detach_unused_buf);

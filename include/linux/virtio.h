@@ -43,8 +43,13 @@ struct virtqueue_detach_cursor {
 	unsigned done:1;
 	unsigned hole:14;
 
-	/* for split head */
-	unsigned head:16;
+	union {
+		/* for split head */
+		unsigned head:16;
+
+		/* for packed id */
+		unsigned curr:16;
+	};
 	unsigned num:16;
 	unsigned pos:16;
 };
