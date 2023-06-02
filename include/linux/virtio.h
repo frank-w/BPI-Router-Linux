@@ -38,6 +38,17 @@ struct virtqueue {
 	void *priv;
 };
 
+struct virtqueue_detach_cursor {
+	unsigned indirect:1;
+	unsigned done:1;
+	unsigned hole:14;
+
+	/* for split head */
+	unsigned head:16;
+	unsigned num:16;
+	unsigned pos:16;
+};
+
 int virtqueue_add_outbuf(struct virtqueue *vq,
 			 struct scatterlist sg[], unsigned int num,
 			 void *data,
