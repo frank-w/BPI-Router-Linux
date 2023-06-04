@@ -972,11 +972,17 @@ static const struct btmtkuart_data mt7668_data __maybe_unused = {
 	.fwname = FIRMWARE_MT7668,
 };
 
+static const struct btmtkuart_data mt7915_data __maybe_unused = {
+	.flags = BTMTKUART_FLAG_STANDALONE_HW,
+	.fwname = FIRMWARE_MT7915,
+};
+
 #ifdef CONFIG_OF
 static const struct of_device_id mtk_of_match_table[] = {
 	{ .compatible = "mediatek,mt7622-bluetooth", .data = &mt7622_data},
 	{ .compatible = "mediatek,mt7663u-bluetooth", .data = &mt7663_data},
 	{ .compatible = "mediatek,mt7668u-bluetooth", .data = &mt7668_data},
+	{ .compatible = "mediatek,mt7915-bluetooth", .data = &mt7915_data},
 	{ }
 };
 MODULE_DEVICE_TABLE(of, mtk_of_match_table);
