@@ -44,12 +44,51 @@
 						read-only;
 					};
 
-					partition@580000 {
+					ubi: partition@580000 {
 						label = "ubi";
 						reg = <0x580000 0x7a80000>;
+						compatible = "linux,ubi";
+
+						volumes {
+							#address-cells = <1>;
+							#size-cells = <0>;
+
+							art: volume@0 {
+								reg = <0>;
+								compatible = "nvmem-cells";
+								label = "art";
+								read-only;
+								#address-cells = <1>;
+								#size-cells = <1>;
+
+								macaddr_gmac1: macaddr_gmac1@0 {
+									reg = <0x0 0x6>;
+								};
+
+								macaddr_gmac2: macaddr_gmac2@6 {
+									reg = <0x6 0x6>;
+								};
+
+								pre_cal_24g: pre_cal_24g@1000 {
+									reg = <0x1000 0x2f20>;
+								};
+							};
+
+							fit: volume@2 {
+								reg = <2>;
+								volname = "fit";
+							};
+						};
 					};
 				};
 			};
+		};
+	};
+
+	fragment@1 {
+		target-path = "/chosen";
+		__overlay__ {
+			rootdisk = <&fit>;
 		};
 	};
 };
