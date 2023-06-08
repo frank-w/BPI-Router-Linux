@@ -348,6 +348,7 @@ struct ubi_volume {
 	int writers;
 	int exclusive;
 	int metaonly;
+	bool is_dead;
 
 	int reserved_pebs;
 	int vol_type;
@@ -568,6 +569,7 @@ struct ubi_device {
 	spinlock_t volumes_lock;
 	int ref_count;
 	int image_seq;
+	bool is_dead;
 
 	int rsvd_pebs;
 	int avail_pebs;
