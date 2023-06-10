@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0+
 #include <linux/bitfield.h>
+#include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/phy.h>
+#include <linux/regmap.h>
 
 #define MTK_GPHY_ID_MT7981			0x03a29461
 #define MTK_GPHY_ID_MT7988			0x03a29481
@@ -206,8 +208,39 @@
 #define MTK_PHY_DA_TX_R50_PAIR_C		0x53f
 #define MTK_PHY_DA_TX_R50_PAIR_D		0x540
 
+/* Registers on MDIO_MMD_VEND2 */
+#define MTK_PHY_LED0_ON_CTRL			0x24
+#define MTK_PHY_LED1_ON_CTRL			0x26
+#define   MTK_PHY_LED_ON_MASK			GENMASK(6, 0)
+#define   MTK_PHY_LED_ON_LINK1000		BIT(0)
+#define   MTK_PHY_LED_ON_LINK100		BIT(1)
+#define   MTK_PHY_LED_ON_LINK10			BIT(2)
+#define   MTK_PHY_LED_ON_LINKDOWN		BIT(3)
+#define   MTK_PHY_LED_ON_FDX			BIT(4) /* Full duplex */
+#define   MTK_PHY_LED_ON_HDX			BIT(5) /* Half duplex */
+#define   MTK_PHY_LED_ON_FORCE_ON		BIT(6)
+#define   MTK_PHY_LED_ON_POLARITY		BIT(14)
+#define   MTK_PHY_LED_ON_ENABLE			BIT(15)
+
+#define MTK_PHY_LED0_BLINK_CTRL			0x25
+#define MTK_PHY_LED1_BLINK_CTRL			0x27
+#define   MTK_PHY_LED_BLINK_1000TX		BIT(0)
+#define   MTK_PHY_LED_BLINK_1000RX		BIT(1)
+#define   MTK_PHY_LED_BLINK_100TX		BIT(2)
+#define   MTK_PHY_LED_BLINK_100RX		BIT(3)
+#define   MTK_PHY_LED_BLINK_10TX		BIT(4)
+#define   MTK_PHY_LED_BLINK_10RX		BIT(5)
+#define   MTK_PHY_LED_BLINK_COLLISION		BIT(6)
+#define   MTK_PHY_LED_BLINK_RX_CRC_ERR		BIT(7)
+#define   MTK_PHY_LED_BLINK_RX_IDLE_ERR		BIT(8)
+#define   MTK_PHY_LED_BLINK_FORCE_BLINK		BIT(9)
+
 #define MTK_PHY_RG_BG_RASEL			0x115
 #define   MTK_PHY_RG_BG_RASEL_MASK		GENMASK(2, 0)
+
+/* Register in boottrap syscon defining the initial state of the 4 PHY LEDs */
+#define RG_GPIO_MISC_TPBANK0			0x6f0
+#define   RG_GPIO_MISC_TPBANK0_BOOTMODE		GENMASK(11, 8)
 
 /* These macro privides efuse parsing for internal phy. */
 #define EFS_DA_TX_I2MPB_A(x)			(((x) >> 0) & GENMASK(5, 0))
@@ -236,13 +269,6 @@ enum {
 	PAIR_D,
 };
 
-enum {
-	GPHY_PORT0,
-	GPHY_PORT1,
-	GPHY_PORT2,
-	GPHY_PORT3,
-};
-
 enum calibration_mode {
 	EFUSE_K,
 	SW_K
@@ -259,6 +285,10 @@ enum CAL_ITEM {
 enum CAL_MODE {
 	EFUSE_M,
 	SW_M
+};
+
+struct mtk_socphy_shared {
+	u32			boottrap;
 };
 
 static int mtk_socphy_read_page(struct phy_device *phydev)
@@ -1071,6 +1101,113 @@ static int mt798x_phy_config_init(struct phy_device *phydev)
 	return mt798x_phy_calibration(phydev);
 }
 
+static bool mt7988_phy_led_get_polarity(struct phy_device *phydev, int led_num)
+{
+	struct mtk_socphy_shared *priv = phydev->shared->priv;
+	u32 polarities;
+
+	if (led_num == 0)
+		polarities = ~(priv->boottrap);
+	else
+		polarities = BIT(1);
+
+	if (polarities & BIT(phydev->mdio.addr))
+		return true;
+
+	return false;
+}
+
+static int mt798x_phy_setup_leds(struct phy_device *phydev)
+{
+	struct pinctrl *pinctrl;
+	const u16 led_on_ctrl_defaults = MTK_PHY_LED_ON_ENABLE   |
+					 MTK_PHY_LED_ON_LINK1000 |
+					 MTK_PHY_LED_ON_LINK100  |
+					 MTK_PHY_LED_ON_LINK10;
+	const u16 led_blink_defaults = MTK_PHY_LED_BLINK_1000TX |
+				       MTK_PHY_LED_BLINK_1000RX |
+				       MTK_PHY_LED_BLINK_100TX  |
+				       MTK_PHY_LED_BLINK_100RX  |
+				       MTK_PHY_LED_BLINK_10TX   |
+				       MTK_PHY_LED_BLINK_10RX;
+
+	phy_write_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED0_ON_CTRL,
+		      led_on_ctrl_defaults ^
+		      (mt7988_phy_led_get_polarity(phydev, 0) ?
+		       MTK_PHY_LED_ON_POLARITY : 0));
+
+	phy_write_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED1_ON_CTRL,
+		      led_on_ctrl_defaults ^
+		      (mt7988_phy_led_get_polarity(phydev, 1) ?
+		       MTK_PHY_LED_ON_POLARITY : 0));
+
+	phy_write_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED0_BLINK_CTRL,
+		      led_blink_defaults);
+
+	phy_write_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED1_BLINK_CTRL,
+		      led_blink_defaults);
+
+	pinctrl = devm_pinctrl_get_select(&phydev->mdio.dev, "gbe-led");
+	if (IS_ERR(pinctrl))
+		dev_err(&phydev->mdio.bus->dev, "Failed to setup PHY LED\n");
+
+	return 0;
+}
+
+static int mt7988_phy_probe_shared(struct phy_device *phydev)
+{
+	struct device_node *np = dev_of_node(&phydev->mdio.bus->dev);
+	struct mtk_socphy_shared *priv = phydev->shared->priv;
+	struct regmap *regmap;
+	u32 reg;
+	int ret;
+
+	/* The LED0 of the 4 PHYs in MT7988 are wired to SoC pins LED_A, LED_B,
+	 * LED_C and LED_D respectively. At the same time those pins are used to
+	 * bootstrap configuration of the reference clock source (LED_A),
+	 * DRAM DDRx16b x2/x1 (LED_B) and boot device (LED_C, LED_D).
+	 * In practise this is done using a LED and a resistor pulling the pin
+	 * either to GND or to VIO.
+	 * The detected value at boot time is accessible at run-time using the
+	 * TPBANK0 register located in the gpio base of the pinctrl, in order
+	 * to read it here it needs to be referenced by a phandle called
+	 * 'mediatek,pio' in the MDIO bus hosting the PHY.
+	 * The 4 bits in TPBANK0 are kept as package shared data and are used to
+	 * set LED polarity for each of the LED0.
+	 */
+	regmap = syscon_regmap_lookup_by_phandle(np, "mediatek,pio");
+	if (IS_ERR(regmap))
+		return PTR_ERR(regmap);
+
+	ret = regmap_read(regmap, RG_GPIO_MISC_TPBANK0, &reg);
+	if (ret)
+		return ret;
+
+	priv->boottrap = FIELD_GET(RG_GPIO_MISC_TPBANK0_BOOTMODE, reg);
+
+	return 0;
+}
+
+static int mt7988_phy_probe(struct phy_device *phydev)
+{
+	int err;
+
+	err = devm_phy_package_join(&phydev->mdio.dev, phydev, 0,
+				    sizeof(struct mtk_socphy_shared));
+	if (err)
+		return err;
+
+	if (phy_package_probe_once(phydev)) {
+		err = mt7988_phy_probe_shared(phydev);
+		if (err)
+			return err;
+	}
+
+	mt798x_phy_setup_leds(phydev);
+
+	return mt798x_phy_calibration(phydev);
+}
+
 static struct phy_driver mtk_socphy_driver[] = {
 	{
 		PHY_ID_MATCH_EXACT(MTK_GPHY_ID_MT7981),
@@ -1090,7 +1227,7 @@ static struct phy_driver mtk_socphy_driver[] = {
 		.config_init	= mt798x_phy_config_init,
 		.config_intr	= genphy_no_config_intr,
 		.handle_interrupt = genphy_handle_interrupt_no_ack,
-		.probe		= mt798x_phy_calibration,
+		.probe		= mt7988_phy_probe,
 		.suspend	= genphy_suspend,
 		.resume		= genphy_resume,
 		.read_page	= mtk_socphy_read_page,
