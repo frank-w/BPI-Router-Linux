@@ -25,6 +25,22 @@ config NET_MEDIATEK_SOC
 	  This driver supports the gigabit ethernet MACs in the
 	  MediaTek SoC family.
 
+config NET_MEDIATEK_SOC_USXGMII
+	bool "Support USXGMII SerDes on MT7988"
+	depends on (ARCH_MEDIATEK && ARM64) || COMPILE_TEST
+	def_bool NET_MEDIATEK_SOC != n
+	help
+	  Include support for 10G SerDes which can be found on MT7988.
+	  If this kernel should run on SoCs with 10 GBit/s Ethernet you
+	  will need to select this option to use GMAC2 and GMAC3 with
+	  external PHYs, SFP(+) cages in 10000Base-R, 5000Base-R or
+	  USXGMII interface mode.
+
+	  Note that as the 2500Base-X/1000Base-X/Cisco SGMII SerDes PCS
+	  unit (MediaTek LynxI) in MT7988 is connected via the new 10GE
+	  SerDes, you will also need to select this option in case you
+	  want to use any of those SerDes modes.
+
 config NET_MEDIATEK_STAR_EMAC
 	tristate "MediaTek STAR Ethernet MAC support"
 	select PHYLIB
