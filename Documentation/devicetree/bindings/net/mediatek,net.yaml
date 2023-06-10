@@ -23,6 +23,7 @@ properties:
       - mediatek,mt7629-eth
       - mediatek,mt7981-eth
       - mediatek,mt7986-eth
+      - mediatek,mt7988-eth
       - ralink,rt5350-eth
 
   reg:
@@ -70,6 +71,22 @@ properties:
       A list of phandle to the syscon node that handles the SGMII setup which is required for
       those SoCs equipped with SGMII.
 
+  mediatek,toprgu
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description:
+      Phandle to the mediatek toprgu controller used to provide various clocks
+      and reset to the system.
+
+  mediatek,usxgmiisys:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    minItems: 2
+    maxItems: 2
+    items:
+      maxItems: 1
+    description:
+      A list of phandle to the syscon node that handles the USXGMII setup which is required for
+      those SoCs equipped with USXGMII.
+
   mediatek,wed:
     $ref: /schemas/types.yaml#/definitions/phandle-array
     minItems: 2
@@ -83,6 +100,21 @@ properties:
     $ref: /schemas/types.yaml#/definitions/phandle
     description:
       Phandle to the mediatek wed-pcie controller.
+
+  mediatek,xfi_pextp:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    minItems: 2
+    maxItems: 2
+    items:
+      maxItems: 1
+    description:
+      A list of phandle to the syscon node that handles the XFI setup which is required for
+      those SoCs equipped with XFI.
+
+  mediatek,xfi_pll:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description:
+      Phandle to the XFI PLL unit.
 
   dma-coherent: true
 
@@ -289,6 +321,85 @@ allOf:
         mediatek,sgmiisys:
           minItems: 2
           maxItems: 2
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: mediatek,mt7988-eth
+    then:
+      properties:
+        interrupts:
+          minItems: 4
+
+        clocks:
+          minItems: 34
+          maxItems: 34
+
+        clock-names:
+          items:
+            - const: crypto
+            - const: fe
+            - const: gp2
+            - const: gp1
+            - const: gp3
+            - const: ethwarp_wocpu2
+            - const: ethwarp_wocpu1
+            - const: ethwarp_wocpu0
+            - const: esw
+            - const: netsys0
+            - const: netsys1
+            - const: sgmii_tx250m
+            - const: sgmii_rx250m
+            - const: sgmii2_tx250m
+            - const: sgmii2_rx250m
+            - const: top_usxgmii0_sel
+            - const: top_usxgmii1_sel
+            - const: top_sgm0_sel
+            - const: top_sgm1_sel
+            - const: top_xfi_phy0_xtal_sel
+            - const: top_xfi_phy1_xtal_sel
+            - const: top_eth_gmii_sel
+            - const: top_eth_refck_50m_sel
+            - const: top_eth_sys_200m_sel
+            - const: top_eth_sys_sel
+            - const: top_eth_xgmii_sel
+            - const: top_eth_mii_sel
+            - const: top_netsys_sel
+            - const: top_netsys_500m_sel
+            - const: top_netsys_pao_2x_sel
+            - const: top_netsys_sync_250m_sel
+            - const: top_netsys_ppefb_250m_sel
+            - const: top_netsys_warp_sel
+            - const: wocpu1
+            - const: wocpu0
+            - const: xgp1
+            - const: xgp2
+            - const: xgp3
+
+        mediatek,sgmiisys:
+          minItems: 2
+          maxItems: 2
+
+        mediatek,usxgmiisys:
+          minItems: 2
+          maxItems: 2
+
+        mediatek,xfi_pextp:
+          minItems: 2
+          maxItems: 2
+
+        mediatek,xfi_pll:
+          minItems: 1
+          maxItems: 1
+
+        mediatek,infracfg
+          minItems: 1
+          maxItems: 1
+
+        mediatek,toprgu
+          minItems: 1
+          maxItems: 1
 
 patternProperties:
   "^mac@[0-1]$":
