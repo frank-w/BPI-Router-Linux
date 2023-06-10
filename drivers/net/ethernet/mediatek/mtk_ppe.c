@@ -898,6 +898,9 @@ struct mtk_ppe *mtk_ppe_init(struct mtk_eth *eth, void __iomem *base, int index)
 	ppe->version = eth->soc->offload_version;
 	ppe->accounting = accounting;
 
+	if (dma_set_mask_and_coherent(ppe->dev, DMA_BIT_MASK(32)))
+		goto err_free_l2_flows;
+
 	foe = dmam_alloc_coherent(ppe->dev,
 				  MTK_PPE_ENTRIES * soc->foe_entry_size,
 				  &ppe->foe_phys, GFP_KERNEL);
