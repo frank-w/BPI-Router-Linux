@@ -1,0 +1,44 @@
+/* SPDX-License-Identifier: (GPL-2.0-only OR MIT) */
+/*
+ * Authors: Daniel Golle <daniel@makrotopia.org>
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "bananapi,bpi-r3", "mediatek,mt7986a";
+
+	fragment@0 {
+		target-path = "/i2c-gpio-0";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@1 {
+		target-path = "/sfp-1";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@2 {
+		target-path = "/soc/ethernet@15100000/mdio-bus";
+		__overlay__ {
+			en8811: ethernet-phy@6 {
+				compatible = "ethernet-phy-ieee802.3-c45";
+				phy-mode = "2500base-x";
+				reg = <6>;
+			};
+		};
+	};
+
+	fragment@3 {
+		target-path = "/soc/ethernet@15100000/mac@1";
+		__overlay__ {
+			managed = "phy";
+			phy = <&en8811>;
+		};
+	};
+};
