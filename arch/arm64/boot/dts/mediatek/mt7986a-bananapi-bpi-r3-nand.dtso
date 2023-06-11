@@ -91,4 +91,20 @@
 			rootdisk = <&fit>;
 		};
 	};
+
+	fragment@2 {
+		target-path = "/soc/ethernet@15100000/mac@0";
+		__overlay__ {
+			nvmem-cells = <&macaddr_gmac1>;
+			nvmem-cell-names = "mac-address";
+		};
+	};
+
+	fragment@3 {
+		target-path = "/soc/ethernet@15100000/mac@1";
+		__overlay__ {
+			nvmem-cells = <&macaddr_gmac2>;
+			nvmem-cell-names = "mac-address";
+		};
+	};
 };
