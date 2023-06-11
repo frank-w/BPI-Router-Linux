@@ -80,6 +80,11 @@ config MESON_GXL_PHY
 	help
 	  Currently has a driver for the Amlogic Meson GXL Internal PHY
 
+config AIROHA_EN8811H_PHY
+	tristate "Airoha EN8811H 2.5G Gigabit PHY"
+	help
+	  Currently supports the Airoha EN8811H PHY.
+
 config ADIN_PHY
 	tristate "Analog Devices Industrial Ethernet PHYs"
 	help
