@@ -4030,8 +4030,12 @@ static void mtk_sgmii_destroy(struct mtk_eth *eth)
 {
 	int i;
 
-	for (i = 0; i < MTK_MAX_DEVS; i++)
+	for (i = 0; i < MTK_MAX_DEVS; i++) {
+		if (!eth->sgmii_pcs[i])
+			continue;
+
 		mtk_pcs_lynxi_destroy(eth->sgmii_pcs[i]);
+	}
 }
 
 static int mtk_cleanup(struct mtk_eth *eth)
