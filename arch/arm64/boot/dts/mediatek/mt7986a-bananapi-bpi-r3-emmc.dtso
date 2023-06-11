@@ -12,7 +12,7 @@
 
 	fragment@0 {
 		target-path = "/soc/mmc@11230000";
-		__overlay__ {
+		frag0: __overlay__ {
 			bus-width = <8>;
 			max-frequency = <200000000>;
 			cap-mmc-highspeed;
@@ -25,5 +25,11 @@
 			status = "okay";
 		};
 	};
-};
 
+	fragment@1 {
+		target-path = "/chosen";
+		__overlay__ {
+			rootdisk = <&frag0 5>;
+		};
+	};
+};
