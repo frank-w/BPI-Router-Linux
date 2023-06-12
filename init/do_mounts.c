@@ -437,7 +437,8 @@ static dev_t __init parse_root_device(char *root_device_name)
 	int error;
 	dev_t dev;
 
-	if (!strncmp(root_device_name, "mtd", 3) ||
+	if (!strncmp(root_device_name, "fit", 3) ||
+	    !strncmp(root_device_name, "mtd", 3) ||
 	    !strncmp(root_device_name, "ubi", 3))
 		return Root_Generic;
 	if (strcmp(root_device_name, "/dev/nfs") == 0)
