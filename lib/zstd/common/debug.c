@@ -22,4 +22,6 @@
 
 #include "debug.h"
 
+#if (DEBUGLEVEL>=2)
 int g_debuglevel = DEBUGLEVEL;
+#endif
