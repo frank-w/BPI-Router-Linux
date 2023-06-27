@@ -2329,7 +2329,7 @@ static void _enable_swap_info(struct swap_info_struct *p)
 	 */
 	plist_add(&p->list, &swap_active_head);
 
-	/* add to avaliable list iff swap device is not full */
+	/* add to available list iff swap device is not full */
 	if (p->highest_bit)
 		add_to_avail_list(p);
 }
