@@ -920,16 +920,16 @@ function prepare_SD {
 
 	export INSTALL_MOD_PATH=$SD/BPI-ROOT/;
 	echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
+	kerndir="$SD/BPI-BOOT"
+	fdtdir=$kerndir
 	if [[ "$board" == "bpi-r2pro" ]];then
-		mkdir -p $SD/BPI-BOOT/extlinux/
-		cp ${bindir}arch/arm64/boot/Image.gz $SD/BPI-BOOT/extlinux/
-		cp ./$board.dtb $SD/BPI-BOOT/extlinux/$board.dtb
+		mkdir -p $kerndir/extlinux/
+		cp ${bindir}arch/arm64/boot/Image.gz $kerndir/extlinux/
+		cp ./$board.dtb $kerndir/extlinux/$board.dtb
 	else
-		kerndir=$SD/BPI-BOOT/bananapi/$board/linux
-		fdtdir="$kerndir/dtb"
-		if [[ "$board" == "bpi-r3" ]];then
-			kerndir="$SD/BPI-BOOT"
-			fdtdir=$kerndir
+		if [[ "$board" =~ bpi-r2|bpi-r64 ]];then
+			kerndir=$SD/BPI-BOOT/bananapi/$board/linux
+			fdtdir="$kerndir/dtb"
 		fi
 		for createDir in "$kerndir" "$fdtdir" "$SD/BPI-ROOT/lib/modules" "$SD/BPI-ROOT/lib/firmware"; do
 			mkdir -p ${createDir} >/dev/null 2>/dev/null
