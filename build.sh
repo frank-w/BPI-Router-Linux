@@ -766,10 +766,10 @@ case "\$1" in
 esac
 EOF
 	chmod +x $targetdir/DEBIAN/postrm
-	if [[ "$board" == "bpi-r64" ]];then
-		debarch=arm64
-	else
+	if [[ "$board" == "bpi-r2" ]];then
 		debarch=armhf
+	else
+		debarch=arm64
 	fi
 
     cat > $targetdir/DEBIAN/control << EOF
@@ -865,10 +865,10 @@ function build {
 				cp $DTBFILE $board.dtb
 			fi
 
-			if [[ "$board" == "bpi-r2pro" ]];then
-				#skipping mkimage causes no choice, but uImage is not bootable on r2pro
-				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
-			elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
+			#if [[ "$board" == "bpi-r2pro" ]];then
+			#	#skipping mkimage causes no choice, but uImage is not bootable on r2pro
+			#	mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
+			if [[ -e ${board}.its ]];then #"$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
 				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
 				mkimage -f ${board}.its.tmp ${board}.itb
@@ -941,9 +941,9 @@ function prepare_SD {
 			cp ./uImage_nodt $kerndir/uImage_nodt
 			cp ./$board.dtb $fdtdir/$board.dtb
 		fi
-		if [[ -e ./$board.itb ]];then
-			cp ./$board.itb $kerndir/$board.itb
-		fi
+	fi
+	if [[ -e ./$board.itb ]];then
+		cp ./$board.itb $kerndir/$board.itb
 	fi
 	make modules_install
 
