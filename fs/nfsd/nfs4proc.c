@@ -942,8 +942,17 @@ nfsd4_read(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	/* check stateid */
 	status = nfs4_preprocess_stateid_op(rqstp, cstate, &cstate->current_fh,
 					&read->rd_stateid, RD_STATE,
-					&read->rd_nf, NULL);
-
+					&read->rd_nf, &read->rd_wd_stid);
+	/*
+	 * rd_wd_stid is needed for nfsd4_encode_read to allow a write
+	 * delegation stateid to be used for a READ.
+	 */
+	if (!status && (read->rd_wd_stid->sc_type != NFS4_DELEG_STID ||
+			delegstateid(read->rd_wd_stid)->dl_type !=
+			NFS4_OPEN_DELEGATE_WRITE)) {
+		nfs4_put_stid(read->rd_wd_stid);
+		read->rd_wd_stid = NULL;
+	}
 	read->rd_rqstp = rqstp;
 	read->rd_fhp = &cstate->current_fh;
 	return status;
@@ -953,6 +962,8 @@ nfsd4_read(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 static void
 nfsd4_read_release(union nfsd4_op_u *u)
 {
+	if (u->read.rd_wd_stid)
+		nfs4_put_stid(u->read.rd_wd_stid);
 	if (u->read.rd_nf)
 		nfsd_file_put(u->read.rd_nf);
 	trace_nfsd_read_done(u->read.rd_rqstp, u->read.rd_fhp,
