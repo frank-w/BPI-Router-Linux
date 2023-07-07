@@ -3708,6 +3708,9 @@ static u64 mem_cgroup_read_u64(struct cgroup_subsys_state *css,
 	case _MEMSWAP:
 		counter = &memcg->memsw;
 		break;
+	case _KMEM:
+		counter = &memcg->kmem;
+		break;
 	case _TCP:
 		counter = &memcg->tcpmem;
 		break;
