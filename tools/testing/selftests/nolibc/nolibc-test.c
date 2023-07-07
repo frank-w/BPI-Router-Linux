@@ -1063,6 +1063,9 @@ int prepare(void)
 		}
 	}
 
+	/* some tests rely on a writable /tmp */
+	mkdir("/tmp", 0755);
+
 	return 0;
 }
 
