@@ -431,7 +431,7 @@ static void sfp_quirk_oem_2_5g(const struct sfp_eeprom_id *id,
 			       unsigned long *interfaces)
 {
 	/* Copper 2.5G SFP */
-	linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT, modes);
+	linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT, modes);
 	__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
 	sfp_quirk_disable_autoneg(id, modes, interfaces);
 }
