@@ -1167,7 +1167,7 @@ static __always_inline void iocsr_write64(u64 val, u32 reg)
 
 #ifndef __ASSEMBLY__
 
-static inline u64 drdtime(void)
+static __always_inline u64 drdtime(void)
 {
 	int rID = 0;
 	u64 val = 0;
@@ -1496,7 +1496,7 @@ __BUILD_CSR_OP(tlbidx)
 #define write_fcsr(dest, val) \
 do {	\
 	__asm__ __volatile__(	\
-	"	movgr2fcsr	%0, "__stringify(dest)"	\n"	\
+	"	movgr2fcsr	"__stringify(dest)", %0	\n"	\
 	: : "r" (val));	\
 } while (0)
 

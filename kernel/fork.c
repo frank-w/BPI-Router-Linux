@@ -252,23 +252,19 @@ static int memcg_charge_kernel_stack(struct vm_struct *vm)
 {
 	int i;
 	int ret;
+	int nr_charged = 0;
 
-	BUILD_BUG_ON(IS_ENABLED(CONFIG_VMAP_STACK) && PAGE_SIZE % 1024 != 0);
 	BUG_ON(vm->nr_pages != THREAD_SIZE / PAGE_SIZE);
 
 	for (i = 0; i < THREAD_SIZE / PAGE_SIZE; i++) {
 		ret = memcg_kmem_charge_page(vm->pages[i], GFP_KERNEL, 0);
 		if (ret)
 			goto err;
+		nr_charged++;
 	}
 	return 0;
 err:
-	/*
-	 * If memcg_kmem_charge_page() fails, page's memory cgroup pointer is
-	 * NULL, and memcg_kmem_uncharge_page() in free_thread_stack() will
-	 * ignore this page.
-	 */
-	for (i = 0; i < THREAD_SIZE / PAGE_SIZE; i++)
+	for (i = 0; i < nr_charged; i++)
 		memcg_kmem_uncharge_page(vm->pages[i], 0);
 	return ret;
 }
@@ -627,6 +623,7 @@ void free_task(struct task_struct *tsk)
 	arch_release_task_struct(tsk);
 	if (tsk->flags & PF_KTHREAD)
 		free_kthread_struct(tsk);
+	bpf_task_storage_free(tsk);
 	free_task_struct(tsk);
 }
 EXPORT_SYMBOL(free_task);
@@ -979,7 +976,6 @@ void __put_task_struct(struct task_struct *tsk)
 	cgroup_free(tsk);
 	task_numa_free(tsk, true);
 	security_task_free(tsk);
-	bpf_task_storage_free(tsk);
 	exit_creds(tsk);
 	delayacct_tsk_free(tsk);
 	put_signal_struct(tsk->signal);
