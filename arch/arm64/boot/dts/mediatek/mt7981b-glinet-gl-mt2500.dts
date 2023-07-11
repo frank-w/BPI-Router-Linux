@@ -1,0 +1,234 @@
+/dts-v1/;
+#include "mt7981.dtsi"
+/ {
+	model = "GL.iNet GL-MT2500";
+	compatible = "glinet,mt2500-emmc", "mediatek,mt7981";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0x11002000 console=ttyS0,115200n1 swiotlb=512";
+		stdout-path = "serial0:115200n8";
+	};
+
+	reserved-memory {
+		/delete-node/ wo-ilm@151e0000;
+		/delete-node/ wo-dlm@151e8000;
+		/delete-node/ wo-boot@15194000;
+	};
+
+	aliases {
+		led-boot = &led_blue;
+		led-failsafe = &led_blue;
+		led-running = &led_white;
+		led-upgrade = &led_blue;
+		serial0 = &uart0;
+	};
+
+	reg_3p3v: regulator-3p3v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	gpio-export {
+		compatible = "gpio-export";
+
+		usb_power {
+			gpio-export,name = "usb_power";
+			gpio-export,output = <1>;
+			gpios = <&pio 12 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led@0 {
+			label = "vpn";
+			gpios = <&pio 31 GPIO_ACTIVE_LOW>;
+		};
+
+		led_white: led@1 {
+			label = "white:system";
+			gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+		};
+
+		led_blue: led@2 {
+			label = "blue:system";
+			gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&watchdog {
+	status = "okay";
+};
+
+&mmc0 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+	bus-width = <8>;
+	max-frequency = <52000000>;
+	cap-mmc-highspeed;
+	vmmc-supply = <&reg_3p3v>;
+	non-removable;
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		block {
+			partitions {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				partition@2 {
+					reg = <2>;
+					partname = "u-boot-env";
+					compatible = "nvmem-cells";
+				};
+
+				partition@3 {
+					reg = <3>;
+					partname = "rf";
+					compatible = "nvmem-cells";
+				};
+			};
+		};
+
+		boot1 {
+			compatible = "nvmem-cells";
+
+			nvmem-layout {
+				compatible = "fixed-layout";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				macaddr: macaddr@a {
+					compatible = "mac-base";
+					reg = <0xa 0x6>;
+					#nvmem-cell-cells = <1>;
+				};
+
+				ddns@10 {
+					reg = <0x10 0x10>;
+				};
+
+				sn-bak@20 {
+					reg = <0x20 0x10>;
+				};
+
+				sn@30 {
+					reg = <0x30 0x10>;
+				};
+
+				country-code@88 {
+					reg = <0x88 0x10>;
+				};
+			};
+		};
+	};
+};
+
+&eth {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mdio_pins>;
+
+	status = "okay";
+
+	gmac0: mac@0 {
+		compatible = "mediatek,eth-mac";
+		reg = <0>;
+		phy-mode = "2500base-x";
+		phy-handle = <&phy0>;
+		nvmem-cells = <&macaddr 0>;
+		nvmem-cell-names = "mac-address";
+	};
+
+	gmac1: mac@1 {
+		compatible = "mediatek,eth-mac";
+		reg = <1>;
+		phy-mode = "gmii";
+		phy-handle = <&int_gbe_phy>;
+		nvmem-cells = <&macaddr 1>;
+		nvmem-cell-names = "mac-address";
+	};
+};
+
+&mdio_bus {
+	reset-gpios = <&pio 14 GPIO_ACTIVE_LOW>;
+	reset-delay-us = <600>;
+	reset-post-delay-us = <20000>;
+
+	phy0: ethernet-phy@5 {
+		reg = <5>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		phy-mode = "2500base-x";
+	};
+};
+
+&pio {
+	spic_pins: spi1-pins {
+		mux {
+			function = "spi";
+			groups = "spi1_1";
+		};
+	};
+	mmc0_pins_default: mmc0-pins-default {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+	mmc0_pins_uhs: mmc0-pins-uhs {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+};
+
+&xhci {
+	mediatek,u3p-dis-msk = <0x0>;
+	phys = <&u2port0 PHY_TYPE_USB2>,
+	       <&u3port0 PHY_TYPE_USB3>;
+	status = "okay";
+};
+
+&wifi {
+	/delete-property/ memory-region;
+};
+
+&consys {
+	/delete-property/ memory-region;
+
+	status = "disabled";
+};
+
+&wed {
+	/delete-property/ memory-region;
+	/delete-property/ memory-region-names;
+
+	status = "disabled";
+};
