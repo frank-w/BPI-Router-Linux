@@ -25,7 +25,6 @@
 #include <linux/mm.h>
 #include <linux/proc_fs.h>
 #include <linux/tty.h>
-#include <linux/file.h>
 #include <linux/binfmts.h>
 #include <linux/coredump.h>
 #include <linux/security.h>
