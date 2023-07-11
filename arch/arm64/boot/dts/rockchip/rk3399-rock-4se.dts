@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright (c) 2019 Fuzhou Rockchip Electronics Co., Ltd
- * Copyright (c) 2019 Radxa Limited
- * Copyright (c) 2019 Amarula Solutions(India)
+ * Copyright (c) 2019 Akash Gajjar <Akash_Gajjar@mentor.com>
+ * Copyright (c) 2019 Pragnesh Patel <Pragnesh_Patel@mentor.com>
  */
 
 /dts-v1/;
 #include "rk3399-rock-pi-4.dtsi"
-#include "rk3399-opp.dtsi"
+#include "rk3399-t-opp.dtsi"
 
 / {
-	model = "Radxa ROCK Pi 4C";
-	compatible = "radxa,rockpi4c", "radxa,rockpi4", "rockchip,rk3399";
+	model = "Radxa ROCK 4SE";
+	compatible = "radxa,rock-4se", "rockchip,rk3399";
 
 	aliases {
 		mmc2 = &sdio0;
 	};
 };
 
-&es8316 {
-	pinctrl-0 = <&hp_detect &hp_int>;
-	pinctrl-names = "default";
-	interrupt-parent = <&gpio1>;
-	interrupts = <RK_PA1 IRQ_TYPE_LEVEL_HIGH>;
+&pinctrl {
+	usb2 {
+		vcc5v0_host_en: vcc5v0-host-en {
+			rockchip,pins = <4 RK_PD1 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
 };
 
 &sdio0 {
@@ -37,10 +37,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&wifi_host_wake_l>;
 	};
-};
-
-&sound {
-	hp-det-gpio = <&gpio1 RK_PA0 GPIO_ACTIVE_HIGH>;
 };
 
 &uart0 {
@@ -62,9 +58,8 @@
 };
 
 &vcc5v0_host {
-	gpio = <&gpio3 RK_PD6 GPIO_ACTIVE_HIGH>;
-};
-
-&vcc5v0_host_en {
-	rockchip,pins = <3 RK_PD6 RK_FUNC_GPIO &pcfg_pull_none>;
+	enable-active-high;
+	gpio = <&gpio4 RK_PD1 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&vcc5v0_host_en>;
 };
