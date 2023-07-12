@@ -233,10 +233,15 @@ static const struct mtk_rng_of_data mt7623_rng_data = {
 	.rng_version = 1,
 };
 
+static const struct mtk_rng_of_data mt7988_rng_data = {
+	.rng_version = 2,
+};
+
 static const struct of_device_id mtk_rng_match[] = {
 	{ .compatible = "mediatek,mt7981-rng", .data = &mt7981_rng_data },
 	{ .compatible = "mediatek,mt7986-rng", .data = &mt7986_rng_data },
 	{ .compatible = "mediatek,mt7623-rng", .data = &mt7623_rng_data },
+	{ .compatible = "mediatek,mt7988-rng", .data = &mt7988_rng_data },
 	{},
 };
 MODULE_DEVICE_TABLE(of, mtk_rng_match);
