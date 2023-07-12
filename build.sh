@@ -138,7 +138,7 @@ fi
 function edit()
 {
 	file=$1
-	EDITOR=nano
+	if [[ -z "$EDITOR" ]];then EDITOR=/usr/bin/editor;fi #use alternatives setting
 	if [[ -e "$file" ]];then
 		if [[ -w "$file" ]];then
 			$EDITOR "$file"
