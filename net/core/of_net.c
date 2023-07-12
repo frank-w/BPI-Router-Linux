@@ -58,13 +58,71 @@ static int of_get_mac_addr(struct device_node *np, const char *name, u8 *addr)
 	return -ENODEV;
 }
 
+static void *nvmem_cell_get_mac_address(struct nvmem_cell *cell)
+{
+	size_t len;
+	void *mac;
+
+	mac = nvmem_cell_read(cell, &len);
+	if (IS_ERR(mac))
+		return mac;
+	if (len != ETH_ALEN) {
+		kfree(mac);
+		return ERR_PTR(-EINVAL);
+	}
+	return mac;
+}
+
+static void *nvmem_cell_get_mac_address_ascii(struct nvmem_cell *cell)
+{
+	size_t len;
+	int ret;
+	void *mac_ascii;
+	u8 *mac;
+
+	mac_ascii = nvmem_cell_read(cell, &len);
+	if (IS_ERR(mac_ascii))
+		return mac_ascii;
+	if (len != ETH_ALEN*2+5) {
+		kfree(mac_ascii);
+		return ERR_PTR(-EINVAL);
+	}
+	mac = kmalloc(ETH_ALEN, GFP_KERNEL);
+	if (!mac) {
+		kfree(mac_ascii);
+		return ERR_PTR(-ENOMEM);
+	}
+	ret = sscanf(mac_ascii, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
+				&mac[0], &mac[1], &mac[2],
+				&mac[3], &mac[4], &mac[5]);
+	kfree(mac_ascii);
+	if (ret == ETH_ALEN)
+		return mac;
+	kfree(mac);
+	return ERR_PTR(-EINVAL);
+}
+
+static struct nvmem_cell_mac_address_property {
+	char *name;
+	void *(*read)(struct nvmem_cell *);
+} nvmem_cell_mac_address_properties[] = {
+	{
+		.name = "mac-address",
+		.read = nvmem_cell_get_mac_address,
+	}, {
+		.name = "mac-address-ascii",
+		.read = nvmem_cell_get_mac_address_ascii,
+	},
+};
+
+
 int of_get_mac_address_nvmem(struct device_node *np, u8 *addr)
 {
 	struct platform_device *pdev = of_find_device_by_node(np);
+	struct nvmem_cell_mac_address_property *property;
 	struct nvmem_cell *cell;
 	const void *mac;
-	size_t len;
-	int ret;
+	int ret, i;
 
 	/* Try lookup by device first, there might be a nvmem_cell_lookup
 	 * associated with a given device.
@@ -75,17 +133,26 @@ int of_get_mac_address_nvmem(struct device_node *np, u8 *addr)
 		return ret;
 	}
 
-	cell = of_nvmem_cell_get(np, "mac-address");
+	for (i = 0; i < ARRAY_SIZE(nvmem_cell_mac_address_properties); i++) {
+		property = &nvmem_cell_mac_address_properties[i];
+		cell = of_nvmem_cell_get(np, property->name);
+		/* For -EPROBE_DEFER don't try other properties.
+		 * We'll get back to this one.
+		 */
+		if (!IS_ERR(cell) || PTR_ERR(cell) == -EPROBE_DEFER)
+			break;
+	}
+
 	if (IS_ERR(cell))
 		return PTR_ERR(cell);
 
-	mac = nvmem_cell_read(cell, &len);
+	mac = property->read(cell);
 	nvmem_cell_put(cell);
 
 	if (IS_ERR(mac))
 		return PTR_ERR(mac);
 
-	if (len != ETH_ALEN || !is_valid_ether_addr(mac)) {
+	if (!is_valid_ether_addr(mac)) {
 		kfree(mac);
 		return -EINVAL;
 	}
