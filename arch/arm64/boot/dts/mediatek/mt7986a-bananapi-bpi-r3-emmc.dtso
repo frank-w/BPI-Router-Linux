@@ -12,7 +12,9 @@
 
 	fragment@0 {
 		target-path = "/soc/mmc@11230000";
-		frag0: __overlay__ {
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
 			bus-width = <8>;
 			max-frequency = <200000000>;
 			cap-mmc-highspeed;
@@ -23,13 +25,61 @@
 			no-sd;
 			no-sdio;
 			status = "okay";
+
+			card@0 {
+				compatible = "mmc-card";
+				reg = <0>;
+
+				block {
+					partitions {
+						#address-cells = <1>;
+						#size-cells = <0>;
+
+						partition@1 {
+							reg = <1>;
+							compatible = "nvmem-cells";
+						};
+
+						rootdisk: partition@5 {
+							reg = <5>;
+							partname = "production";
+						};
+					};
+				};
+
+				boot1 {
+					compatible = "nvmem-cells";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					macaddr: macaddr@a {
+						reg = <0xa 0x6>;
+					};
+
+					ddns@10 {
+						reg = <0x10 0x10>;
+					};
+
+					sn-bak@20 {
+						reg = <0x20 0x10>;
+					};
+
+					sn@30 {
+						reg = <0x30 0x10>;
+					};
+
+					country-code@88 {
+						reg = <0x88 0x10>;
+					};
+				};
+			};
 		};
 	};
 
 	fragment@1 {
 		target-path = "/chosen";
 		__overlay__ {
-			rootdisk = <&frag0 5>;
+			rootdisk = <&rootdisk>;
 		};
 	};
 };
