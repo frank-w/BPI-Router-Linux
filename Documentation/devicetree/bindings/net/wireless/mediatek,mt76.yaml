@@ -78,8 +78,6 @@ properties:
 
   ieee80211-freq-limit: true
 
-  address: true
-
   local-mac-address: true
 
   mac-address: true
@@ -237,7 +235,6 @@ patternProperties:
       reg:
         maxItems: 1
 
-      address: true
       local-mac-address: true
       mac-address: true
 
