@@ -822,6 +822,123 @@ static int gpy115_loopback(struct phy_device *phydev, bool enable)
 	return genphy_soft_reset(phydev);
 }
 
+static const unsigned long supported_rules = BIT(TRIGGER_NETDEV_LINK) |
+					     BIT(TRIGGER_NETDEV_LINK_10) |
+					     BIT(TRIGGER_NETDEV_LINK_100) |
+					     BIT(TRIGGER_NETDEV_LINK_1000) |
+					     BIT(TRIGGER_NETDEV_TX) |
+					     BIT(TRIGGER_NETDEV_RX);
+
+static int gpy_phy_led_brightness_set(struct phy_device *phydev,
+				      u8 index, enum led_brightness value)
+{
+	if (index > 3)
+		return -EINVAL;
+
+	return phy_modify(phydev, 27, BIT(index) | BIT(8 + index),
+			  (value != LED_OFF) ? BIT(index) : BIT(8 + index));
+}
+
+static int gpy_led_hw_control_set(struct phy_device *phydev, u8 index,
+				  unsigned long rules)
+{
+	int ret;
+	u16 reg = 0;
+
+	if (index > 3)
+		return -EINVAL;
+
+	if (!(rules & supported_rules))
+		return phy_clear_bits(phydev, 27, BIT(8 + index));
+
+	ret = phy_set_bits(phydev, 27, BIT(8 + index));
+	if (ret)
+		return ret;
+
+	if (rules & BIT(TRIGGER_NETDEV_LINK_10))
+		reg |= BIT(4);
+
+	if (rules & BIT(TRIGGER_NETDEV_LINK_100))
+		reg |= BIT(5);
+
+	if (rules & BIT(TRIGGER_NETDEV_LINK_1000))
+		reg |= BIT(6);
+
+	if (rules & BIT(TRIGGER_NETDEV_LINK) &&
+	    !(rules & (BIT(TRIGGER_NETDEV_LINK_10) |
+	               BIT(TRIGGER_NETDEV_LINK_100) |
+	               BIT(TRIGGER_NETDEV_LINK_1000))))
+		reg |= BIT(4) | BIT(5) | BIT(6) | BIT(7);
+
+	if (rules & BIT(TRIGGER_NETDEV_TX))
+		reg |= BIT(8);
+
+	if (rules & BIT(TRIGGER_NETDEV_RX))
+		reg |= BIT(9);
+
+	return phy_write_mmd(phydev, 30, 1 + index, reg);
+}
+
+static int gpy_led_hw_control_get(struct phy_device *phydev, u8 index,
+				  unsigned long *rules)
+{
+	int reg;
+
+	if (index > 3)
+		return -EINVAL;
+
+	reg = phy_read(phydev, 27);
+	if (reg < 0)
+		return reg;
+
+	*rules = 0;
+	if (!(reg & BIT(8 + index)))
+		return 0;
+
+	reg = phy_read_mmd(phydev, 30, 1 + index);
+	if (reg < 0)
+		return reg;
+
+	if (reg & BIT(4))
+		*rules |= BIT(TRIGGER_NETDEV_LINK_10);
+
+	if (reg & BIT(5))
+		*rules |= BIT(TRIGGER_NETDEV_LINK_100);
+
+	if (reg & BIT(6))
+		*rules |= BIT(TRIGGER_NETDEV_LINK_1000);
+
+	if (reg & (BIT(4) | BIT(5) | BIT(6) | BIT(7)))
+		*rules |= BIT(TRIGGER_NETDEV_LINK);
+
+	if (reg & BIT(8))
+		*rules |= BIT(TRIGGER_NETDEV_TX);
+
+	if (reg & BIT(9))
+		*rules |= BIT(TRIGGER_NETDEV_RX);
+
+	return 0;
+};
+
+static int gpy_led_hw_is_supported(struct phy_device *phydev, u8 index,
+				   unsigned long rules)
+{
+	if (index > 3)
+		return -EINVAL;
+
+	if (rules & ~supported_rules)
+		return -EOPNOTSUPP;
+
+	if ((rules & (BIT(TRIGGER_NETDEV_RX) | BIT(TRIGGER_NETDEV_TX))) &&
+	    !(rules & (BIT(TRIGGER_NETDEV_LINK_10) |
+		       BIT(TRIGGER_NETDEV_LINK_100) |
+		       BIT(TRIGGER_NETDEV_LINK_1000) |
+		       BIT(TRIGGER_NETDEV_LINK))))
+		return -EOPNOTSUPP;
+
+	return 0;
+};
+
 static struct phy_driver gpy_drivers[] = {
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY2xx),
@@ -892,6 +1009,10 @@ static struct phy_driver gpy_drivers[] = {
 		.set_wol	= gpy_set_wol,
 		.get_wol	= gpy_get_wol,
 		.set_loopback	= gpy_loopback,
+		.led_brightness_set = gpy_phy_led_brightness_set,
+		.led_hw_is_supported = gpy_led_hw_is_supported,
+		.led_hw_control_set = gpy_led_hw_control_set,
+		.led_hw_control_get = gpy_led_hw_control_get,
 	},
 	{
 		PHY_ID_MATCH_MODEL(PHY_ID_GPY211C),
@@ -909,6 +1030,10 @@ static struct phy_driver gpy_drivers[] = {
 		.set_wol	= gpy_set_wol,
 		.get_wol	= gpy_get_wol,
 		.set_loopback	= gpy_loopback,
+		.led_brightness_set = gpy_phy_led_brightness_set,
+		.led_hw_is_supported = gpy_led_hw_is_supported,
+		.led_hw_control_set = gpy_led_hw_control_set,
+		.led_hw_control_get = gpy_led_hw_control_get,
 	},
 	{
 		.phy_id		= PHY_ID_GPY212B,
