@@ -445,6 +445,23 @@
 			status = "disabled";
 		};
 
+		spi2: spi@11009000 {
+			compatible = "mediatek,ipm-spi-quad";
+			reg = <0 0x11009000 0 0x100>;
+			interrupts = <GIC_SPI 142 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&topckgen CLK_TOP_MPLL_D2>,
+				 <&topckgen CLK_TOP_SPI_SEL>,
+				 <&infracfg CLK_INFRA_104M_SPI2_BCK>,
+				 <&infracfg CLK_INFRA_66M_SPI2_HCK>;
+			clock-names = "parent-clk", "sel-clk", "spi-clk",
+				      "spi-hclk";
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
 		pcie2: pcie@11280000 {
 			compatible = "mediatek,mt7988-pcie",
 				     "mediatek,mt7986-pcie",
