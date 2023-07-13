@@ -2413,6 +2413,8 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
 					      int area_type,
 					      unsigned int part_type)
 {
+	struct fwnode_handle *fwnode;
+	struct device *ddev;
 	struct mmc_blk_data *md;
 	int devidx, ret;
 	char cap_str[10];
@@ -2508,6 +2510,12 @@ static struct mmc_blk_data *mmc_blk_alloc_req(struct mmc_card *card,
 		cache_enabled  = true;
 
 	blk_queue_write_cache(md->queue.queue, cache_enabled, fua_enabled);
+
+	ddev = disk_to_dev(md->disk);
+	fwnode = device_get_named_child_node(subname ? md->parent->parent :
+						       md->parent,
+					     subname ? subname : "block");
+	ddev->fwnode = fwnode;
 
 	string_get_size((u64)size, 512, STRING_UNITS_2,
 			cap_str, sizeof(cap_str));
