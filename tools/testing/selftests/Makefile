@@ -58,6 +58,7 @@ TARGETS += nsfs
 TARGETS += pidfd
 TARGETS += pid_namespace
 TARGETS += powerpc
+TARGETS += prctl
 TARGETS += proc
 TARGETS += pstore
 TARGETS += ptrace
@@ -86,7 +87,7 @@ TARGETS += tmpfs
 TARGETS += tpm2
 TARGETS += user
 TARGETS += vDSO
-TARGETS += vm
+TARGETS += mm
 TARGETS += x86
 TARGETS += zram
 #Please keep the TARGETS list alphabetically sorted

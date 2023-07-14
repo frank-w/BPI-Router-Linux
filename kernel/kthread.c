@@ -38,6 +38,7 @@ struct task_struct *kthreadd_task;
 struct kthread_create_info
 {
 	/* Information passed to kthread() from kthreadd. */
+	char *full_name;
 	int (*threadfn)(void *data);
 	void *data;
 	int node;
@@ -343,10 +344,12 @@ static int kthread(void *_create)
 	/* Release the structure when caller killed by a fatal signal. */
 	done = xchg(&create->done, NULL);
 	if (!done) {
+		kfree(create->full_name);
 		kfree(create);
 		kthread_exit(-EINTR);
 	}
 
+	self->full_name = create->full_name;
 	self->threadfn = threadfn;
 	self->data = data;
 
@@ -396,11 +399,13 @@ static void create_kthread(struct kthread_create_info *create)
 	current->pref_node_fork = create->node;
 #endif
 	/* We want our own signal handler (we take no signals by default). */
-	pid = kernel_thread(kthread, create, CLONE_FS | CLONE_FILES | SIGCHLD);
+	pid = kernel_thread(kthread, create, create->full_name,
+			    CLONE_FS | CLONE_FILES | SIGCHLD);
 	if (pid < 0) {
 		/* Release the structure when caller killed by a fatal signal. */
 		struct completion *done = xchg(&create->done, NULL);
 
+		kfree(create->full_name);
 		if (!done) {
 			kfree(create);
 			return;
@@ -427,6 +432,11 @@ struct task_struct *__kthread_create_on_node(int (*threadfn)(void *data),
 	create->data = data;
 	create->node = node;
 	create->done = &done;
+	create->full_name = kvasprintf(GFP_KERNEL, namefmt, args);
+	if (!create->full_name) {
+		task = ERR_PTR(-ENOMEM);
+		goto free_create;
+	}
 
 	spin_lock(&kthread_create_lock);
 	list_add_tail(&create->list, &kthread_create_list);
@@ -453,26 +463,7 @@ struct task_struct *__kthread_create_on_node(int (*threadfn)(void *data),
 		wait_for_completion(&done);
 	}
 	task = create->result;
-	if (!IS_ERR(task)) {
-		char name[TASK_COMM_LEN];
-		va_list aq;
-		int len;
-
-		/*
-		 * task is already visible to other tasks, so updating
-		 * COMM must be protected.
-		 */
-		va_copy(aq, args);
-		len = vsnprintf(name, sizeof(name), namefmt, aq);
-		va_end(aq);
-		if (len >= TASK_COMM_LEN) {
-			struct kthread *kthread = to_kthread(task);
-
-			/* leave it truncated when out of memory. */
-			kthread->full_name = kvasprintf(GFP_KERNEL, namefmt, args);
-		}
-		set_task_comm(task, name);
-	}
+free_create:
 	kfree(create);
 	return task;
 }
@@ -1382,6 +1373,10 @@ EXPORT_SYMBOL_GPL(kthread_flush_worker);
  * Flush and destroy @worker.  The simple flush is enough because the kthread
  * worker API is used only in trivial scenarios.  There are no multi-step state
  * machines needed.
+ *
+ * Note that this function is not responsible for handling delayed work, so
+ * caller should be responsible for queuing or canceling all delayed work items
+ * before invoke this function.
  */
 void kthread_destroy_worker(struct kthread_worker *worker)
 {
@@ -1393,6 +1388,7 @@ void kthread_destroy_worker(struct kthread_worker *worker)
 
 	kthread_flush_worker(worker);
 	kthread_stop(task);
+	WARN_ON(!list_empty(&worker->delayed_work_list));
 	WARN_ON(!list_empty(&worker->work_list));
 	kfree(worker);
 }

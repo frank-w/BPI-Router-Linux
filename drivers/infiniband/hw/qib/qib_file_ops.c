@@ -733,7 +733,7 @@ static int qib_mmap_mem(struct vm_area_struct *vma, struct qib_ctxtdata *rcd,
 		}
 
 		/* don't allow them to later change with mprotect */
-		vma->vm_flags &= ~VM_MAYWRITE;
+		vm_flags_clear(vma, VM_MAYWRITE);
 	}
 
 	pfn = virt_to_phys(kvaddr) >> PAGE_SHIFT;
@@ -769,7 +769,7 @@ static int mmap_ureg(struct vm_area_struct *vma, struct qib_devdata *dd,
 		phys = dd->physaddr + ureg;
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
-		vma->vm_flags |= VM_DONTCOPY | VM_DONTEXPAND;
+		vm_flags_set(vma, VM_DONTCOPY | VM_DONTEXPAND);
 		ret = io_remap_pfn_range(vma, vma->vm_start,
 					 phys >> PAGE_SHIFT,
 					 vma->vm_end - vma->vm_start,
@@ -810,8 +810,7 @@ static int mmap_piobufs(struct vm_area_struct *vma,
 	 * don't allow them to later change to readable with mprotect (for when
 	 * not initially mapped readable, as is normally the case)
 	 */
-	vma->vm_flags &= ~VM_MAYREAD;
-	vma->vm_flags |= VM_DONTCOPY | VM_DONTEXPAND;
+	vm_flags_mod(vma, VM_DONTCOPY | VM_DONTEXPAND, VM_MAYREAD);
 
 	/* We used PAT if wc_cookie == 0 */
 	if (!dd->wc_cookie)
@@ -852,7 +851,7 @@ static int mmap_rcvegrbufs(struct vm_area_struct *vma,
 		goto bail;
 	}
 	/* don't allow them to later change to writable with mprotect */
-	vma->vm_flags &= ~VM_MAYWRITE;
+	vm_flags_clear(vma, VM_MAYWRITE);
 
 	start = vma->vm_start;
 
@@ -944,7 +943,7 @@ static int mmap_kvaddr(struct vm_area_struct *vma, u64 pgaddr,
 		 * Don't allow permission to later change to writable
 		 * with mprotect.
 		 */
-		vma->vm_flags &= ~VM_MAYWRITE;
+		vm_flags_clear(vma, VM_MAYWRITE);
 	} else
 		goto bail;
 	len = vma->vm_end - vma->vm_start;
@@ -955,7 +954,7 @@ static int mmap_kvaddr(struct vm_area_struct *vma, u64 pgaddr,
 
 	vma->vm_pgoff = (unsigned long) addr >> PAGE_SHIFT;
 	vma->vm_ops = &qib_file_vm_ops;
-	vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP;
+	vm_flags_set(vma, VM_DONTEXPAND | VM_DONTDUMP);
 	ret = 1;
 
 bail:
@@ -2246,10 +2245,10 @@ static ssize_t qib_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct qib_ctxtdata *rcd = ctxt_fp(iocb->ki_filp);
 	struct qib_user_sdma_queue *pq = fp->pq;
 
-	if (!iter_is_iovec(from) || !from->nr_segs || !pq)
+	if (!from->user_backed || !from->nr_segs || !pq)
 		return -EINVAL;
 
-	return qib_user_sdma_writev(rcd, pq, from->iov, from->nr_segs);
+	return qib_user_sdma_writev(rcd, pq, iter_iov(from), from->nr_segs);
 }
 
 static struct class *qib_class;
