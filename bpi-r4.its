@@ -29,17 +29,17 @@
 				algo = "sha1";
 			};
 		};
-/*		fdt-ov-sd {
+		fdt-ov-sd {
 			description = "Flattened Device Tree blob";
-			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dtbo");
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-sd.dtbo");
 			type = "flat_dt";
 		};
 		fdt-ov-emmc {
 			description = "Flattened Device Tree blob";
-			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtbo");
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-emmc.dtbo");
 			type = "flat_dt";
 		};
-		fdt-ov-nand{
+/*		fdt-ov-nand{
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-nand.dtbo");
 			type = "flat_dt";
 			arch = "arm64";
@@ -67,7 +67,7 @@
 				algo = "sha1";
 			};
 		};
-/*		conf-sd {
+		conf-sd {
 			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-base", "fdt-ov-sd";
@@ -85,7 +85,7 @@
 				algo = "sha1";
 			};
 		};
-		conf-sd-nand {
+/*		conf-sd-nand {
 			description = "Boot Linux kernel with SD+NAND FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-nand";
