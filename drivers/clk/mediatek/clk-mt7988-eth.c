@@ -118,7 +118,7 @@ static const struct mtk_clk_desc ethwarp_desc = {
 	.num_clks = ARRAY_SIZE(ethwarp_clks),
 };
 
-static const struct of_device_id of_match_clk_mt7986_eth[] = {
+static const struct of_device_id of_match_clk_mt7988_eth[] = {
 	{ .compatible = "mediatek,mt7988-ethsys", .data = &ethdma_desc },
 	{ .compatible = "mediatek,mt7988-sgmiisys_0", .data = &sgmii0_desc },
 	{ .compatible = "mediatek,mt7988-sgmiisys_1", .data = &sgmii1_desc },
@@ -130,7 +130,7 @@ MODULE_DEVICE_TABLE(of, of_match_clk_mt7988_eth);
 static struct platform_driver clk_mt7988_eth_drv = {
 	.driver = {
 		.name = "clk-mt7988-eth",
-		.of_match_table = of_match_clk_mt7986_eth,
+		.of_match_table = of_match_clk_mt7988_eth,
 	},
 	.probe = mtk_clk_simple_probe,
 	.remove_new = mtk_clk_simple_remove,
