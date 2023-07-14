@@ -347,6 +347,16 @@ static irqreturn_t xway_gphy_handle_interrupt(struct phy_device *phydev)
 	return IRQ_HANDLED;
 }
 
+static int xway_phy_led_brightness_set(struct phy_device *phydev,
+				      u8 index, enum led_brightness value)
+{
+	if (index > 2)
+		return -EINVAL;
+
+	return phy_modify(phydev, 27, BIT(index) | BIT(8 + index),
+			  (value != LED_OFF) ? BIT(index) : BIT(8 + index));
+}
+
 static struct phy_driver xway_gphy[] = {
 	{
 		.phy_id		= PHY_ID_PHY11G_1_3,
@@ -359,6 +369,7 @@ static struct phy_driver xway_gphy[] = {
 		.config_intr	= xway_gphy_config_intr,
 		.suspend	= genphy_suspend,
 		.resume		= genphy_resume,
+		.led_brightness_set = xway_phy_led_brightness_set,
 	}, {
 		.phy_id		= PHY_ID_PHY22F_1_3,
 		.phy_id_mask	= 0xffffffff,
@@ -381,6 +392,7 @@ static struct phy_driver xway_gphy[] = {
 		.config_intr	= xway_gphy_config_intr,
 		.suspend	= genphy_suspend,
 		.resume		= genphy_resume,
+		.led_brightness_set = xway_phy_led_brightness_set,
 	}, {
 		.phy_id		= PHY_ID_PHY22F_1_4,
 		.phy_id_mask	= 0xffffffff,
@@ -402,6 +414,7 @@ static struct phy_driver xway_gphy[] = {
 		.config_intr	= xway_gphy_config_intr,
 		.suspend	= genphy_suspend,
 		.resume		= genphy_resume,
+		.led_brightness_set = xway_phy_led_brightness_set,
 	}, {
 		.phy_id		= PHY_ID_PHY22F_1_5,
 		.phy_id_mask	= 0xffffffff,
