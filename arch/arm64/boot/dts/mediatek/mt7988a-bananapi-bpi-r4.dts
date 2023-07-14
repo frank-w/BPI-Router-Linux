@@ -6,6 +6,8 @@
 
 /dts-v1/;
 #include "mt7988a.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
 #include <dt-bindings/pinctrl/mt65xx.h>
 #include <dt-bindings/regulator/richtek,rt5190a-regulator.h>
 
@@ -19,8 +21,58 @@
 			    pci=pcie_bus_perf";
 	};
 
+        gpio-keys {
+                compatible = "gpio-keys";
+
+                reset {
+                        label = "reset";
+                        linux,code = <BTN_0>;
+                        gpios = <&pio 13 GPIO_ACTIVE_LOW>;
+                };
+
+                wps {
+                        label = "wps";
+                        linux,code = <KEY_WPS_BUTTON>;
+                        gpios = <&pio 14 GPIO_ACTIVE_LOW>;
+                };
+        };
+
+        gpio-leds {
+                compatible = "gpio-leds";
+
+                blue {
+                        label = "bpi-r4:pio:blue";
+                        gpios = <&pio 65 GPIO_ACTIVE_HIGH>;
+                        default-state = "off";
+                };
+
+                green {
+                        label = "bpi-r4:pio:green";
+                        gpios = <&pio 64 GPIO_ACTIVE_HIGH>;
+                        default-state = "off";
+                };
+        };
+
 	memory {
 		reg = <0 0x40000000 0 0x40000000>;
+	};
+
+	sfp_esp0: sfp@0 {
+		compatible = "sff,sfp";
+		i2c-bus = <&i2c1>;
+		mod-def0-gpios = <&pio 12 1>;
+		los-gpios = <&pio 68 0>;
+		tx-disable-gpios = <&pio 11 0>;
+		maximum-power-milliwatt = <3000>;
+	};
+
+	sfp_esp1: sfp@1 {
+		compatible = "sff,sfp";
+		i2c-bus = <&i2c2>;
+		mod-def0-gpios = <&pio 52 1>;
+		los-gpios = <&pio 80 0>;
+		tx-disable-gpios = <&pio 21 0>;
+		maximum-power-milliwatt = <3000>;
 	};
 };
 
@@ -195,6 +247,8 @@
 		compatible = "mediatek,eth-mac";
 		reg = <0>;
 		phy-mode = "internal";
+		//mac-type = "xgdm";
+		//phy-mode = "10gbase-kr";
 
 		fixed-link {
 			speed = <10000>;
@@ -208,6 +262,8 @@
 		reg = <1>;
 		phy-mode = "internal";
 		phy-connection-type = "internal";
+		//mac-type = "xgdm";
+		//phy-mode = "10gbase-kr";
 		phy = <&phy15>;
 	};
 
