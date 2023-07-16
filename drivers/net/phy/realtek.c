@@ -667,7 +667,8 @@ static int rtl822x_write_mmd(struct phy_device *phydev, int devnum, u16 regnum,
 
 static int rtl822x_get_features(struct phy_device *phydev)
 {
-	int val;
+	return genphy_c45_pma_read_abilities(phydev);
+/*	int val;
 
 	val = phy_read_paged(phydev, 0xa61, 0x13);
 	if (val < 0)
@@ -680,12 +681,13 @@ static int rtl822x_get_features(struct phy_device *phydev)
 	linkmode_mod_bit(ETHTOOL_LINK_MODE_10000baseT_Full_BIT,
 			 phydev->supported, val & RTL_SUPPORTS_10000FULL);
 
-	return genphy_read_abilities(phydev);
+	return genphy_read_abilities(phydev);*/
 }
 
 static int rtl822x_config_aneg(struct phy_device *phydev)
 {
-	int ret = 0;
+	return 0;
+/*	int ret = 0;
 
 	if (phydev->autoneg == AUTONEG_ENABLE) {
 		u16 adv2500 = 0;
@@ -700,12 +702,30 @@ static int rtl822x_config_aneg(struct phy_device *phydev)
 			return ret;
 	}
 
-	return __genphy_config_aneg(phydev, ret);
+	return __genphy_config_aneg(phydev, ret);*/
 }
 
 static int rtl822x_read_status(struct phy_device *phydev)
 {
-	int ret;
+	int val;
+
+	val = genphy_c45_read_status(phydev);
+	if (val < 0)
+		return val;
+
+	// must read twice
+	for(int i=0;i<2;i++)
+	{
+		val = phy_read_mmd(phydev, MDIO_MMD_VEND2, 0xA402);
+		if (val < 0)
+			return val;
+	}
+
+	phydev->link = (val & 0x4) ? (1) : (0);
+
+	return 0;
+
+/*	int ret;
 
 	if (phydev->autoneg == AUTONEG_ENABLE) {
 		int lpadv = phy_read_paged(phydev, 0xa5d, 0x13);
@@ -725,7 +745,7 @@ static int rtl822x_read_status(struct phy_device *phydev)
 	if (ret < 0)
 		return ret;
 
-	return rtlgen_get_speed(phydev);
+	return rtlgen_get_speed(phydev);*/
 }
 
 static bool rtlgen_supports_2_5gbps(struct phy_device *phydev)
@@ -1035,8 +1055,13 @@ static struct phy_driver realtek_drvs[] = {
 		.read_status    = rtl822x_read_status,
 		.suspend        = genphy_suspend,
 		.resume         = rtlgen_resume,
+/*		.get_features   = rtl822x_get_features,
+		.config_aneg    = rtl822x_config_aneg,
+		.read_status    = rtl822x_read_status,
+		.suspend        = genphy_suspend,
+		.resume         = rtlgen_resume,
 		.read_page      = rtl821x_read_page,
-		.write_page     = rtl821x_write_page,
+		.write_page     = rtl821x_write_page,*/
 	}, {
 		PHY_ID_MATCH_EXACT(0x001cc84a),
 		.name           = "RTL8221B-VM-CG 2.5Gbps PHY",

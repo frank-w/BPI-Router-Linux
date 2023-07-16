@@ -396,6 +396,16 @@ static void sfp_fixup_rollball_cc(struct sfp *sfp)
 	sfp->id.base.extended_cc = SFF8024_ECC_10GBASE_T_SFI;
 }
 
+// For 2.5GBASE-T short-reach modules
+static void sfp_fixup_oem_2_5g(struct sfp *sfp)
+{
+       sfp->mdio_protocol = MDIO_I2C_ROLLBALL;
+       sfp->module_t_wait = msecs_to_jiffies(25 * 1000);
+       sfp->id.base.connector = SFF8024_CONNECTOR_RJ45;
+       sfp->id.base.extended_cc = SFF8024_ECC_2_5GBASE_T;
+
+}
+
 static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
 				unsigned long *modes,
 				unsigned long *interfaces)
@@ -475,7 +485,7 @@ static const struct sfp_quirk sfp_quirks[] = {
 	SFP_QUIRK_F("Walsun", "HXSX-ATRI-1", sfp_fixup_fs_10gt),
 
 	SFP_QUIRK_F("OEM", "SFP-10G-T", sfp_fixup_rollball_cc),
-	SFP_QUIRK_M("OEM", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
+	SFP_QUIRK("OEM", "SFP-2.5G-T", sfp_quirk_oem_2_5g, sfp_fixup_oem_2_5g),
 	SFP_QUIRK_F("OEM", "RTSFP-10", sfp_fixup_rollball_cc),
 	SFP_QUIRK_F("OEM", "RTSFP-10G", sfp_fixup_rollball_cc),
 	SFP_QUIRK_F("Turris", "RTSFP-10", sfp_fixup_rollball),
