@@ -363,6 +363,10 @@
 			#clock-cells = <1>;
 		};
 
+		trng: trng@1020f000 {
+			compatible = "mediatek,mt7988-rng";
+		};
+
 		uart0: serial@11000000 {
 			compatible = "mediatek,mt7986-uart",
 				     "mediatek,mt6577-uart";
