@@ -912,6 +912,7 @@ static int kfence_init_late(void)
 
 #ifdef CONFIG_CONTIG_ALLOC
 	struct page *pages;
+
 	pages = alloc_contig_pages(nr_pages_pool, GFP_KERNEL, first_online_node,
 				   NULL);
 	if (!pages)
