@@ -1425,7 +1425,6 @@ bool zswap_load(struct page *page)
 	spin_lock(&tree->lock);
 	entry = zswap_entry_find_get(&tree->rbroot, offset);
 	if (!entry) {
-		/* entry was written back */
 		spin_unlock(&tree->lock);
 		return false;
 	}
