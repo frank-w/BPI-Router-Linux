@@ -898,6 +898,10 @@ static int mt7996_init_hardware(struct mt7996_dev *dev)
 	INIT_LIST_HEAD(&dev->wed_rro.poll_list);
 	spin_lock_init(&dev->wed_rro.lock);
 
+	ret = mt7996_get_chip_sku(dev);
+	if (ret)
+		return ret;
+
 	ret = mt7996_dma_init(dev);
 	if (ret)
 		return ret;

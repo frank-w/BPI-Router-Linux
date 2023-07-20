@@ -40,6 +40,7 @@
 #define MT7992_ROM_PATCH		"mediatek/mt7996/mt7992_rom_patch.bin"
 
 #define MT7996_EEPROM_DEFAULT		"mediatek/mt7996/mt7996_eeprom.bin"
+#define MT7996_EEPROM_DEFAULT_404	"mediatek/mt7996/mt7996_eeprom_dual_404.bin"
 #define MT7992_EEPROM_DEFAULT		"mediatek/mt7996/mt7992_eeprom.bin"
 #define MT7996_EEPROM_SIZE		7680
 #define MT7996_EEPROM_BLOCK_SIZE	16
@@ -86,6 +87,11 @@ struct mt7996_vif;
 struct mt7996_sta;
 struct mt7996_dfs_pulse;
 struct mt7996_dfs_pattern;
+
+enum mt7996_sku_type {
+	MT7996_SKU_404,
+	MT7996_SKU_444,
+};
 
 enum mt7996_ram_type {
 	MT7996_RAM_TYPE_WM,
@@ -256,6 +262,8 @@ struct mt7996_dev {
 	struct cfg80211_chan_def rdd2_chandef;
 	struct mt7996_phy *rdd2_phy;
 
+	u8 chip_sku;
+
 	u16 chainmask;
 	u8 chainshift[__MT_MAX_BAND];
 	u32 hif_idx;
@@ -398,6 +406,23 @@ mt7996_phy3(struct mt7996_dev *dev)
 	return __mt7996_phy(dev, MT_BAND2);
 }
 
+static inline int
+mt7996_get_chip_sku(struct mt7996_dev *dev)
+{
+	u32 val = mt76_rr(dev, MT_PAD_GPIO);
+
+	/* reserve for future variants */
+	switch (mt76_chip(&dev->mt76)) {
+	case 0x7990:
+		dev->chip_sku = FIELD_GET(MT_PAD_GPIO_ADIE_COMB, val) <= 1;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static inline bool
 mt7996_band_valid(struct mt7996_dev *dev, u8 band)
 {
@@ -405,8 +430,7 @@ mt7996_band_valid(struct mt7996_dev *dev, u8 band)
 		return band <= MT_BAND1;
 
 	/* tri-band support */
-	if (band <= MT_BAND2 &&
-	    mt76_get_field(dev, MT_PAD_GPIO, MT_PAD_GPIO_ADIE_COMB) <= 1)
+	if (band <= MT_BAND2 && dev->chip_sku)
 		return true;
 
 	return band == MT_BAND0 || band == MT_BAND2;
