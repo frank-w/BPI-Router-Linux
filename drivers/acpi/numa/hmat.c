@@ -24,6 +24,7 @@
 #include <linux/node.h>
 #include <linux/sysfs.h>
 #include <linux/dax.h>
+#include <linux/memory-tiers.h>
 
 static u8 hmat_revision;
 static int hmat_disable __initdata;
@@ -759,6 +760,137 @@ static int hmat_callback(struct notifier_block *self,
 	return NOTIFY_OK;
 }
 
+static int hmat_adistance_disabled;
+static struct node_hmem_attrs default_dram_attrs;
+
+static void dump_hmem_attrs(struct node_hmem_attrs *attrs)
+{
+	pr_cont("read_latency: %u, write_latency: %u, read_bandwidth: %u, write_bandwidth: %u\n",
+		attrs->read_latency, attrs->write_latency,
+		attrs->read_bandwidth, attrs->write_bandwidth);
+}
+
+static void disable_hmat_adistance_algorithm(void)
+{
+	hmat_adistance_disabled = true;
+}
+
+static int hmat_init_default_dram_attrs(void)
+{
+	struct memory_target *target;
+	struct node_hmem_attrs *attrs;
+	int nid, pxm;
+	int nid_dram = NUMA_NO_NODE;
+
+	if (default_dram_attrs.read_latency +
+	    default_dram_attrs.write_latency != 0)
+		return 0;
+
+	if (!default_dram_type)
+		return -EIO;
+
+	for_each_node_mask(nid, default_dram_type->nodes) {
+		pxm = node_to_pxm(nid);
+		target = find_mem_target(pxm);
+		if (!target)
+			continue;
+		attrs = &target->hmem_attrs[1];
+		if (nid_dram == NUMA_NO_NODE) {
+			if (attrs->read_latency + attrs->write_latency == 0 ||
+			    attrs->read_bandwidth + attrs->write_bandwidth == 0) {
+				pr_info("hmat: invalid hmem attrs for default DRAM node: %d,\n",
+					nid);
+				pr_info("  ");
+				dump_hmem_attrs(attrs);
+				pr_info("  disable hmat based abstract distance algorithm.\n");
+				disable_hmat_adistance_algorithm();
+				return -EIO;
+			}
+			nid_dram = nid;
+			default_dram_attrs = *attrs;
+			continue;
+		}
+
+		/*
+		 * The performance of all default DRAM nodes is expected
+		 * to be same (that is, the variation is less than 10%).
+		 * And it will be used as base to calculate the abstract
+		 * distance of other memory nodes.
+		 */
+		if (abs(attrs->read_latency - default_dram_attrs.read_latency) * 10 >
+		    default_dram_attrs.read_latency ||
+		    abs(attrs->write_latency - default_dram_attrs.write_latency) * 10 >
+		    default_dram_attrs.write_latency ||
+		    abs(attrs->read_bandwidth - default_dram_attrs.read_bandwidth) * 10 >
+		    default_dram_attrs.read_bandwidth) {
+			pr_info("hmat: hmem attrs for DRAM nodes mismatch.\n");
+			pr_info("  node %d:", nid_dram);
+			dump_hmem_attrs(&default_dram_attrs);
+			pr_info("  node %d:", nid);
+			dump_hmem_attrs(attrs);
+			pr_info("  disable hmat based abstract distance algorithm.\n");
+			disable_hmat_adistance_algorithm();
+			return -EIO;
+		}
+	}
+
+	return 0;
+}
+
+static int hmat_calculate_adistance(struct notifier_block *self,
+				    unsigned long nid, void *data)
+{
+	static DECLARE_BITMAP(p_nodes, MAX_NUMNODES);
+	struct memory_target *target;
+	struct node_hmem_attrs *attrs;
+	int *adist = data;
+	int pxm;
+
+	if (hmat_adistance_disabled)
+		return NOTIFY_OK;
+
+	pxm = node_to_pxm(nid);
+	target = find_mem_target(pxm);
+	if (!target)
+		return NOTIFY_OK;
+
+	if (hmat_init_default_dram_attrs())
+		return NOTIFY_OK;
+
+	mutex_lock(&target_lock);
+	hmat_update_target_attrs(target, p_nodes, 1);
+	mutex_unlock(&target_lock);
+
+	attrs = &target->hmem_attrs[1];
+
+	if (attrs->read_latency + attrs->write_latency == 0 ||
+	    attrs->read_bandwidth + attrs->write_bandwidth == 0)
+		return NOTIFY_OK;
+
+	/*
+	 * The abstract distance of a memory node is in direct
+	 * proportion to its memory latency (read + write) and
+	 * inversely proportional to its memory bandwidth (read +
+	 * write).  The abstract distance, memory latency, and memory
+	 * bandwidth of the default DRAM nodes are used as the base.
+	 */
+	*adist = MEMTIER_ADISTANCE_DRAM *
+		(attrs->read_latency + attrs->write_latency) /
+		(default_dram_attrs.read_latency +
+		 default_dram_attrs.write_latency) *
+		(default_dram_attrs.read_bandwidth +
+		 default_dram_attrs.write_bandwidth) /
+		(attrs->read_bandwidth + attrs->write_bandwidth);
+
+	return NOTIFY_STOP;
+}
+
+static __meminitdata struct notifier_block hmat_adist_nb =
+{
+	.notifier_call = hmat_calculate_adistance,
+	.priority = 100,
+};
+
 static __init void hmat_free_structures(void)
 {
 	struct memory_target *target, *tnext;
@@ -801,6 +933,7 @@ static __init int hmat_init(void)
 	struct acpi_table_header *tbl;
 	enum acpi_hmat_type i;
 	acpi_status status;
+	int usage;
 
 	if (srat_disabled() || hmat_disable)
 		return 0;
@@ -841,8 +974,11 @@ static __init int hmat_init(void)
 	hmat_register_targets();
 
 	/* Keep the table and structures if the notifier may use them */
-	if (!hotplug_memory_notifier(hmat_callback, HMAT_CALLBACK_PRI))
+	usage = !hotplug_memory_notifier(hmat_callback, HMAT_CALLBACK_PRI);
+	usage += !register_mt_adistance_algorithm(&hmat_adist_nb);
+	if (usage)
 		return 0;
+
 out_put:
 	hmat_free_structures();
 	acpi_put_table(tbl);
