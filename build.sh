@@ -61,8 +61,8 @@ case $board in
 		ARCH=arm
 		CONFIGPATH=arch/$ARCH/configs
 		DEFCONFIG=$CONFIGPATH/mt7623n_evb_fwu_defconfig
-		DTS=arch/arm/boot/dts/mt7623n-bananapi-bpi-r2.dts
-		DTSI=arch/arm/boot/dts/mt7623.dtsi
+		DTS=arch/arm/boot/dts/mediatek/mt7623n-bananapi-bpi-r2.dts
+		DTSI=arch/arm/boot/dts/mediatek/mt7623.dtsi
 		;;
 esac
 #echo "DTB:${DTS%.*}.dtb"
