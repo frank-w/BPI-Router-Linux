@@ -14,7 +14,12 @@
 	char *_fw;						\
 	switch (mt76_chip(&(_dev)->mt76)) {			\
 	case 0x7992:						\
-		_fw = MT7992_##name;				\
+		if ((_dev)->chip_sku == MT7992_SKU_23)		\
+			_fw = MT7992_##name##_23;		\
+		else if ((_dev)->chip_sku == MT7992_SKU_24)	\
+			_fw = MT7992_##name##_24;		\
+		else						\
+			_fw = MT7992_##name;			\
 		break;						\
 	case 0x7990:						\
 	default:						\

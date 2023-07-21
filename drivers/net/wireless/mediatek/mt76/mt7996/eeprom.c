@@ -9,14 +9,33 @@
 
 static int mt7996_check_eeprom(struct mt7996_dev *dev)
 {
+#define FEM_INT				0
+#define FEM_EXT				3
 	u8 *eeprom = dev->mt76.eeprom.data;
+	u8 i, fem[__MT_MAX_BAND], fem_type;
 	u16 val = get_unaligned_le16(eeprom);
+
+	for (i = 0; i < __MT_MAX_BAND; i++)
+		fem[i] = eeprom[MT_EE_WIFI_CONF + 6 + i] & MT_EE_WIFI_PA_LNA_CONFIG;
 
 	switch (val) {
 	case 0x7990:
 		return is_mt7996(&dev->mt76) ? 0 : -EINVAL;
 	case 0x7992:
-		return is_mt7992(&dev->mt76) ? 0 : -EINVAL;
+		if (dev->fem_type == MT7996_FEM_UNSET)
+			return is_mt7992(&dev->mt76) ? 0 : -EINVAL;
+
+		if (fem[0] == FEM_EXT && fem[1] == FEM_EXT)
+			fem_type = MT7996_FEM_EXT;
+		else if (fem[0] == FEM_INT && fem[1] == FEM_INT)
+			fem_type = MT7996_FEM_INT;
+		else if (fem[0] == FEM_INT && fem[1] == FEM_EXT)
+			fem_type = MT7996_FEM_MIX;
+		else
+			return -EINVAL;
+
+		return (is_mt7992(&dev->mt76) ? 0 : -EINVAL) |
+		       (dev->fem_type == fem_type ? 0 : -EINVAL);
 	default:
 		return -EINVAL;
 	}
@@ -30,7 +49,18 @@ static char *mt7996_eeprom_name(struct mt7996_dev *dev)
 			return MT7996_EEPROM_DEFAULT_404;
 		return MT7996_EEPROM_DEFAULT;
 	case 0x7992:
-		return MT7992_EEPROM_DEFAULT;
+		if (dev->chip_sku == MT7992_SKU_23) {
+			if (dev->fem_type == MT7996_FEM_INT)
+				return MT7992_EEPROM_DEFAULT_23;
+			return MT7992_EEPROM_DEFAULT_23_EXT;
+		} else if (dev->chip_sku == MT7992_SKU_44) {
+			if (dev->fem_type == MT7996_FEM_INT)
+				return MT7992_EEPROM_DEFAULT;
+			else if (dev->fem_type == MT7996_FEM_MIX)
+				return MT7992_EEPROM_DEFAULT_MIX;
+			return MT7992_EEPROM_DEFAULT_EXT;
+		}
+		return MT7992_EEPROM_DEFAULT_24;
 	default:
 		return MT7996_EEPROM_DEFAULT;
 	}
@@ -220,6 +250,10 @@ int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy)
 int mt7996_eeprom_init(struct mt7996_dev *dev)
 {
 	int ret;
+
+	ret = mt7996_get_chip_sku(dev);
+	if (ret)
+		return ret;
 
 	ret = mt7996_eeprom_load(dev);
 	if (ret < 0) {

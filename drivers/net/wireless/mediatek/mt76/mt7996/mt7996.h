@@ -39,9 +39,24 @@
 #define MT7992_FIRMWARE_DSP		"mediatek/mt7996/mt7992_dsp.bin"
 #define MT7992_ROM_PATCH		"mediatek/mt7996/mt7992_rom_patch.bin"
 
+#define MT7992_FIRMWARE_WA_24		"mediatek/mt7996/mt7992_wa_24.bin"
+#define MT7992_FIRMWARE_WM_24		"mediatek/mt7996/mt7992_wm_24.bin"
+#define MT7992_FIRMWARE_DSP_24		"mediatek/mt7996/mt7992_dsp_24.bin"
+#define MT7992_ROM_PATCH_24		"mediatek/mt7996/mt7992_rom_patch_24.bin"
+
+#define MT7992_FIRMWARE_WA_23		"mediatek/mt7996/mt7992_wa_23.bin"
+#define MT7992_FIRMWARE_WM_23		"mediatek/mt7996/mt7992_wm_23.bin"
+#define MT7992_FIRMWARE_DSP_23		"mediatek/mt7996/mt7992_dsp_23.bin"
+#define MT7992_ROM_PATCH_23		"mediatek/mt7996/mt7992_rom_patch_23.bin"
+
 #define MT7996_EEPROM_DEFAULT		"mediatek/mt7996/mt7996_eeprom.bin"
 #define MT7996_EEPROM_DEFAULT_404	"mediatek/mt7996/mt7996_eeprom_dual_404.bin"
-#define MT7992_EEPROM_DEFAULT		"mediatek/mt7996/mt7992_eeprom.bin"
+#define MT7992_EEPROM_DEFAULT		"mediatek/mt7996/mt7992_eeprom_2i5i.bin"
+#define MT7992_EEPROM_DEFAULT_EXT	"mediatek/mt7996/mt7992_eeprom_2e5e.bin"
+#define MT7992_EEPROM_DEFAULT_MIX	"mediatek/mt7996/mt7992_eeprom_2i5e.bin"
+#define MT7992_EEPROM_DEFAULT_24	"mediatek/mt7996/mt7992_eeprom_24_2i5i.bin"
+#define MT7992_EEPROM_DEFAULT_23	"mediatek/mt7996/mt7992_eeprom_23_2i5i.bin"
+#define MT7992_EEPROM_DEFAULT_23_EXT	"mediatek/mt7996/mt7992_eeprom_23_2e5e.bin"
 #define MT7996_EEPROM_SIZE		7680
 #define MT7996_EEPROM_BLOCK_SIZE	16
 #define MT7996_TOKEN_SIZE		16384
@@ -88,9 +103,22 @@ struct mt7996_sta;
 struct mt7996_dfs_pulse;
 struct mt7996_dfs_pattern;
 
+enum mt7996_fem_type {
+	MT7996_FEM_UNSET,
+	MT7996_FEM_EXT,
+	MT7996_FEM_INT,
+	MT7996_FEM_MIX,
+};
+
 enum mt7996_sku_type {
 	MT7996_SKU_404,
 	MT7996_SKU_444,
+};
+
+enum mt7992_sku_type {
+	MT7992_SKU_23,
+	MT7992_SKU_24,
+	MT7992_SKU_44,
 };
 
 enum mt7996_ram_type {
@@ -263,6 +291,7 @@ struct mt7996_dev {
 	struct mt7996_phy *rdd2_phy;
 
 	u8 chip_sku;
+	u8 fem_type;
 
 	u16 chainmask;
 	u8 chainshift[__MT_MAX_BAND];
@@ -406,23 +435,6 @@ mt7996_phy3(struct mt7996_dev *dev)
 	return __mt7996_phy(dev, MT_BAND2);
 }
 
-static inline int
-mt7996_get_chip_sku(struct mt7996_dev *dev)
-{
-	u32 val = mt76_rr(dev, MT_PAD_GPIO);
-
-	/* reserve for future variants */
-	switch (mt76_chip(&dev->mt76)) {
-	case 0x7990:
-		dev->chip_sku = FIELD_GET(MT_PAD_GPIO_ADIE_COMB, val) <= 1;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 static inline bool
 mt7996_band_valid(struct mt7996_dev *dev, u8 band)
 {
@@ -461,6 +473,7 @@ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx,
 			  int n_desc, int ring_base, struct mtk_wed_device *wed);
 void mt7996_init_txpower(struct mt7996_phy *phy);
 int mt7996_txbf_init(struct mt7996_dev *dev);
+int mt7996_get_chip_sku(struct mt7996_dev *dev);
 void mt7996_reset(struct mt7996_dev *dev);
 int mt7996_run(struct ieee80211_hw *hw);
 int mt7996_mcu_init(struct mt7996_dev *dev);

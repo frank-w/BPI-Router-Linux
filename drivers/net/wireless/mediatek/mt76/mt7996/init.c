@@ -883,6 +883,65 @@ out:
 #endif
 }
 
+int mt7996_get_chip_sku(struct mt7996_dev *dev)
+{
+#define MT7976C_CHIP_VER	0x8a10
+#define MT7976C_HL_CHIP_VER	0x8b00
+#define MT7976C_PS_CHIP_VER	0x8c10
+#define MT7976C_EFUSE_OFFSET	0x470
+#define MT7976C_EFUSE_VALUE	0xc
+	u32 regval, val = mt76_rr(dev, MT_PAD_GPIO);
+	u16 adie_chip_id, adie_chip_ver;
+	u8 adie_comb, adie_num, adie_idx = 0;
+
+	switch (mt76_chip(&dev->mt76)) {
+	case 0x7990:
+		adie_comb = FIELD_GET(MT_PAD_GPIO_ADIE_COMB, val);
+		if (adie_comb <= 1)
+			dev->chip_sku = MT7996_SKU_444;
+		else
+			dev->chip_sku = MT7996_SKU_404;
+		break;
+	case 0x7992:
+		adie_comb = FIELD_GET(MT_PAD_GPIO_ADIE_COMB_7992, val);
+		adie_num = FIELD_GET(MT_PAD_GPIO_ADIE_NUM_7992, val);
+		adie_idx = !adie_num;
+		if (adie_num)
+			dev->chip_sku = MT7992_SKU_23;
+		else if (adie_comb)
+			dev->chip_sku = MT7992_SKU_44;
+		else
+			dev->chip_sku = MT7992_SKU_24;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (test_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state)) {
+		u8 buf[MT7996_EEPROM_BLOCK_SIZE];
+		u8 idx = MT7976C_EFUSE_OFFSET % MT7996_EEPROM_BLOCK_SIZE;
+		bool is_7976c;
+
+		mt7996_mcu_rf_regval(dev, MT_ADIE_CHIP_ID(adie_idx), &regval, false);
+		adie_chip_id = FIELD_GET(MT_ADIE_CHIP_ID_MASK, regval);
+		adie_chip_ver = FIELD_GET(MT_ADIE_VERSION_MASK, regval);
+		mt7996_mcu_get_eeprom(dev, MT7976C_EFUSE_OFFSET, buf);
+		is_7976c = (adie_chip_ver == MT7976C_CHIP_VER) ||
+			   (adie_chip_ver == MT7976C_HL_CHIP_VER) ||
+			   (adie_chip_ver == MT7976C_PS_CHIP_VER) ||
+			   (buf[idx] == MT7976C_EFUSE_VALUE);
+		if (adie_chip_id == 0x7975 || (adie_chip_id == 0x7976 && is_7976c) ||
+		    adie_chip_id == 0x7979)
+			dev->fem_type = MT7996_FEM_INT;
+		else if (adie_chip_id == 0x7977 && adie_comb == 1)
+			dev->fem_type = MT7996_FEM_MIX;
+		else
+			dev->fem_type = MT7996_FEM_EXT;
+	}
+
+	return 0;
+}
+
 static int mt7996_init_hardware(struct mt7996_dev *dev)
 {
 	int ret, idx;
