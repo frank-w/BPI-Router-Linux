@@ -459,7 +459,7 @@ void pte_free_defer(struct mm_struct *mm, pgtable_t pgtable)
 	 * page_table_free() does not do the pgste gmap_unlink() which
 	 * page_table_free_rcu() does: warn us if pgste ever reaches here.
 	 */
-	WARN_ON_ONCE(mm_alloc_pgste(mm));
+	WARN_ON_ONCE(mm_has_pgste(mm));
 }
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 
