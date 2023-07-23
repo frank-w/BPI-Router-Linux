@@ -2380,19 +2380,17 @@ skip:
 				mmap_locked = false;
 				*result = hpage_collapse_scan_file(mm,
 					khugepaged_scan.address, file, pgoff, cc);
+				fput(file);
 				if (*result == SCAN_PTE_MAPPED_HUGEPAGE) {
 					mmap_read_lock(mm);
-					mmap_locked = true;
-					if (hpage_collapse_test_exit(mm)) {
-						fput(file);
+					if (hpage_collapse_test_exit(mm))
 						goto breakouterloop;
-					}
 					*result = collapse_pte_mapped_thp(mm,
 						khugepaged_scan.address, false);
 					if (*result == SCAN_PMD_MAPPED)
 						*result = SCAN_SUCCEED;
+					mmap_read_unlock(mm);
 				}
-				fput(file);
 			} else {
 				*result = hpage_collapse_scan_pmd(mm, vma,
 					khugepaged_scan.address, &mmap_locked, cc);
