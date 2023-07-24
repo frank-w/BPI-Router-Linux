@@ -2185,7 +2185,7 @@ must_cow:
 					     EXTENT_CLEAR_DATA_RESV,
 					     PAGE_UNLOCK | PAGE_SET_ORDERED);
 
-		cur_offset = extent_end;
+		cur_offset = nocow_end + 1;
 
 		/*
 		 * btrfs_reloc_clone_csums() error, now we're OK to call error
