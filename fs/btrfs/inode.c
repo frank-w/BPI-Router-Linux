@@ -1971,21 +1971,14 @@ static noinline int run_delalloc_nocow(struct btrfs_inode *inode,
 	struct btrfs_path *path;
 	u64 cow_start = (u64)-1;
 	u64 cur_offset = start;
-	int ret;
+	int ret = -ENOMEM;
 	bool check_prev = true;
 	u64 ino = btrfs_ino(inode);
 	struct can_nocow_file_extent_args nocow_args = { 0 };
 
 	path = btrfs_alloc_path();
-	if (!path) {
-		extent_clear_unlock_delalloc(inode, start, end, locked_page,
-					     EXTENT_LOCKED | EXTENT_DELALLOC |
-					     EXTENT_DO_ACCOUNTING |
-					     EXTENT_DEFRAG, PAGE_UNLOCK |
-					     PAGE_START_WRITEBACK |
-					     PAGE_END_WRITEBACK);
-		return -ENOMEM;
-	}
+	if (!path)
+		goto error;
 
 	nocow_args.end = end;
 	nocow_args.writeback_path = true;
