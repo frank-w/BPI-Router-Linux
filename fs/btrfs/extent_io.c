@@ -1153,6 +1153,7 @@ static noinline_for_stack int writepage_delalloc(struct btrfs_inode *inode,
 	u64 delalloc_start = page_start;
 	u64 delalloc_end = page_end;
 	u64 delalloc_to_write = 0;
+	bool found_delalloc = false;
 	int ret = 0;
 
 	while (delalloc_start < page_end) {
@@ -1169,6 +1170,22 @@ static noinline_for_stack int writepage_delalloc(struct btrfs_inode *inode,
 			return ret;
 
 		delalloc_start = delalloc_end + 1;
+		found_delalloc = true;
+	}
+
+	/*
+	 * If we did not find any delalloc range in the io_tree, this must be
+	 * the rare case of dirtying pages through get_user_pages without
+	 * calling into ->page_mkwrite.
+	 * While these are in the process of being fixed by switching to
+	 * pin_user_pages, some are still around and need to be worked around
+	 * by creating a delalloc reservation in a fixup worker, and waiting
+	 * us to be called again with that reservation.
+	 */
+	if (!found_delalloc && btrfs_writepage_cow_fixup(page)) {
+		redirty_page_for_writepage(wbc, page);
+		unlock_page(page);
+		return 1;
 	}
 
 	/*
@@ -1273,14 +1290,6 @@ static noinline_for_stack int __extent_writepage_io(struct btrfs_inode *inode,
 	struct extent_map *em;
 	int ret = 0;
 	int nr = 0;
-
-	ret = btrfs_writepage_cow_fixup(page);
-	if (ret) {
-		/* Fixup worker will requeue */
-		redirty_page_for_writepage(bio_ctrl->wbc, page);
-		unlock_page(page);
-		return 1;
-	}
 
 	bio_ctrl->end_io_func = end_bio_extent_writepage;
 	while (cur <= end) {
@@ -1421,9 +1430,6 @@ static int __extent_writepage(struct page *page, struct btrfs_bio_ctrl *bio_ctrl
 		goto done;
 
 	ret = __extent_writepage_io(BTRFS_I(inode), page, bio_ctrl, i_size, &nr);
-	if (ret == 1)
-		return 0;
-
 	bio_ctrl->wbc->nr_to_write--;
 
 done:
@@ -2176,8 +2182,6 @@ void extent_write_locked_range(struct inode *inode, struct page *locked_page,
 
 		ret = __extent_writepage_io(BTRFS_I(inode), page, &bio_ctrl,
 					    i_size, &nr);
-		if (ret == 1)
-			goto next_page;
 
 		/* Make sure the mapping tag for page dirty gets cleared. */
 		if (nr == 0) {
@@ -2193,7 +2197,6 @@ void extent_write_locked_range(struct inode *inode, struct page *locked_page,
 		btrfs_page_unlock_writer(fs_info, page, cur, cur_len);
 		if (ret < 0)
 			found_error = true;
-next_page:
 		put_page(page);
 		cur = cur_end + 1;
 	}
