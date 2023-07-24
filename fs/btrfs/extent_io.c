@@ -2151,7 +2151,6 @@ void extent_write_locked_range(struct inode *inode, struct page *locked_page,
 			       u64 start, u64 end, struct writeback_control *wbc,
 			       bool pages_dirty)
 {
-	bool found_error = false;
 	int ret = 0;
 	struct address_space *mapping = inode->i_mapping;
 	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
@@ -2180,16 +2179,29 @@ void extent_write_locked_range(struct inode *inode, struct page *locked_page,
 			clear_page_dirty_for_io(page);
 		}
 
-		ret = __extent_writepage_io(BTRFS_I(inode), page, &bio_ctrl,
-					    i_size);
+		/*
+		 * The entire page range that we were called on is locked and
+		 * covered by an ordered_extent.  Make sure we continue the
+		 * loop after an initial writeback error to unwind these as well
+		 * as clearing the dirty bit on the page by starting and ending
+		 * writeback.
+		 */
+		if (ret) {
+			btrfs_mark_ordered_io_finished(BTRFS_I(inode), page,
+						       cur, cur_len, false);
+			btrfs_page_clear_uptodate(fs_info, page, cur, cur_len);
+			set_page_writeback(page);
+			end_page_writeback(page);
+		} else {
+			ret = __extent_writepage_io(BTRFS_I(inode), page,
+						    &bio_ctrl, i_size);
+		}
 		btrfs_page_unlock_writer(fs_info, page, cur, cur_len);
-		if (ret < 0)
-			found_error = true;
 		put_page(page);
 		cur = cur_end + 1;
 	}
 
-	submit_write_bio(&bio_ctrl, found_error ? ret : 0);
+	submit_write_bio(&bio_ctrl, ret);
 }
 
 int extent_writepages(struct address_space *mapping,
