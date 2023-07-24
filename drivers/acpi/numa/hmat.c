@@ -885,8 +885,7 @@ static int hmat_calculate_adistance(struct notifier_block *self,
 	return NOTIFY_STOP;
 }
 
-static __meminitdata struct notifier_block hmat_adist_nb =
-{
+static __meminitdata struct notifier_block hmat_adist_nb = {
 	.notifier_call = hmat_calculate_adistance,
 	.priority = 100,
 };
