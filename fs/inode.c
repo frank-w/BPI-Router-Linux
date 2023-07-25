@@ -1920,6 +1920,21 @@ int inode_update_time(struct inode *inode, struct timespec64 *time, int flags)
 EXPORT_SYMBOL(inode_update_time);
 
 /**
+ * current_coarse_time - Return FS time
+ * @inode: inode.
+ *
+ * Return the current coarse-grained time truncated to the time
+ * granularity supported by the fs.
+ */
+static struct timespec64 current_coarse_time(struct inode *inode)
+{
+	struct timespec64 now;
+
+	ktime_get_coarse_real_ts64(&now);
+	return timestamp_truncate(now, inode);
+}
+
+/**
  *	atime_needs_update	-	update the access time
  *	@path: the &struct path to update
  *	@inode: inode to update
@@ -1952,7 +1967,7 @@ bool atime_needs_update(const struct path *path, struct inode *inode)
 	if ((mnt->mnt_flags & MNT_NODIRATIME) && S_ISDIR(inode->i_mode))
 		return false;
 
-	now = current_time(inode);
+	now = current_coarse_time(inode);
 
 	if (!relatime_need_update(mnt, inode, now))
 		return false;
@@ -1986,7 +2001,7 @@ void touch_atime(const struct path *path)
 	 * We may also fail on filesystems that have the ability to make parts
 	 * of the fs read only, e.g. subvolumes in Btrfs.
 	 */
-	now = current_time(inode);
+	now = current_coarse_time(inode);
 	inode_update_time(inode, &now, S_ATIME);
 	__mnt_drop_write(mnt);
 skip_update:
@@ -2071,6 +2086,56 @@ int file_remove_privs(struct file *file)
 	return __file_remove_privs(file, 0);
 }
 EXPORT_SYMBOL(file_remove_privs);
+
+/**
+ * current_mgtime - Return FS time (possibly fine-grained)
+ * @inode: inode.
+ *
+ * Return the current time truncated to the time granularity supported by
+ * the fs, as suitable for a ctime/mtime change. If the ctime is flagged
+ * as having been QUERIED, get a fine-grained timestamp.
+ */
+static struct timespec64 current_mgtime(struct inode *inode)
+{
+	struct timespec64 now;
+	atomic_long_t *pnsec = (atomic_long_t *)&inode->__i_ctime.tv_nsec;
+	long nsec = atomic_long_read(pnsec);
+
+	if (nsec & I_CTIME_QUERIED) {
+		ktime_get_real_ts64(&now);
+	} else {
+		struct timespec64 ctime;
+
+		ktime_get_coarse_real_ts64(&now);
+
+		/*
+		 * If we've recently fetched a fine-grained timestamp
+		 * then the coarse-grained one may still be earlier than the
+		 * existing one. Just keep the existing ctime if so.
+		 */
+		ctime = inode_get_ctime(inode);
+		if (timespec64_compare(&ctime, &now) > 0)
+			now = ctime;
+	}
+
+	return timestamp_truncate(now, inode);
+}
+
+/**
+ * current_time - Return timestamp suitable for ctime update
+ * @inode: inode to eventually be updated
+ *
+ * Return the current time, which is usually coarse-grained but may be fine
+ * grained if the filesystem uses multigrain timestamps and the existing
+ * ctime was queried since the last update.
+ */
+struct timespec64 current_time(struct inode *inode)
+{
+	if (is_mgtime(inode))
+		return current_mgtime(inode);
+	return current_coarse_time(inode);
+}
+EXPORT_SYMBOL(current_time);
 
 static int inode_needs_update_time(struct inode *inode, struct timespec64 *now)
 {
@@ -2481,36 +2546,11 @@ struct timespec64 timestamp_truncate(struct timespec64 t, struct inode *inode)
 EXPORT_SYMBOL(timestamp_truncate);
 
 /**
- * current_time - Return FS time
- * @inode: inode.
- *
- * Return the current time truncated to the time granularity supported by
- * the fs.
- *
- * Note that inode and inode->sb cannot be NULL.
- * Otherwise, the function warns and returns time without truncation.
- */
-struct timespec64 current_time(struct inode *inode)
-{
-	struct timespec64 now;
-
-	ktime_get_coarse_real_ts64(&now);
-
-	if (unlikely(!inode->i_sb)) {
-		WARN(1, "current_time() called with uninitialized super_block in the inode");
-		return now;
-	}
-
-	return timestamp_truncate(now, inode);
-}
-EXPORT_SYMBOL(current_time);
-
-/**
  * inode_set_ctime_current - set the ctime to current_time
  * @inode: inode
  *
- * Set the inode->i_ctime to the current value for the inode. Returns
- * the current value that was assigned to i_ctime.
+ * Set the inode->__i_ctime to the current value for the inode. Returns
+ * the current value that was assigned to __i_ctime.
  */
 struct timespec64 inode_set_ctime_current(struct inode *inode)
 {
