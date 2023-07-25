@@ -467,11 +467,12 @@
 			reg = <0 0x11230000 0 0x1000>,
 			      <0 0x11D60000 0 0x1000>;
 			interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&infracfg CLK_INFRA_MSDC400>,
+			clocks = <&infracfg CLK_TOP_EMMC_400M_SEL>,
 				 <&infracfg CLK_INFRA_MSDC2_HCK>,
+				 <&infracfg CLK_INFRA_MSDC400>,
 				 <&infracfg CLK_INFRA_133M_MSDC_0_HCK>,
 				 <&infracfg CLK_INFRA_66M_MSDC_0_HCK>;
-			clock-names = "source", "hclk", "ahb_cg", "axi_cg";
+			clock-names = "source", "hclk", "source_cg", "bus_clk", "sys_cg";
 			status = "disabled";
 		};
 
