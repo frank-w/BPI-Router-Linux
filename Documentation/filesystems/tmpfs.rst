@@ -130,6 +130,21 @@ for emergency or testing purposes. The values you can set for shmem_enabled are:
     option, for testing
 ==  ============================================================
 
+tmpfs also supports quota with the following mount options
+
+========  =============================================================
+quota     User and group quota accounting and enforcement is enabled on
+          the mount. Tmpfs is using hidden system quota files that are
+          initialized on mount.
+usrquota  User quota accounting and enforcement is enabled on the
+          mount.
+grpquota  Group quota accounting and enforcement is enabled on the
+          mount.
+========  =============================================================
+
+Note that tmpfs quotas do not support user namespaces so no uid/gid
+translation is done if quotas are enabled inside user namespaces.
+
 tmpfs has a mount option to set the NUMA memory allocation policy for
 all files in that instance (if CONFIG_NUMA is enabled) - which can be
 adjusted on the fly via 'mount -o remount ...'
