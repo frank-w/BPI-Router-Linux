@@ -29,5 +29,30 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	status = "okay";
+
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		block {
+			compatible = "block-device";
+
+			partitions {
+				block-partition-env {
+					partname = "ubootenv";
+					nvmem-layout {
+						compatible = "u-boot,env-layout";
+					};
+				};
+
+				emmc_rootfs: block-partition-production {
+					partname = "production";
+				};
+			};
+		};
+	};
 };
 
+&{/chosen} {
+	rootdisk-emmc = <&emmc_rootfs>;
+};
