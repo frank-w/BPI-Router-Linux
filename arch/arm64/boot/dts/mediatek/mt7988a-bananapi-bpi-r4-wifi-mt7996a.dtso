@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	compatible = "bananapi,bpi-r4", "mediatek,mt7988a";
+
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			wifi_12v: regulator-wifi-12v {
+				compatible = "regulator-fixed";
+				regulator-name = "wifi";
+				regulator-min-microvolt = <12000000>;
+				regulator-max-microvolt = <12000000>;
+				gpio = <&pio 4 GPIO_ACTIVE_HIGH>;
+				enable-active-high;
+				regulator-always-on;
+			};
+		};
+	};
+};
