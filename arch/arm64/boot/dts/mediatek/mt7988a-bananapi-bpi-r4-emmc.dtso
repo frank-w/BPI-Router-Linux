@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2021 MediaTek Inc.
+ * Author: Frank Wunderlich <frank-w@public-files.de>
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "bananapi,bpi-r4", "mediatek,mt7988a";
+
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			reg_1p8v: regulator-1p8v {
+				compatible = "regulator-fixed";
+				regulator-name = "fixed-1.8V";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			reg_3p3v: regulator-3p3v {
+				compatible = "regulator-fixed";
+				regulator-name = "fixed-3.3V";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+		};
+	};
+
+	fragment@2 {
+		target-path = "/soc/mmc@11230000";
+		__overlay__ {
+			pinctrl-names = "default", "state_uhs";
+			pinctrl-0 = <&mmc0_pins_emmc_51>;
+			pinctrl-1 = <&mmc0_pins_emmc_51>;
+			bus-width = <8>;
+			max-frequency = <200000000>;
+			cap-mmc-highspeed;
+			mmc-hs200-1_8v;
+			mmc-hs400-1_8v;
+			hs400-ds-delay = <0x12814>;
+			vqmmc-supply = <&reg_1p8v>;
+			vmmc-supply = <&reg_3p3v>;
+			non-removable;
+			no-sd;
+			no-sdio;
+			status = "okay";
+		};
+	};
+};
