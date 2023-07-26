@@ -599,6 +599,7 @@ enum {
 	SDF_NOJOURNALID,
 	SDF_RORECOVERY,		/* read only recovery */
 	SDF_SKIP_DLM_UNLOCK,
+	SDF_FLUSH,
 	SDF_FORCE_AIL_FLUSH,
 	SDF_FREEZE_INITIATOR,
 	SDF_WITHDRAWING,	/* Will withdraw eventually */
