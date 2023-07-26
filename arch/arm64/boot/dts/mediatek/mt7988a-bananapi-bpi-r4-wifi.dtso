@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2023 MediaTek Inc.
+ * Author: Frank Wunderlich <frank-w@public-files.de>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	compatible = "bananapi,bpi-r4", "mediatek,mt7988a";
+
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+
+			wifi_12v: regulator-wifi-12v {
+				compatible = "regulator-fixed";
+				regulator-name = "wifi-12v";
+				regulator-min-microvolt = <12000000>;
+				regulator-max-microvolt = <12000000>;
+				//gpio = < &{/soc/pinctrl@1001f000} 4 GPIO_ACTIVE_HIGH>;
+				gpio = < &pio 4 GPIO_ACTIVE_HIGH>;
+				enable-active-high;
+				regulator-always-on;
+			};
+		};
+	};
+
+	__external_symbols__ {
+		pio = "/soc/pinctrl@1001f000";
+	};
+
+};
