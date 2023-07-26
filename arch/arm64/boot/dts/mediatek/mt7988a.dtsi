@@ -473,6 +473,10 @@
 				 <&infracfg CLK_INFRA_133M_MSDC_0_HCK>,
 				 <&infracfg CLK_INFRA_66M_MSDC_0_HCK>;
 			clock-names = "source", "hclk", "source_cg", "bus_clk", "sys_cg";
+			assigned-clocks = <&topckgen CLK_TOP_EMMC_250M_SEL>,
+					  <&topckgen CLK_TOP_EMMC_400M_SEL>;
+			assigned-clock-parents = <&topckgen CLK_TOP_NET1PLL_D5_D2>,
+						 <&apmixedsys CLK_APMIXED_MSDCPLL>;
 			status = "disabled";
 		};
 
