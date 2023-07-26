@@ -169,6 +169,7 @@ static const struct mtk_gate_regs infra3_cg_regs = {
 		.id = _id, .name = _name, .parent_name = _parent,             \
 		.regs = &infra2_cg_regs, .shift = _shift,                     \
 		.ops = &mtk_clk_gate_ops_setclr, .flags = _flags,             \
+		.flags = CLK_IS_CRITICAL,                                     \
 	}
 
 #define GATE_INFRA3_FLAGS(_id, _name, _parent, _shift, _flags)                \
