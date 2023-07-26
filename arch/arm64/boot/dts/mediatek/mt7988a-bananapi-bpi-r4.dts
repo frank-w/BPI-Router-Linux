@@ -57,21 +57,52 @@
 		reg = <0 0x40000000 0 0x40000000>;
 	};
 
-	sfp_esp0: sfp@0 {
+	regulator-sfp1-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "sfp1";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pio 82 GPIO_ACTIVE_LOW>;
+		regulator-always-on;
+	};
+
+	regulator-sfp2-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "sfp2";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pio 83 GPIO_ACTIVE_LOW>;
+		regulator-always-on;
+	};
+
+	/* left SFP cage (wan) using hardware i2c bus */
+	sfp0: sfp1-wan {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c1>;
-		mod-def0-gpios = <&pio 12 1>;
-		los-gpios = <&pio 68 0>;
-		tx-disable-gpios = <&pio 11 0>;
+		mod-def0-gpios = <&pio 12 GPIO_ACTIVE_LOW>;
+		los-gpios = <&pio 68 GPIO_ACTIVE_HIGH>;
+		tx-disable-gpios = <&pio 11 GPIO_ACTIVE_HIGH>;
+		rate-select0-gpios = <&pio 54 GPIO_ACTIVE_LOW>;
 		maximum-power-milliwatt = <3000>;
 	};
 
-	sfp_esp1: sfp@1 {
+	/* i2c of the right SFP cage (lan) */
+	i2c_sfp2: i2c-gpio-0 {
+		compatible = "i2c-gpio";
+		sda-gpios = <&pio 51 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&pio 53 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		i2c-gpio,delay-us = <2>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	sfp1: sfp2-lan {
 		compatible = "sff,sfp";
-		i2c-bus = <&i2c2>;
-		mod-def0-gpios = <&pio 52 1>;
-		los-gpios = <&pio 80 0>;
-		tx-disable-gpios = <&pio 21 0>;
+		i2c-bus = <&i2c_sfp2>;
+		mod-def0-gpios = <&pio 52 GPIO_ACTIVE_LOW>;
+		los-gpios = <&pio 80 GPIO_ACTIVE_HIGH>;
+		tx-disable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
+		rate-select0-gpios = <&pio 81 GPIO_ACTIVE_LOW>;
 		maximum-power-milliwatt = <3000>;
 	};
 };
