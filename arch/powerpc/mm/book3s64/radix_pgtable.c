@@ -793,9 +793,9 @@ static void __meminit free_vmemmap_pages(struct page *page,
 		free_pages((unsigned long)page_address(page), order);
 }
 
-static void remove_pte_table(pte_t *pte_start, unsigned long addr,
-			     unsigned long end, bool direct,
-			     struct vmem_altmap *altmap)
+static void __meminit remove_pte_table(pte_t *pte_start, unsigned long addr,
+				       unsigned long end, bool direct,
+				       struct vmem_altmap *altmap)
 {
 	unsigned long next, pages = 0;
 	pte_t *pte;
