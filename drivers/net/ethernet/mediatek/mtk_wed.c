@@ -298,7 +298,11 @@ mtk_wed_tx_buffer_alloc(struct mtk_wed_device *dev)
 	int token = dev->wlan.token_start;
 	int ring_size;
 	int n_pages;
-	int i, page_idx;
+	int err, i, page_idx;
+
+	err = dma_set_mask_and_coherent(dev->hw->dev, DMA_BIT_MASK(32));
+	if (err)
+		return err;
 
 	ring_size = dev->wlan.nbuf & ~(MTK_WED_BUF_PER_PAGE - 1);
 	n_pages = ring_size / MTK_WED_BUF_PER_PAGE;
@@ -416,6 +420,11 @@ mtk_wed_rx_buffer_alloc(struct mtk_wed_device *dev)
 {
 	struct mtk_rxbm_desc *desc;
 	dma_addr_t desc_phys;
+	int err;
+
+	err = dma_set_mask_and_coherent(dev->hw->dev, DMA_BIT_MASK(32));
+	if (err)
+		return err;
 
 	dev->rx_buf_ring.size = dev->wlan.rx_nbuf;
 	desc = dma_alloc_coherent(dev->hw->dev,
@@ -787,6 +796,10 @@ static int
 mtk_wed_rro_ring_alloc(struct mtk_wed_device *dev, struct mtk_wed_ring *ring,
 		       int size)
 {
+	int err = dma_set_mask_and_coherent(dev->hw->dev, DMA_BIT_MASK(32));
+	if (err)
+		return err;
+
 	ring->desc = dma_alloc_coherent(dev->hw->dev,
 					size * sizeof(*ring->desc),
 					&ring->desc_phys, GFP_KERNEL);
@@ -1225,6 +1238,10 @@ static int
 mtk_wed_ring_alloc(struct mtk_wed_device *dev, struct mtk_wed_ring *ring,
 		   int size, u32 desc_size, bool tx)
 {
+	int err = dma_set_mask_and_coherent(dev->hw->dev, DMA_BIT_MASK(32));
+	if (err)
+		return err;
+
 	ring->desc = dma_alloc_coherent(dev->hw->dev, size * desc_size,
 					&ring->desc_phys, GFP_KERNEL);
 	if (!ring->desc)

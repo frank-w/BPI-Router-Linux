@@ -521,6 +521,7 @@ static struct phylink_pcs *mtk_mac_select_pcs(struct phylink_config *config,
 
 		return eth->sgmii_pcs[sid];
 	} else if ((interface == PHY_INTERFACE_MODE_USXGMII ||
+		    interface == PHY_INTERFACE_MODE_10GBASER ||
 		    interface == PHY_INTERFACE_MODE_10GKR ||
 		    interface == PHY_INTERFACE_MODE_5GBASER) &&
 		   mtk_is_netsys_v3_or_greater(eth) &&
@@ -573,6 +574,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 			break;
 		case PHY_INTERFACE_MODE_USXGMII:
 		case PHY_INTERFACE_MODE_10GKR:
+		case PHY_INTERFACE_MODE_10GBASER:
 		case PHY_INTERFACE_MODE_5GBASER:
 			if (MTK_HAS_CAPS(eth->soc->caps, MTK_USXGMII)) {
 				err = mtk_gmac_usxgmii_path_setup(eth, mac->id);
@@ -661,6 +663,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 		mac->syscfg0 = val;
 	} else if (state->interface != PHY_INTERFACE_MODE_USXGMII &&
 		   state->interface != PHY_INTERFACE_MODE_10GKR &&
+		   state->interface != PHY_INTERFACE_MODE_10GBASER &&
 		   state->interface != PHY_INTERFACE_MODE_5GBASER &&
 		   phylink_autoneg_inband(mode)) {
 		dev_err(eth->dev,
@@ -1255,7 +1258,13 @@ static int mtk_init_fq_dma(struct mtk_eth *eth)
 	dma_addr_t phy_ring_tail;
 	int cnt = MTK_QDMA_RING_SIZE;
 	dma_addr_t dma_addr;
-	int i;
+	int err, i;
+
+	err = dma_set_mask_and_coherent(eth->dma_dev, DMA_BIT_MASK(32));
+	if (err) {
+		dev_err(eth->dma_dev, "unsupported DMA mask\n");
+		return err;
+	}
 
 	eth->scratch_ring = dma_alloc_coherent(eth->dma_dev,
 					       cnt * soc->txrx.txd_size,
@@ -2555,13 +2564,19 @@ static int mtk_tx_alloc(struct mtk_eth *eth)
 	struct mtk_tx_ring *ring = &eth->tx_ring;
 	int i, sz = soc->txrx.txd_size;
 	struct mtk_tx_dma_v2 *txd;
-	int ring_size;
+	int err, ring_size;
 	u32 ofs, val;
 
 	if (MTK_HAS_CAPS(soc->caps, MTK_QDMA))
 		ring_size = MTK_QDMA_RING_SIZE;
 	else
 		ring_size = MTK_DMA_SIZE;
+
+	err = dma_set_mask_and_coherent(eth->dma_dev, DMA_BIT_MASK(32));
+	if (err) {
+		dev_err(eth->dma_dev, "unsupported DMA mask\n");
+		return err;
+	}
 
 	ring->buf = kcalloc(ring_size, sizeof(*ring->buf),
 			       GFP_KERNEL);
@@ -2689,7 +2704,7 @@ static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	struct mtk_rx_ring *ring;
 	int rx_data_len, rx_dma_size;
-	int i;
+	int err, i;
 
 	if (rx_flag == MTK_RX_FLAGS_QDMA) {
 		if (ring_no)
@@ -2723,6 +2738,12 @@ static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 			return PTR_ERR(pp);
 
 		ring->page_pool = pp;
+	}
+
+	err = dma_set_mask_and_coherent(eth->dma_dev, DMA_BIT_MASK(32));
+	if (err) {
+		dev_err(eth->dma_dev, "unsupported DMA mask\n");
+		return err;
 	}
 
 	ring->dma = dma_alloc_coherent(eth->dma_dev,
@@ -4656,6 +4677,8 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	} else if (MTK_HAS_CAPS(mac->hw->soc->caps, MTK_USXGMII)) {
 		mac->phylink_config.mac_capabilities |= MAC_5000FD | MAC_10000FD;
 		__set_bit(PHY_INTERFACE_MODE_5GBASER,
+		mac->phylink_config.supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_10GBASER,
 		mac->phylink_config.supported_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_10GKR,
 		mac->phylink_config.supported_interfaces);

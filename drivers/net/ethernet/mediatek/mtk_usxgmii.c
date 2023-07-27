@@ -590,7 +590,7 @@ static int mtk_usxgmii_pcs_config(struct phylink_pcs *pcs, unsigned int mode,
 			     FIELD_PREP(USXGMII_LINK_TIMER_AN_RESTART, 0x7B);
 		xfi_mode = FIELD_PREP(USXGMII_XFI_RX_MODE, USXGMII_XFI_RX_MODE_10G) |
 			   FIELD_PREP(USXGMII_XFI_TX_MODE, USXGMII_XFI_TX_MODE_10G);
-	} else if (interface == PHY_INTERFACE_MODE_10GKR) {
+	} else if (interface == PHY_INTERFACE_MODE_10GKR || interface == PHY_INTERFACE_MODE_10GBASER) {
 		an_ctrl = FIELD_PREP(USXGMII_AN_SYNC_CNT, 0x1FF);
 		link_timer = FIELD_PREP(USXGMII_LINK_TIMER_IDLE_DETECT, 0x7B) |
 			     FIELD_PREP(USXGMII_LINK_TIMER_COMP_ACK_DETECT, 0x7B) |
@@ -664,7 +664,7 @@ static int mtk_usxgmii_pcs_config(struct phylink_pcs *pcs, unsigned int mode,
 	/* Setup USXGMIISYS with the determined property */
 	if (interface == PHY_INTERFACE_MODE_USXGMII)
 		mtk_usxgmii_setup_phya_usxgmii(mpcs);
-	else if (interface == PHY_INTERFACE_MODE_10GKR)
+	else if (interface == PHY_INTERFACE_MODE_10GKR || interface == PHY_INTERFACE_MODE_10GBASER)
 		mtk_usxgmii_setup_phya_10gbaser(mpcs);
 	else if (interface == PHY_INTERFACE_MODE_5GBASER)
 		mtk_usxgmii_setup_phya_5gbaser(mpcs);
