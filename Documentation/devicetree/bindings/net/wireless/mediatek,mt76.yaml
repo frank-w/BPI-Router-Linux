@@ -34,6 +34,12 @@ properties:
     description:
       MT7986 should contain 3 regions consys, dcm, and sku, in this order.
 
+  '#address-cells':
+    const: 1
+
+  '#size-cells':
+    const: 0
+
   interrupts:
     minItems: 1
     items:
@@ -74,13 +80,23 @@ properties:
 
   ieee80211-freq-limit: true
 
+  address: true
+
+  local-mac-address: true
+
+  mac-address: true
+
   nvmem-cells:
+    minItems: 1
     items:
       - description: NVMEM cell with EEPROM
+      - description: NVMEM cell with the MAC address
 
   nvmem-cell-names:
+    minItems: 1
     items:
       - const: eeprom
+      - const: mac-address
 
   mediatek,eeprom-data:
     $ref: /schemas/types.yaml#/definitions/uint32-array
@@ -215,6 +231,30 @@ properties:
                     description:
                       Half-dBm power delta for different numbers of antennas
 
+patternProperties:
+  '^band@[0-2]+$':
+    type: object
+    additionalProperties: false
+    properties:
+      reg:
+        maxItems: 1
+
+      address: true
+      local-mac-address: true
+      mac-address: true
+
+      nvmem-cells:
+        description: NVMEM cell with the MAC address
+
+      nvmem-cell-names:
+        items:
+          - const: mac-address
+
+    required:
+      - reg
+
+    unevaluatedProperties: false
+
 required:
   - compatible
   - reg
@@ -245,10 +285,13 @@ examples:
       #address-cells = <3>;
       #size-cells = <2>;
       wifi@0,0 {
+        #address-cells = <1>;
+        #size-cells = <0>;
         compatible = "mediatek,mt76";
         reg = <0x0000 0 0 0 0>;
         ieee80211-freq-limit = <5000000 6000000>;
-        mediatek,mtd-eeprom = <&factory 0x8000>;
+        nvmem-cells = <&factory_eeprom>;
+        nvmem-cell-names = "eeprom";
         big-endian;
 
         led {
@@ -276,6 +319,20 @@ examples:
                };
              };
           };
+        };
+
+        band@0 {
+          /* 2.4 GHz */
+          reg = <0>;
+          nvmem-cells = <&macaddr 0x4>;
+          nvmem-cell-names = "mac-address";
+        };
+
+        band@1 {
+          /* 5 GHz */
+          reg = <1>;
+          nvmem-cells = <&macaddr 0xa>;
+          nvmem-cell-names = "mac-address";
         };
       };
     };
