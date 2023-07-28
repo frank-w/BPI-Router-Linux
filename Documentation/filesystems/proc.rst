@@ -688,7 +688,7 @@ files are there, and which are missing.
  buddyinfo    Kernel memory allocator information (see text)	(2.5)
  bus          Directory containing bus specific information
  cmdline      Kernel command line, both from bootloader and embedded
- 	      in the kernel image.
+ 	      in the kernel image
  cmdline_load Kernel command line obtained from kernel image	(6.6)
  cpuinfo      Info about the CPU
  devices      Available devices (block and character)
