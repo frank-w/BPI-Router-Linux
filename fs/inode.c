@@ -2097,28 +2097,28 @@ EXPORT_SYMBOL(file_remove_privs);
  */
 static struct timespec64 current_mgtime(struct inode *inode)
 {
-	struct timespec64 now;
+	struct timespec64 now, ctime;
 	atomic_long_t *pnsec = (atomic_long_t *)&inode->__i_ctime.tv_nsec;
 	long nsec = atomic_long_read(pnsec);
 
 	if (nsec & I_CTIME_QUERIED) {
 		ktime_get_real_ts64(&now);
-	} else {
-		struct timespec64 ctime;
-
-		ktime_get_coarse_real_ts64(&now);
-
-		/*
-		 * If we've recently fetched a fine-grained timestamp
-		 * then the coarse-grained one may still be earlier than the
-		 * existing one. Just keep the existing ctime if so.
-		 */
-		ctime = inode_get_ctime(inode);
-		if (timespec64_compare(&ctime, &now) > 0)
-			now = ctime;
+		return timestamp_truncate(now, inode);
 	}
 
-	return timestamp_truncate(now, inode);
+	ktime_get_coarse_real_ts64(&now);
+	now = timestamp_truncate(now, inode);
+
+	/*
+	 * If we've recently fetched a fine-grained timestamp
+	 * then the coarse-grained one may still be earlier than the
+	 * existing ctime. Just keep the existing value if so.
+	 */
+	ctime = inode_get_ctime(inode);
+	if (timespec64_compare(&ctime, &now) > 0)
+		now = ctime;
+
+	return now;
 }
 
 /**
