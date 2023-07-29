@@ -1433,26 +1433,6 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 			ret = PTR_ERR(ordered);
 			goto out_drop_extent_cache;
 		}
-
-		if (btrfs_is_data_reloc_root(root)) {
-			ret = btrfs_reloc_clone_csums(ordered);
-
-			/*
-			 * Only drop cache here, and process as normal.
-			 *
-			 * We must not allow extent_clear_unlock_delalloc()
-			 * at out_unlock label to free meta of this ordered
-			 * extent, as its meta should be freed by
-			 * btrfs_finish_ordered_io().
-			 *
-			 * So we must continue until @start is increased to
-			 * skip current ordered extent.
-			 */
-			if (ret)
-				btrfs_drop_extent_map_range(inode, start,
-							    start + ram_size - 1,
-							    false);
-		}
 		btrfs_put_ordered_extent(ordered);
 
 		btrfs_dec_block_group_reservations(fs_info, ins.objectid);
@@ -1479,14 +1459,6 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 		alloc_hint = ins.objectid + ins.offset;
 		start += cur_alloc_size;
 		extent_reserved = false;
-
-		/*
-		 * btrfs_reloc_clone_csums() error, since start is increased
-		 * extent_clear_unlock_delalloc() at out_unlock label won't
-		 * free metadata of current ordered extent, we're OK to exit.
-		 */
-		if (ret)
-			goto out_unlock;
 	}
 done:
 	if (done_offset)
@@ -1968,28 +1940,27 @@ static noinline int run_delalloc_nocow(struct btrfs_inode *inode,
 	struct btrfs_path *path;
 	u64 cow_start = (u64)-1;
 	u64 cur_offset = start;
-	int ret;
+	int ret = -ENOMEM;
 	bool check_prev = true;
 	u64 ino = btrfs_ino(inode);
-	struct btrfs_block_group *bg;
-	bool nocow = false;
 	struct can_nocow_file_extent_args nocow_args = { 0 };
 
+	/*
+	 * Normally on a zoned device we're only doing COW writes, but in case
+	 * of relocation on a zoned filesystem serializes I/O so that we're only
+	 * writing sequentially and can end up here as well.
+	 */
+	ASSERT(!btrfs_is_zoned(fs_info) || btrfs_is_data_reloc_root(root));
+
 	path = btrfs_alloc_path();
-	if (!path) {
-		extent_clear_unlock_delalloc(inode, start, end, locked_page,
-					     EXTENT_LOCKED | EXTENT_DELALLOC |
-					     EXTENT_DO_ACCOUNTING |
-					     EXTENT_DEFRAG, PAGE_UNLOCK |
-					     PAGE_START_WRITEBACK |
-					     PAGE_END_WRITEBACK);
-		return -ENOMEM;
-	}
+	if (!path)
+		goto error;
 
 	nocow_args.end = end;
 	nocow_args.writeback_path = true;
 
 	while (1) {
+		struct btrfs_block_group *nocow_bg = NULL;
 		struct btrfs_ordered_extent *ordered;
 		struct btrfs_key found_key;
 		struct btrfs_file_extent_item *fi;
@@ -1999,8 +1970,6 @@ static noinline int run_delalloc_nocow(struct btrfs_inode *inode,
 		u64 nocow_end;
 		int extent_type;
 		bool is_prealloc;
-
-		nocow = false;
 
 		ret = btrfs_lookup_file_extent(NULL, root, path, ino,
 					       cur_offset, 0);
@@ -2026,11 +1995,8 @@ next_slot:
 		leaf = path->nodes[0];
 		if (path->slots[0] >= btrfs_header_nritems(leaf)) {
 			ret = btrfs_next_leaf(root, path);
-			if (ret < 0) {
-				if (cow_start != (u64)-1)
-					cur_offset = cow_start;
+			if (ret < 0)
 				goto error;
-			}
 			if (ret > 0)
 				break;
 			leaf = path->nodes[0];
@@ -2063,7 +2029,7 @@ next_slot:
 		if (found_key.offset > cur_offset) {
 			extent_end = found_key.offset;
 			extent_type = 0;
-			goto out_check;
+			goto must_cow;
 		}
 
 		/*
@@ -2093,24 +2059,22 @@ next_slot:
 
 		nocow_args.start = cur_offset;
 		ret = can_nocow_file_extent(path, &found_key, inode, &nocow_args);
-		if (ret < 0) {
-			if (cow_start != (u64)-1)
-				cur_offset = cow_start;
+		if (ret < 0)
 			goto error;
-		} else if (ret == 0) {
-			goto out_check;
-		}
+		if (ret == 0)
+			goto must_cow;
 
 		ret = 0;
-		bg = btrfs_inc_nocow_writers(fs_info, nocow_args.disk_bytenr);
-		if (bg)
-			nocow = true;
-out_check:
-		/*
-		 * If nocow is false then record the beginning of the range
-		 * that needs to be COWed
-		 */
-		if (!nocow) {
+		nocow_bg = btrfs_inc_nocow_writers(fs_info, nocow_args.disk_bytenr);
+		if (!nocow_bg) {
+must_cow:
+			/*
+			 * If we can't perform NOCOW writeback for the range,
+			 * then record the beginning of the range that needs to
+			 * be COWed.  It will be written out before the next
+			 * NOCOW range if we find one, or when exiting this
+			 * loop.
+			 */
 			if (cow_start == (u64)-1)
 				cow_start = cur_offset;
 			cur_offset = extent_end;
@@ -2130,9 +2094,11 @@ out_check:
 		if (cow_start != (u64)-1) {
 			ret = fallback_to_cow(inode, locked_page,
 					      cow_start, found_key.offset - 1);
-			if (ret)
-				goto error;
 			cow_start = (u64)-1;
+			if (ret) {
+				btrfs_dec_nocow_writers(nocow_bg);
+				goto error;
+			}
 		}
 
 		nocow_end = cur_offset + nocow_args.num_bytes - 1;
@@ -2149,6 +2115,7 @@ out_check:
 					  ram_bytes, BTRFS_COMPRESS_NONE,
 					  BTRFS_ORDERED_PREALLOC);
 			if (IS_ERR(em)) {
+				btrfs_dec_nocow_writers(nocow_bg);
 				ret = PTR_ERR(em);
 				goto error;
 			}
@@ -2162,6 +2129,7 @@ out_check:
 				? (1 << BTRFS_ORDERED_PREALLOC)
 				: (1 << BTRFS_ORDERED_NOCOW),
 				BTRFS_COMPRESS_NONE);
+		btrfs_dec_nocow_writers(nocow_bg);
 		if (IS_ERR(ordered)) {
 			if (is_prealloc) {
 				btrfs_drop_extent_map_range(inode, cur_offset,
@@ -2170,19 +2138,6 @@ out_check:
 			ret = PTR_ERR(ordered);
 			goto error;
 		}
-
-		if (nocow) {
-			btrfs_dec_nocow_writers(bg);
-			nocow = false;
-		}
-
-		if (btrfs_is_data_reloc_root(root))
-			/*
-			 * Error handled later, as we must prevent
-			 * extent_clear_unlock_delalloc() in error handler
-			 * from freeing metadata of created ordered extent.
-			 */
-			ret = btrfs_reloc_clone_csums(ordered);
 		btrfs_put_ordered_extent(ordered);
 
 		extent_clear_unlock_delalloc(inode, cur_offset, nocow_end,
@@ -2191,15 +2146,7 @@ out_check:
 					     EXTENT_CLEAR_DATA_RESV,
 					     PAGE_UNLOCK | PAGE_SET_ORDERED);
 
-		cur_offset = extent_end;
-
-		/*
-		 * btrfs_reloc_clone_csums() error, now we're OK to call error
-		 * handler, as metadata for created ordered extent will only
-		 * be freed by btrfs_finish_ordered_io().
-		 */
-		if (ret)
-			goto error;
+		cur_offset = nocow_end + 1;
 		if (cur_offset > end)
 			break;
 	}
@@ -2211,15 +2158,23 @@ out_check:
 	if (cow_start != (u64)-1) {
 		cur_offset = end;
 		ret = fallback_to_cow(inode, locked_page, cow_start, end);
+		cow_start = (u64)-1;
 		if (ret)
 			goto error;
 	}
 
-error:
-	if (nocow)
-		btrfs_dec_nocow_writers(bg);
+	btrfs_free_path(path);
+	return 0;
 
-	if (ret && cur_offset < end)
+error:
+	/*
+	 * If an error happened while a COW region is outstanding, cur_offset
+	 * needs to be reset to cow_start to ensure the COW region is unlocked
+	 * as well.
+	 */
+	if (cow_start != (u64)-1)
+		cur_offset = cow_start;
+	if (cur_offset < end)
 		extent_clear_unlock_delalloc(inode, cur_offset, end,
 					     locked_page, EXTENT_LOCKED |
 					     EXTENT_DELALLOC | EXTENT_DEFRAG |
@@ -2260,14 +2215,6 @@ int btrfs_run_delalloc_range(struct btrfs_inode *inode, struct page *locked_page
 		 start >= page_offset(locked_page) + PAGE_SIZE));
 
 	if (should_nocow(inode, start, end)) {
-		/*
-		 * Normally on a zoned device we're only doing COW writes, but
-		 * in case of relocation on a zoned filesystem we have taken
-		 * precaution, that we're only writing sequentially. It's safe
-		 * to use run_delalloc_nocow() here, like for  regular
-		 * preallocated inodes.
-		 */
-		ASSERT(!zoned || btrfs_is_data_reloc_root(inode->root));
 		ret = run_delalloc_nocow(inode, locked_page, start, end);
 		goto out;
 	}
