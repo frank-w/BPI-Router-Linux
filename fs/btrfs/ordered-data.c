@@ -18,6 +18,7 @@
 #include "delalloc-space.h"
 #include "qgroup.h"
 #include "subpage.h"
+#include "relocation.h"
 #include "file.h"
 #include "super.h"
 
@@ -274,8 +275,27 @@ struct btrfs_ordered_extent *btrfs_alloc_ordered_extent(
 	entry = alloc_ordered_extent(inode, file_offset, num_bytes, ram_bytes,
 				     disk_bytenr, disk_num_bytes, offset, flags,
 				     compress_type);
-	if (!IS_ERR(entry))
-		insert_ordered_extent(entry);
+	if (IS_ERR(entry))
+		return entry;
+
+	/*
+	 * Writes to relocation roots are special, and clones the existing csums
+	 * from the csum tree instead of calculating them.
+	 *
+	 * Clone the csums here so that the ordered extent never gets inserted
+	 * into the per-inode ordered extent tree and per-root list on failure.
+	 */
+	if (btrfs_is_data_reloc_root(inode->root)) {
+		int ret;
+
+		ret = btrfs_reloc_clone_csums(entry);
+		if (ret) {
+			kmem_cache_free(btrfs_ordered_extent_cache, entry);
+			return ERR_PTR(ret);
+		}
+	}
+
+	insert_ordered_extent(entry);
 	return entry;
 }
 
@@ -409,6 +429,10 @@ void btrfs_mark_ordered_io_finished(struct btrfs_inode *inode,
 	struct btrfs_ordered_extent *entry = NULL;
 	unsigned long flags;
 	u64 cur = file_offset;
+
+	trace_btrfs_writepage_end_io_hook(inode, file_offset,
+					  file_offset + num_bytes - 1,
+					  uptodate);
 
 	spin_lock_irqsave(&tree->lock, flags);
 	while (cur < file_offset + num_bytes) {
