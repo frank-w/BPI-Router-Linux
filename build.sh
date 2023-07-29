@@ -821,6 +821,7 @@ function build {
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
+		export DTC_FLAGS="-@"
 		make ${MAKEFLAGS} ${CFLAGS} ${OWNCONFIGS} 2>&3
 		ret=$?
 		exec 3>&-
