@@ -8040,7 +8040,7 @@ CONFIG_USB_XHCI_MTK=y
 CONFIG_USB_STORAGE=y
 
 CONFIG_RESET_TI_SYSCON=y
-CONFIG_EXTRA_FIRMWARE="mediatek/mediatek-2p5ge-phy-dmb.bin mediatek/mediatek-2p5ge-phy-pmb.bin"
+CONFIG_EXTRA_FIRMWARE="mediatek/mediatek-2p5ge-phy-dmb.bin mediatek/mediatek-2p5ge-phy-pmb.bin mediatek/mt7996/mt7996_wa.bin mediatek/mt7996/mt7996_wm.bin mediatek/mt7996/mt7996_rom_patch.bin mediatek/mt7996/mt7996_eeprom.bin"
 CONFIG_EXTRA_FIRMWARE_DIR="utils/firmware"
 
 CONFIG_CFG80211=y
