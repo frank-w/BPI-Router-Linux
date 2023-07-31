@@ -44,6 +44,8 @@ static unsigned int iommu_def_domain_type __read_mostly;
 static bool iommu_dma_strict __read_mostly = IS_ENABLED(CONFIG_IOMMU_DEFAULT_DMA_STRICT);
 static u32 iommu_cmd_line __read_mostly;
 
+static DEFINE_MUTEX(dev_iommu_group_lock);
+
 struct iommu_group {
 	struct kobject kobj;
 	struct kobject *devices_kobj;
@@ -438,7 +440,6 @@ static int __iommu_probe_device(struct device *dev, struct list_head *group_list
 {
 	const struct iommu_ops *ops = dev->bus->iommu_ops;
 	struct iommu_group *group;
-	static DEFINE_MUTEX(iommu_probe_device_lock);
 	struct group_device *gdev;
 	int ret;
 
@@ -451,7 +452,7 @@ static int __iommu_probe_device(struct device *dev, struct list_head *group_list
 	 * probably be able to use device_lock() here to minimise the scope,
 	 * but for now enforcing a simple global ordering is fine.
 	 */
-	mutex_lock(&iommu_probe_device_lock);
+	mutex_lock(&dev_iommu_group_lock);
 
 	/* Device is probed already if in a group */
 	if (dev->iommu_group) {
@@ -497,7 +498,7 @@ static int __iommu_probe_device(struct device *dev, struct list_head *group_list
 			list_add_tail(&group->entry, group_list);
 	}
 	mutex_unlock(&group->mutex);
-	mutex_unlock(&iommu_probe_device_lock);
+	mutex_unlock(&dev_iommu_group_lock);
 
 	if (dev_is_pci(dev))
 		iommu_dma_set_pci_32bit_workaround(dev);
@@ -512,7 +513,7 @@ err_put_group:
 	mutex_unlock(&group->mutex);
 	iommu_group_put(group);
 out_unlock:
-	mutex_unlock(&iommu_probe_device_lock);
+	mutex_unlock(&dev_iommu_group_lock);
 
 	return ret;
 }
@@ -1219,6 +1220,12 @@ struct iommu_group *iommu_group_get(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(iommu_group_get);
 
+static struct iommu_group *iommu_group_get_locked(struct device *dev)
+{
+	lockdep_assert_held(&dev_iommu_group_lock);
+	return iommu_group_get(dev);
+}
+
 /**
  * iommu_group_ref_get - Increment reference on a group
  * @group: the group to use, must not be NULL
@@ -1532,7 +1539,7 @@ static struct iommu_group *get_pci_alias_group(struct pci_dev *pdev,
 	if (test_and_set_bit(pdev->devfn & 0xff, devfns))
 		return NULL;
 
-	group = iommu_group_get(&pdev->dev);
+	group = iommu_group_get_locked(&pdev->dev);
 	if (group)
 		return group;
 
@@ -1573,7 +1580,7 @@ static int get_pci_alias_or_group(struct pci_dev *pdev, u16 alias, void *opaque)
 	struct group_for_pci_data *data = opaque;
 
 	data->pdev = pdev;
-	data->group = iommu_group_get(&pdev->dev);
+	data->group = iommu_group_get_locked(&pdev->dev);
 
 	return data->group != NULL;
 }
@@ -1629,7 +1636,7 @@ struct iommu_group *pci_device_group(struct device *dev)
 
 		pdev = bus->self;
 
-		group = iommu_group_get(&pdev->dev);
+		group = iommu_group_get_locked(&pdev->dev);
 		if (group)
 			return group;
 	}
@@ -1662,7 +1669,7 @@ struct iommu_group *fsl_mc_device_group(struct device *dev)
 	struct device *cont_dev = fsl_mc_cont_dev(dev);
 	struct iommu_group *group;
 
-	group = iommu_group_get(cont_dev);
+	group = iommu_group_get_locked(cont_dev);
 	if (!group)
 		group = iommu_group_alloc();
 	return group;
