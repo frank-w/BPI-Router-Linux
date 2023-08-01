@@ -2040,7 +2040,8 @@ static int mt7996_driver_own(struct mt7996_dev *dev, u8 band)
 	if (!mt76_poll_msec(dev, MT_TOP_LPCR_HOST_BAND(band),
 			    MT_TOP_LPCR_HOST_FW_OWN_STAT, 0, 500)) {
 		dev_err(dev->mt76.dev, "Timeout for driver own\n");
-		return -EIO;
+		return -EPROBE_DEFER;
+		//return -EIO;
 	}
 
 	/* clear irq when the driver own success */
@@ -2084,6 +2085,7 @@ static int mt7996_load_patch(struct mt7996_dev *dev)
 	}
 
 	ret = request_firmware(&fw, MT7996_ROM_PATCH, dev->mt76.dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 	if (ret)
 		goto out;
 
@@ -2208,6 +2210,7 @@ static int mt7996_load_ram(struct mt7996_dev *dev)
 	int ret;
 
 	ret = request_firmware(&fw, MT7996_FIRMWARE_WM, dev->mt76.dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 	if (ret)
 		return ret;
 
@@ -2231,6 +2234,7 @@ static int mt7996_load_ram(struct mt7996_dev *dev)
 	release_firmware(fw);
 
 	ret = request_firmware(&fw, MT7996_FIRMWARE_WA, dev->mt76.dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 	if (ret)
 		return ret;
 
@@ -2414,6 +2418,7 @@ mt7996_mcu_init_rx_airtime(struct mt7996_dev *dev)
 	num = 2 + 2 * (dev->dbdc_support + dev->tbtc_support);
 	len = sizeof(hdr) + num * sizeof(struct vow_rx_airtime);
 	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, len);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0lx\n",__FUNCTION__,__LINE__,(unsigned long)skb);
 	if (!skb)
 		return -ENOMEM;
 
@@ -2441,33 +2446,45 @@ int mt7996_mcu_init_firmware(struct mt7996_dev *dev)
 	mt76_wr(dev, MT_SWDEF_MODE, MT_SWDEF_NORMAL_MODE);
 
 	ret = mt7996_driver_own(dev, 0);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 	if (ret)
 		return ret;
 	/* set driver own for band1 when two hif exist */
 	if (dev->hif2) {
 		ret = mt7996_driver_own(dev, 1);
+		printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 		if (ret)
 			return ret;
 	}
 
 	ret = mt7996_load_firmware(dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
+
 	if (ret)
 		return ret;
 
 	set_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state);
 	ret = mt7996_mcu_fw_log_2_host(dev, MCU_FW_LOG_WM, 0);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
+
 	if (ret)
 		return ret;
 
 	ret = mt7996_mcu_fw_log_2_host(dev, MCU_FW_LOG_WA, 0);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
+
 	if (ret)
 		return ret;
 
 	ret = mt7996_mcu_set_mwds(dev, 1);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
+
 	if (ret)
 		return ret;
 
 	ret = mt7996_mcu_init_rx_airtime(dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
+
 	if (ret)
 		return ret;
 

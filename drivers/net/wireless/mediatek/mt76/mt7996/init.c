@@ -440,30 +440,37 @@ void mt7996_wfsys_reset(struct mt7996_dev *dev)
 static int mt7996_init_hardware(struct mt7996_dev *dev)
 {
 	int ret, idx;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	mt76_wr(dev, MT_INT_SOURCE_CSR, ~0);
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	INIT_WORK(&dev->init_work, mt7996_init_work);
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	dev->dbdc_support = true;
 	dev->tbtc_support = true;
 
 	ret = mt7996_dma_init(dev);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 	if (ret)
 		return ret;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	set_bit(MT76_STATE_INITIALIZED, &dev->mphy.state);
 
 	ret = mt7996_mcu_init(dev);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_eeprom_init(dev);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)ret);
 	if (ret < 0)
 		return ret;
 
 	/* Beacon and mgmt frames should occupy wcid 0 */
 	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7996_WTBL_STA);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:0x%0x\n",__FUNCTION__,__LINE__,(unsigned int)idx);
 	if (idx)
 		return -ENOSPC;
 
