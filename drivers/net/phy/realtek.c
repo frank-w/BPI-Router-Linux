@@ -561,6 +561,9 @@ static int rtlgen_get_speed(struct phy_device *phydev, int val)
 	case 0x0220:
 		phydev->speed = SPEED_5000;
 		break;
+	case 0x0230:
+		phydev->speed = SPEED_1000;
+		break;
 	default:
 		break;
 	}
