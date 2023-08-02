@@ -70,8 +70,18 @@
 
 #define RTLGEN_SPEED_MASK			0x0630
 
+#define RTL822x_V2_GBCR				0xa412
+#define RTL822x_V2_GBCR_1000BASET_FULL_DUPLEX_CAP	BIT(9)
+
+#define RTL822x_V2_GBSR				0xa414
+#define RTL822x_V2_GBSR_LP_1000BASET_HALF_DUPLEX_CAP	BIT(10)
+#define RTL822x_V2_GBSR_LP_1000BASET_FULL_DUPLEX_CAP	BIT(11)
+
+#define RTL822x_V2_PHYSR			0xa434
+
 #define RTL_GENERIC_PHYID			0x001cc800
 #define RTL_8211FVD_PHYID			0x001cc878
+#define RTL_8221B_VB_CG				0x001cc849
 
 MODULE_DESCRIPTION("Realtek PHY driver");
 MODULE_AUTHOR("Johnson Leung");
@@ -733,6 +743,137 @@ static int rtl822x_read_status(struct phy_device *phydev)
 	return rtlgen_get_speed(phydev, val);
 }
 
+/* Assume when a rtl822x is on a sfp module and is accessed via RollBall
+* address, it is setup in "Rate Adaptor Mode".
+* Can change this, if a better option is known to detect this mode.
+*/
+static bool rtl822x_in_rate_adaptor_mode(struct phy_device *phydev)
+{
+        return phy_on_sfp(phydev) && phydev->mdio.addr == 17;
+}
+
+
+static int rtl822x_c45_get_features(struct phy_device *phydev)
+{
+	int ret = 0;
+
+	if (rtl822x_in_rate_adaptor_mode(phydev)) {
+		linkmode_zero(phydev->supported);
+	} else {
+		ret = genphy_c45_pma_read_abilities(phydev);
+		if (ret < 0)
+			return ret;
+	}
+
+	linkmode_set_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+			phydev->supported);
+	linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT,
+			phydev->supported);
+	linkmode_set_bit(ETHTOOL_LINK_MODE_TP_BIT,
+			phydev->supported);
+
+	return ret;
+
+}
+
+static int rtl822x_c45_config_aneg(struct phy_device *phydev)
+{
+	int ret;
+
+	if (rtl822x_in_rate_adaptor_mode(phydev)) return 0;
+
+	ret = genphy_c45_config_aneg(phydev);
+	if (ret < 0)
+		return ret;
+
+	/* Clause 45 has no standardized support for 1000BaseT, therefore
+	 * use vendor registers for this mode.
+	 */
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
+			phydev->advertising))
+		phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, RTL822x_V2_GBCR,
+				RTL822x_V2_GBCR_1000BASET_FULL_DUPLEX_CAP);
+
+	return ret;
+}
+
+static int rtl822x_c45_read_status(struct phy_device *phydev)
+{
+	int ret, val;
+
+	if (rtl822x_in_rate_adaptor_mode(phydev)) {
+		ret = genphy_c45_read_link(phydev);
+		if (ret)
+			return ret;
+
+		linkmode_zero(phydev->lp_advertising);
+		phydev->duplex = DUPLEX_FULL;
+		phydev->speed = SPEED_UNKNOWN;
+		phydev->pause = 0;
+		phydev->asym_pause = 0;
+
+		val = genphy_c45_pma_baset1_read_master_slave(phydev);
+		if (val < 0)
+			return val;
+
+		ret = genphy_c45_read_lpa(phydev);
+		if (ret)
+			return ret;
+
+	} else {
+		ret = genphy_c45_read_status(phydev);
+		if (ret < 0)
+			return ret;
+	}
+	/* Clause 45 has no standardized support for 1000BaseT, therefore
+	* use vendor registers for this mode.
+	*/
+	val = phy_read_mmd(phydev, MDIO_MMD_VEND2, RTL822x_V2_GBSR);
+	if (val < 0)
+		return val;
+
+	linkmode_mod_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT,
+			phydev->lp_advertising,
+			val & RTL822x_V2_GBSR_LP_1000BASET_HALF_DUPLEX_CAP);
+	linkmode_mod_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
+			phydev->lp_advertising,
+			val & RTL822x_V2_GBSR_LP_1000BASET_FULL_DUPLEX_CAP);
+
+	/* Read actual speed from vendor register. */
+	val = phy_read_mmd(phydev, MDIO_MMD_VEND2, RTL822x_V2_PHYSR);
+	if (val < 0)
+		return val;
+
+	ret = rtlgen_get_speed(phydev, val);
+	if (ret)
+		return ret;
+
+	phydev_dbg(phydev,
+		    "RTL822x genphy_c45 status: %s/%s/%s %*pb %*pb pause=%02x link=%u\n",
+		    phy_modes(phydev->interface),
+		    phy_speed_to_str(phydev->speed),
+		    phy_duplex_to_str(phydev->duplex),
+		    __ETHTOOL_LINK_MODE_MASK_NBITS, phydev->advertising,
+		    __ETHTOOL_LINK_MODE_MASK_NBITS, phydev->lp_advertising,
+		    phydev->pause, phydev->link);
+
+	return 0;
+}
+
+static int rtl822x_c45_suspend(struct phy_device *phydev)
+{
+	if (rtl822x_in_rate_adaptor_mode(phydev)) return 0;
+
+	return genphy_c45_pma_suspend(phydev);
+}
+
+static int rtl822x_c45_resume(struct phy_device *phydev)
+{
+	if (rtl822x_in_rate_adaptor_mode(phydev)) return 0;
+
+	return genphy_c45_pma_resume(phydev);
+}
+
 static bool rtlgen_supports_2_5gbps(struct phy_device *phydev)
 {
 	int val;
@@ -754,6 +895,31 @@ static int rtl8226_match_phy_device(struct phy_device *phydev)
 {
 	return phydev->phy_id == RTL_GENERIC_PHYID &&
 	       rtlgen_supports_2_5gbps(phydev);
+}
+
+/* Only use Clause 45 if available and Clause 22 is not.
+* This also includes RollBall protocol SFP modules.
+* Could possibly replace this function call with phydev->is_c45
+* to use the Clause 45 driver instance on all capable rtl822x.
+*/
+static bool rtl822x_use_c45(struct phy_device *phydev)
+{
+        return phydev->mdio.bus &&
+		!phydev->mdio.bus->read && !!phydev->mdio.bus->read_c45;
+}
+
+static int rtl8221_vb_cg_c22_match_phy_device(struct phy_device *phydev)
+{
+	return phydev->is_c45 &&
+			phydev->c45_ids.device_ids[1] == RTL_8221B_VB_CG &&
+			!rtl822x_use_c45(phydev);
+}
+
+static int rtl8221_vb_cg_c45_match_phy_device(struct phy_device *phydev)
+{
+	return phydev->is_c45 &&
+			phydev->c45_ids.device_ids[1] == RTL_8221B_VB_CG &&
+			rtl822x_use_c45(phydev);
 }
 
 static int rtlgen_resume(struct phy_device *phydev)
@@ -1033,8 +1199,8 @@ static struct phy_driver realtek_drvs[] = {
 		.read_page      = rtl821x_read_page,
 		.write_page     = rtl821x_write_page,
 	}, {
-		PHY_ID_MATCH_EXACT(0x001cc849),
-		.name           = "RTL8221B-VB-CG 2.5Gbps PHY",
+		.match_phy_device = rtl8221_vb_cg_c22_match_phy_device,
+		.name           = "RTL8221B-VB-CG 2.5Gbps PHY (C22)",
 		.get_features   = rtl822x_get_features,
 		.config_aneg    = rtl822x_config_aneg,
 		.read_status    = rtl822x_read_status,
@@ -1042,6 +1208,14 @@ static struct phy_driver realtek_drvs[] = {
 		.resume         = rtlgen_resume,
 		.read_page      = rtl821x_read_page,
 		.write_page     = rtl821x_write_page,
+	}, {
+		.match_phy_device = rtl8221_vb_cg_c45_match_phy_device,
+		.name           = "RTL8221B-VB-CG 2.5Gbps PHY (C45)",
+		.get_features   = rtl822x_c45_get_features,
+		.config_aneg    = rtl822x_c45_config_aneg,
+		.read_status    = rtl822x_c45_read_status,
+		.suspend        = rtl822x_c45_suspend,
+		.resume         = rtl822x_c45_resume,
 	}, {
 		PHY_ID_MATCH_EXACT(0x001cc84a),
 		.name           = "RTL8221B-VM-CG 2.5Gbps PHY",
