@@ -553,16 +553,10 @@ static int rtl8366rb_config_init(struct phy_device *phydev)
 }
 
 /* get actual speed to cover the downshift case */
-static int rtlgen_get_speed(struct phy_device *phydev)
+static int rtlgen_get_speed(struct phy_device *phydev, int val)
 {
-	int val;
-
 	if (!phydev->link)
 		return 0;
-
-	val = phy_read_paged(phydev, 0xa43, 0x12);
-	if (val < 0)
-		return val;
 
 	switch (val & RTLGEN_SPEED_MASK) {
 	case 0x0000:
@@ -592,13 +586,17 @@ static int rtlgen_get_speed(struct phy_device *phydev)
 
 static int rtlgen_read_status(struct phy_device *phydev)
 {
-	int ret;
+	int ret, val;
 
 	ret = genphy_read_status(phydev);
 	if (ret < 0)
 		return ret;
 
-	return rtlgen_get_speed(phydev);
+	val = phy_read_paged(phydev, 0xa43, 0x12);
+	if (val < 0)
+		return val;
+
+	return rtlgen_get_speed(phydev, val);
 }
 
 static int rtlgen_read_mmd(struct phy_device *phydev, int devnum, u16 regnum)
@@ -741,7 +739,7 @@ static void rtl822x_update_interface(struct phy_device *phydev)
 
 static int rtl822x_read_status(struct phy_device *phydev)
 {
-	int ret;
+	int ret, val;
 
 	if (phydev->autoneg == AUTONEG_ENABLE) {
 		int lpadv = phy_read_paged(phydev, 0xa5d, 0x13);
@@ -762,7 +760,11 @@ static int rtl822x_read_status(struct phy_device *phydev)
 
 	rtl822x_update_interface(phydev);
 
-	return 0;
+	val = phy_read_paged(phydev, 0xa43, 0x12);
+	if (val < 0)
+		return val;
+
+	return rtlgen_get_speed(phydev, val);
 }
 
 static bool rtlgen_supports_2_5gbps(struct phy_device *phydev)
