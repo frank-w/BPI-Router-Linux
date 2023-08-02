@@ -448,9 +448,16 @@ STATIC int
 xfs_open_devices(
 	struct xfs_mount	*mp)
 {
-	struct block_device	*ddev = mp->m_super->s_bdev;
+	struct super_block	*sb = mp->m_super;
+	struct block_device	*ddev = sb->s_bdev;
 	struct block_device	*logdev = NULL, *rtdev = NULL;
 	int			error;
+
+	/*
+	 * blkdev_put() can't be called under s_umount, see the comment
+	 * in get_tree_bdev() for more details
+	 */
+	up_write(&sb->s_umount);
 
 	/*
 	 * Open real time and log devices - order is important.
@@ -458,7 +465,7 @@ xfs_open_devices(
 	if (mp->m_logname) {
 		error = xfs_blkdev_get(mp, mp->m_logname, &logdev);
 		if (error)
-			return error;
+			goto out_relock;
 	}
 
 	if (mp->m_rtname) {
@@ -496,7 +503,10 @@ xfs_open_devices(
 		mp->m_logdev_targp = mp->m_ddev_targp;
 	}
 
-	return 0;
+	error = 0;
+out_relock:
+	down_write(&sb->s_umount);
+	return error;
 
  out_free_rtdev_targ:
 	if (mp->m_rtdev_targp)
@@ -508,7 +518,7 @@ xfs_open_devices(
  out_close_logdev:
 	if (logdev && logdev != ddev)
 		xfs_blkdev_put(mp, logdev);
-	return error;
+	goto out_relock;
 }
 
 /*
