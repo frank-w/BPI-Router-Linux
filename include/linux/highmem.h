@@ -445,13 +445,13 @@ static inline void memcpy_from_folio(char *to, struct folio *folio,
 	VM_BUG_ON(offset + len > folio_size(folio));
 
 	do {
-		char *from = kmap_local_folio(folio, offset);
+		const char *from = kmap_local_folio(folio, offset);
 		size_t chunk = len;
 
 		if (folio_test_highmem(folio) &&
-		    (chunk > (PAGE_SIZE - offset_in_page(offset))))
+		    chunk > PAGE_SIZE - offset_in_page(offset))
 			chunk = PAGE_SIZE - offset_in_page(offset);
-		memcpy(to, from, len);
+		memcpy(to, from, chunk);
 		kunmap_local(from);
 
 		from += chunk;
@@ -470,9 +470,9 @@ static inline void memcpy_to_folio(struct folio *folio, size_t offset,
 		size_t chunk = len;
 
 		if (folio_test_highmem(folio) &&
-		    (chunk > (PAGE_SIZE - offset_in_page(offset))))
+		    chunk > PAGE_SIZE - offset_in_page(offset))
 			chunk = PAGE_SIZE - offset_in_page(offset);
-		memcpy(to, from, len);
+		memcpy(to, from, chunk);
 		kunmap_local(to);
 
 		from += chunk;
