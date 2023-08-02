@@ -1434,10 +1434,8 @@ out:
 static struct dentry *btrfs_mount_root(struct file_system_type *fs_type,
 		int flags, const char *device_name, void *data)
 {
-	struct block_device *bdev = NULL;
 	struct super_block *s;
 	struct btrfs_device *device = NULL;
-	struct btrfs_fs_devices *fs_devices = NULL;
 	struct btrfs_fs_info *fs_info = NULL;
 	void *new_sec_opts = NULL;
 	int error = 0;
@@ -1483,35 +1481,36 @@ static struct dentry *btrfs_mount_root(struct file_system_type *fs_type,
 		error = PTR_ERR(device);
 		goto error_fs_info;
 	}
-
-	fs_devices = device->fs_devices;
-	fs_info->fs_devices = fs_devices;
-
-	error = btrfs_open_devices(fs_devices, sb_open_mode(flags), fs_type);
+	fs_info->fs_devices = device->fs_devices;
 	mutex_unlock(&uuid_mutex);
-	if (error)
-		goto error_fs_info;
 
-	if (!(flags & SB_RDONLY) && fs_devices->rw_devices == 0) {
-		error = -EACCES;
-		goto error_close_devices;
-	}
-
-	bdev = fs_devices->latest_dev->bdev;
 	s = sget(fs_type, btrfs_test_super, btrfs_set_super, flags | SB_NOSEC,
 		 fs_info);
 	if (IS_ERR(s)) {
 		error = PTR_ERR(s);
-		goto error_close_devices;
+		goto error_fs_info;
 	}
 
 	if (s->s_root) {
-		btrfs_close_devices(fs_devices);
 		btrfs_free_fs_info(fs_info);
 		if ((flags ^ s->s_flags) & SB_RDONLY)
 			error = -EBUSY;
 	} else {
-		snprintf(s->s_id, sizeof(s->s_id), "%pg", bdev);
+		struct btrfs_fs_devices *fs_devices = fs_info->fs_devices;
+
+		error = btrfs_open_devices(fs_devices, sb_open_mode(flags),
+					   fs_type);
+		if (error)
+			goto out_deactivate;
+
+		if (!(flags & SB_RDONLY) && fs_devices->rw_devices == 0) {
+			error = -EACCES;
+			btrfs_close_devices(fs_info->fs_devices);
+			goto out_deactivate;
+		}
+
+		snprintf(s->s_id, sizeof(s->s_id), "%pg",
+			 fs_devices->latest_dev->bdev);
 		shrinker_debugfs_rename(&s->s_shrink, "sb-%s:%s", fs_type->name,
 					s->s_id);
 		btrfs_sb(s)->bdev_holder = fs_type;
@@ -1519,21 +1518,19 @@ static struct dentry *btrfs_mount_root(struct file_system_type *fs_type,
 	}
 	if (!error)
 		error = security_sb_set_mnt_opts(s, new_sec_opts, 0, NULL);
+	if (error)
+		goto out_deactivate;
 	security_free_mnt_opts(&new_sec_opts);
-	if (error) {
-		deactivate_locked_super(s);
-		return ERR_PTR(error);
-	}
-
 	return dget(s->s_root);
 
-error_close_devices:
-	btrfs_close_devices(fs_devices);
-error_fs_info:
-	btrfs_free_fs_info(fs_info);
+out_deactivate:
+	deactivate_locked_super(s);
 error_sec_opts:
 	security_free_mnt_opts(&new_sec_opts);
 	return ERR_PTR(error);
+error_fs_info:
+	btrfs_free_fs_info(fs_info);
+	goto error_sec_opts;
 }
 
 /*
