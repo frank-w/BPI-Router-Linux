@@ -695,6 +695,7 @@ static void __dma_page_cpu_to_dev(struct page *page, unsigned long off,
 static void __dma_page_dev_to_cpu(struct page *page, unsigned long off,
 	size_t size, enum dma_data_direction dir)
 {
+	struct folio *folio = page_folio(page);
 	phys_addr_t paddr = page_to_phys(page) + off;
 
 	/* FIXME: non-speculating: not required */
@@ -709,19 +710,18 @@ static void __dma_page_dev_to_cpu(struct page *page, unsigned long off,
 	 * Mark the D-cache clean for these pages to avoid extra flushing.
 	 */
 	if (dir != DMA_TO_DEVICE && size >= PAGE_SIZE) {
-		unsigned long pfn;
-		size_t left = size;
+		ssize_t left = size;
+		size_t offset = offset_in_folio(folio, paddr);
 
-		pfn = page_to_pfn(page) + off / PAGE_SIZE;
-		off %= PAGE_SIZE;
-		if (off) {
-			pfn++;
-			left -= PAGE_SIZE - off;
+		if (offset) {
+			left -= folio_size(folio) - offset;
+			folio = folio_next(folio);
 		}
-		while (left >= PAGE_SIZE) {
-			page = pfn_to_page(pfn++);
-			set_bit(PG_dcache_clean, &page->flags);
-			left -= PAGE_SIZE;
+
+		while (left >= (ssize_t)folio_size(folio)) {
+			set_bit(PG_dcache_clean, &folio->flags);
+			left -= folio_size(folio);
+			folio = folio_next(folio);
 		}
 	}
 }
