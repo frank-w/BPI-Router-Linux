@@ -2358,18 +2358,17 @@ static int vfs_setup_quota_inode(struct inode *inode, int type)
 	return 0;
 }
 
-int dquot_load_quota_sb(struct super_block *sb, int type, int format_id,
-	unsigned int flags)
+static int dquot_load_quota_sb(struct super_block *sb, int type, int format_id,
+		unsigned int flags)
 {
 	struct quota_format_type *fmt = find_quota_format(format_id);
 	struct quota_info *dqopt = sb_dqopt(sb);
 	int error;
 
+	lockdep_assert_held_write(&sb->s_umount);
+
 	/* Just unsuspend quotas? */
 	BUG_ON(flags & DQUOT_SUSPENDED);
-	/* s_umount should be held in exclusive mode */
-	if (WARN_ON_ONCE(down_read_trylock(&sb->s_umount)))
-		up_read(&sb->s_umount);
 
 	if (!fmt)
 		return -ESRCH;
@@ -2435,7 +2434,6 @@ out_fmt:
 
 	return error;
 }
-EXPORT_SYMBOL(dquot_load_quota_sb);
 
 /*
  * More powerful function for turning on quotas on given quota inode allowing
