@@ -495,7 +495,7 @@ static void cramfs_kill_sb(struct super_block *sb)
 	} else if (IS_ENABLED(CONFIG_CRAMFS_BLOCKDEV) && sb->s_bdev) {
 		sb->s_bdev->bd_super = NULL;
 		sync_blockdev(sb->s_bdev);
-		blkdev_put(sb->s_bdev, sb->s_type);
+		blkdev_put(sb->s_bdev, sb);
 	}
 	kfree(sbi);
 }

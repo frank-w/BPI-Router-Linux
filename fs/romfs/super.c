@@ -595,7 +595,7 @@ static void romfs_kill_sb(struct super_block *sb)
 	if (sb->s_bdev) {
 		sb->s_bdev->bd_super = NULL;
 		sync_blockdev(sb->s_bdev);
-		blkdev_put(sb->s_bdev, sb->s_type);
+		blkdev_put(sb->s_bdev, sb);
 	}
 #endif
 }
