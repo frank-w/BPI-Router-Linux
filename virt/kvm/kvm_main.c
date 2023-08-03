@@ -154,11 +154,6 @@ static unsigned long long kvm_active_vms;
 
 static DEFINE_PER_CPU(cpumask_var_t, cpu_kick_mask);
 
-__weak void kvm_arch_mmu_notifier_invalidate_range(struct kvm *kvm,
-						   unsigned long start, unsigned long end)
-{
-}
-
 __weak void kvm_arch_guest_memory_reclaimed(struct kvm *kvm)
 {
 }
@@ -519,18 +514,6 @@ EXPORT_SYMBOL_GPL(kvm_destroy_vcpus);
 static inline struct kvm *mmu_notifier_to_kvm(struct mmu_notifier *mn)
 {
 	return container_of(mn, struct kvm, mmu_notifier);
-}
-
-static void kvm_mmu_notifier_invalidate_range(struct mmu_notifier *mn,
-					      struct mm_struct *mm,
-					      unsigned long start, unsigned long end)
-{
-	struct kvm *kvm = mmu_notifier_to_kvm(mn);
-	int idx;
-
-	idx = srcu_read_lock(&kvm->srcu);
-	kvm_arch_mmu_notifier_invalidate_range(kvm, start, end);
-	srcu_read_unlock(&kvm->srcu, idx);
 }
 
 typedef bool (*hva_handler_t)(struct kvm *kvm, struct kvm_gfn_range *range);
@@ -910,7 +893,6 @@ static void kvm_mmu_notifier_release(struct mmu_notifier *mn,
 }
 
 static const struct mmu_notifier_ops kvm_mmu_notifier_ops = {
-	.invalidate_range	= kvm_mmu_notifier_invalidate_range,
 	.invalidate_range_start	= kvm_mmu_notifier_invalidate_range_start,
 	.invalidate_range_end	= kvm_mmu_notifier_invalidate_range_end,
 	.clear_flush_young	= kvm_mmu_notifier_clear_flush_young,
@@ -3891,7 +3873,10 @@ static int create_vcpu_fd(struct kvm_vcpu *vcpu)
 static int vcpu_get_pid(void *data, u64 *val)
 {
 	struct kvm_vcpu *vcpu = data;
-	*val = pid_nr(rcu_access_pointer(vcpu->pid));
+
+	rcu_read_lock();
+	*val = pid_nr(rcu_dereference(vcpu->pid));
+	rcu_read_unlock();
 	return 0;
 }
 
@@ -3993,7 +3978,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 	if (r < 0)
 		goto kvm_put_xa_release;
 
-	if (KVM_BUG_ON(!!xa_store(&kvm->vcpu_array, vcpu->vcpu_idx, vcpu, 0), kvm)) {
+	if (KVM_BUG_ON(xa_store(&kvm->vcpu_array, vcpu->vcpu_idx, vcpu, 0), kvm)) {
 		r = -EINVAL;
 		goto kvm_put_xa_release;
 	}
@@ -4050,8 +4035,17 @@ static ssize_t kvm_vcpu_stats_read(struct file *file, char __user *user_buffer,
 			sizeof(vcpu->stat), user_buffer, size, offset);
 }
 
+static int kvm_vcpu_stats_release(struct inode *inode, struct file *file)
+{
+	struct kvm_vcpu *vcpu = file->private_data;
+
+	kvm_put_kvm(vcpu->kvm);
+	return 0;
+}
+
 static const struct file_operations kvm_vcpu_stats_fops = {
 	.read = kvm_vcpu_stats_read,
+	.release = kvm_vcpu_stats_release,
 	.llseek = noop_llseek,
 };
 
@@ -4072,6 +4066,9 @@ static int kvm_vcpu_ioctl_get_stats_fd(struct kvm_vcpu *vcpu)
 		put_unused_fd(fd);
 		return PTR_ERR(file);
 	}
+
+	kvm_get_kvm(vcpu->kvm);
+
 	file->f_mode |= FMODE_PREAD;
 	fd_install(fd, file);
 
@@ -4623,7 +4620,7 @@ int __attribute__((weak)) kvm_vm_ioctl_enable_cap(struct kvm *kvm,
 	return -EINVAL;
 }
 
-static bool kvm_are_all_memslots_empty(struct kvm *kvm)
+bool kvm_are_all_memslots_empty(struct kvm *kvm)
 {
 	int i;
 
@@ -4636,6 +4633,7 @@ static bool kvm_are_all_memslots_empty(struct kvm *kvm)
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(kvm_are_all_memslots_empty);
 
 static int kvm_vm_ioctl_enable_cap_generic(struct kvm *kvm,
 					   struct kvm_enable_cap *cap)
@@ -4715,8 +4713,17 @@ static ssize_t kvm_vm_stats_read(struct file *file, char __user *user_buffer,
 				sizeof(kvm->stat), user_buffer, size, offset);
 }
 
+static int kvm_vm_stats_release(struct inode *inode, struct file *file)
+{
+	struct kvm *kvm = file->private_data;
+
+	kvm_put_kvm(kvm);
+	return 0;
+}
+
 static const struct file_operations kvm_vm_stats_fops = {
 	.read = kvm_vm_stats_read,
+	.release = kvm_vm_stats_release,
 	.llseek = noop_llseek,
 };
 
@@ -4735,6 +4742,9 @@ static int kvm_vm_ioctl_get_stats_fd(struct kvm *kvm)
 		put_unused_fd(fd);
 		return PTR_ERR(file);
 	}
+
+	kvm_get_kvm(kvm);
+
 	file->f_mode |= FMODE_PREAD;
 	fd_install(fd, file);
 
@@ -5315,6 +5325,12 @@ static void hardware_disable_all(void)
 }
 #endif /* CONFIG_KVM_GENERIC_HARDWARE_ENABLING */
 
+static void kvm_iodevice_destructor(struct kvm_io_device *dev)
+{
+	if (dev->ops->destructor)
+		dev->ops->destructor(dev);
+}
+
 static void kvm_io_bus_destroy(struct kvm_io_bus *bus)
 {
 	int i;
@@ -5538,7 +5554,7 @@ int kvm_io_bus_register_dev(struct kvm *kvm, enum kvm_bus bus_idx, gpa_t addr,
 int kvm_io_bus_unregister_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 			      struct kvm_io_device *dev)
 {
-	int i, j;
+	int i;
 	struct kvm_io_bus *new_bus, *bus;
 
 	lockdep_assert_held(&kvm->slots_lock);
@@ -5568,18 +5584,19 @@ int kvm_io_bus_unregister_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 	rcu_assign_pointer(kvm->buses[bus_idx], new_bus);
 	synchronize_srcu_expedited(&kvm->srcu);
 
-	/* Destroy the old bus _after_ installing the (null) bus. */
+	/*
+	 * If NULL bus is installed, destroy the old bus, including all the
+	 * attached devices. Otherwise, destroy the caller's device only.
+	 */
 	if (!new_bus) {
 		pr_err("kvm: failed to shrink bus, removing it completely\n");
-		for (j = 0; j < bus->dev_count; j++) {
-			if (j == i)
-				continue;
-			kvm_iodevice_destructor(bus->range[j].dev);
-		}
+		kvm_io_bus_destroy(bus);
+		return -ENOMEM;
 	}
 
+	kvm_iodevice_destructor(dev);
 	kfree(bus);
-	return new_bus ? 0 : -ENOMEM;
+	return 0;
 }
 
 struct kvm_io_device *kvm_io_bus_get_dev(struct kvm *kvm, enum kvm_bus bus_idx,
