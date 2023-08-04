@@ -386,7 +386,7 @@ EXPORT_SYMBOL_GPL(svc_xprt_copy_addrs);
  */
 char *svc_print_addr(struct svc_rqst *rqstp, char *buf, size_t len)
 {
-	return __svc_print_addr(svc_addr(rqstp), buf, len);
+	return __svc_print_addr(svc_addr(rqstp), buf, len, true);
 }
 EXPORT_SYMBOL_GPL(svc_print_addr);
 

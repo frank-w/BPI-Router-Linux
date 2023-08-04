@@ -209,21 +209,21 @@ static inline unsigned short svc_xprt_remote_port(const struct svc_xprt *xprt)
 }
 
 static inline char *__svc_print_addr(const struct sockaddr *addr,
-				     char *buf, const size_t len)
+				     char *buf, const size_t len,
+				     bool verbose)
 {
 	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
 	const struct sockaddr_in6 *sin6 = (const struct sockaddr_in6 *)addr;
 
 	switch (addr->sa_family) {
 	case AF_INET:
-		snprintf(buf, len, "%pI4, port=%u", &sin->sin_addr,
-			ntohs(sin->sin_port));
+		snprintf(buf, len, "%pI4%s%hu", &sin->sin_addr,
+			 verbose ? ", port=" : " ", ntohs(sin->sin_port));
 		break;
 
 	case AF_INET6:
-		snprintf(buf, len, "%pI6, port=%u",
-			 &sin6->sin6_addr,
-			ntohs(sin6->sin6_port));
+		snprintf(buf, len, "%pI6%s%hu", &sin6->sin6_addr,
+			 verbose ? ", port=" : " ", ntohs(sin6->sin6_port));
 		break;
 
 	default:
