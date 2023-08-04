@@ -1057,6 +1057,15 @@ int nfsd_dispatch(struct svc_rqst *rqstp)
 	if (!proc->pc_decode(rqstp, &rqstp->rq_arg_stream))
 		goto out_decode_err;
 
+	/*
+	 * Release rq_status_counter setting it to an odd value after the rpc
+	 * request has been properly parsed. rq_status_counter is used to
+	 * notify the consumers if the rqstp fields are stable
+	 * (rq_status_counter is odd) or not meaningful (rq_status_counter
+	 * is even).
+	 */
+	smp_store_release(&rqstp->rq_status_counter, rqstp->rq_status_counter | 1);
+
 	rp = NULL;
 	switch (nfsd_cache_lookup(rqstp, &rp)) {
 	case RC_DOIT:
@@ -1073,6 +1082,12 @@ int nfsd_dispatch(struct svc_rqst *rqstp)
 
 	if (!proc->pc_encode(rqstp, &rqstp->rq_res_stream))
 		goto out_encode_err;
+
+	/*
+	 * Release rq_status_counter setting it to an even value after the rpc
+	 * request has been properly processed.
+	 */
+	smp_store_release(&rqstp->rq_status_counter, rqstp->rq_status_counter + 1);
 
 	nfsd_cache_update(rqstp, rp, rqstp->rq_cachetype, statp + 1);
 out_cached_reply:
@@ -1148,4 +1163,129 @@ int nfsd_pool_stats_release(struct inode *inode, struct file *file)
 	nfsd_put(net);
 	mutex_unlock(&nfsd_mutex);
 	return ret;
+}
+
+static int nfsd_rpc_status_show(struct seq_file *m, void *v)
+{
+	struct inode *inode = file_inode(m->file);
+	struct nfsd_net *nn = net_generic(inode->i_sb->s_fs_info, nfsd_net_id);
+	int i;
+
+	rcu_read_lock();
+
+	for (i = 0; i < nn->nfsd_serv->sv_nrpools; i++) {
+		struct svc_rqst *rqstp;
+
+		list_for_each_entry_rcu(rqstp,
+				&nn->nfsd_serv->sv_pools[i].sp_all_threads,
+				rq_all) {
+			struct {
+				struct sockaddr daddr;
+				struct sockaddr saddr;
+				unsigned long rq_flags;
+				const char *pc_name;
+				ktime_t rq_stime;
+				__be32 rq_xid;
+				u32 rq_prog;
+				u32 rq_vers;
+				/* NFSv4 compund */
+				u32 opnum[NFSD_MAX_OPS_PER_COMPOUND];
+				u8 opcnt;
+			} rqstp_info;
+			unsigned int status_counter;
+			char buf[RPC_MAX_ADDRBUFLEN];
+			int j;
+
+			/*
+			 * Acquire rq_status_counter before parsing the rqst
+			 * fields. rq_status_counter is set to an odd value in
+			 * order to notify the consumers the rqstp fields are
+			 * meaningful.
+			 */
+			status_counter = smp_load_acquire(&rqstp->rq_status_counter);
+			if (!(status_counter & 1))
+				continue;
+
+			rqstp_info.rq_xid = rqstp->rq_xid;
+			rqstp_info.rq_flags = rqstp->rq_flags;
+			rqstp_info.rq_prog = rqstp->rq_prog;
+			rqstp_info.rq_vers = rqstp->rq_vers;
+			rqstp_info.pc_name = svc_proc_name(rqstp);
+			rqstp_info.rq_stime = rqstp->rq_stime;
+			rqstp_info.opcnt = 0;
+			memcpy(&rqstp_info.daddr, svc_daddr(rqstp),
+			       sizeof(struct sockaddr));
+			memcpy(&rqstp_info.saddr, svc_addr(rqstp),
+			       sizeof(struct sockaddr));
+
+#ifdef CONFIG_NFSD_V4
+			if (rqstp->rq_vers == NFS4_VERSION &&
+			    rqstp->rq_proc == NFSPROC4_COMPOUND) {
+				/* NFSv4 compund */
+				struct nfsd4_compoundargs *args = rqstp->rq_argp;
+
+				rqstp_info.opcnt = args->opcnt;
+				for (j = 0; j < rqstp_info.opcnt; j++) {
+					struct nfsd4_op *op = &args->ops[j];
+
+					rqstp_info.opnum[j] = op->opnum;
+				}
+			}
+#endif /* CONFIG_NFSD_V4 */
+
+			/*
+			 * Acquire rq_status_counter before reporting the rqst
+			 * fields to the user.
+			 */
+			if (smp_load_acquire(&rqstp->rq_status_counter) != status_counter)
+				continue;
+
+			seq_printf(m,
+				   "0x%08x 0x%08lx 0x%08x NFSv%d %s %016lld",
+				   be32_to_cpu(rqstp_info.rq_xid),
+				   rqstp_info.rq_flags,
+				   rqstp_info.rq_prog,
+				   rqstp_info.rq_vers,
+				   rqstp_info.pc_name,
+				   ktime_to_us(rqstp_info.rq_stime));
+			seq_printf(m, " %s",
+				   __svc_print_addr(&rqstp_info.saddr, buf,
+						    sizeof(buf), false));
+			seq_printf(m, " %s",
+				   __svc_print_addr(&rqstp_info.daddr, buf,
+						    sizeof(buf), false));
+			for (j = 0; j < rqstp_info.opcnt; j++)
+				seq_printf(m, " %s",
+					   nfsd4_op_name(rqstp_info.opnum[j]));
+			seq_puts(m, "\n");
+		}
+	}
+
+	rcu_read_unlock();
+
+	return 0;
+}
+
+/**
+ * nfsd_rpc_status_open - open routine for nfsd_rpc_status handler
+ * @inode: entry inode pointer.
+ * @file: entry file pointer.
+ *
+ * nfsd_rpc_status_open is the open routine for nfsd_rpc_status procfs handler.
+ * nfsd_rpc_status dumps pending RPC requests info queued into nfs server.
+ */
+int nfsd_rpc_status_open(struct inode *inode, struct file *file)
+{
+	struct nfsd_net *nn = net_generic(inode->i_sb->s_fs_info, nfsd_net_id);
+
+	mutex_lock(&nfsd_mutex);
+	if (!nn->nfsd_serv) {
+		mutex_unlock(&nfsd_mutex);
+		return -ENODEV;
+	}
+
+	svc_get(nn->nfsd_serv);
+	mutex_unlock(&nfsd_mutex);
+
+	return single_open(file, nfsd_rpc_status_show, inode->i_private);
 }
