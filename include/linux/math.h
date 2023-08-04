@@ -160,7 +160,7 @@ __STRUCT_FRACT(u32)
  * @a: the first argument
  * @b: the second argument
  *
- * @a and @b has to be of the same type. With this restriction we compare
+ * @a and @b have to be of the same type. With this restriction we compare
  * signed to signed and unsigned to unsigned. The result is the subtraction
  * the smaller of the two from the bigger, hence result is always a positive
  * value.
