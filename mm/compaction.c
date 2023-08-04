@@ -250,6 +250,11 @@ static unsigned long skip_offline_sections(unsigned long start_pfn)
 	return 0;
 }
 
+/*
+ * If the PFN falls into an offline section, return the end PFN of the
+ * next online section in reverse. If the PFN falls into an online section
+ * or if there is no next online section in reverse, return 0.
+ */
 static unsigned long skip_offline_sections_reverse(unsigned long start_pfn)
 {
 	unsigned long start_nr = pfn_to_section_nr(start_pfn);
@@ -259,7 +264,7 @@ static unsigned long skip_offline_sections_reverse(unsigned long start_pfn)
 
 	while (start_nr-- > 0) {
 		if (online_section_nr(start_nr))
-			return section_nr_to_pfn(start_nr) + PAGES_PER_SECTION - 1;
+			return section_nr_to_pfn(start_nr) + PAGES_PER_SECTION;
 	}
 
 	return 0;
@@ -1694,8 +1699,7 @@ static void isolate_freepages(struct compact_control *cc)
 
 			next_pfn = skip_offline_sections_reverse(block_start_pfn);
 			if (next_pfn)
-				block_start_pfn = max(pageblock_start_pfn(next_pfn),
-						      low_pfn);
+				block_start_pfn = max(next_pfn, low_pfn);
 
 			continue;
 		}
