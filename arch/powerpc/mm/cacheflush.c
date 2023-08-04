@@ -172,6 +172,7 @@ void flush_dcache_icache_folio(struct folio *folio)
 			flush_dcache_icache_phys((pfn + i) * PAGE_SIZE);
 	}
 }
+EXPORT_SYMBOL(flush_dcache_icache_folio);
 
 void clear_user_page(void *page, unsigned long vaddr, struct page *pg)
 {
