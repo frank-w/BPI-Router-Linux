@@ -831,6 +831,14 @@ static int get_phy_c45_ids(struct mii_bus *bus, int addr,
 		if (!(devs_in_pkg & (1 << i)))
 			continue;
 
+		/* Realtek PHY's do not support reading from MDIO_MMD_VEND1
+		 * at MDIO_STAT2 or MII_PHYSIDx. It makes them fail.
+		 */
+		if (i == MDIO_MMD_VEND1 && phy_id_compare(
+				c45_ids->device_ids[MDIO_MMD_PMAPMD],
+				0x001cc800, GENMASK(31, 10)))
+			continue;
+
 		if (i == MDIO_MMD_VEND1 || i == MDIO_MMD_VEND2) {
 			/* Probe the "Device Present" bits for the vendor MMDs
 			 * to ignore these if they do not contain IEEE 802.3
