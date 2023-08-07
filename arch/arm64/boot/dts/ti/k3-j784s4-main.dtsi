@@ -618,7 +618,7 @@
 		interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
 		power-domains = <&k3_pds 140 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 140 1>, <&k3_clks 140 2>;
-		clock-names =  "clk_ahb", "clk_xin";
+		clock-names = "clk_ahb", "clk_xin";
 		assigned-clocks = <&k3_clks 140 2>;
 		assigned-clock-parents = <&k3_clks 140 3>;
 		bus-width = <8>;
@@ -646,7 +646,7 @@
 		interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
 		power-domains = <&k3_pds 141 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 141 3>, <&k3_clks 141 4>;
-		clock-names =  "clk_ahb", "clk_xin";
+		clock-names = "clk_ahb", "clk_xin";
 		assigned-clocks = <&k3_clks 141 4>;
 		assigned-clock-parents = <&k3_clks 141 5>;
 		bus-width = <4>;
@@ -1368,6 +1368,30 @@
 		power-domains = <&k3_pds 383 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 383 1>;
 		status = "disabled";
+	};
+
+	ufs_wrapper: ufs-wrapper@4e80000 {
+		compatible = "ti,j721e-ufs";
+		reg = <0x00 0x4e80000 0x00 0x100>;
+		power-domains = <&k3_pds 387 TI_SCI_PD_EXCLUSIVE>;
+		clocks = <&k3_clks 387 3>;
+		assigned-clocks = <&k3_clks 387 3>;
+		assigned-clock-parents = <&k3_clks 387 6>;
+		ranges;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		status = "disabled";
+
+		ufs@4e84000 {
+			compatible = "cdns,ufshc-m31-16nm", "jedec,ufs-2.0";
+			reg = <0x00 0x4e84000 0x00 0x10000>;
+			interrupts = <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>;
+			freq-table-hz = <250000000 250000000>, <19200000 19200000>,
+					<19200000 19200000>;
+			clocks = <&k3_clks 387 1>, <&k3_clks 387 3>, <&k3_clks 387 3>;
+			clock-names = "core_clk", "phy_clk", "ref_clk";
+			dma-coherent;
+		};
 	};
 
 	main_r5fss0: r5fss@5c00000 {

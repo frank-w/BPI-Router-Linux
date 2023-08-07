@@ -9,7 +9,6 @@
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/sys_soc.h>
 #include <linux/dma/ti-cppi5.h>
@@ -125,6 +124,7 @@ struct k3_ring_ops {
  * @occ: Occupancy
  * @windex: Write index
  * @rindex: Read index
+ * @tdown_complete: Tear down complete state
  */
 struct k3_ring_state {
 	u32 free;
@@ -192,7 +192,7 @@ struct k3_ringacc_ops {
  * @num_rings: number of ring in RA
  * @rings_inuse: bitfield for ring usage tracking
  * @rm_gp_range: general purpose rings range from tisci
- * @dma_ring_reset_quirk: DMA reset w/a enable
+ * @dma_ring_reset_quirk: DMA reset workaround enable
  * @num_proxies: number of RA proxies
  * @proxy_inuse: bitfield for proxy usage tracking
  * @rings: array of rings descriptors (struct @k3_ring)
@@ -229,9 +229,9 @@ struct k3_ringacc {
 };
 
 /**
- * struct k3_ringacc - Rings accelerator SoC data
+ * struct k3_ringacc_soc_data - Rings accelerator SoC data
  *
- * @dma_ring_reset_quirk:  DMA reset w/a enable
+ * @dma_ring_reset_quirk:  DMA reset workaround enable
  */
 struct k3_ringacc_soc_data {
 	unsigned dma_ring_reset_quirk:1;
@@ -1373,10 +1373,8 @@ static int k3_ringacc_init(struct platform_device *pdev,
 
 	dev->msi.domain = of_msi_get_domain(dev, dev->of_node,
 					    DOMAIN_BUS_TI_SCI_INTA_MSI);
-	if (!dev->msi.domain) {
-		dev_err(dev, "Failed to get MSI domain\n");
+	if (!dev->msi.domain)
 		return -EPROBE_DEFER;
-	}
 
 	ret = k3_ringacc_probe_dt(ringacc);
 	if (ret)
