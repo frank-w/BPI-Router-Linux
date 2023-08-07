@@ -82,10 +82,6 @@ static int tzp;
 module_param(tzp, int, 0444);
 MODULE_PARM_DESC(tzp, "Thermal zone polling frequency, in 1/10 seconds.");
 
-static int nocrt;
-module_param(nocrt, int, 0);
-MODULE_PARM_DESC(nocrt, "Set to take no action upon ACPI thermal zone critical trips points.");
-
 static int off;
 module_param(off, int, 0);
 MODULE_PARM_DESC(off, "Set to disable ACPI thermal support.");
@@ -119,7 +115,6 @@ struct acpi_thermal_active {
 	struct acpi_handle_list devices;
 	unsigned long temperature;
 	bool valid;
-	bool enabled;
 };
 
 struct acpi_thermal_trips {
@@ -1057,15 +1052,10 @@ static int acpi_thermal_resume(struct device *dev)
 		if (!tz->trips.active[i].valid)
 			break;
 
-		tz->trips.active[i].enabled = true;
 		for (j = 0; j < tz->trips.active[i].devices.count; j++) {
 			result = acpi_bus_update_power(
 					tz->trips.active[i].devices.handles[j],
 					&power_state);
-			if (result || (power_state != ACPI_STATE_D0)) {
-				tz->trips.active[i].enabled = false;
-				break;
-			}
 		}
 	}
 
@@ -1107,7 +1097,7 @@ static int thermal_act(const struct dmi_system_id *d) {
 static int thermal_nocrt(const struct dmi_system_id *d) {
 	pr_notice("%s detected: disabling all critical thermal trip point actions.\n",
 		  d->ident);
-	nocrt = 1;
+	crt = -1;
 	return 0;
 }
 static int thermal_tzp(const struct dmi_system_id *d) {
