@@ -140,7 +140,7 @@ static struct file_system_type ext2_fs_type = {
 };
 MODULE_ALIAS_FS("ext2");
 MODULE_ALIAS("ext2");
-#define IS_EXT2_SB(sb) ((sb)->s_bdev->bd_holder == &ext2_fs_type)
+#define IS_EXT2_SB(sb) ((sb)->s_type == &ext2_fs_type)
 #else
 #define IS_EXT2_SB(sb) (0)
 #endif
@@ -156,7 +156,7 @@ static struct file_system_type ext3_fs_type = {
 };
 MODULE_ALIAS_FS("ext3");
 MODULE_ALIAS("ext3");
-#define IS_EXT3_SB(sb) ((sb)->s_bdev->bd_holder == &ext3_fs_type)
+#define IS_EXT3_SB(sb) ((sb)->s_type == &ext3_fs_type)
 
 
 static inline void __ext4_read_bh(struct buffer_head *bh, blk_opf_t op_flags,
@@ -1096,15 +1096,6 @@ void ext4_update_dynamic_rev(struct super_block *sb)
 	 */
 }
 
-static void ext4_bdev_mark_dead(struct block_device *bdev)
-{
-	ext4_force_shutdown(bdev->bd_holder, EXT4_GOING_FLAGS_NOLOGFLUSH);
-}
-
-static const struct blk_holder_ops ext4_holder_ops = {
-	.mark_dead		= ext4_bdev_mark_dead,
-};
-
 /*
  * Open the external journal device
  */
@@ -1113,7 +1104,7 @@ static struct block_device *ext4_blkdev_get(dev_t dev, struct super_block *sb)
 	struct block_device *bdev;
 
 	bdev = blkdev_get_by_dev(dev, BLK_OPEN_READ | BLK_OPEN_WRITE, sb,
-				 &ext4_holder_ops);
+				 &fs_holder_ops);
 	if (IS_ERR(bdev))
 		goto fail;
 	return bdev;
@@ -5854,7 +5845,10 @@ static journal_t *ext4_get_dev_journal(struct super_block *sb,
 	if (WARN_ON_ONCE(!ext4_has_feature_journal(sb)))
 		return NULL;
 
+	/* see get_tree_bdev why this is needed and safe */
+	up_write(&sb->s_umount);
 	bdev = ext4_blkdev_get(j_dev, sb);
+	down_write(&sb->s_umount);
 	if (bdev == NULL)
 		return NULL;
 
@@ -7103,7 +7097,7 @@ static int ext4_quota_off(struct super_block *sb, int type)
 	}
 	EXT4_I(inode)->i_flags &= ~(EXT4_NOATIME_FL | EXT4_IMMUTABLE_FL);
 	inode_set_flags(inode, 0, S_NOATIME | S_IMMUTABLE);
-	inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode->i_mtime = inode_set_ctime_current(inode);
 	err = ext4_mark_inode_dirty(handle, inode);
 	ext4_journal_stop(handle);
 out_unlock:
@@ -7279,7 +7273,7 @@ static struct file_system_type ext4_fs_type = {
 	.init_fs_context	= ext4_init_fs_context,
 	.parameters		= ext4_param_specs,
 	.kill_sb		= kill_block_super,
-	.fs_flags		= FS_REQUIRES_DEV | FS_ALLOW_IDMAP,
+	.fs_flags		= FS_REQUIRES_DEV | FS_ALLOW_IDMAP | FS_MGTIME,
 };
 MODULE_ALIAS_FS("ext4");
 

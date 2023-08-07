@@ -573,9 +573,9 @@ xfs_vn_getattr(
 	stat->gid = vfsgid_into_kgid(vfsgid);
 	stat->ino = ip->i_ino;
 	stat->atime = inode->i_atime;
-	stat->mtime = inode->i_mtime;
-	stat->ctime = inode->i_ctime;
 	stat->blocks = XFS_FSB_TO_BB(mp, ip->i_nblocks + ip->i_delayed_blks);
+
+	fill_mg_cmtime(request_mask, inode, stat);
 
 	if (xfs_has_v3inodes(mp)) {
 		if (request_mask & STATX_BTIME) {
@@ -1055,7 +1055,7 @@ xfs_vn_update_time(
 
 	xfs_ilock(ip, XFS_ILOCK_EXCL);
 	if (flags & S_CTIME)
-		inode->i_ctime = *now;
+		inode_set_ctime_to_ts(inode, *now);
 	if (flags & S_MTIME)
 		inode->i_mtime = *now;
 	if (flags & S_ATIME)

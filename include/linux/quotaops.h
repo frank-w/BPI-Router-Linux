@@ -95,6 +95,8 @@ int dquot_mark_dquot_dirty(struct dquot *dquot);
 
 int dquot_file_open(struct inode *inode, struct file *file);
 
+int dquot_load_quota_sb(struct super_block *sb, int type, int format_id,
+	unsigned int flags);
 int dquot_load_quota_inode(struct inode *inode, int type, int format_id,
 	unsigned int flags);
 int dquot_quota_on(struct super_block *sb, int type, int format_id,
