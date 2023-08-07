@@ -1296,6 +1296,22 @@ static struct thread_trace *thread_trace__new(void)
 	return ttrace;
 }
 
+static void thread_trace__free_files(struct thread_trace *ttrace);
+
+static void thread_trace__delete(void *pttrace)
+{
+	struct thread_trace *ttrace = pttrace;
+
+	if (!ttrace)
+		return;
+
+	intlist__delete(ttrace->syscall_stats);
+	ttrace->syscall_stats = NULL;
+	thread_trace__free_files(ttrace);
+	zfree(&ttrace->entry_str);
+	free(ttrace);
+}
+
 static struct thread_trace *thread__trace(struct thread *thread, FILE *fp)
 {
 	struct thread_trace *ttrace;
@@ -1332,6 +1348,17 @@ void syscall_arg__set_ret_scnprintf(struct syscall_arg *arg,
 #define TRACE_PFMIN		(1 << 1)
 
 static const size_t trace__entry_str_size = 2048;
+
+static void thread_trace__free_files(struct thread_trace *ttrace)
+{
+	for (int i = 0; i < ttrace->files.max; ++i) {
+		struct file *file = ttrace->files.table + i;
+		zfree(&file->pathname);
+	}
+
+	zfree(&ttrace->files.table);
+	ttrace->files.max  = -1;
+}
 
 static struct file *thread_trace__files_entry(struct thread_trace *ttrace, int fd)
 {
@@ -1634,6 +1661,8 @@ static int trace__symbols_init(struct trace *trace, struct evlist *evlist)
 	trace->host = machine__new_host();
 	if (trace->host == NULL)
 		return -ENOMEM;
+
+	thread__set_priv_destructor(thread_trace__delete);
 
 	err = trace_event__register_resolver(trace->host, trace__machine__resolve_kernel_addr);
 	if (err < 0)
@@ -3136,13 +3165,8 @@ static void evlist__free_syscall_tp_fields(struct evlist *evlist)
 	struct evsel *evsel;
 
 	evlist__for_each_entry(evlist, evsel) {
-		struct evsel_trace *et = evsel->priv;
-
-		if (!et || !evsel->tp_format || strcmp(evsel->tp_format->system, "syscalls"))
-			continue;
-
-		zfree(&et->fmt);
-		free(et);
+		evsel_trace__delete(evsel->priv);
+		evsel->priv = NULL;
 	}
 }
 
