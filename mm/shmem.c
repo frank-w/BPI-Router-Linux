@@ -970,7 +970,7 @@ static void shmem_undo_range(struct inode *inode, loff_t lstart, loff_t lend,
 		same_folio = lend < folio_pos(folio) + folio_size(folio);
 		folio_mark_dirty(folio);
 		if (!truncate_inode_partial_folio(folio, lstart, lend)) {
-			start = folio->index + folio_nr_pages(folio);
+			start = folio_next_index(folio);
 			if (same_folio)
 				end = folio->index;
 		}
@@ -1724,7 +1724,7 @@ static void shmem_set_folio_swapin_error(struct inode *inode, pgoff_t index,
 	swp_entry_t swapin_error;
 	void *old;
 
-	swapin_error = make_swapin_error_entry();
+	swapin_error = make_poisoned_swp_entry();
 	old = xa_cmpxchg_irq(&mapping->i_pages, index,
 			     swp_to_radix_entry(swap),
 			     swp_to_radix_entry(swapin_error), 0);
@@ -1769,7 +1769,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	swap = radix_to_swp_entry(*foliop);
 	*foliop = NULL;
 
-	if (is_swapin_error_entry(swap))
+	if (is_poisoned_swp_entry(swap))
 		return -EIO;
 
 	si = get_swap_device(swap);
@@ -3881,8 +3881,7 @@ static int shmem_show_options(struct seq_file *seq, struct dentry *root)
 	struct mempolicy *mpol;
 
 	if (sbinfo->max_blocks != shmem_default_max_blocks())
-		seq_printf(seq, ",size=%luk",
-			sbinfo->max_blocks << (PAGE_SHIFT - 10));
+		seq_printf(seq, ",size=%luk", K(sbinfo->max_blocks));
 	if (sbinfo->max_inodes != shmem_default_max_inodes())
 		seq_printf(seq, ",nr_inodes=%lu", sbinfo->max_inodes);
 	if (sbinfo->mode != (0777 | S_ISVTX))

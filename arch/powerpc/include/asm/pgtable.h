@@ -41,6 +41,12 @@ struct mm_struct;
 
 #ifndef __ASSEMBLY__
 
+void set_ptes(struct mm_struct *mm, unsigned long addr, pte_t *ptep,
+		pte_t pte, unsigned int nr);
+#define set_ptes set_ptes
+#define update_mmu_cache(vma, addr, ptep) \
+	update_mmu_cache_range(NULL, vma, addr, ptep, 1)
+
 #ifndef MAX_PTRS_PER_PGD
 #define MAX_PTRS_PER_PGD PTRS_PER_PGD
 #endif
@@ -48,6 +54,12 @@ struct mm_struct;
 /* Keep these as a macros to avoid include dependency mess */
 #define pte_page(x)		pfn_to_page(pte_pfn(x))
 #define mk_pte(page, pgprot)	pfn_pte(page_to_pfn(page), (pgprot))
+
+static inline unsigned long pte_pfn(pte_t pte)
+{
+	return (pte_val(pte) & PTE_RPN_MASK) >> PTE_RPN_SHIFT;
+}
+
 /*
  * Select all bits except the pfn
  */
@@ -158,13 +170,9 @@ static inline pgtable_t pmd_pgtable(pmd_t pmd)
 }
 
 #ifdef CONFIG_PPC64
-#define is_ioremap_addr is_ioremap_addr
-static inline bool is_ioremap_addr(const void *x)
-{
-	unsigned long addr = (unsigned long)x;
-
-	return addr >= IOREMAP_BASE && addr < IOREMAP_END;
-}
+int __meminit vmemmap_populated(unsigned long vmemmap_addr, int vmemmap_map_size);
+bool altmap_cross_boundary(struct vmem_altmap *altmap, unsigned long start,
+			   unsigned long page_size);
 #endif /* CONFIG_PPC64 */
 
 #endif /* __ASSEMBLY__ */
