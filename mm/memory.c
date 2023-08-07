@@ -3951,6 +3951,13 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	}
 
 	/*
+	 * Some architectures may have to restore extra metadata to the page
+	 * when reading from swap. This metadata may be indexed by swap entry
+	 * so this must be called before swap_free().
+	 */
+	arch_swap_restore(entry, folio);
+
+	/*
 	 * Remove the swap entry and conditionally try to free up the swapcache.
 	 * We're already holding a reference on the page but haven't mapped it
 	 * yet.
@@ -5692,6 +5699,10 @@ int __access_remote_vm(struct mm_struct *mm, unsigned long addr, void *buf,
 	int write = gup_flags & FOLL_WRITE;
 
 	if (mmap_read_lock_killable(mm))
+		return 0;
+
+	/* Avoid triggering the temporary warning in __get_user_pages */
+	if (!vma_lookup(mm, addr) && !expand_stack(mm, addr))
 		return 0;
 
 	/* ignore errors, just check how much was successfully transferred */
