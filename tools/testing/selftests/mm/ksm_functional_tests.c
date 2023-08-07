@@ -516,7 +516,7 @@ static void test_prot_none(void)
 	/* Store a unique value in each page on one half using ptrace */
 	for (i = 0; i < size / 2; i += pagesize) {
 		lseek(mem_fd, (uintptr_t) map + i, SEEK_SET);
-		if (write(mem_fd, &i, sizeof(size)) != sizeof(size)) {
+		if (write(mem_fd, &i, sizeof(i)) != sizeof(i)) {
 			ksft_test_result_fail("ptrace write failed\n");
 			goto unmap;
 		}
