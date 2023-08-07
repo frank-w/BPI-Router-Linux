@@ -17,8 +17,11 @@ maintainers:
   - Ansuel Smith <ansuelsmth@gmail.com>
 
 allOf:
-  - $ref: /schemas/mtd/partitions/partition.yaml#
   - $ref: /schemas/nvmem/nvmem.yaml#
+
+oneOf:
+  - $ref: /schemas/mtd/partitions/partition.yaml#
+  - $ref: /schemas/mtd/partitions/ubi-volume.yaml#
 
 properties:
   compatible:
