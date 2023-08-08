@@ -12,7 +12,7 @@
 #include <asm/percpu.h>
 #include <asm/frame.h>
 
-	.section .text.__x86.indirect_thunk
+	.section .text..__x86.indirect_thunk
 
 
 .macro POLINE reg
@@ -131,7 +131,7 @@ SYM_CODE_END(__x86_indirect_jump_thunk_array)
  */
 #ifdef CONFIG_RETHUNK
 
-	.section .text.__x86.return_thunk
+	.section .text..__x86.return_thunk
 
 /*
  * Safety details here pertain to the AMD Zen{1,2} microarchitecture:
