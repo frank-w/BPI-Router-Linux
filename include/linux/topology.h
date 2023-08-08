@@ -245,38 +245,49 @@ static inline const struct cpumask *cpu_cpu_mask(int cpu)
 	return cpumask_of_node(cpu_to_node(cpu));
 }
 
+/*
+ * sched_numa_find_*_cpu() functions family traverses only accessible CPUs,
+ * i.e. those listed in cpu_online_mask.
+ */
 #ifdef CONFIG_NUMA
 int sched_numa_find_nth_cpu(const struct cpumask *cpus, int cpu, int node);
-extern const struct cpumask *sched_numa_hop_mask(unsigned int node, unsigned int hops);
+int sched_numa_find_next_cpu(const struct cpumask *cpus, int cpu, int node, unsigned int *hop);
 #else
 static __always_inline int sched_numa_find_nth_cpu(const struct cpumask *cpus, int cpu, int node)
 {
-	return cpumask_nth(cpu, cpus);
+	return cpumask_nth_and(cpu, cpus, cpu_online_mask);
 }
 
-static inline const struct cpumask *
-sched_numa_hop_mask(unsigned int node, unsigned int hops)
+static __always_inline
+int sched_numa_find_next_cpu(const struct cpumask *cpus, int cpu, int node, unsigned int *hop)
 {
-	return ERR_PTR(-EOPNOTSUPP);
+	return find_next_and_bit(cpumask_bits(cpus), cpumask_bits(cpu_online_mask),
+						small_cpumask_bits, cpu);
 }
 #endif	/* CONFIG_NUMA */
 
 /**
- * for_each_numa_hop_mask - iterate over cpumasks of increasing NUMA distance
- *                          from a given node.
- * @mask: the iteration variable.
+ * for_each_numa_cpu - iterate over cpus in increasing order taking into account
+ *		       NUMA distances from a given node.
+ * @cpu: the (optionally unsigned) integer iterator
+ * @hop: the iterator variable for nodes, i.e. proximity order to the @node
  * @node: the NUMA node to start the search from.
+ * @mask: the cpumask pointer
  *
- * Requires rcu_lock to be held.
+ * Where considered as a replacement to for_each_cpu(), the following should be
+ * taken into consideration:
+ *  - Only accessible (i.e. online) CPUs are enumerated.
+ *  - CPUs enumeration may not be a monotonic increasing sequence;
  *
- * Yields cpu_online_mask for @node == NUMA_NO_NODE.
+ * rcu_lock must be held;
  */
-#define for_each_numa_hop_mask(mask, node)				       \
-	for (unsigned int __hops = 0;					       \
-	     mask = (node != NUMA_NO_NODE || __hops) ?			       \
-		     sched_numa_hop_mask(node, __hops) :		       \
-		     cpu_online_mask,					       \
-	     !IS_ERR_OR_NULL(mask);					       \
-	     __hops++)
+#define for_each_numa_cpu(cpu, hop, node, mask)					\
+	for ((cpu) = 0, (hop) = 0;						\
+		(cpu) = sched_numa_find_next_cpu((mask), (cpu), (node), &(hop)),\
+		(cpu) < nr_cpu_ids;						\
+		(cpu)++)
+
+#define for_each_numa_online_cpu(cpu, hop, node)				\
+	for_each_numa_cpu(cpu, hop, node, cpu_online_mask)
 
 #endif /* _LINUX_TOPOLOGY_H */

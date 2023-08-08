@@ -2144,37 +2144,44 @@ unlock:
 }
 EXPORT_SYMBOL_GPL(sched_numa_find_nth_cpu);
 
-/**
- * sched_numa_hop_mask() - Get the cpumask of CPUs at most @hops hops away from
- *                         @node
- * @node: The node to count hops from.
- * @hops: Include CPUs up to that many hops away. 0 means local node.
+/*
+ * sched_numa_find_next_cpu() - given the NUMA topology, find the next cpu
+ * cpumask: cpumask to find a CPU from
+ * cpu: current CPU
+ * node: local node
+ * hop: (in/out) indicates distance order of current CPU to a local node
  *
- * Return: On success, a pointer to a cpumask of CPUs at most @hops away from
- * @node, an error value otherwise.
+ * The function searches for a next CPU at a given NUMA distance, indicated
+ * by hop, and if nothing found, tries to find CPUs at a greater distance,
+ * starting from the beginning.
  *
- * Requires rcu_lock to be held. Returned cpumask is only valid within that
- * read-side section, copy it if required beyond that.
- *
- * Note that not all hops are equal in distance; see sched_init_numa() for how
- * distances and masks are handled.
- * Also note that this is a reflection of sched_domains_numa_masks, which may change
- * during the lifetime of the system (offline nodes are taken out of the masks).
+ * Return: cpu, or >= nr_cpu_ids when nothing found.
  */
-const struct cpumask *sched_numa_hop_mask(unsigned int node, unsigned int hops)
+int sched_numa_find_next_cpu(const struct cpumask *cpus, int cpu, int node, unsigned int *hop)
 {
+	unsigned long *cur, *prev;
 	struct cpumask ***masks;
+	unsigned int ret;
 
-	if (node >= nr_node_ids || hops >= sched_domains_numa_levels)
-		return ERR_PTR(-EINVAL);
+	if (*hop >= sched_domains_numa_levels)
+		return nr_cpu_ids;
 
 	masks = rcu_dereference(sched_domains_numa_masks);
-	if (!masks)
-		return ERR_PTR(-EBUSY);
+	cur = cpumask_bits(masks[*hop][node]);
+	if (*hop == 0)
+		ret = find_next_and_bit(cpumask_bits(cpus), cur, nr_cpu_ids, cpu);
+	else {
+		prev = cpumask_bits(masks[*hop - 1][node]);
+		ret = find_next_and_andnot_bit(cpumask_bits(cpus), cur, prev, nr_cpu_ids, cpu);
+	}
 
-	return masks[hops][node];
+	if (ret < nr_cpu_ids)
+		return ret;
+
+	*hop += 1;
+	return sched_numa_find_next_cpu(cpus, 0, node, hop);
 }
-EXPORT_SYMBOL_GPL(sched_numa_hop_mask);
+EXPORT_SYMBOL_GPL(sched_numa_find_next_cpu);
 
 #endif /* CONFIG_NUMA */
 
