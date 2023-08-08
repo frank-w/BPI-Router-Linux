@@ -402,9 +402,9 @@ static char __ssp_receive_char(struct sifive_serial_port *ssp, char *is_empty)
  */
 static void __ssp_receive_chars(struct sifive_serial_port *ssp)
 {
-	unsigned char ch;
 	char is_empty;
 	int c;
+	u8 ch;
 
 	for (c = SIFIVE_RX_FIFO_DEPTH; c > 0; --c) {
 		ch = __ssp_receive_char(ssp, &is_empty);
@@ -917,12 +917,9 @@ static int sifive_serial_probe(struct platform_device *pdev)
 	if (irq < 0)
 		return -EPROBE_DEFER;
 
-	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	base = devm_ioremap_resource(&pdev->dev, mem);
-	if (IS_ERR(base)) {
-		dev_err(&pdev->dev, "could not acquire device memory\n");
+	base = devm_platform_get_and_ioremap_resource(pdev, 0, &mem);
+	if (IS_ERR(base))
 		return PTR_ERR(base);
-	}
 
 	clk = devm_clk_get_enabled(&pdev->dev, NULL);
 	if (IS_ERR(clk)) {

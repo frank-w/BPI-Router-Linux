@@ -16,8 +16,6 @@
 
 #include <linux/ti_wilink_st.h>
 
-extern void st_kim_recv(void *, const unsigned char *, long);
-void st_int_recv(void *, const unsigned char *, long);
 /*
  * function pointer pointing to either,
  * st_kim_recv during registration to receive fw download responses
@@ -225,10 +223,9 @@ static inline void st_wakeup_ack(struct st_data_s *st_gdata,
  *	HCI-Events, ACL, SCO, 4 types of HCI-LL PM packets
  *	CH-8 packets from FM, CH-9 packets from GPS cores.
  */
-void st_int_recv(void *disc_data,
-	const unsigned char *data, long count)
+static void st_int_recv(void *disc_data,
+	const unsigned char *ptr, long count)
 {
-	char *ptr;
 	struct st_proto_s *proto;
 	unsigned short payload_len = 0;
 	int len = 0;
@@ -237,9 +234,7 @@ void st_int_recv(void *disc_data,
 	struct st_data_s *st_gdata = (struct st_data_s *)disc_data;
 	unsigned long flags;
 
-	ptr = (char *)data;
-	/* tty_receive sent null ? */
-	if (unlikely(ptr == NULL) || (st_gdata == NULL)) {
+	if (st_gdata == NULL) {
 		pr_err(" received null from TTY ");
 		return;
 	}

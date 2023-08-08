@@ -133,9 +133,8 @@ static void uart_stop(struct tty_struct *tty)
 	uart_port_unlock(port, flags);
 }
 
-static void __uart_start(struct tty_struct *tty)
+static void __uart_start(struct uart_state *state)
 {
-	struct uart_state *state = tty->driver_data;
 	struct uart_port *port = state->uart_port;
 	struct serial_port_device *port_dev;
 	int err;
@@ -170,7 +169,7 @@ static void uart_start(struct tty_struct *tty)
 	unsigned long flags;
 
 	port = uart_port_lock(state, flags);
-	__uart_start(tty);
+	__uart_start(state);
 	uart_port_unlock(port, flags);
 }
 
@@ -239,7 +238,7 @@ static void uart_change_line_settings(struct tty_struct *tty, struct uart_state 
 		if (!old_hw_stopped)
 			uport->ops->stop_tx(uport);
 		else
-			__uart_start(tty);
+			__uart_start(state);
 	}
 	spin_unlock_irq(&uport->lock);
 }
@@ -594,10 +593,8 @@ static int uart_write(struct tty_struct *tty,
 	 * This means you called this function _after_ the port was
 	 * closed.  No cookie for you.
 	 */
-	if (!state) {
-		WARN_ON(1);
+	if (WARN_ON(!state))
 		return -EL3HLT;
-	}
 
 	port = uart_port_lock(state, flags);
 	circ = &state->xmit;
@@ -619,7 +616,7 @@ static int uart_write(struct tty_struct *tty,
 		ret += c;
 	}
 
-	__uart_start(tty);
+	__uart_start(state);
 	uart_port_unlock(port, flags);
 	return ret;
 }
@@ -660,10 +657,8 @@ static void uart_flush_buffer(struct tty_struct *tty)
 	 * This means you called this function _after_ the port was
 	 * closed.  No cookie for you.
 	 */
-	if (!state) {
-		WARN_ON(1);
+	if (WARN_ON(!state))
 		return;
-	}
 
 	pr_debug("uart_flush_buffer(%d) called\n", tty->index);
 
@@ -3486,7 +3481,7 @@ EXPORT_SYMBOL_GPL(uart_handle_cts_change);
  * @flag: flag for the character (see TTY_NORMAL and friends)
  */
 void uart_insert_char(struct uart_port *port, unsigned int status,
-		 unsigned int overrun, unsigned int ch, unsigned int flag)
+		      unsigned int overrun, u8 ch, u8 flag)
 {
 	struct tty_port *tport = &port->state->port;
 
@@ -3505,7 +3500,7 @@ void uart_insert_char(struct uart_port *port, unsigned int status,
 EXPORT_SYMBOL_GPL(uart_insert_char);
 
 #ifdef CONFIG_MAGIC_SYSRQ_SERIAL
-static const char sysrq_toggle_seq[] = CONFIG_MAGIC_SYSRQ_SERIAL_SEQUENCE;
+static const u8 sysrq_toggle_seq[] = CONFIG_MAGIC_SYSRQ_SERIAL_SEQUENCE;
 
 static void uart_sysrq_on(struct work_struct *w)
 {
@@ -3528,7 +3523,7 @@ static DECLARE_WORK(sysrq_enable_work, uart_sysrq_on);
  * Returns: %false if @ch is out of enabling sequence and should be
  * handled some other way, %true if @ch was consumed.
  */
-bool uart_try_toggle_sysrq(struct uart_port *port, unsigned int ch)
+bool uart_try_toggle_sysrq(struct uart_port *port, u8 ch)
 {
 	int sysrq_toggle_seq_len = strlen(sysrq_toggle_seq);
 
