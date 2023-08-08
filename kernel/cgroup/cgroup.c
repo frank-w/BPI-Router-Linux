@@ -679,7 +679,7 @@ EXPORT_SYMBOL_GPL(of_css);
  * @ssid: the index of the subsystem, CGROUP_SUBSYS_COUNT after reaching the end
  * @cgrp: the target cgroup to iterate css's of
  *
- * Should be called under cgroup_[tree_]mutex.
+ * Should be called under cgroup_mutex.
  */
 #define for_each_css(css, ssid, cgrp)					\
 	for ((ssid) = 0; (ssid) < CGROUP_SUBSYS_COUNT; (ssid)++)	\
@@ -1736,7 +1736,7 @@ static int css_populate_dir(struct cgroup_subsys_state *css)
 	struct cftype *cfts, *failed_cfts;
 	int ret;
 
-	if ((css->flags & CSS_VISIBLE) || !cgrp->kn)
+	if (css->flags & CSS_VISIBLE)
 		return 0;
 
 	if (!css->ss) {
@@ -2499,7 +2499,7 @@ struct task_struct *cgroup_taskset_next(struct cgroup_taskset *tset,
 
 			/*
 			 * This function may be called both before and
-			 * after cgroup_taskset_migrate().  The two cases
+			 * after cgroup_migrate_execute().  The two cases
 			 * can be distinguished by looking at whether @cset
 			 * has its ->mg_dst_cset set.
 			 */
@@ -3654,9 +3654,10 @@ static int cgroup_stat_show(struct seq_file *seq, void *v)
 	return 0;
 }
 
-static int __maybe_unused cgroup_extra_stat_show(struct seq_file *seq,
-						 struct cgroup *cgrp, int ssid)
+#ifdef CONFIG_CGROUP_SCHED
+static int cgroup_extra_stat_show(struct seq_file *seq, int ssid)
 {
+	struct cgroup *cgrp = seq_css(seq)->cgroup;
 	struct cgroup_subsys *ss = cgroup_subsys[ssid];
 	struct cgroup_subsys_state *css;
 	int ret;
@@ -3672,15 +3673,15 @@ static int __maybe_unused cgroup_extra_stat_show(struct seq_file *seq,
 	css_put(css);
 	return ret;
 }
+#endif
 
 static int cpu_stat_show(struct seq_file *seq, void *v)
 {
-	struct cgroup __maybe_unused *cgrp = seq_css(seq)->cgroup;
 	int ret = 0;
 
 	cgroup_base_stat_cputime_show(seq);
 #ifdef CONFIG_CGROUP_SCHED
-	ret = cgroup_extra_stat_show(seq, cgrp, cpu_cgrp_id);
+	ret = cgroup_extra_stat_show(seq, cpu_cgrp_id);
 #endif
 	return ret;
 }
@@ -4350,14 +4351,13 @@ static int cgroup_init_cftypes(struct cgroup_subsys *ss, struct cftype *cfts)
 	return ret;
 }
 
-static int cgroup_rm_cftypes_locked(struct cftype *cfts)
+static void cgroup_rm_cftypes_locked(struct cftype *cfts)
 {
 	lockdep_assert_held(&cgroup_mutex);
 
 	list_del(&cfts->node);
 	cgroup_apply_cftypes(cfts, false);
 	cgroup_exit_cftypes(cfts);
-	return 0;
 }
 
 /**
@@ -4373,8 +4373,6 @@ static int cgroup_rm_cftypes_locked(struct cftype *cfts)
  */
 int cgroup_rm_cftypes(struct cftype *cfts)
 {
-	int ret;
-
 	if (!cfts || cfts[0].name[0] == '\0')
 		return 0;
 
@@ -4382,9 +4380,9 @@ int cgroup_rm_cftypes(struct cftype *cfts)
 		return -ENOENT;
 
 	cgroup_lock();
-	ret = cgroup_rm_cftypes_locked(cfts);
+	cgroup_rm_cftypes_locked(cfts);
 	cgroup_unlock();
-	return ret;
+	return 0;
 }
 
 /**
@@ -5337,7 +5335,7 @@ static struct cftype cgroup_psi_files[] = {
  *    RCU callback.
  *
  * 4. After the grace period, the css can be freed.  Implemented in
- *    css_free_work_fn().
+ *    css_free_rwork_fn().
  *
  * It is actually hairier because both step 2 and 4 require process context
  * and thus involve punting to css->destroy_work adding two additional
@@ -5581,8 +5579,7 @@ err_free_css:
 
 /*
  * The returned cgroup is fully initialized including its control mask, but
- * it isn't associated with its kernfs_node and doesn't have the control
- * mask applied.
+ * it doesn't have the control mask applied.
  */
 static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 				    umode_t mode)
@@ -5908,7 +5905,7 @@ static int cgroup_destroy_locked(struct cgroup *cgrp)
 	/*
 	 * Mark @cgrp and the associated csets dead.  The former prevents
 	 * further task migration and child creation by disabling
-	 * cgroup_lock_live_group().  The latter makes the csets ignored by
+	 * cgroup_kn_lock_live().  The latter makes the csets ignored by
 	 * the migration path.
 	 */
 	cgrp->self.flags &= ~CSS_ONLINE;
@@ -5930,7 +5927,7 @@ static int cgroup_destroy_locked(struct cgroup *cgrp)
 		parent->nr_threaded_children--;
 
 	spin_lock_irq(&css_set_lock);
-	for (tcgrp = cgroup_parent(cgrp); tcgrp; tcgrp = cgroup_parent(tcgrp)) {
+	for (tcgrp = parent; tcgrp; tcgrp = cgroup_parent(tcgrp)) {
 		tcgrp->nr_descendants--;
 		tcgrp->nr_dying_descendants++;
 		/*
@@ -6123,8 +6120,8 @@ int __init cgroup_init(void)
 			continue;
 
 		if (cgroup1_ssid_disabled(ssid))
-			printk(KERN_INFO "Disabling %s control group subsystem in v1 mounts\n",
-			       ss->name);
+			pr_info("Disabling %s control group subsystem in v1 mounts\n",
+				ss->name);
 
 		cgrp_dfl_root.subsys_mask |= 1 << ss->id;
 
