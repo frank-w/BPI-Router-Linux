@@ -509,6 +509,14 @@ static inline void show_rcu_tasks_gp_kthreads(void) {}
 #endif /* #else #ifdef CONFIG_TASKS_RCU_GENERIC */
 #endif /* #else #ifdef CONFIG_TINY_RCU */
 
+#ifdef CONFIG_TASKS_RCU
+struct task_struct *get_rcu_tasks_gp_kthread(void);
+#endif // # ifdef CONFIG_TASKS_RCU
+
+#ifdef CONFIG_TASKS_RUDE_RCU
+struct task_struct *get_rcu_tasks_rude_gp_kthread(void);
+#endif // # ifdef CONFIG_TASKS_RUDE_RCU
+
 #define RCU_SCHEDULER_INACTIVE	0
 #define RCU_SCHEDULER_INIT	1
 #define RCU_SCHEDULER_RUNNING	2
@@ -558,10 +566,6 @@ void do_trace_rcu_torture_read(const char *rcutorturename,
 	do { } while (0)
 #endif
 static inline void rcu_gp_set_torture_wait(int duration) { }
-#endif
-
-#if IS_ENABLED(CONFIG_RCU_TORTURE_TEST) || IS_MODULE(CONFIG_RCU_TORTURE_TEST)
-long rcutorture_sched_setaffinity(pid_t pid, const struct cpumask *in_mask);
 #endif
 
 #ifdef CONFIG_TINY_SRCU
