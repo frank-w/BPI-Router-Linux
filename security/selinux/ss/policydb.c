@@ -2,7 +2,7 @@
 /*
  * Implementation of the policy database.
  *
- * Author : Stephen Smalley, <sds@tycho.nsa.gov>
+ * Author : Stephen Smalley, <stephen.smalley.work@gmail.com>
  */
 
 /*
@@ -41,7 +41,7 @@
 #include "mls.h"
 #include "services.h"
 
-#ifdef DEBUG_HASHES
+#ifdef CONFIG_SECURITY_SELINUX_DEBUG
 static const char *const symtab_name[SYM_NUM] = {
 	"common prefixes",
 	"classes",
@@ -678,7 +678,7 @@ static int (*const index_f[SYM_NUM]) (void *key, void *datum, void *datap) = {
 	cat_index,
 };
 
-#ifdef DEBUG_HASHES
+#ifdef CONFIG_SECURITY_SELINUX_DEBUG
 static void hash_eval(struct hashtab *h, const char *hash_name)
 {
 	struct hashtab_info info;
@@ -701,7 +701,10 @@ static void symtab_hash_eval(struct symtab *s)
 static inline void hash_eval(struct hashtab *h, const char *hash_name)
 {
 }
-#endif
+static inline void symtab_hash_eval(struct symtab *s)
+{
+}
+#endif /* CONFIG_SECURITY_SELINUX_DEBUG */
 
 /*
  * Define the other val_to_name and val_to_struct arrays
@@ -725,10 +728,8 @@ static int policydb_index(struct policydb *p)
 	pr_debug("SELinux:  %d classes, %d rules\n",
 		 p->p_classes.nprim, p->te_avtab.nel);
 
-#ifdef DEBUG_HASHES
 	avtab_hash_eval(&p->te_avtab, "rules");
 	symtab_hash_eval(p->symtab);
-#endif
 
 	p->class_val_to_struct = kcalloc(p->p_classes.nprim,
 					 sizeof(*p->class_val_to_struct),
@@ -863,6 +864,8 @@ void policydb_destroy(struct policydb *p)
 int policydb_load_isids(struct policydb *p, struct sidtab *s)
 {
 	struct ocontext *head, *c;
+	bool isid_init_supported = ebitmap_get_bit(&p->policycaps,
+						   POLICYDB_CAP_USERSPACE_INITIAL_CONTEXT);
 	int rc;
 
 	rc = sidtab_init(s);
@@ -886,12 +889,37 @@ int policydb_load_isids(struct policydb *p, struct sidtab *s)
 		if (!name)
 			continue;
 
+		/*
+		 * Also ignore SECINITSID_INIT if the policy doesn't declare
+		 * support for it
+		 */
+		if (sid == SECINITSID_INIT && !isid_init_supported)
+			continue;
+
 		rc = sidtab_set_initial(s, sid, &c->context[0]);
 		if (rc) {
 			pr_err("SELinux:  unable to load initial SID %s.\n",
 			       name);
 			sidtab_destroy(s);
 			return rc;
+		}
+
+		/*
+		 * If the policy doesn't support the "userspace_initial_context"
+		 * capability, set SECINITSID_INIT to the same context as
+		 * SECINITSID_KERNEL. This ensures the same behavior as before
+		 * the reintroduction of SECINITSID_INIT, where all tasks
+		 * started before policy load would initially get the context
+		 * corresponding to SECINITSID_KERNEL.
+		 */
+		if (sid == SECINITSID_KERNEL && !isid_init_supported) {
+			rc = sidtab_set_initial(s, SECINITSID_INIT, &c->context[0]);
+			if (rc) {
+				pr_err("SELinux:  unable to load initial SID %s.\n",
+				       name);
+				sidtab_destroy(s);
+				return rc;
+			}
 		}
 	}
 	return 0;
@@ -1660,7 +1688,7 @@ static int user_bounds_sanity_check(void *key, void *datum, void *datap)
 
 		if (++depth == POLICYDB_BOUNDS_MAXDEPTH) {
 			pr_err("SELinux: user %s: "
-			       "too deep or looped boundary",
+			       "too deep or looped boundary\n",
 			       (char *) key);
 			return -EINVAL;
 		}
@@ -1739,7 +1767,7 @@ static int type_bounds_sanity_check(void *key, void *datum, void *datap)
 
 		if (upper->attribute) {
 			pr_err("SELinux: type %s: "
-			       "bounded by attribute %s",
+			       "bounded by attribute %s\n",
 			       (char *) key,
 			       sym_name(p, SYM_TYPES, upper->value - 1));
 			return -EINVAL;
@@ -3648,7 +3676,7 @@ int policydb_write(struct policydb *p, void *fp)
 	info = policydb_lookup_compat(p->policyvers);
 	if (!info) {
 		pr_err("SELinux: compatibility lookup failed for policy "
-		    "version %d", p->policyvers);
+		    "version %d\n", p->policyvers);
 		return -EINVAL;
 	}
 

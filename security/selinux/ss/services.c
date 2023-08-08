@@ -2,7 +2,7 @@
 /*
  * Implementation of the security services.
  *
- * Authors : Stephen Smalley, <sds@tycho.nsa.gov>
+ * Authors : Stephen Smalley, <stephen.smalley.work@gmail.com>
  *	     James Morris <jmorris@redhat.com>
  *
  * Updated: Trusted Computer Solutions, Inc. <dgoeddel@trustedcs.com>
@@ -856,7 +856,7 @@ int security_bounded_transition(u32 old_sid, u32 new_sid)
 	struct sidtab *sidtab;
 	struct sidtab_entry *old_entry, *new_entry;
 	struct type_datum *type;
-	int index;
+	u32 index;
 	int rc;
 
 	if (!selinux_initialized())
@@ -1511,7 +1511,7 @@ static int security_context_to_sid_core(const char *scontext, u32 scontext_len,
 		return -ENOMEM;
 
 	if (!selinux_initialized()) {
-		int i;
+		u32 i;
 
 		for (i = 1; i < SECINITSID_NUM; i++) {
 			const char *s = initial_sid_to_string[i];
@@ -1694,7 +1694,7 @@ static void filename_compute_type(struct policydb *policydb,
 static int security_compute_sid(u32 ssid,
 				u32 tsid,
 				u16 orig_tclass,
-				u32 specified,
+				u16 specified,
 				const char *objname,
 				u32 *out_sid,
 				bool kern)
@@ -1706,8 +1706,7 @@ static int security_compute_sid(u32 ssid,
 	struct context *scontext, *tcontext, newcontext;
 	struct sidtab_entry *sentry, *tentry;
 	struct avtab_key avkey;
-	struct avtab_datum *avdatum;
-	struct avtab_node *node;
+	struct avtab_node *avnode, *node;
 	u16 tclass;
 	int rc = 0;
 	bool sock;
@@ -1815,22 +1814,22 @@ retry:
 	avkey.target_type = tcontext->type;
 	avkey.target_class = tclass;
 	avkey.specified = specified;
-	avdatum = avtab_search(&policydb->te_avtab, &avkey);
+	avnode = avtab_search_node(&policydb->te_avtab, &avkey);
 
 	/* If no permanent rule, also check for enabled conditional rules */
-	if (!avdatum) {
+	if (!avnode) {
 		node = avtab_search_node(&policydb->te_cond_avtab, &avkey);
 		for (; node; node = avtab_search_node_next(node, specified)) {
 			if (node->key.specified & AVTAB_ENABLED) {
-				avdatum = &node->datum;
+				avnode = node;
 				break;
 			}
 		}
 	}
 
-	if (avdatum) {
+	if (avnode) {
 		/* Use the type from the type transition/member/change rule. */
-		newcontext.type = avdatum->u.data;
+		newcontext.type = avnode->datum.u.data;
 	}
 
 	/* if we have a objname this is a file trans check so check those rules */
@@ -2822,7 +2821,6 @@ static inline int __security_genfs_sid(struct selinux_policy *policy,
 {
 	struct policydb *policydb = &policy->policydb;
 	struct sidtab *sidtab = policy->sidtab;
-	int len;
 	u16 sclass;
 	struct genfs *genfs;
 	struct ocontext *c;
@@ -2844,7 +2842,7 @@ static inline int __security_genfs_sid(struct selinux_policy *policy,
 		return -ENOENT;
 
 	for (c = genfs->head; c; c = c->next) {
-		len = strlen(c->u.name);
+		size_t len = strlen(c->u.name);
 		if ((!c->v.sclass || sclass == c->v.sclass) &&
 		    (strncmp(c->u.name, path, len) == 0))
 			break;
@@ -3332,7 +3330,7 @@ static int get_classes_callback(void *k, void *d, void *args)
 {
 	struct class_datum *datum = d;
 	char *name = k, **classes = args;
-	int value = datum->value - 1;
+	u32 value = datum->value - 1;
 
 	classes[value] = kstrdup(name, GFP_ATOMIC);
 	if (!classes[value])
@@ -3342,7 +3340,7 @@ static int get_classes_callback(void *k, void *d, void *args)
 }
 
 int security_get_classes(struct selinux_policy *policy,
-			 char ***classes, int *nclasses)
+			 char ***classes, u32 *nclasses)
 {
 	struct policydb *policydb;
 	int rc;
@@ -3358,7 +3356,8 @@ int security_get_classes(struct selinux_policy *policy,
 	rc = hashtab_map(&policydb->p_classes.table, get_classes_callback,
 			 *classes);
 	if (rc) {
-		int i;
+		u32 i;
+
 		for (i = 0; i < *nclasses; i++)
 			kfree((*classes)[i]);
 		kfree(*classes);
@@ -3372,7 +3371,7 @@ static int get_permissions_callback(void *k, void *d, void *args)
 {
 	struct perm_datum *datum = d;
 	char *name = k, **perms = args;
-	int value = datum->value - 1;
+	u32 value = datum->value - 1;
 
 	perms[value] = kstrdup(name, GFP_ATOMIC);
 	if (!perms[value])
@@ -3382,10 +3381,11 @@ static int get_permissions_callback(void *k, void *d, void *args)
 }
 
 int security_get_permissions(struct selinux_policy *policy,
-			     char *class, char ***perms, int *nperms)
+			     const char *class, char ***perms, u32 *nperms)
 {
 	struct policydb *policydb;
-	int rc, i;
+	u32 i;
+	int rc;
 	struct class_datum *match;
 
 	policydb = &policy->policydb;
@@ -3600,7 +3600,7 @@ err:
 /* Check to see if the rule contains any selinux fields */
 int selinux_audit_rule_known(struct audit_krule *rule)
 {
-	int i;
+	u32 i;
 
 	for (i = 0; i < rule->field_count; i++) {
 		struct audit_field *f = &rule->fields[i];

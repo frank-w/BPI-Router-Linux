@@ -1,7 +1,7 @@
 /*
  * Implementation of the access vector table type.
  *
- * Author : Stephen Smalley, <sds@tycho.nsa.gov>
+ * Author : Stephen Smalley, <stephen.smalley.work@gmail.com>
  */
 
 /* Updated: Frank Mayer <mayerf@tresys.com> and Karl MacMillan <kmacmillan@tresys.com>
@@ -110,7 +110,7 @@ static int avtab_insert(struct avtab *h, const struct avtab_key *key,
 	struct avtab_node *prev, *cur, *newnode;
 	u16 specified = key->specified & ~(AVTAB_ENABLED|AVTAB_ENABLED_OLD);
 
-	if (!h || !h->nslot)
+	if (!h || !h->nslot || h->nel == U32_MAX)
 		return -EINVAL;
 
 	hvalue = avtab_hash(key, h->mask);
@@ -156,7 +156,7 @@ struct avtab_node *avtab_insert_nonunique(struct avtab *h,
 	struct avtab_node *prev, *cur;
 	u16 specified = key->specified & ~(AVTAB_ENABLED|AVTAB_ENABLED_OLD);
 
-	if (!h || !h->nslot)
+	if (!h || !h->nslot || h->nel == U32_MAX)
 		return NULL;
 	hvalue = avtab_hash(key, h->mask);
 	for (prev = NULL, cur = h->htable[hvalue];
@@ -178,38 +178,6 @@ struct avtab_node *avtab_insert_nonunique(struct avtab *h,
 			break;
 	}
 	return avtab_insert_node(h, hvalue, prev, key, datum);
-}
-
-struct avtab_datum *avtab_search(struct avtab *h, const struct avtab_key *key)
-{
-	int hvalue;
-	struct avtab_node *cur;
-	u16 specified = key->specified & ~(AVTAB_ENABLED|AVTAB_ENABLED_OLD);
-
-	if (!h || !h->nslot)
-		return NULL;
-
-	hvalue = avtab_hash(key, h->mask);
-	for (cur = h->htable[hvalue]; cur;
-	     cur = cur->next) {
-		if (key->source_type == cur->key.source_type &&
-		    key->target_type == cur->key.target_type &&
-		    key->target_class == cur->key.target_class &&
-		    (specified & cur->key.specified))
-			return &cur->datum;
-
-		if (key->source_type < cur->key.source_type)
-			break;
-		if (key->source_type == cur->key.source_type &&
-		    key->target_type < cur->key.target_type)
-			break;
-		if (key->source_type == cur->key.source_type &&
-		    key->target_type == cur->key.target_type &&
-		    key->target_class < cur->key.target_class)
-			break;
-	}
-
-	return NULL;
 }
 
 /* This search function returns a node pointer, and can be used in
@@ -248,7 +216,7 @@ struct avtab_node *avtab_search_node(struct avtab *h,
 }
 
 struct avtab_node*
-avtab_search_node_next(struct avtab_node *node, int specified)
+avtab_search_node_next(struct avtab_node *node, u16 specified)
 {
 	struct avtab_node *cur;
 
@@ -354,6 +322,7 @@ int avtab_alloc_dup(struct avtab *new, const struct avtab *orig)
 	return avtab_alloc_common(new, orig->nslot);
 }
 
+#ifdef CONFIG_SECURITY_SELINUX_DEBUG
 void avtab_hash_eval(struct avtab *h, const char *tag)
 {
 	int i, chain_len, slots_used, max_chain_len;
@@ -384,6 +353,7 @@ void avtab_hash_eval(struct avtab *h, const char *tag)
 	       tag, h->nel, slots_used, h->nslot, max_chain_len,
 	       chain2_len_sum);
 }
+#endif /* CONFIG_SECURITY_SELINUX_DEBUG */
 
 static const uint16_t spec_order[] = {
 	AVTAB_ALLOWED,

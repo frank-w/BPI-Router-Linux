@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- *  NSA Security-Enhanced Linux (SELinux) security module
+ *  Security-Enhanced Linux (SELinux) security module
  *
  *  This file contains the SELinux hook function implementations.
  *
- *  Authors:  Stephen Smalley, <sds@tycho.nsa.gov>
+ *  Authors:  Stephen Smalley, <stephen.smalley.work@gmail.com>
  *	      Chris Vance, <cvance@nai.com>
  *	      Wayne Salamon, <wsalamon@nai.com>
  *	      James Morris <jmorris@redhat.com>
@@ -224,6 +224,31 @@ static inline u32 cred_sid(const struct cred *cred)
 
 	tsec = selinux_cred(cred);
 	return tsec->sid;
+}
+
+static void __ad_net_init(struct common_audit_data *ad,
+			  struct lsm_network_audit *net,
+			  int ifindex, struct sock *sk, u16 family)
+{
+	ad->type = LSM_AUDIT_DATA_NET;
+	ad->u.net = net;
+	net->netif = ifindex;
+	net->sk = sk;
+	net->family = family;
+}
+
+static void ad_net_init_from_sk(struct common_audit_data *ad,
+				struct lsm_network_audit *net,
+				struct sock *sk)
+{
+	__ad_net_init(ad, net, 0, sk, 0);
+}
+
+static void ad_net_init_from_iif(struct common_audit_data *ad,
+				 struct lsm_network_audit *net,
+				 int ifindex, u16 family)
+{
+	__ad_net_init(ad, net, ifindex, NULL, family);
 }
 
 /*
@@ -1127,7 +1152,7 @@ static inline int default_protocol_dgram(int protocol)
 
 static inline u16 socket_type_to_security_class(int family, int type, int protocol)
 {
-	int extsockclass = selinux_policycap_extsockclass();
+	bool extsockclass = selinux_policycap_extsockclass();
 
 	switch (family) {
 	case PF_UNIX:
@@ -2290,6 +2315,19 @@ static int selinux_bprm_creds_for_exec(struct linux_binprm *bprm)
 	new_tsec->keycreate_sid = 0;
 	new_tsec->sockcreate_sid = 0;
 
+	/*
+	 * Before policy is loaded, label any task outside kernel space
+	 * as SECINITSID_INIT, so that any userspace tasks surviving from
+	 * early boot end up with a label different from SECINITSID_KERNEL
+	 * (if the policy chooses to set SECINITSID_INIT != SECINITSID_KERNEL).
+	 */
+	if (!selinux_initialized()) {
+		new_tsec->sid = SECINITSID_INIT;
+		/* also clear the exec_sid just in case */
+		new_tsec->exec_sid = 0;
+		return 0;
+	}
+
 	if (old_tsec->exec_sid) {
 		new_tsec->sid = old_tsec->exec_sid;
 		/* Reset exec SID on execve. */
@@ -2917,7 +2955,7 @@ static int selinux_inode_init_security_anon(struct inode *inode,
 		struct inode_security_struct *context_isec =
 			selinux_inode(context_inode);
 		if (context_isec->initialized != LABEL_INITIALIZED) {
-			pr_err("SELinux:  context_inode is not initialized");
+			pr_err("SELinux:  context_inode is not initialized\n");
 			return -EACCES;
 		}
 
@@ -4496,14 +4534,27 @@ static int sock_has_perm(struct sock *sk, u32 perms)
 {
 	struct sk_security_struct *sksec = sk->sk_security;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 
 	if (sksec->sid == SECINITSID_KERNEL)
 		return 0;
 
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->sk = sk;
+	/*
+	 * Before POLICYDB_CAP_USERSPACE_INITIAL_CONTEXT, sockets that
+	 * inherited the kernel context from early boot used to be skipped
+	 * here, so preserve that behavior unless the capability is set.
+	 *
+	 * By setting the capability the policy signals that it is ready
+	 * for this quirk to be fixed. Note that sockets created by a kernel
+	 * thread or a usermode helper executed without a transition will
+	 * still be skipped in this check regardless of the policycap
+	 * setting.
+	 */
+	if (!selinux_policycap_userspace_initial_context() &&
+	    sksec->sid == SECINITSID_INIT)
+		return 0;
+
+	ad_net_init_from_sk(&ad, &net, sk);
 
 	return avc_has_perm(current_sid(), sksec->sid, sksec->sclass, perms,
 			    &ad);
@@ -4896,12 +4947,10 @@ static int selinux_socket_unix_stream_connect(struct sock *sock,
 	struct sk_security_struct *sksec_other = other->sk_security;
 	struct sk_security_struct *sksec_new = newsk->sk_security;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 	int err;
 
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->sk = other;
+	ad_net_init_from_sk(&ad, &net, other);
 
 	err = avc_has_perm(sksec_sock->sid, sksec_other->sid,
 			   sksec_other->sclass,
@@ -4928,11 +4977,9 @@ static int selinux_socket_unix_may_send(struct socket *sock,
 	struct sk_security_struct *ssec = sock->sk->sk_security;
 	struct sk_security_struct *osec = other->sk->sk_security;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->sk = other->sk;
+	ad_net_init_from_sk(&ad, &net, other->sk);
 
 	return avc_has_perm(ssec->sid, osec->sid, osec->sclass, SOCKET__SENDTO,
 			    &ad);
@@ -4968,13 +5015,10 @@ static int selinux_sock_rcv_skb_compat(struct sock *sk, struct sk_buff *skb,
 	struct sk_security_struct *sksec = sk->sk_security;
 	u32 sk_sid = sksec->sid;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 	char *addrp;
 
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->netif = skb->skb_iif;
-	ad.u.net->family = family;
+	ad_net_init_from_iif(&ad, &net, skb->skb_iif, family);
 	err = selinux_parse_skb(skb, &ad, &addrp, 1, NULL);
 	if (err)
 		return err;
@@ -4996,15 +5040,13 @@ static int selinux_sock_rcv_skb_compat(struct sock *sk, struct sk_buff *skb,
 
 static int selinux_socket_sock_rcv_skb(struct sock *sk, struct sk_buff *skb)
 {
-	int err;
+	int err, peerlbl_active, secmark_active;
 	struct sk_security_struct *sksec = sk->sk_security;
 	u16 family = sk->sk_family;
 	u32 sk_sid = sksec->sid;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 	char *addrp;
-	u8 secmark_active;
-	u8 peerlbl_active;
 
 	if (family != PF_INET && family != PF_INET6)
 		return 0;
@@ -5025,10 +5067,7 @@ static int selinux_socket_sock_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	if (!secmark_active && !peerlbl_active)
 		return 0;
 
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->netif = skb->skb_iif;
-	ad.u.net->family = family;
+	ad_net_init_from_iif(&ad, &net, skb->skb_iif, family);
 	err = selinux_parse_skb(skb, &ad, &addrp, 1, NULL);
 	if (err)
 		return err;
@@ -5198,7 +5237,7 @@ static int selinux_sctp_process_new_assoc(struct sctp_association *asoc,
 	u16 family = sk->sk_family;
 	struct sk_security_struct *sksec = sk->sk_security;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 	int err;
 
 	/* handle mapped IPv4 packets arriving via IPv6 sockets */
@@ -5234,9 +5273,7 @@ static int selinux_sctp_process_new_assoc(struct sctp_association *asoc,
 		/* Other association peer SIDs are checked to enforce
 		 * consistency among the peer SIDs.
 		 */
-		ad.type = LSM_AUDIT_DATA_NET;
-		ad.u.net = &net;
-		ad.u.net->sk = asoc->base.sk;
+		ad_net_init_from_sk(&ad, &net, asoc->base.sk);
 		err = avc_has_perm(sksec->peer_sid, asoc->peer_secid,
 				   sksec->sclass, SCTP_SOCKET__ASSOCIATION,
 				   &ad);
@@ -5467,11 +5504,11 @@ static void selinux_inet_conn_established(struct sock *sk, struct sk_buff *skb)
 
 static int selinux_secmark_relabel_packet(u32 sid)
 {
-	const struct task_security_struct *__tsec;
+	const struct task_security_struct *tsec;
 	u32 tsid;
 
-	__tsec = selinux_cred(current_cred());
-	tsid = __tsec->sid;
+	tsec = selinux_cred(current_cred());
+	tsid = tsec->sid;
 
 	return avc_has_perm(tsid, sid, SECCLASS_PACKET, PACKET__RELABELTO,
 			    NULL);
@@ -5581,7 +5618,7 @@ static unsigned int selinux_ip_forward(void *priv, struct sk_buff *skb,
 	char *addrp;
 	u32 peer_sid;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 	int secmark_active, peerlbl_active;
 
 	if (!selinux_policycap_netpeer())
@@ -5597,10 +5634,7 @@ static unsigned int selinux_ip_forward(void *priv, struct sk_buff *skb,
 		return NF_DROP;
 
 	ifindex = state->in->ifindex;
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->netif = ifindex;
-	ad.u.net->family = family;
+	ad_net_init_from_iif(&ad, &net, ifindex, family);
 	if (selinux_parse_skb(skb, &ad, &addrp, 1, NULL) != 0)
 		return NF_DROP;
 
@@ -5680,7 +5714,7 @@ static unsigned int selinux_ip_postroute_compat(struct sk_buff *skb,
 	struct sock *sk;
 	struct sk_security_struct *sksec;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 	u8 proto = 0;
 
 	sk = skb_to_full_sk(skb);
@@ -5688,10 +5722,7 @@ static unsigned int selinux_ip_postroute_compat(struct sk_buff *skb,
 		return NF_ACCEPT;
 	sksec = sk->sk_security;
 
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->netif = state->out->ifindex;
-	ad.u.net->family = state->pf;
+	ad_net_init_from_iif(&ad, &net, state->out->ifindex, state->pf);
 	if (selinux_parse_skb(skb, &ad, NULL, 0, &proto))
 		return NF_DROP;
 
@@ -5716,7 +5747,7 @@ static unsigned int selinux_ip_postroute(void *priv,
 	int ifindex;
 	struct sock *sk;
 	struct common_audit_data ad;
-	struct lsm_network_audit net = {0,};
+	struct lsm_network_audit net;
 	char *addrp;
 	int secmark_active, peerlbl_active;
 
@@ -5813,10 +5844,7 @@ static unsigned int selinux_ip_postroute(void *priv,
 	}
 
 	ifindex = state->out->ifindex;
-	ad.type = LSM_AUDIT_DATA_NET;
-	ad.u.net = &net;
-	ad.u.net->netif = ifindex;
-	ad.u.net->family = family;
+	ad_net_init_from_iif(&ad, &net, ifindex, family);
 	if (selinux_parse_skb(skb, &ad, &addrp, 0, NULL))
 		return NF_DROP;
 
@@ -5969,8 +5997,7 @@ static int selinux_msg_queue_associate(struct kern_ipc_perm *msq, int msqflg)
 
 static int selinux_msg_queue_msgctl(struct kern_ipc_perm *msq, int cmd)
 {
-	int err;
-	int perms;
+	u32 perms;
 
 	switch (cmd) {
 	case IPC_INFO:
@@ -5993,8 +6020,7 @@ static int selinux_msg_queue_msgctl(struct kern_ipc_perm *msq, int cmd)
 		return 0;
 	}
 
-	err = ipc_has_perm(msq, perms);
-	return err;
+	return ipc_has_perm(msq, perms);
 }
 
 static int selinux_msg_queue_msgsnd(struct kern_ipc_perm *msq, struct msg_msg *msg, int msqflg)
@@ -6099,8 +6125,7 @@ static int selinux_shm_associate(struct kern_ipc_perm *shp, int shmflg)
 /* Note, at this point, shp is locked down */
 static int selinux_shm_shmctl(struct kern_ipc_perm *shp, int cmd)
 {
-	int perms;
-	int err;
+	u32 perms;
 
 	switch (cmd) {
 	case IPC_INFO:
@@ -6127,8 +6152,7 @@ static int selinux_shm_shmctl(struct kern_ipc_perm *shp, int cmd)
 		return 0;
 	}
 
-	err = ipc_has_perm(shp, perms);
-	return err;
+	return ipc_has_perm(shp, perms);
 }
 
 static int selinux_shm_shmat(struct kern_ipc_perm *shp,
@@ -6898,7 +6922,7 @@ static int selinux_uring_override_creds(const struct cred *new)
  */
 static int selinux_uring_sqpoll(void)
 {
-	int sid = current_sid();
+	u32 sid = current_sid();
 
 	return avc_has_perm(sid, sid,
 			    SECCLASS_IO_URING, IO_URING__SQPOLL, NULL);
@@ -7239,6 +7263,8 @@ static __init int selinux_init(void)
 	cred_init_security();
 
 	default_noexec = !(VM_DATA_DEFAULT_FLAGS & VM_EXEC);
+	if (!default_noexec)
+		pr_notice("SELinux:  virtual memory is executable by default\n");
 
 	avc_init();
 
