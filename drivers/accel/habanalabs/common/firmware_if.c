@@ -724,6 +724,11 @@ static bool fw_report_boot_dev0(struct hl_device *hdev, u32 err_val,
 		err_exists = true;
 	}
 
+	if (err_val & CPU_BOOT_ERR0_TMP_THRESH_INIT_FAIL) {
+		dev_err(hdev->dev, "Device boot error - Failed to set threshold for temperature sensor\n");
+		err_exists = true;
+	}
+
 	if (err_val & CPU_BOOT_ERR0_DEVICE_UNUSABLE_FAIL) {
 		/* Ignore this bit, don't prevent driver loading */
 		dev_dbg(hdev->dev, "device unusable status is set\n");
@@ -2743,7 +2748,8 @@ static int hl_fw_dynamic_init_cpu(struct hl_device *hdev,
 	if (!(hdev->fw_components & FW_TYPE_BOOT_CPU)) {
 		struct lkd_fw_binning_info *binning_info;
 
-		rc = hl_fw_dynamic_request_descriptor(hdev, fw_loader, 0);
+		rc = hl_fw_dynamic_request_descriptor(hdev, fw_loader,
+							sizeof(struct lkd_msg_comms));
 		if (rc)
 			goto protocol_err;
 
@@ -2775,6 +2781,11 @@ static int hl_fw_dynamic_init_cpu(struct hl_device *hdev,
 				"Read binning masks: tpc: 0x%llx, dram: 0x%llx, edma: 0x%x, dec: 0x%x, rot:0x%x\n",
 				hdev->tpc_binning, hdev->dram_binning, hdev->edma_binning,
 				hdev->decoder_binning, hdev->rotator_binning);
+		}
+
+		if (hdev->asic_prop.support_dynamic_resereved_fw_size) {
+			hdev->asic_prop.reserved_fw_mem_size =
+				le32_to_cpu(fw_loader->dynamic_loader.comm_desc.rsvd_mem_size_mb);
 		}
 
 		return 0;

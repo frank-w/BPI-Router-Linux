@@ -29,6 +29,9 @@
 #include <linux/coresight.h>
 #include <linux/dma-buf.h>
 
+#include <drm/drm_device.h>
+#include <drm/drm_file.h>
+
 #include "security.h"
 
 #define HL_NAME				"habanalabs"
@@ -641,6 +644,7 @@ struct hl_hints_range {
  * @glbl_err_cause_num: global err cause number.
  * @hbw_flush_reg: register to read to generate HBW flush. value of 0 means HBW flush is
  *                 not supported.
+ * @reserved_fw_mem_size: size in MB of dram memory reserved for FW.
  * @collective_first_sob: first sync object available for collective use
  * @collective_first_mon: first monitor available for collective use
  * @sync_stream_first_sob: first sync object available for sync stream use
@@ -689,6 +693,7 @@ struct hl_hints_range {
  * @dma_mask: the dma mask to be set for this device
  * @supports_advanced_cpucp_rc: true if new cpucp opcodes are supported.
  * @supports_engine_modes: true if changing engines/engine_cores modes is supported.
+ * @support_dynamic_resereved_fw_size: true if we support dynamic reserved size for fw.
  */
 struct asic_fixed_properties {
 	struct hw_queue_properties	*hw_queues_props;
@@ -772,6 +777,7 @@ struct asic_fixed_properties {
 	u32				num_of_special_blocks;
 	u32				glbl_err_cause_num;
 	u32				hbw_flush_reg;
+	u32				reserved_fw_mem_size;
 	u16				collective_first_sob;
 	u16				collective_first_mon;
 	u16				sync_stream_first_sob;
@@ -808,6 +814,7 @@ struct asic_fixed_properties {
 	u8				dma_mask;
 	u8				supports_advanced_cpucp_rc;
 	u8				supports_engine_modes;
+	u8				support_dynamic_resereved_fw_size;
 };
 
 /**
@@ -1144,6 +1151,7 @@ struct timestamp_reg_work_obj {
  * @buf: pointer to the timestamp buffer which include both user/kernel buffers.
  *       relevant only when doing timestamps records registration.
  * @cq_cb: pointer to CQ counter CB.
+ * @interrupt: interrupt that the node hanged on it's wait list.
  * @timestamp_kernel_addr: timestamp handle address, where to set timestamp
  *                         relevant only when doing timestamps records
  *                         registration.
@@ -1153,10 +1161,11 @@ struct timestamp_reg_work_obj {
  *          allocating records dynamically.
  */
 struct timestamp_reg_info {
-	struct hl_mmap_mem_buf	*buf;
-	struct hl_cb		*cq_cb;
-	u64			*timestamp_kernel_addr;
-	u8			in_use;
+	struct hl_mmap_mem_buf		*buf;
+	struct hl_cb			*cq_cb;
+	struct hl_user_interrupt	*interrupt;
+	u64				*timestamp_kernel_addr;
+	bool				in_use;
 };
 
 /**
@@ -1835,6 +1844,7 @@ struct hl_cs_outcome_store {
  * @va_range: holds available virtual addresses for host and dram mappings.
  * @mem_hash_lock: protects the mem_hash.
  * @hw_block_list_lock: protects the HW block memory list.
+ * @ts_reg_lock: timestamp registration ioctls lock.
  * @debugfs_list: node in debugfs list of contexts.
  * @hw_block_mem_list: list of HW block virtual mapped addresses.
  * @cs_counters: context command submission counters.
@@ -1871,6 +1881,7 @@ struct hl_ctx {
 	struct hl_va_range		*va_range[HL_VA_RANGE_TYPE_MAX];
 	struct mutex			mem_hash_lock;
 	struct mutex			hw_block_list_lock;
+	struct mutex			ts_reg_lock;
 	struct list_head		debugfs_list;
 	struct list_head		hw_block_mem_list;
 	struct hl_cs_counters_atomic	cs_counters;
@@ -2250,7 +2261,7 @@ struct hl_notifier_event {
 /**
  * struct hl_fpriv - process information stored in FD private data.
  * @hdev: habanalabs device structure.
- * @filp: pointer to the given file structure.
+ * @filp: pointer to the DRM file private data structure.
  * @taskpid: current process ID.
  * @ctx: current executing context. TODO: remove for multiple ctx per process
  * @ctx_mgr: context manager to handle multiple context for this FD.
@@ -2265,7 +2276,7 @@ struct hl_notifier_event {
  */
 struct hl_fpriv {
 	struct hl_device		*hdev;
-	struct file			*filp;
+	struct drm_file			*file_priv;
 	struct pid			*taskpid;
 	struct hl_ctx			*ctx;
 	struct hl_ctx_mgr		ctx_mgr;
@@ -3055,6 +3066,20 @@ struct fw_err_info {
 };
 
 /**
+ * struct engine_err_info - engine error information.
+ * @event: holds information on the event.
+ * @event_detected: if set as 1, then an engine event was discovered for the
+ *                  first time after the driver has finished booting-up.
+ * @event_info_available: indicates that an engine event info is now available.
+ */
+struct engine_err_info {
+	struct hl_info_engine_err_event	event;
+	atomic_t			event_detected;
+	bool				event_info_available;
+};
+
+
+/**
  * struct hl_error_info - holds information collected during an error.
  * @cs_timeout: CS timeout error information.
  * @razwi_info: RAZWI information.
@@ -3062,6 +3087,7 @@ struct fw_err_info {
  * @page_fault_info: page fault information.
  * @hw_err: (fatal) hardware error information.
  * @fw_err: firmware error information.
+ * @engine_err: engine error information.
  */
 struct hl_error_info {
 	struct cs_timeout_info		cs_timeout;
@@ -3070,6 +3096,7 @@ struct hl_error_info {
 	struct page_fault_info		page_fault_info;
 	struct hw_err_info		hw_err;
 	struct fw_err_info		fw_err;
+	struct engine_err_info		engine_err;
 };
 
 /**
@@ -3117,8 +3144,7 @@ struct hl_reset_info {
  *		   (required only for PCI address match mode)
  * @pcie_bar: array of available PCIe bars virtual addresses.
  * @rmmio: configuration area address on SRAM.
- * @hclass: pointer to the habanalabs class.
- * @cdev: related char device.
+ * @drm: related DRM device.
  * @cdev_ctrl: char device for control operations only (INFO IOCTL)
  * @dev: related kernel basic device structure.
  * @dev_ctrl: related kernel device structure for the control device
@@ -3245,8 +3271,7 @@ struct hl_reset_info {
  * @rotator_binning: contains mask of rotators engines that is received from the f/w
  *			which indicates which rotator engines are binned-out(Gaudi3 and above).
  * @id: device minor.
- * @id_control: minor of the control device.
- * @cdev_idx: char device index. Used for setting its name.
+ * @cdev_idx: char device index.
  * @cpu_pci_msb_addr: 50-bit extension bits for the device CPU's 40-bit
  *                    addresses.
  * @is_in_dram_scrub: true if dram scrub operation is on going.
@@ -3308,8 +3333,7 @@ struct hl_device {
 	u64				pcie_bar_phys[HL_PCI_NUM_BARS];
 	void __iomem			*pcie_bar[HL_PCI_NUM_BARS];
 	void __iomem			*rmmio;
-	struct class			*hclass;
-	struct cdev			cdev;
+	struct drm_device		drm;
 	struct cdev			cdev_ctrl;
 	struct device			*dev;
 	struct device			*dev_ctrl;
@@ -3418,7 +3442,6 @@ struct hl_device {
 	u32				device_release_watchdog_timeout_sec;
 	u32				rotator_binning;
 	u16				id;
-	u16				id_control;
 	u16				cdev_idx;
 	u16				cpu_pci_msb_addr;
 	u8				is_in_dram_scrub;
@@ -3582,6 +3605,11 @@ static inline bool hl_mem_area_inside_range(u64 address, u64 size,
 	return false;
 }
 
+static inline struct hl_device *to_hl_device(struct drm_device *ddev)
+{
+	return container_of(ddev, struct hl_device, drm);
+}
+
 /**
  * hl_mem_area_crosses_range() - Checks whether address+size crossing a range.
  * @address: The start address of the area we want to validate.
@@ -3620,7 +3648,12 @@ int hl_access_cfg_region(struct hl_device *hdev, u64 addr, u64 *val,
 	enum debugfs_access_type acc_type);
 int hl_access_dev_mem(struct hl_device *hdev, enum pci_region region_type,
 			u64 addr, u64 *val, enum debugfs_access_type acc_type);
-int hl_device_open(struct inode *inode, struct file *filp);
+
+int hl_mmap(struct file *filp, struct vm_area_struct *vma);
+
+int hl_device_open(struct drm_device *drm, struct drm_file *file_priv);
+void hl_device_release(struct drm_device *ddev, struct drm_file *file_priv);
+
 int hl_device_open_ctrl(struct inode *inode, struct file *filp);
 bool hl_device_operational(struct hl_device *hdev,
 		enum hl_device_status *status);
@@ -3944,16 +3977,14 @@ void hl_handle_page_fault(struct hl_device *hdev, u64 addr, u16 eng_id, bool is_
 				u64 *event_mask);
 void hl_handle_critical_hw_err(struct hl_device *hdev, u16 event_id, u64 *event_mask);
 void hl_handle_fw_err(struct hl_device *hdev, struct hl_info_fw_err_info *info);
+void hl_capture_engine_err(struct hl_device *hdev, u16 engine_id, u16 error_count);
 void hl_enable_err_info_capture(struct hl_error_info *captured_err_info);
 
 #ifdef CONFIG_DEBUG_FS
 
-void hl_debugfs_init(void);
-void hl_debugfs_fini(void);
 int hl_debugfs_device_init(struct hl_device *hdev);
 void hl_debugfs_device_fini(struct hl_device *hdev);
 void hl_debugfs_add_device(struct hl_device *hdev);
-void hl_debugfs_remove_device(struct hl_device *hdev);
 void hl_debugfs_add_file(struct hl_fpriv *hpriv);
 void hl_debugfs_remove_file(struct hl_fpriv *hpriv);
 void hl_debugfs_add_cb(struct hl_cb *cb);
@@ -3972,14 +4003,6 @@ void hl_debugfs_set_state_dump(struct hl_device *hdev, char *data,
 
 #else
 
-static inline void __init hl_debugfs_init(void)
-{
-}
-
-static inline void hl_debugfs_fini(void)
-{
-}
-
 static inline int hl_debugfs_device_init(struct hl_device *hdev)
 {
 	return 0;
@@ -3990,10 +4013,6 @@ static inline void hl_debugfs_device_fini(struct hl_device *hdev)
 }
 
 static inline void hl_debugfs_add_device(struct hl_device *hdev)
-{
-}
-
-static inline void hl_debugfs_remove_device(struct hl_device *hdev)
 {
 }
 
@@ -4108,11 +4127,12 @@ void hl_ack_pb_single_dcore(struct hl_device *hdev, u32 dcore_offset,
 		const u32 pb_blocks[], u32 blocks_array_size);
 
 /* IOCTLs */
-long hl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg);
 long hl_ioctl_control(struct file *filep, unsigned int cmd, unsigned long arg);
-int hl_cb_ioctl(struct hl_fpriv *hpriv, void *data);
-int hl_cs_ioctl(struct hl_fpriv *hpriv, void *data);
-int hl_wait_ioctl(struct hl_fpriv *hpriv, void *data);
-int hl_mem_ioctl(struct hl_fpriv *hpriv, void *data);
+int hl_info_ioctl(struct drm_device *ddev, void *data, struct drm_file *file_priv);
+int hl_cb_ioctl(struct drm_device *ddev, void *data, struct drm_file *file_priv);
+int hl_cs_ioctl(struct drm_device *ddev, void *data, struct drm_file *file_priv);
+int hl_wait_ioctl(struct drm_device *ddev, void *data, struct drm_file *file_priv);
+int hl_mem_ioctl(struct drm_device *ddev, void *data, struct drm_file *file_priv);
+int hl_debug_ioctl(struct drm_device *ddev, void *data, struct drm_file *file_priv);
 
 #endif /* HABANALABSP_H_ */
