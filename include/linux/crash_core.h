@@ -84,13 +84,4 @@ int parse_crashkernel_high(char *cmdline, unsigned long long system_ram,
 int parse_crashkernel_low(char *cmdline, unsigned long long system_ram,
 		unsigned long long *crash_size, unsigned long long *crash_base);
 
-#define KEXEC_CRASH_HP_NONE			0
-#define KEXEC_CRASH_HP_ADD_CPU			1
-#define KEXEC_CRASH_HP_REMOVE_CPU		2
-#define KEXEC_CRASH_HP_ADD_MEMORY		3
-#define KEXEC_CRASH_HP_REMOVE_MEMORY		4
-#define KEXEC_CRASH_HP_INVALID_CPU		-1U
-
-struct kimage;
-
 #endif /* LINUX_CRASH_CORE_H */
