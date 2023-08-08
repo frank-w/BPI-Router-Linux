@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Red Hat Inc.
+ * Copyright 2023 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -19,22 +19,9 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-#include "ram.h"
-
-#include <subdev/bios.h>
-#include <subdev/bios/init.h>
-#include <subdev/bios/rammap.h>
-
-static const struct nvkm_ram_func
-ga102_ram = {
-};
-
-int
-ga102_ram_new(struct nvkm_fb *fb, struct nvkm_ram **pram)
-{
-	struct nvkm_device *device = fb->subdev.device;
-	enum nvkm_ram_type type = nvkm_fb_bios_memtype(device->bios);
-	u32 size = nvkm_rd32(device, 0x1183a4);
-
-	return nvkm_ram_new_(&ga102_ram, fb, type, (u64)size << 20, pram);
-}
+uint32_t kgd_aldebaran_enable_debug_trap(struct amdgpu_device *adev,
+					bool restore_dbg_registers,
+					uint32_t vmid);
+uint32_t kgd_aldebaran_set_wave_launch_mode(struct amdgpu_device *adev,
+					uint8_t wave_launch_mode,
+					uint32_t vmid);
