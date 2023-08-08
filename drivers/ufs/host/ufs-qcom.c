@@ -1483,6 +1483,7 @@ static void ufs_qcom_config_scaling_param(struct ufs_hba *hba,
 					struct devfreq_simple_ondemand_data *d)
 {
 	p->polling_ms = 60;
+	p->timer = DEVFREQ_TIMER_DELAYED;
 	d->upthreshold = 70;
 	d->downdifferential = 5;
 }
@@ -1643,11 +1644,12 @@ static void ufs_qcom_write_msi_msg(struct msi_desc *desc, struct msi_msg *msg)
 	ufshcd_mcq_config_esi(hba, msg);
 }
 
-static irqreturn_t ufs_qcom_mcq_esi_handler(int irq, void *__hba)
+static irqreturn_t ufs_qcom_mcq_esi_handler(int irq, void *data)
 {
-	struct ufs_hba *hba = __hba;
-	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
-	u32 id = irq - host->esi_base;
+	struct msi_desc *desc = data;
+	struct device *dev = msi_desc_to_dev(desc);
+	struct ufs_hba *hba = dev_get_drvdata(dev);
+	u32 id = desc->msi_index;
 	struct ufs_hw_queue *hwq = &hba->uhq[id];
 
 	ufshcd_mcq_write_cqis(hba, 0x1, id);
@@ -1665,8 +1667,6 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
 
 	if (host->esi_enabled)
 		return 0;
-	else if (host->esi_base < 0)
-		return -EINVAL;
 
 	/*
 	 * 1. We only handle CQs as of now.
@@ -1675,16 +1675,16 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
 	nr_irqs = hba->nr_hw_queues - hba->nr_queues[HCTX_TYPE_POLL];
 	ret = platform_msi_domain_alloc_irqs(hba->dev, nr_irqs,
 					     ufs_qcom_write_msi_msg);
-	if (ret)
+	if (ret) {
+		dev_err(hba->dev, "Failed to request Platform MSI %d\n", ret);
 		goto out;
+	}
 
+	msi_lock_descs(hba->dev);
 	msi_for_each_desc(desc, hba->dev, MSI_DESC_ALL) {
-		if (!desc->msi_index)
-			host->esi_base = desc->irq;
-
 		ret = devm_request_irq(hba->dev, desc->irq,
 				       ufs_qcom_mcq_esi_handler,
-				       IRQF_SHARED, "qcom-mcq-esi", hba);
+				       IRQF_SHARED, "qcom-mcq-esi", desc);
 		if (ret) {
 			dev_err(hba->dev, "%s: Fail to request IRQ for %d, err = %d\n",
 				__func__, desc->irq, ret);
@@ -1692,14 +1692,17 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
 			break;
 		}
 	}
+	msi_unlock_descs(hba->dev);
 
 	if (ret) {
 		/* Rewind */
+		msi_lock_descs(hba->dev);
 		msi_for_each_desc(desc, hba->dev, MSI_DESC_ALL) {
 			if (desc == failed_desc)
 				break;
 			devm_free_irq(hba->dev, desc->irq, hba);
 		}
+		msi_unlock_descs(hba->dev);
 		platform_msi_domain_free_irqs(hba->dev);
 	} else {
 		if (host->hw_ver.major == 6 && host->hw_ver.minor == 0 &&
@@ -1712,12 +1715,8 @@ static int ufs_qcom_config_esi(struct ufs_hba *hba)
 	}
 
 out:
-	if (ret) {
-		host->esi_base = -1;
-		dev_warn(hba->dev, "Failed to request Platform MSI %d\n", ret);
-	} else {
+	if (!ret)
 		host->esi_enabled = true;
-	}
 
 	return ret;
 }

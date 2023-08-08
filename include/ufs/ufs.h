@@ -23,9 +23,11 @@
 					(sizeof(struct utp_upiu_header)))
 #define UFS_SENSE_SIZE	18
 
-#define UPIU_HEADER_DWORD(byte3, byte2, byte1, byte0)\
-			cpu_to_be32((byte3 << 24) | (byte2 << 16) |\
-			 (byte1 << 8) | (byte0))
+static inline __be32 upiu_header_dword(u8 byte3, u8 byte2, u8 byte1, u8 byte0)
+{
+	return cpu_to_be32(byte3 << 24 | byte2 << 16 | byte1 << 8 | byte0);
+}
+
 /*
  * UFS device may have standard LUs and LUN id could be from 0x00 to
  * 0x7F. Standard LUs use "Peripheral Device Addressing Format".
@@ -100,6 +102,12 @@ enum {
 	UPIU_CMD_FLAGS_NONE	= 0x00,
 	UPIU_CMD_FLAGS_WRITE	= 0x20,
 	UPIU_CMD_FLAGS_READ	= 0x40,
+};
+
+/* UPIU response flags */
+enum {
+	UPIU_RSP_FLAG_UNDERFLOW	= 0x20,
+	UPIU_RSP_FLAG_OVERFLOW	= 0x40,
 };
 
 /* UPIU Task Attributes */
@@ -516,41 +524,6 @@ struct utp_cmd_rsp {
 	u8 sense_data[UFS_SENSE_SIZE];
 };
 
-struct ufshpb_active_field {
-	__be16 active_rgn;
-	__be16 active_srgn;
-};
-#define HPB_ACT_FIELD_SIZE 4
-
-/**
- * struct utp_hpb_rsp - Response UPIU structure
- * @residual_transfer_count: Residual transfer count DW-3
- * @reserved1: Reserved double words DW-4 to DW-7
- * @sense_data_len: Sense data length DW-8 U16
- * @desc_type: Descriptor type of sense data
- * @additional_len: Additional length of sense data
- * @hpb_op: HPB operation type
- * @lun: LUN of response UPIU
- * @active_rgn_cnt: Active region count
- * @inactive_rgn_cnt: Inactive region count
- * @hpb_active_field: Recommended to read HPB region and subregion
- * @hpb_inactive_field: To be inactivated HPB region and subregion
- */
-struct utp_hpb_rsp {
-	__be32 residual_transfer_count;
-	__be32 reserved1[4];
-	__be16 sense_data_len;
-	u8 desc_type;
-	u8 additional_len;
-	u8 hpb_op;
-	u8 lun;
-	u8 active_rgn_cnt;
-	u8 inactive_rgn_cnt;
-	struct ufshpb_active_field hpb_active_field[2];
-	__be16 hpb_inactive_field[2];
-};
-#define UTP_HPB_RSP_SIZE 40
-
 /**
  * struct utp_upiu_rsp - general upiu response structure
  * @header: UPIU header structure DW-0 to DW-2
@@ -561,7 +534,6 @@ struct utp_upiu_rsp {
 	struct utp_upiu_header header;
 	union {
 		struct utp_cmd_rsp sr;
-		struct utp_hpb_rsp hr;
 		struct utp_upiu_query qr;
 	};
 };
@@ -620,9 +592,6 @@ struct ufs_dev_info {
 	u32	clk_gating_wait_us;
 	/* Stores the depth of queue in UFS device */
 	u8	bqueuedepth;
-
-	/* UFS HPB related flag */
-	bool	hpb_enabled;
 
 	/* UFS WB related flags */
 	bool    wb_enabled;

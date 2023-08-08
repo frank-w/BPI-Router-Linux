@@ -97,6 +97,7 @@ void ufshcd_mcq_config_mac(struct ufs_hba *hba, u32 max_active_cmds)
 	val |= FIELD_PREP(MCQ_CFG_MAC_MASK, max_active_cmds);
 	ufshcd_writel(hba, val, REG_UFS_MCQ_CFG);
 }
+EXPORT_SYMBOL_GPL(ufshcd_mcq_config_mac);
 
 /**
  * ufshcd_mcq_req_to_hwq - find the hardware queue on which the
@@ -245,6 +246,7 @@ u32 ufshcd_mcq_read_cqis(struct ufs_hba *hba, int i)
 {
 	return readl(mcq_opr_base(hba, OPR_CQIS, i) + REG_CQIS);
 }
+EXPORT_SYMBOL_GPL(ufshcd_mcq_read_cqis);
 
 void ufshcd_mcq_write_cqis(struct ufs_hba *hba, u32 val, int i)
 {
@@ -388,6 +390,7 @@ void ufshcd_mcq_make_queues_operational(struct ufs_hba *hba)
 			      MCQ_CFG_n(REG_SQATTR, i));
 	}
 }
+EXPORT_SYMBOL_GPL(ufshcd_mcq_make_queues_operational);
 
 void ufshcd_mcq_enable_esi(struct ufs_hba *hba)
 {
@@ -487,8 +490,8 @@ static int ufshcd_mcq_sq_start(struct ufs_hba *hba, struct ufs_hw_queue *hwq)
 /**
  * ufshcd_mcq_sq_cleanup - Clean up submission queue resources
  * associated with the pending command.
- * @hba - per adapter instance.
- * @task_tag - The command's task tag.
+ * @hba: per adapter instance.
+ * @task_tag: The command's task tag.
  *
  * Returns 0 for success; error code otherwise.
  */
@@ -551,7 +554,7 @@ unlock:
  * Write the sqe's Command Type to 0xF. The host controller will not
  * fetch any sqe with Command Type = 0xF.
  *
- * @utrd - UTP Transfer Request Descriptor to be nullified.
+ * @utrd: UTP Transfer Request Descriptor to be nullified.
  */
 static void ufshcd_mcq_nullify_sqe(struct utp_transfer_req_desc *utrd)
 {
@@ -568,9 +571,9 @@ static void ufshcd_mcq_nullify_sqe(struct utp_transfer_req_desc *utrd)
  * If the command is in the submission queue and not issued to the device yet,
  * nullify the sqe so the host controller will skip fetching the sqe.
  *
- * @hba - per adapter instance.
- * @hwq - Hardware Queue to be searched.
- * @task_tag - The command's task tag.
+ * @hba: per adapter instance.
+ * @hwq: Hardware Queue to be searched.
+ * @task_tag: The command's task tag.
  *
  * Returns true if the SQE containing the command is present in the SQ
  * (not fetched by the controller); returns false if the SQE is not in the SQ.
@@ -619,7 +622,7 @@ out:
 
 /**
  * ufshcd_mcq_abort - Abort the command in MCQ.
- * @cmd - The command to be aborted.
+ * @cmd: The command to be aborted.
  *
  * Returns SUCCESS or FAILED error codes
  */
