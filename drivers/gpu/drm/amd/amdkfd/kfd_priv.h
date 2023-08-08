@@ -323,15 +323,6 @@ struct kfd_dev {
 
 	struct kfd_device_info device_info;
 
-	phys_addr_t doorbell_base;	/* Start of actual doorbells used by
-					 * KFD. It is aligned for mapping
-					 * into user mode
-					 */
-	size_t doorbell_base_dw_offset;	/* Offset from the start of the PCI
-					 * doorbell BAR to the first KFD
-					 * doorbell in dwords. GFX reserves
-					 * the segment before this offset.
-					 */
 	u32 __iomem *doorbell_kernel_ptr; /* This is a pointer for a doorbells
 					   * page used by kernel queue
 					   */
@@ -340,8 +331,6 @@ struct kfd_dev {
 
 	const struct kfd2kgd_calls *kfd2kgd;
 	struct mutex doorbell_mutex;
-	DECLARE_BITMAP(doorbell_available_index,
-			KFD_MAX_NUM_OF_QUEUES_PER_PROCESS);
 
 	void *gtt_mem;
 	uint64_t gtt_start_gpu_addr;
@@ -385,6 +374,12 @@ struct kfd_dev {
 	/* Track per device allocated watch points */
 	uint32_t alloc_watch_ids;
 	spinlock_t watch_points_lock;
+
+	/* Kernel doorbells for KFD device */
+	struct amdgpu_bo *doorbells;
+
+	/* bitmap for dynamic doorbell allocation from doorbell object */
+	unsigned long *doorbell_bitmap;
 };
 
 enum kfd_mempool {
@@ -702,7 +697,10 @@ struct qcm_process_device {
 	uint64_t ib_base;
 	void *ib_kaddr;
 
-	/* doorbell resources per process per device */
+	/* doorbells for kfd process */
+	struct amdgpu_bo *proc_doorbells;
+
+	/* bitmap for dynamic doorbell allocation from the bo */
 	unsigned long *doorbell_bitmap;
 };
 
@@ -792,7 +790,6 @@ struct kfd_process_device {
 	struct attribute attr_evict;
 
 	struct kobject *kobj_stats;
-	unsigned int doorbell_index;
 
 	/*
 	 * @cu_occupancy: Reports occupancy of Compute Units (CU) of a process
@@ -1100,9 +1097,9 @@ unsigned int kfd_get_doorbell_dw_offset_in_bar(struct kfd_dev *kfd,
 					unsigned int doorbell_id);
 phys_addr_t kfd_get_process_doorbells(struct kfd_process_device *pdd);
 int kfd_alloc_process_doorbells(struct kfd_dev *kfd,
-				unsigned int *doorbell_index);
+				struct kfd_process_device *pdd);
 void kfd_free_process_doorbells(struct kfd_dev *kfd,
-				unsigned int doorbell_index);
+				struct kfd_process_device *pdd);
 /* GTT Sub-Allocator */
 
 int kfd_gtt_sa_allocate(struct kfd_node *node, unsigned int size,

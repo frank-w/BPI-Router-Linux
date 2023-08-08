@@ -1,6 +1,5 @@
-/* SPDX-License-Identifier: MIT */
 /*
- * Copyright 2022 Advanced Micro Devices, Inc.
+ * Copyright 2021 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -24,34 +23,24 @@
  *
  */
 
-#ifndef __DCN314_CLK_MGR_H__
-#define __DCN314_CLK_MGR_H__
-#include "clk_mgr_internal.h"
+#ifndef AMDGPU_DM_AMDGPU_DM_REPLAY_H_
+#define AMDGPU_DM_AMDGPU_DM_REPLAY_H_
 
-struct dcn314_watermarks;
+#include "amdgpu.h"
 
-struct dcn314_smu_watermark_set {
-	struct dcn314_watermarks *wm_set;
-	union large_integer mc_address;
+enum replay_enable_option {
+	pr_enable_option_static_screen = 0x1,
+	pr_enable_option_mpo_video = 0x2,
+	pr_enable_option_full_screen_video = 0x4,
+	pr_enable_option_general_ui = 0x8,
+	pr_enable_option_static_screen_coasting = 0x10000,
+	pr_enable_option_mpo_video_coasting = 0x20000,
+	pr_enable_option_full_screen_video_coasting = 0x40000,
 };
 
-struct clk_mgr_dcn314 {
-	struct clk_mgr_internal base;
-	struct dcn314_smu_watermark_set smu_wm_set;
-};
 
-bool dcn314_are_clock_states_equal(struct dc_clocks *a,
-		struct dc_clocks *b);
+bool amdgpu_dm_replay_enable(struct dc_stream_state *stream, bool enable);
+bool amdgpu_dm_setup_replay(struct dc_link *link, struct amdgpu_dm_connector *aconnector);
+bool amdgpu_dm_replay_disable(struct dc_stream_state *stream);
 
-void dcn314_update_clocks(struct clk_mgr *clk_mgr_base,
-			struct dc_state *context,
-			bool safe_to_lower);
-
-void dcn314_clk_mgr_construct(struct dc_context *ctx,
-		struct clk_mgr_dcn314 *clk_mgr,
-		struct pp_smu_funcs *pp_smu,
-		struct dccg *dccg);
-
-void dcn314_clk_mgr_destroy(struct clk_mgr_internal *clk_mgr_int);
-
-#endif //__DCN314_CLK_MGR_H__
+#endif /* AMDGPU_DM_AMDGPU_DM_REPLAY_H_ */
