@@ -168,13 +168,10 @@ void mtk_vcodec_dbgfs_remove(struct mtk_vcodec_dev *vcodec_dev, int ctx_id)
 	list_for_each_entry(dbgfs_inst, &vcodec_dev->dbgfs.dbgfs_head, node) {
 		if (dbgfs_inst->inst_id == ctx_id) {
 			vcodec_dev->dbgfs.inst_count--;
-			break;
+			list_del(&dbgfs_inst->node);
+			kfree(dbgfs_inst);
+			return;
 		}
-	}
-
-	if (dbgfs_inst) {
-		list_del(&dbgfs_inst->node);
-		kfree(dbgfs_inst);
 	}
 }
 EXPORT_SYMBOL_GPL(mtk_vcodec_dbgfs_remove);
@@ -188,8 +185,8 @@ void mtk_vcodec_dbgfs_init(struct mtk_vcodec_dev *vcodec_dev, bool is_encode)
 	else
 		vcodec_dev->dbgfs.vcodec_root = debugfs_create_dir("vcodec-dec", NULL);
 	if (IS_ERR(vcodec_dev->dbgfs.vcodec_root))
-		dev_err(&vcodec_dev->plat_dev->dev, "create vcodec dir err:%d\n",
-			IS_ERR(vcodec_dev->dbgfs.vcodec_root));
+		dev_err(&vcodec_dev->plat_dev->dev, "create vcodec dir err:%ld\n",
+			PTR_ERR(vcodec_dev->dbgfs.vcodec_root));
 
 	vcodec_root = vcodec_dev->dbgfs.vcodec_root;
 	debugfs_create_x32("mtk_v4l2_dbg_level", 0644, vcodec_root, &mtk_v4l2_dbg_level);

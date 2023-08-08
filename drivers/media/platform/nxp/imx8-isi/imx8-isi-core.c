@@ -9,7 +9,7 @@
 #include <linux/kernel.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/pm_runtime.h>
@@ -30,12 +30,12 @@
  */
 
 struct mxc_isi_async_subdev {
-	struct v4l2_async_subdev asd;
+	struct v4l2_async_connection asd;
 	unsigned int port;
 };
 
 static inline struct mxc_isi_async_subdev *
-asd_to_mxc_isi_async_subdev(struct v4l2_async_subdev *asd)
+asd_to_mxc_isi_async_subdev(struct v4l2_async_connection *asd)
 {
 	return container_of(asd, struct mxc_isi_async_subdev, asd);
 };
@@ -48,12 +48,12 @@ notifier_to_mxc_isi_dev(struct v4l2_async_notifier *n)
 
 static int mxc_isi_async_notifier_bound(struct v4l2_async_notifier *notifier,
 					struct v4l2_subdev *sd,
-					struct v4l2_async_subdev *asd)
+					struct v4l2_async_connection *asc)
 {
 	const unsigned int link_flags = MEDIA_LNK_FL_IMMUTABLE
 				      | MEDIA_LNK_FL_ENABLED;
 	struct mxc_isi_dev *isi = notifier_to_mxc_isi_dev(notifier);
-	struct mxc_isi_async_subdev *masd = asd_to_mxc_isi_async_subdev(asd);
+	struct mxc_isi_async_subdev *masd = asd_to_mxc_isi_async_subdev(asc);
 	struct media_pad *pad = &isi->crossbar.pads[masd->port];
 	struct device_link *link;
 
@@ -175,7 +175,7 @@ static int mxc_isi_v4l2_init(struct mxc_isi_dev *isi)
 	}
 
 	/* Initialize, fill and register the async notifier. */
-	v4l2_async_nf_init(&isi->notifier);
+	v4l2_async_nf_init(&isi->notifier, v4l2_dev);
 	isi->notifier.ops = &mxc_isi_async_notifier_ops;
 
 	for (i = 0; i < isi->pdata->num_ports; ++i) {
@@ -200,7 +200,7 @@ static int mxc_isi_v4l2_init(struct mxc_isi_dev *isi)
 		masd->port = i;
 	}
 
-	ret = v4l2_async_nf_register(v4l2_dev, &isi->notifier);
+	ret = v4l2_async_nf_register(&isi->notifier);
 	if (ret < 0) {
 		dev_err(isi->dev,
 			"Failed to register async notifier: %d\n", ret);
