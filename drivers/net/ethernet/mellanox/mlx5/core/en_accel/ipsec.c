@@ -40,6 +40,7 @@
 #include "en.h"
 #include "ipsec.h"
 #include "ipsec_rxtx.h"
+#include "en_rep.h"
 
 #define MLX5_IPSEC_RESCHED msecs_to_jiffies(1000)
 #define MLX5E_IPSEC_TUNNEL_SA XA_MARK_1
@@ -354,6 +355,12 @@ void mlx5e_ipsec_build_accel_xfrm_attrs(struct mlx5e_ipsec_sa_entry *sa_entry,
 
 	mlx5e_ipsec_init_limits(sa_entry, attrs);
 	mlx5e_ipsec_init_macs(sa_entry, attrs);
+
+	if (x->encap) {
+		attrs->encap = true;
+		attrs->sport = x->encap->encap_sport;
+		attrs->dport = x->encap->encap_dport;
+	}
 }
 
 static int mlx5e_xfrm_validate_state(struct mlx5_core_dev *mdev,
@@ -387,8 +394,25 @@ static int mlx5e_xfrm_validate_state(struct mlx5_core_dev *mdev,
 		return -EINVAL;
 	}
 	if (x->encap) {
-		NL_SET_ERR_MSG_MOD(extack, "Encapsulated xfrm state may not be offloaded");
-		return -EINVAL;
+		if (!(mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_ESPINUDP)) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation is not supported");
+			return -EINVAL;
+		}
+
+		if (x->encap->encap_type != UDP_ENCAP_ESPINUDP) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation other than UDP is not supported");
+			return -EINVAL;
+		}
+
+		if (x->xso.type != XFRM_DEV_OFFLOAD_PACKET) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation is supported in packet offload mode only");
+			return -EINVAL;
+		}
+
+		if (x->props.mode != XFRM_MODE_TRANSPORT) {
+			NL_SET_ERR_MSG_MOD(extack, "Encapsulation is supported in transport mode only");
+			return -EINVAL;
+		}
 	}
 	if (!x->aead) {
 		NL_SET_ERR_MSG_MOD(extack, "Cannot offload xfrm states without aead");
@@ -835,6 +859,7 @@ void mlx5e_ipsec_init(struct mlx5e_priv *priv)
 			goto clear_aso;
 	}
 
+	ipsec->is_uplink_rep = mlx5e_is_uplink_rep(priv);
 	ret = mlx5e_accel_ipsec_fs_init(ipsec);
 	if (ret)
 		goto err_fs_init;

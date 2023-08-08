@@ -457,6 +457,7 @@ void tcp_init_sock(struct sock *sk)
 
 	WRITE_ONCE(sk->sk_sndbuf, READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_wmem[1]));
 	WRITE_ONCE(sk->sk_rcvbuf, READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_rmem[1]));
+	tcp_scaling_ratio_init(sk);
 
 	set_bit(SOCK_SUPPORT_ZC, &sk->sk_socket->flags);
 	sk_sockets_allocated_inc(sk);
@@ -1700,7 +1701,7 @@ EXPORT_SYMBOL(tcp_peek_len);
 /* Make sure sk_rcvbuf is big enough to satisfy SO_RCVLOWAT hint */
 int tcp_set_rcvlowat(struct sock *sk, int val)
 {
-	int cap;
+	int space, cap;
 
 	if (sk->sk_userlocks & SOCK_RCVBUF_LOCK)
 		cap = sk->sk_rcvbuf >> 1;
@@ -1715,10 +1716,10 @@ int tcp_set_rcvlowat(struct sock *sk, int val)
 	if (sk->sk_userlocks & SOCK_RCVBUF_LOCK)
 		return 0;
 
-	val <<= 1;
-	if (val > sk->sk_rcvbuf) {
-		WRITE_ONCE(sk->sk_rcvbuf, val);
-		tcp_sk(sk)->window_clamp = tcp_win_from_space(sk, val);
+	space = tcp_space_from_win(sk, val);
+	if (space > sk->sk_rcvbuf) {
+		WRITE_ONCE(sk->sk_rcvbuf, space);
+		tcp_sk(sk)->window_clamp = val;
 	}
 	return 0;
 }
@@ -2861,7 +2862,7 @@ adjudge_to_death:
 
 	if (sk->sk_state == TCP_FIN_WAIT2) {
 		struct tcp_sock *tp = tcp_sk(sk);
-		if (tp->linger2 < 0) {
+		if (READ_ONCE(tp->linger2) < 0) {
 			tcp_set_state(sk, TCP_CLOSE);
 			tcp_send_active_reset(sk, GFP_ATOMIC);
 			__NET_INC_STATS(sock_net(sk),
@@ -3287,18 +3288,21 @@ int tcp_sock_set_syncnt(struct sock *sk, int val)
 	if (val < 1 || val > MAX_TCP_SYNCNT)
 		return -EINVAL;
 
-	lock_sock(sk);
 	WRITE_ONCE(inet_csk(sk)->icsk_syn_retries, val);
-	release_sock(sk);
 	return 0;
 }
 EXPORT_SYMBOL(tcp_sock_set_syncnt);
 
-void tcp_sock_set_user_timeout(struct sock *sk, u32 val)
+int tcp_sock_set_user_timeout(struct sock *sk, int val)
 {
-	lock_sock(sk);
+	/* Cap the max time in ms TCP will retry or probe the window
+	 * before giving up and aborting (ETIMEDOUT) a connection.
+	 */
+	if (val < 0)
+		return -EINVAL;
+
 	WRITE_ONCE(inet_csk(sk)->icsk_user_timeout, val);
-	release_sock(sk);
+	return 0;
 }
 EXPORT_SYMBOL(tcp_sock_set_user_timeout);
 
@@ -3341,9 +3345,7 @@ int tcp_sock_set_keepintvl(struct sock *sk, int val)
 	if (val < 1 || val > MAX_TCP_KEEPINTVL)
 		return -EINVAL;
 
-	lock_sock(sk);
 	WRITE_ONCE(tcp_sk(sk)->keepalive_intvl, val * HZ);
-	release_sock(sk);
 	return 0;
 }
 EXPORT_SYMBOL(tcp_sock_set_keepintvl);
@@ -3353,10 +3355,8 @@ int tcp_sock_set_keepcnt(struct sock *sk, int val)
 	if (val < 1 || val > MAX_TCP_KEEPCNT)
 		return -EINVAL;
 
-	lock_sock(sk);
 	/* Paired with READ_ONCE() in keepalive_probes() */
 	WRITE_ONCE(tcp_sk(sk)->keepalive_probes, val);
-	release_sock(sk);
 	return 0;
 }
 EXPORT_SYMBOL(tcp_sock_set_keepcnt);
@@ -3458,6 +3458,32 @@ int do_tcp_setsockopt(struct sock *sk, int level, int optname,
 	if (copy_from_sockptr(&val, optval, sizeof(val)))
 		return -EFAULT;
 
+	/* Handle options that can be set without locking the socket. */
+	switch (optname) {
+	case TCP_SYNCNT:
+		return tcp_sock_set_syncnt(sk, val);
+	case TCP_USER_TIMEOUT:
+		return tcp_sock_set_user_timeout(sk, val);
+	case TCP_KEEPINTVL:
+		return tcp_sock_set_keepintvl(sk, val);
+	case TCP_KEEPCNT:
+		return tcp_sock_set_keepcnt(sk, val);
+	case TCP_LINGER2:
+		if (val < 0)
+			WRITE_ONCE(tp->linger2, -1);
+		else if (val > TCP_FIN_TIMEOUT_MAX / HZ)
+			WRITE_ONCE(tp->linger2, TCP_FIN_TIMEOUT_MAX);
+		else
+			WRITE_ONCE(tp->linger2, val * HZ);
+		return 0;
+	case TCP_DEFER_ACCEPT:
+		/* Translate value in seconds to number of retransmits */
+		WRITE_ONCE(icsk->icsk_accept_queue.rskq_defer_accept,
+			   secs_to_retrans(val, TCP_TIMEOUT_INIT / HZ,
+					   TCP_RTO_MAX / HZ));
+		return 0;
+	}
+
 	sockopt_lock_sock(sk);
 
 	switch (optname) {
@@ -3553,47 +3579,12 @@ int do_tcp_setsockopt(struct sock *sk, int level, int optname,
 	case TCP_KEEPIDLE:
 		err = tcp_sock_set_keepidle_locked(sk, val);
 		break;
-	case TCP_KEEPINTVL:
-		if (val < 1 || val > MAX_TCP_KEEPINTVL)
-			err = -EINVAL;
-		else
-			WRITE_ONCE(tp->keepalive_intvl, val * HZ);
-		break;
-	case TCP_KEEPCNT:
-		if (val < 1 || val > MAX_TCP_KEEPCNT)
-			err = -EINVAL;
-		else
-			WRITE_ONCE(tp->keepalive_probes, val);
-		break;
-	case TCP_SYNCNT:
-		if (val < 1 || val > MAX_TCP_SYNCNT)
-			err = -EINVAL;
-		else
-			WRITE_ONCE(icsk->icsk_syn_retries, val);
-		break;
-
 	case TCP_SAVE_SYN:
 		/* 0: disable, 1: enable, 2: start from ether_header */
 		if (val < 0 || val > 2)
 			err = -EINVAL;
 		else
 			tp->save_syn = val;
-		break;
-
-	case TCP_LINGER2:
-		if (val < 0)
-			WRITE_ONCE(tp->linger2, -1);
-		else if (val > TCP_FIN_TIMEOUT_MAX / HZ)
-			WRITE_ONCE(tp->linger2, TCP_FIN_TIMEOUT_MAX);
-		else
-			WRITE_ONCE(tp->linger2, val * HZ);
-		break;
-
-	case TCP_DEFER_ACCEPT:
-		/* Translate value in seconds to number of retransmits */
-		WRITE_ONCE(icsk->icsk_accept_queue.rskq_defer_accept,
-			   secs_to_retrans(val, TCP_TIMEOUT_INIT / HZ,
-					   TCP_RTO_MAX / HZ));
 		break;
 
 	case TCP_WINDOW_CLAMP:
@@ -3610,16 +3601,6 @@ int do_tcp_setsockopt(struct sock *sk, int level, int optname,
 		err = tp->af_specific->md5_parse(sk, optname, optval, optlen);
 		break;
 #endif
-	case TCP_USER_TIMEOUT:
-		/* Cap the max time in ms TCP will retry or probe the window
-		 * before giving up and aborting (ETIMEDOUT) a connection.
-		 */
-		if (val < 0)
-			err = -EINVAL;
-		else
-			WRITE_ONCE(icsk->icsk_user_timeout, val);
-		break;
-
 	case TCP_FASTOPEN:
 		if (val >= 0 && ((1 << sk->sk_state) & (TCPF_CLOSE |
 		    TCPF_LISTEN))) {

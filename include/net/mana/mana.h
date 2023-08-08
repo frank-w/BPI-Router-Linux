@@ -4,6 +4,8 @@
 #ifndef _MANA_H
 #define _MANA_H
 
+#include <net/xdp.h>
+
 #include "gdma.h"
 #include "hw_channel.h"
 
@@ -280,6 +282,7 @@ struct mana_recv_buf_oob {
 	struct gdma_wqe_request wqe_req;
 
 	void *buf_va;
+	bool from_pool; /* allocated from a page pool */
 
 	/* SGL of the buffer going to be sent has part of the work request. */
 	u32 num_sge;
@@ -329,6 +332,8 @@ struct mana_rxq {
 	void *xdp_save_va; /* for reusing */
 	bool xdp_flush;
 	int xdp_rc; /* XDP redirect return code */
+
+	struct page_pool *page_pool;
 
 	/* MUST BE THE LAST MEMBER:
 	 * Each receive buffer has an associated mana_recv_buf_oob.
