@@ -8,14 +8,6 @@
 #include <linux/etherdevice.h>
 #include "rtl819x_TS.h"
 
-static void TsSetupTimeOut(struct timer_list *unused)
-{
-}
-
-static void TsInactTimeout(struct timer_list *unused)
-{
-}
-
 static void RxPktPendingTimeout(struct timer_list *t)
 {
 	struct rx_ts_record *pRxTs = from_timer(pRxTs, t,
@@ -117,8 +109,8 @@ static void ResetTxTsEntry(struct tx_ts_record *pTS)
 	pTS->bAddBaReqDelayed = false;
 	pTS->bUsingBa = false;
 	pTS->bDisable_AddBa = false;
-	ResetBaEntry(&pTS->TxAdmittedBARecord);
-	ResetBaEntry(&pTS->TxPendingBARecord);
+	rtllib_reset_ba_entry(&pTS->TxAdmittedBARecord);
+	rtllib_reset_ba_entry(&pTS->TxPendingBARecord);
 }
 
 static void ResetRxTsEntry(struct rx_ts_record *pTS)
@@ -126,7 +118,7 @@ static void ResetRxTsEntry(struct rx_ts_record *pTS)
 	ResetTsCommonInfo(&pTS->ts_common_info);
 	pTS->rx_indicate_seq = 0xffff;
 	pTS->rx_timeout_indicate_seq = 0xffff;
-	ResetBaEntry(&pTS->rx_admitted_ba_record);
+	rtllib_reset_ba_entry(&pTS->rx_admitted_ba_record);
 }
 
 void TSInitialize(struct rtllib_device *ieee)
@@ -142,12 +134,6 @@ void TSInitialize(struct rtllib_device *ieee)
 
 	for (count = 0; count < TOTAL_TS_NUM; count++) {
 		pTxTS->num = count;
-		timer_setup(&pTxTS->TsCommonInfo.SetupTimer, TsSetupTimeOut,
-			    0);
-
-		timer_setup(&pTxTS->TsCommonInfo.InactTimer, TsInactTimeout,
-			    0);
-
 		timer_setup(&pTxTS->TsAddBaTimer, TsAddBaProcess, 0);
 
 		timer_setup(&pTxTS->TxPendingBARecord.timer, BaSetupTimeOut,
@@ -167,13 +153,6 @@ void TSInitialize(struct rtllib_device *ieee)
 	for (count = 0; count < TOTAL_TS_NUM; count++) {
 		pRxTS->num = count;
 		INIT_LIST_HEAD(&pRxTS->rx_pending_pkt_list);
-
-		timer_setup(&pRxTS->ts_common_info.SetupTimer, TsSetupTimeOut,
-			    0);
-
-		timer_setup(&pRxTS->ts_common_info.InactTimer, TsInactTimeout,
-			    0);
-
 		timer_setup(&pRxTS->rx_admitted_ba_record.timer,
 			    RxBaInactTimeout, 0);
 
@@ -192,17 +171,6 @@ void TSInitialize(struct rtllib_device *ieee)
 			break;
 		pRxReorderEntry = &ieee->RxReorderEntry[count + 1];
 	}
-}
-
-static void AdmitTS(struct rtllib_device *ieee,
-		    struct ts_common_info *pTsCommonInfo, u32 InactTime)
-{
-	del_timer_sync(&pTsCommonInfo->SetupTimer);
-	del_timer_sync(&pTsCommonInfo->InactTimer);
-
-	if (InactTime != 0)
-		mod_timer(&pTsCommonInfo->InactTimer, jiffies +
-			  msecs_to_jiffies(InactTime));
 }
 
 static struct ts_common_info *SearchAdmitTRStream(struct rtllib_device *ieee,
@@ -379,7 +347,6 @@ bool GetTs(struct rtllib_device *ieee, struct ts_common_info **ppTS,
 		pTSInfo->field.ucSchedule = 0;
 
 		MakeTSEntry(*ppTS, Addr, &TSpec, NULL, 0, 0);
-		AdmitTS(ieee, *ppTS, 0);
 		list_add_tail(&((*ppTS)->List), pAddmitList);
 
 		return true;
@@ -394,8 +361,6 @@ bool GetTs(struct rtllib_device *ieee, struct ts_common_info **ppTS,
 static void RemoveTsEntry(struct rtllib_device *ieee,
 			  struct ts_common_info *pTs, enum tr_select TxRxSelect)
 {
-	del_timer_sync(&pTs->SetupTimer);
-	del_timer_sync(&pTs->InactTimer);
 	TsInitDelBA(ieee, pTs, TxRxSelect);
 
 	if (TxRxSelect == RX_DIR) {
