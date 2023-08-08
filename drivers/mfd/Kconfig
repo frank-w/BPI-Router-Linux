@@ -1197,7 +1197,7 @@ config MFD_RC5T583
 	  different functionality of the device.
 
 config MFD_RK8XX
-	bool
+	tristate
 	select MFD_CORE
 
 config MFD_RK8XX_I2C
@@ -1348,7 +1348,7 @@ config MFD_SC27XX_PMIC
 	  and it also adds the irq_chip parts for handling the PMIC chip events.
 
 config RZ_MTU3
-	bool "Renesas RZ/G2L MTU3a core driver"
+	tristate "Renesas RZ/G2L MTU3a core driver"
 	depends on (ARCH_RZG2L && OF) || COMPILE_TEST
 	help
 	  Select this option to enable Renesas RZ/G2L MTU3a core driver for
