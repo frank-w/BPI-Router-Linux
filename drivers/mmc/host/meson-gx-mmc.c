@@ -11,7 +11,7 @@
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/iopoll.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/ioport.h>
 #include <linux/dma-mapping.h>
@@ -947,9 +947,6 @@ static irqreturn_t meson_mmc_irq(int irq, void *dev_id)
 			 irq_mask, raw_status);
 		return IRQ_NONE;
 	}
-
-	if (WARN_ON(!host))
-		return IRQ_NONE;
 
 	/* ack all raised interrupts */
 	writel(status, host->regs + SD_EMMC_STATUS);
