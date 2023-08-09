@@ -1440,8 +1440,10 @@ int __ref add_memory_resource(int nid, struct resource *res, mhp_t mhp_flags)
 		if (mhp_supports_memmap_on_memory(size)) {
 			mhp_altmap.free = memory_block_memmap_on_memory_pages();
 			params.altmap = kmalloc(sizeof(struct vmem_altmap), GFP_KERNEL);
-			if (!params.altmap)
+			if (!params.altmap) {
+				ret = -ENOMEM;
 				goto error;
+			}
 
 			memcpy(params.altmap, &mhp_altmap, sizeof(mhp_altmap));
 		}
