@@ -1234,6 +1234,14 @@ static int omap_iommu_probe(struct platform_device *pdev)
 		if (err)
 			goto out_sysfs;
 		obj->has_iommu_driver = true;
+	} else {
+		/*
+		 * omap_iommu_probe_device() requires all the iommus associated
+		 * with a device to have been probed to succeed. We just created
+		 * an iommu without registering it, so re-run probe again to try
+		 * to match any devices that are waiting for this iommu.
+		 */
+		bus_iommu_probe(&platform_bus_type, &obj->iommu);
 	}
 
 	pm_runtime_enable(obj->dev);
@@ -1241,9 +1249,6 @@ static int omap_iommu_probe(struct platform_device *pdev)
 	omap_iommu_debugfs_add(obj);
 
 	dev_info(&pdev->dev, "%s registered\n", obj->name);
-
-	/* Re-probe bus to probe device attached to this IOMMU */
-	bus_iommu_probe(&platform_bus_type);
 
 	return 0;
 
