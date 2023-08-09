@@ -160,7 +160,7 @@ const struct iommu_ops *of_iommu_configure(struct device *dev,
 	 * probe for dev, replay it to get things in order.
 	 */
 	if (!err && dev->bus)
-		err = iommu_probe_device(dev);
+		err = iommu_probe_device_locked(dev);
 
 	/* Ignore all other errors apart from EPROBE_DEFER */
 	if (err == -EPROBE_DEFER) {

@@ -452,24 +452,23 @@ static int __iommu_probe_device(struct device *dev, struct list_head *group_list
 	struct group_device *gdev;
 	int ret;
 
-	if (!ops)
-		return -ENODEV;
 	/*
 	 * Allow __iommu_probe_device() to be safely called in parallel,
 	 * both dev->iommu_group and the initial setup of dev->iommu are
 	 * protected this way.
 	 */
-	device_lock(dev);
+	device_lock_assert(dev);
+
+	if (!ops)
+		return -ENODEV;
 
 	/* Device is probed already if in a group */
-	if (dev->iommu_group) {
-		ret = 0;
-		goto out_unlock;
-	}
+	if (dev->iommu_group)
+		return 0;
 
 	ret = iommu_init_device(dev, ops);
 	if (ret)
-		goto out_unlock;
+		return ret;
 
 	group = dev->iommu_group;
 	gdev = iommu_group_alloc_device(group, dev);
@@ -505,7 +504,6 @@ static int __iommu_probe_device(struct device *dev, struct list_head *group_list
 			list_add_tail(&group->entry, group_list);
 	}
 	mutex_unlock(&group->mutex);
-	device_unlock(dev);
 
 	if (dev_is_pci(dev))
 		iommu_dma_set_pci_32bit_workaround(dev);
@@ -519,15 +517,15 @@ err_put_group:
 	iommu_deinit_device(dev);
 	mutex_unlock(&group->mutex);
 	iommu_group_put(group);
-out_unlock:
-	device_unlock(dev);
 	return ret;
 }
 
-int iommu_probe_device(struct device *dev)
+int iommu_probe_device_locked(struct device *dev)
 {
 	const struct iommu_ops *ops;
 	int ret;
+
+	device_lock_assert(dev);
 
 	ret = __iommu_probe_device(dev, NULL);
 	if (ret)
@@ -538,6 +536,16 @@ int iommu_probe_device(struct device *dev)
 		ops->probe_finalize(dev);
 
 	return 0;
+}
+
+int iommu_probe_device(struct device *dev)
+{
+	int ret;
+
+	device_lock(dev);
+	ret = iommu_probe_device_locked(dev);
+	device_unlock(dev);
+	return ret;
 }
 
 static void __iommu_group_free_device(struct iommu_group *group,
@@ -1789,7 +1797,9 @@ static int probe_iommu_group(struct device *dev, void *data)
 	struct list_head *group_list = data;
 	int ret;
 
+	device_lock(dev);
 	ret = __iommu_probe_device(dev, group_list);
+	device_unlock(dev);
 	if (ret == -ENODEV)
 		ret = 0;
 

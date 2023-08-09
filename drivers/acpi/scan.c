@@ -1579,10 +1579,11 @@ static const struct iommu_ops *acpi_iommu_configure_id(struct device *dev,
 
 	/*
 	 * If we have reason to believe the IOMMU driver missed the initial
-	 * iommu_probe_device() call for dev, replay it to get things in order.
+	 * iommu_probe_device_locked() call for dev, replay it to get things in
+	 * order.
 	 */
 	if (!err && dev->bus)
-		err = iommu_probe_device(dev);
+		err = iommu_probe_device_locked(dev);
 
 	/* Ignore all other errors apart from EPROBE_DEFER */
 	if (err == -EPROBE_DEFER) {
