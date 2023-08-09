@@ -76,12 +76,16 @@ void arch_dma_mark_clean(phys_addr_t paddr, size_t size)
 
 	if (offset) {
 		left -= folio_size(folio) - offset;
+		if (left <= 0)
+			return;
 		folio = folio_next(folio);
 	}
 
 	while (left >= (ssize_t)folio_size(folio)) {
-		set_bit(PG_arch_1, &pfn_to_page(pfn)->flags);
 		left -= folio_size(folio);
+		set_bit(PG_arch_1, &pfn_to_page(pfn)->flags);
+		if (!left)
+			break;
 		folio = folio_next(folio);
 	}
 }
