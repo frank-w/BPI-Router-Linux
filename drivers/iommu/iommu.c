@@ -264,6 +264,7 @@ int iommu_device_register(struct iommu_device *iommu,
 		return -EBUSY;
 
 	iommu->ops = ops;
+	iommu->hwdev = hwdev;
 	if (hwdev)
 		iommu->fwnode = dev_fwnode(hwdev);
 
@@ -1802,9 +1803,18 @@ static int probe_iommu_group(struct device *dev, void *data)
 	struct probe_iommu_args *args = data;
 	int ret;
 
+	/*
+	 * The iommu device itself is not probed, in part because no sane iommu
+	 * should self-attach to its own HW, but specifically because we already
+	 * hold the device_lock for the hwdev when calling here.
+	 */
+	if (args->iommu->hwdev == dev)
+		return 0;
+
 	device_lock(dev);
 	ret = __iommu_probe_device(dev, args->group_list);
 	device_unlock(dev);
+
 	if (ret == -ENODEV)
 		ret = 0;
 

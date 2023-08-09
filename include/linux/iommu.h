@@ -361,6 +361,7 @@ struct iommu_domain_ops {
  * @list: Used by the iommu-core to keep a list of registered iommus
  * @ops: iommu-ops for talking to this iommu
  * @dev: struct device for sysfs handling
+ * @hwdev: The device HW that controls the iommu
  * @singleton_group: Used internally for drivers that have only one group
  * @max_pasids: number of supported PASIDs
  */
@@ -369,6 +370,7 @@ struct iommu_device {
 	const struct iommu_ops *ops;
 	struct fwnode_handle *fwnode;
 	struct device *dev;
+	struct device *hwdev;
 	struct iommu_group *singleton_group;
 	u32 max_pasids;
 };

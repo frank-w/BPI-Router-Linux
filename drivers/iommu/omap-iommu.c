@@ -1241,6 +1241,7 @@ static int omap_iommu_probe(struct platform_device *pdev)
 		 * an iommu without registering it, so re-run probe again to try
 		 * to match any devices that are waiting for this iommu.
 		 */
+		obj->iommu.hwdev = &pdev->dev;
 		bus_iommu_probe(&platform_bus_type, &obj->iommu);
 	}
 
