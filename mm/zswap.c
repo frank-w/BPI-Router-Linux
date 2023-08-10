@@ -1419,7 +1419,6 @@ bool zswap_load(struct page *page)
 	bool ret;
 
 	VM_WARN_ON_ONCE(!PageLocked(page));
-	VM_WARN_ON_ONCE(!PageSwapCache(page));
 
 	/* find */
 	spin_lock(&tree->lock);
