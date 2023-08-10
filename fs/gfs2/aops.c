@@ -189,8 +189,10 @@ static int gfs2_writepages(struct address_space *mapping,
 	 * pages held in the ail that it can't find.
 	 */
 	ret = iomap_writepages(mapping, wbc, &wpc, &gfs2_writeback_ops);
-	if (ret == 0)
+	if (ret == 0) {
 		set_bit(SDF_FORCE_AIL_FLUSH, &sdp->sd_flags);
+		wake_up(&sdp->sd_logd_waitq);
+	}
 	return ret;
 }
 
