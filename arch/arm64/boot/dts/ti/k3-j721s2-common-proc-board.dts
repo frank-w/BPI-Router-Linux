@@ -299,20 +299,12 @@
 	};
 };
 
-&main_gpio2 {
-	status = "disabled";
+&main_gpio0 {
+	status = "okay";
 };
 
-&main_gpio4 {
-	status = "disabled";
-};
-
-&main_gpio6 {
-	status = "disabled";
-};
-
-&wkup_gpio1 {
-	status = "disabled";
+&wkup_gpio0 {
+	status = "okay";
 };
 
 &wkup_uart0 {
@@ -366,6 +358,7 @@
 
 &main_sdhci0 {
 	/* eMMC */
+	status = "okay";
 	non-removable;
 	ti,driver-strength-ohm = <50>;
 	disable-wp;
@@ -373,6 +366,7 @@
 
 &main_sdhci1 {
 	/* SD card */
+	status = "okay";
 	pinctrl-0 = <&main_mmc1_pins_default>;
 	pinctrl-names = "default";
 	disable-wp;

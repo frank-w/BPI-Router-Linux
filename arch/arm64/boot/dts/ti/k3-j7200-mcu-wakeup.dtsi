@@ -297,6 +297,7 @@
 		power-domains = <&k3_pds 113 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 113 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	wkup_gpio1: gpio@42100000 {
@@ -313,6 +314,7 @@
 		power-domains = <&k3_pds 114 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 114 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	mcu_navss: bus@28380000 {
@@ -329,8 +331,10 @@
 			reg = <0x00 0x2b800000 0x00 0x400000>,
 			      <0x00 0x2b000000 0x00 0x400000>,
 			      <0x00 0x28590000 0x00 0x100>,
-			      <0x00 0x2a500000 0x00 0x40000>;
-			reg-names = "rt", "fifos", "proxy_gcfg", "proxy_target";
+			      <0x00 0x2a500000 0x00 0x40000>,
+			      <0x00 0x28440000 0x00 0x40000>;
+			reg-names = "rt", "fifos", "proxy_gcfg",
+				    "proxy_target", "cfg";
 			ti,num-rings = <286>;
 			ti,sci-rm-range-gp-rings = <0x1>; /* GP ring range */
 			ti,sci = <&dmsc>;
@@ -544,6 +548,7 @@
 			power-domains = <&k3_pds 103 TI_SCI_PD_EXCLUSIVE>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			status = "disabled";
 		};
 	};
 

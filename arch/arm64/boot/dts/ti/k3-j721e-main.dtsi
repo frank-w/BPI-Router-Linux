@@ -368,8 +368,9 @@
 			reg = <0x0 0x3c000000 0x0 0x400000>,
 			      <0x0 0x38000000 0x0 0x400000>,
 			      <0x0 0x31120000 0x0 0x100>,
-			      <0x0 0x33000000 0x0 0x40000>;
-			reg-names = "rt", "fifos", "proxy_gcfg", "proxy_target";
+			      <0x0 0x33000000 0x0 0x40000>,
+			      <0x0 0x31080000 0x0 0x40000>;
+			reg-names = "rt", "fifos", "proxy_gcfg", "proxy_target", "cfg";
 			ti,num-rings = <1024>;
 			ti,sci-rm-range-gp-rings = <0x1>; /* GP ring range */
 			ti,sci = <&dmsc>;
@@ -1339,6 +1340,7 @@
 		power-domains = <&k3_pds 105 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 105 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_gpio1: gpio@601000 {
@@ -1355,6 +1357,7 @@
 		power-domains = <&k3_pds 106 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 106 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_gpio2: gpio@610000 {
@@ -1372,6 +1375,7 @@
 		power-domains = <&k3_pds 107 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 107 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_gpio3: gpio@611000 {
@@ -1388,6 +1392,7 @@
 		power-domains = <&k3_pds 108 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 108 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_gpio4: gpio@620000 {
@@ -1405,6 +1410,7 @@
 		power-domains = <&k3_pds 109 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 109 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_gpio5: gpio@621000 {
@@ -1421,6 +1427,7 @@
 		power-domains = <&k3_pds 110 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 110 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_gpio6: gpio@630000 {
@@ -1438,6 +1445,7 @@
 		power-domains = <&k3_pds 111 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 111 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_gpio7: gpio@631000 {
@@ -1454,6 +1462,7 @@
 		power-domains = <&k3_pds 112 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 112 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	main_sdhci0: mmc@4f80000 {
@@ -1478,6 +1487,7 @@
 		ti,itap-del-sel-ddr52 = <0x3>;
 		ti,trm-icp = <0x8>;
 		dma-coherent;
+		status = "disabled";
 	};
 
 	main_sdhci1: mmc@4fb0000 {
@@ -1505,6 +1515,7 @@
 		ti,clkbuf-sel = <0x7>;
 		dma-coherent;
 		sdhci-caps-mask = <0x2 0x0>;
+		status = "disabled";
 	};
 
 	main_sdhci2: mmc@4f98000 {
@@ -1532,6 +1543,7 @@
 		ti,clkbuf-sel = <0x7>;
 		dma-coherent;
 		sdhci-caps-mask = <0x2 0x0>;
+		status = "disabled";
 	};
 
 	usbss0: cdns-usb@4104000 {
