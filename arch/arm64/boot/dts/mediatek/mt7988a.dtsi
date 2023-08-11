@@ -532,6 +532,16 @@
 			status = "disabled";
 		};
 
+		lvts: lvts@1100a000 {
+			compatible = "mediatek,mt7988-lvts";
+			#thermal-sensor-cells = <1>;
+			reg = <0 0x1100a000 0 0x1000>;
+			clocks = <&infracfg CLK_INFRA_26M_THERM_SYSTEM>;
+			clock-names = "lvts_clk";
+			nvmem-cells = <&lvts_calibration>;
+			nvmem-cell-names = "e_data1";
+		};
+
 		pcie2: pcie@11280000 {
 			compatible = "mediatek,mt7988-pcie",
 				     "mediatek,mt7986-pcie",
