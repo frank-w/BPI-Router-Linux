@@ -1114,6 +1114,7 @@ static int lvts_probe(struct platform_device *pdev)
 	struct resource *res;
 	int irq, ret;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	lvts_td = devm_kzalloc(dev, sizeof(*lvts_td), GFP_KERNEL);
 	if (!lvts_td)
 		return -ENOMEM;
@@ -1155,6 +1156,7 @@ static int lvts_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, lvts_td);
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
@@ -1173,6 +1175,67 @@ static int lvts_remove(struct platform_device *pdev)
 	return 0;
 }
 
+/*
+ * LVTS MT7988
+ */
+#define LVTS_HW_SHUTDOWN_MT7988	117000
+//enum mt7988_lvts_domain { MT7988_AP_DOMAIN, MT7988_NUM_DOMAIN };
+
+enum mt7988_lvts_sensor_enum {
+	MT7988_TS3_0,
+	MT7988_TS3_1,
+	MT7988_TS3_2,
+	MT7988_TS3_3,
+	MT7988_TS4_0,
+	MT7988_TS4_1,
+	MT7988_TS4_2,
+	MT7988_TS4_3,
+	MT7988_NUM_TS
+};
+
+//Efuse base : 0x11f50000
+//lvts offset in efuse : 0x918 (set in efuse dts node as calibration data)
+//offsets:
+//918 = LVTS_3_0_COUNT_R
+//91C = LVTS_3_1_COUNT_R
+//920 = LVTS_3_2_COUNT_R
+//924 = LVTS_3_3_COUNT_R
+//928 = LVTS_3_COUNT_RC
+
+//92C = LVTS_4_0_COUNT_R
+//930 = LVTS_4_1_COUNT_R
+//934 = LVTS_4_2_COUNT_R
+//938 = LVTS_4_3_COUNT_R
+//93C = LVTS_4_COUNT_RC
+
+static const struct lvts_ctrl_data mt7988_lvts_data_ctrl[] = {
+	{
+		.cal_offset = { 0x00, 0x04, 0x08, 0x0c }, //918,91C,920,924
+		.lvts_sensor = {
+			{ .dt_id = MT7988_TS3_0 },
+			{ .dt_id = MT7988_TS3_1 },
+			{ .dt_id = MT7988_TS3_2 },
+			{ .dt_id = MT7988_TS3_3 }
+		},
+		.num_lvts_sensor = 4,
+		.offset = 0x0,
+		.hw_tshut_temp = LVTS_HW_SHUTDOWN_MT7988,
+	},
+	{
+		.cal_offset = { 0x14, 0x18, 0x1c, 0x20 }, //92C,930,934,938
+		.lvts_sensor = {
+			{ .dt_id = MT7988_TS4_0},
+			{ .dt_id = MT7988_TS4_1},
+			{ .dt_id = MT7988_TS4_2},
+			{ .dt_id = MT7988_TS4_3}
+		},
+		.num_lvts_sensor = 4,
+		.offset = 0x100,
+		.hw_tshut_temp = LVTS_HW_SHUTDOWN_MT7988,
+	}
+};
+
+//MT8195
 static const struct lvts_ctrl_data mt8195_lvts_mcu_data_ctrl[] = {
 	{
 		.cal_offset = { 0x04, 0x07 },
@@ -1252,6 +1315,11 @@ static const struct lvts_ctrl_data mt8195_lvts_ap_data_ctrl[] = {
 	}
 };
 
+static const struct lvts_data mt7988_lvts_data = {
+	.lvts_ctrl	= mt7988_lvts_data_ctrl,
+	.num_lvts_ctrl	= ARRAY_SIZE(mt7988_lvts_data_ctrl),
+};
+
 static const struct lvts_data mt8195_lvts_mcu_data = {
 	.lvts_ctrl	= mt8195_lvts_mcu_data_ctrl,
 	.num_lvts_ctrl	= ARRAY_SIZE(mt8195_lvts_mcu_data_ctrl),
@@ -1263,6 +1331,7 @@ static const struct lvts_data mt8195_lvts_ap_data = {
 };
 
 static const struct of_device_id lvts_of_match[] = {
+	{ .compatible = "mediatek,mt7988-lvts", .data = &mt7988_lvts_data },
 	{ .compatible = "mediatek,mt8195-lvts-mcu", .data = &mt8195_lvts_mcu_data },
 	{ .compatible = "mediatek,mt8195-lvts-ap", .data = &mt8195_lvts_ap_data },
 	{},
