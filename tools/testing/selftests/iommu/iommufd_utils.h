@@ -348,3 +348,50 @@ static void teardown_iommufd(int fd, struct __test_metadata *_metadata)
 	})
 
 #endif
+
+static int _test_cmd_get_hw_info(int fd, __u32 device_id,
+				 void *data, size_t data_len)
+{
+	struct iommu_hw_info cmd = {
+		.size = sizeof(cmd),
+		.dev_id = device_id,
+		.data_len = data_len,
+		.data_ptr = (uint64_t)data,
+	};
+	struct iommu_test_hw_info *info = (struct iommu_test_hw_info *)data;
+	int ret;
+
+	ret = ioctl(fd, IOMMU_GET_HW_INFO, &cmd);
+	if (ret)
+		return ret;
+
+	assert(cmd.out_data_type == IOMMU_HW_INFO_TYPE_SELFTEST);
+
+	/*
+	 * Trailing bytes should be 0 if user buffer is larger than
+	 * the data that kernel reports.
+	 */
+	if (data_len > cmd.data_len) {
+		char *ptr = (char *)(data + cmd.data_len);
+		int idx = 0;
+
+		while (idx < data_len - cmd.data_len) {
+			assert(!*(ptr + idx));
+			idx++;
+		}
+	}
+
+	assert(info->test_reg == IOMMU_HW_INFO_SELFTEST_REGVAL);
+	assert(!info->flags);
+
+	return 0;
+}
+
+#define test_cmd_get_hw_info(device_id, data, data_len)         \
+	ASSERT_EQ(0, _test_cmd_get_hw_info(self->fd, device_id, \
+					   data, data_len))
+
+#define test_err_get_hw_info(_errno, device_id, data, data_len) \
+	EXPECT_ERRNO(_errno,                                    \
+		     _test_cmd_get_hw_info(self->fd, device_id, \
+					   data, data_len))
