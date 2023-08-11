@@ -1114,6 +1114,7 @@ static int lvts_probe(struct platform_device *pdev)
 	struct resource *res;
 	int irq, ret;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	lvts_td = devm_kzalloc(dev, sizeof(*lvts_td), GFP_KERNEL);
 	if (!lvts_td)
 		return -ENOMEM;
@@ -1155,6 +1156,7 @@ static int lvts_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, lvts_td);
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
@@ -1173,6 +1175,52 @@ static int lvts_remove(struct platform_device *pdev)
 	return 0;
 }
 
+/*
+ * LVTS MT7988
+ */
+#define LVTS_HW_SHUTDOWN_MT7988	117000
+enum mt7988_lvts_domain { MT7988_AP_DOMAIN, MT7988_NUM_DOMAIN };
+
+enum mt7988_lvts_sensor_enum {
+	MT7988_TS2_0,
+	MT7988_TS2_1,
+	MT7988_TS2_2,
+	MT7988_TS2_3,
+	MT7988_TS3_0,
+	MT7988_TS3_1,
+	MT7988_TS3_2,
+	MT7988_TS3_3,
+	MT7988_NUM_TS
+};
+
+static const struct lvts_ctrl_data mt7988_lvts_data_ctrl[] = {
+	{
+		.cal_offset = { 0x04, 0x07 }, //what are these offsets (i guess from efuse, but not defined on the other code)??
+		.lvts_sensor = {
+			{ .dt_id = MT7988_TS2_0 },
+			{ .dt_id = MT7988_TS2_1 },
+			{ .dt_id = MT7988_TS2_2 },
+			{ .dt_id = MT7988_TS2_3 }
+		},
+		.num_lvts_sensor = 4,
+		.offset = 0x0,
+		.hw_tshut_temp = LVTS_HW_SHUTDOWN_MT7988,
+	},
+	{
+		.cal_offset = { 0x0d, 0x10 },
+		.lvts_sensor = {
+			{ .dt_id = MT7988_TS3_0},
+			{ .dt_id = MT7988_TS3_1},
+			{ .dt_id = MT7988_TS3_2},
+			{ .dt_id = MT7988_TS3_3}
+		},
+		.num_lvts_sensor = 4,
+		.offset = 0x100,
+		.hw_tshut_temp = LVTS_HW_SHUTDOWN_MT7988,
+	}
+};
+
+//MT8195
 static const struct lvts_ctrl_data mt8195_lvts_mcu_data_ctrl[] = {
 	{
 		.cal_offset = { 0x04, 0x07 },
@@ -1252,6 +1300,11 @@ static const struct lvts_ctrl_data mt8195_lvts_ap_data_ctrl[] = {
 	}
 };
 
+static const struct lvts_data mt7988_lvts_data = {
+	.lvts_ctrl	= mt7988_lvts_data_ctrl,
+	.num_lvts_ctrl	= ARRAY_SIZE(mt7988_lvts_data_ctrl),
+};
+
 static const struct lvts_data mt8195_lvts_mcu_data = {
 	.lvts_ctrl	= mt8195_lvts_mcu_data_ctrl,
 	.num_lvts_ctrl	= ARRAY_SIZE(mt8195_lvts_mcu_data_ctrl),
@@ -1263,6 +1316,7 @@ static const struct lvts_data mt8195_lvts_ap_data = {
 };
 
 static const struct of_device_id lvts_of_match[] = {
+	{ .compatible = "mediatek,mt7988-lvts", .data = &mt7988_lvts_data },
 	{ .compatible = "mediatek,mt8195-lvts-mcu", .data = &mt8195_lvts_mcu_data },
 	{ .compatible = "mediatek,mt8195-lvts-ap", .data = &mt8195_lvts_ap_data },
 	{},
