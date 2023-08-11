@@ -786,13 +786,15 @@
 		};
 
 		lvts: lvts@1100a000 {
-			compatible = "mediatek,mt7988-lvts";
+			compatible = "mediatek,mt7988-lvts-ap";
 			#thermal-sensor-cells = <1>;
 			reg = <0 0x1100a000 0 0x1000>;
 			clocks = <&infracfg CLK_INFRA_26M_THERM_SYSTEM>;
-			clock-names = "lvts_clk";
+			//clock-names = "lvts_clk";
+			interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&infracfg MT7988_INFRA_RST0_THERM_CTRL_SWRST>;
 			nvmem-cells = <&lvts_calibration>;
-			nvmem-cell-names = "e_data1";
+			nvmem-cell-names = "lvts-calib-data-1";
 		};
 
 		crypto: crypto@15600000 {
