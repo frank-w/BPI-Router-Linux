@@ -41,7 +41,7 @@
 		};
 		fdt-ov-wifi {
 			description = "Flattened Device Tree blob";
-			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-wifi.dtbo");
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-wifi-mt7996a.dtbo");
 			type = "flat_dt";
 		};
 /*		fdt-ov-nand{
