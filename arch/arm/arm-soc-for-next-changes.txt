@@ -39,12 +39,38 @@ soc/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.6
 	samsung/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-6.6
+	patch
+		ARM: dts: nspire: Use syscon-reboot to handle restart
+		ARM: dts: nspire: Fix cpu node to conform with DT binding
+		ARM: dts: nspire: Fix sram node to conform with DT binding
+		ARM: dts: nspire: Fix vbus_reg node to conform with DT binding
+		ARM: dts: nspire: Fix uart node to conform with DT binding
+		ARM: dts: nspire: Use MATRIX_KEY macro for linux,keymap
+		ARM: dts: nspire: Remove file name from the files themselves
 
 soc/drivers
 	<no branch> (b43f11e5b453a9c48159d7121c88d79d81901276)
 		git://git.kernel.org/pub/scm/linux/kernel/git/ulfh/linux-pm genpd_create_dir
 	drivers/genpd
 		Merge branch 'drivers/genpd' into soc/drivers
+	tegra/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.6-soc
+	zynq/soc
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-6.6
+	vexpress/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/vexpress-updates-6.6
+	firmware/scmi
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-6.6
+	amlogic/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-drivers-for-v6.6
+	sunxi/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-drivers-for-6.6-1
+	reset/cleanups
+		git://git.pengutronix.de/pza/linux tags/reset-for-v6.6
+	samsung/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-6.6
+	<no branch> (b51022b416f5be113cd5345a2cab287d78e6b74c)
+		https://github.com/hisilicon/linux-hisi tags/hisi-drivers-for-6.6
 
 arm/defconfig
 
@@ -59,6 +85,8 @@ arm/fixes
 		https://github.com/Xilinx/linux-xlnx tags/zynq-soc-for-6.6
 	patch
 		ARM: dts: integrator: fix PCI bus dtc warnings
+		soc: aspeed: uart-routing: Use __sysfs_match_string
+		soc: aspeed: socinfo: Add kfree for kstrdup
 
 soc/arm
 	patch
@@ -93,4 +121,15 @@ soc/arm
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/soc-signed
 	renesas/arm
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v6.6-tag1
+	patch
+		ARM: nspire: Use syscon-reboot to handle restart
+		ARM: nspire: Remove unused header file mmio.h
+
+soc/defconfig
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v6.6-tag1
+	patch
+		ARM: multi_v7_defconfig: Enable TLV320AIC3x
+		ARM: multi_v7_defconfig: Enable TI Remoteproc and related configs
+		ARM: multi_v7_defconfig: Enable OMAP audio/display support
 
