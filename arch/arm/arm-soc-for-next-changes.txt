@@ -47,6 +47,8 @@ soc/dt
 		ARM: dts: nspire: Fix uart node to conform with DT binding
 		ARM: dts: nspire: Use MATRIX_KEY macro for linux,keymap
 		ARM: dts: nspire: Remove file name from the files themselves
+		ARM: dts: aspeed: Fix pca954x i2c-mux node names
+		ARM: dts: nuvoton: Fix pca954x i2c-mux node names
 
 soc/drivers
 	<no branch> (b43f11e5b453a9c48159d7121c88d79d81901276)
@@ -124,6 +126,15 @@ soc/arm
 	patch
 		ARM: nspire: Use syscon-reboot to handle restart
 		ARM: nspire: Remove unused header file mmio.h
+	<no branch> (e06b83d8a44ea54fb401690329a130b89b8b7819)
+		https://github.com/hisilicon/linux-hisi tags/hisi-arm-soc-for-6.6
+	<no branch> (fda31904ffbc7231898198333804fa551b681387)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/maintainers-signed
+	patch
+		MAINTAINERS: soc: reference maintainer profile
+		Documentation/process: maintainer-soc: add clean platforms profile
+		MAINTAINER: samsung: document dtbs_check requirement for Samsung
+		Documentation/process: maintainer-soc: document dtbs_check requirement for Samsung
 
 soc/defconfig
 	renesas/defconfig
