@@ -401,9 +401,9 @@ static int vma_link(struct mm_struct *mm, struct vm_area_struct *vma)
 	if (vma_iter_prealloc(&vmi, vma))
 		return -ENOMEM;
 
-	vma_iter_store(&vmi, vma);
-
 	vma_start_write(vma);
+
+	vma_iter_store(&vmi, vma);
 
 	if (vma->vm_file) {
 		mapping = vma->vm_file->f_mapping;
