@@ -49,6 +49,24 @@ soc/dt
 		ARM: dts: nspire: Remove file name from the files themselves
 		ARM: dts: aspeed: Fix pca954x i2c-mux node names
 		ARM: dts: nuvoton: Fix pca954x i2c-mux node names
+	<no branch> (58fe732052196777112fdba536fb9db5cdd42ec6)
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-6.6-1
+	<no branch> (afc19882dfc89211cf188284c78ff79a08b23802)
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt-6.6-1
+	riscv/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-for-v6.6
+	sunxi/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-6.6-2
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-6.6
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-6.6
+	ixm/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-6.6
+	k3/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.6
+	dt/cleanup-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt64-cleanup-6.6
 
 soc/drivers
 	<no branch> (b43f11e5b453a9c48159d7121c88d79d81901276)
@@ -73,12 +91,21 @@ soc/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-6.6
 	<no branch> (b51022b416f5be113cd5345a2cab287d78e6b74c)
 		https://github.com/hisilicon/linux-hisi tags/hisi-drivers-for-6.6
+	patch
+		soc: kunpeng_hccs: fix size_t format string
+		soc: kunpeng_hccs: add MAILBOX dependency
+	imx/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-6.6
+	oxnas-final
+		https://git.kernel.org/pub/scm/linux/kernel/git/narmstrong/linux-oxnas tags/oxnas-final-for-6.6
+	k3/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.6
+	drivers/memory
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.6
 
 arm/defconfig
 
 arm/late
-
-soc/fixes
 
 arm/fixes
 	<no branch> (78e869dd8b2ba19765ac9b05cdea3e432d1dc188)
@@ -126,15 +153,23 @@ soc/arm
 	patch
 		ARM: nspire: Use syscon-reboot to handle restart
 		ARM: nspire: Remove unused header file mmio.h
-	<no branch> (e06b83d8a44ea54fb401690329a130b89b8b7819)
+	hisi/soc
 		https://github.com/hisilicon/linux-hisi tags/hisi-arm-soc-for-6.6
-	<no branch> (fda31904ffbc7231898198333804fa551b681387)
+	omap/maintainers
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/maintainers-signed
 	patch
 		MAINTAINERS: soc: reference maintainer profile
 		Documentation/process: maintainer-soc: add clean platforms profile
 		MAINTAINER: samsung: document dtbs_check requirement for Samsung
 		Documentation/process: maintainer-soc: document dtbs_check requirement for Samsung
+	mvebu/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-arm-6.6-1
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-6.6
+	patch
+		ARM: s5pv210: Explicitly include correct DT includes
+	keystone/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-soc-for-v6.6
 
 soc/defconfig
 	renesas/defconfig
@@ -143,4 +178,9 @@ soc/defconfig
 		ARM: multi_v7_defconfig: Enable TLV320AIC3x
 		ARM: multi_v7_defconfig: Enable TI Remoteproc and related configs
 		ARM: multi_v7_defconfig: Enable OMAP audio/display support
+	<no branch> (95afa02c9e42cdbc2f91dc0f64e59ea10d710a4f)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.6
+	imx/defconfig
+k3/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-config-for-v6.6
 
