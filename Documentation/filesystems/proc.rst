@@ -723,6 +723,7 @@ files are there, and which are missing.
  partitions   Table of partitions known to the system
  pci 	      Deprecated info of PCI bus (new way -> /proc/bus/pci/,
               decoupled by lspci				(2.4)
+ raw_cmdline  Kernel command line obtained from kernel image	(6.6)
  rtc          Real time clock
  scsi         SCSI info (see text)
  slabinfo     Slab pool info
