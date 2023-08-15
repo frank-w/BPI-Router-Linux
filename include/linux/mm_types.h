@@ -248,6 +248,17 @@ static inline struct page *encoded_page_ptr(struct encoded_page *page)
 	return (struct page *)(~ENCODE_PAGE_BITS & (unsigned long)page);
 }
 
+/*
+ * This macro defines the maximum tail pages (of a folio) that can have the
+ * page->mapping field reused.
+ *
+ * When the tail page's mapping field reused, it'll be exempted from
+ * ->mapping poisoning and checks.  Also see the macro TAIL_MAPPING.
+ *
+ * When grow the folio struct, please consider growing this too.
+ */
+#define  TAIL_MAPPING_REUSED_MAX  (2)
+
 /**
  * struct folio - Represents a contiguous set of bytes.
  * @flags: Identical to the page flags.
