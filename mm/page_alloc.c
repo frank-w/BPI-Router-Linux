@@ -968,7 +968,7 @@ static inline bool is_check_pages_enabled(void)
 static int free_tail_page_prepare(struct page *head_page, struct page *page)
 {
 	struct folio *folio = (struct folio *)head_page;
-	int ret = 1;
+	int ret = 1, index = page - head_page;
 
 	/*
 	 * We rely page->lru.next never has bit 0 set, unless the page
@@ -980,9 +980,9 @@ static int free_tail_page_prepare(struct page *head_page, struct page *page)
 		ret = 0;
 		goto out;
 	}
-	switch (page - head_page) {
-	case 1:
-		/* the first tail page: these may be in place of ->mapping */
+
+	/* Sanity check the first tail page */
+	if (index == 1) {
 		if (unlikely(folio_entire_mapcount(folio))) {
 			bad_page(page, "nonzero entire_mapcount");
 			goto out;
@@ -995,20 +995,14 @@ static int free_tail_page_prepare(struct page *head_page, struct page *page)
 			bad_page(page, "nonzero pincount");
 			goto out;
 		}
-		break;
-	case 2:
-		/*
-		 * the second tail page: ->mapping is
-		 * deferred_list.next -- ignore value.
-		 */
-		break;
-	default:
-		if (page->mapping != TAIL_MAPPING) {
-			bad_page(page, "corrupted mapping in tail page");
-			goto out;
-		}
-		break;
 	}
+
+	/* Sanity check the rest tail pages over ->mapping */
+	if (index > TAIL_MAPPING_REUSED_MAX && page->mapping != TAIL_MAPPING) {
+		bad_page(page, "corrupted mapping in tail page");
+		goto out;
+	}
+
 	if (unlikely(!PageTail(page))) {
 		bad_page(page, "PageTail not set");
 		goto out;

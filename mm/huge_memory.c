@@ -2446,9 +2446,9 @@ static void __split_huge_page_tail(struct folio *folio, int tail,
 			 (1L << PG_dirty) |
 			 LRU_GEN_MASK | LRU_REFS_MASK));
 
-	/* ->mapping in first and second tail page is replaced by other uses */
-	VM_BUG_ON_PAGE(tail > 2 && page_tail->mapping != TAIL_MAPPING,
-			page_tail);
+	/* ->mapping in <=TAIL_MAPPING_REUSED_MAX tail pages are reused */
+	VM_BUG_ON_PAGE(tail > TAIL_MAPPING_REUSED_MAX &&
+		       page_tail->mapping != TAIL_MAPPING, page_tail);
 	page_tail->mapping = head->mapping;
 	page_tail->index = head->index + tail;
 
