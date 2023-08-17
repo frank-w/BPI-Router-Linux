@@ -1225,18 +1225,24 @@ static int omap_iommu_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, obj);
 
 	if (omap_iommu_can_register(pdev)) {
-		obj->group = iommu_group_alloc();
-		if (IS_ERR(obj->group))
-			return PTR_ERR(obj->group);
-
 		err = iommu_device_sysfs_add(&obj->iommu, obj->dev, NULL,
 					     obj->name);
 		if (err)
-			goto out_group;
+			return err;
 
 		err = iommu_device_register(&obj->iommu, &omap_iommu_ops, &pdev->dev);
 		if (err)
 			goto out_sysfs;
+		obj->has_iommu_driver = true;
+	} else {
+		/*
+		 * omap_iommu_probe_device() requires all the iommus associated
+		 * with a device to have been probed to succeed. We just created
+		 * an iommu without registering it, so re-run probe again to try
+		 * to match any devices that are waiting for this iommu.
+		 */
+		obj->iommu.hwdev = &pdev->dev;
+		bus_iommu_probe(&platform_bus_type, &obj->iommu);
 	}
 
 	pm_runtime_enable(obj->dev);
@@ -1245,15 +1251,10 @@ static int omap_iommu_probe(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "%s registered\n", obj->name);
 
-	/* Re-probe bus to probe device attached to this IOMMU */
-	bus_iommu_probe(&platform_bus_type);
-
 	return 0;
 
 out_sysfs:
 	iommu_device_sysfs_remove(&obj->iommu);
-out_group:
-	iommu_group_put(obj->group);
 	return err;
 }
 
@@ -1261,10 +1262,7 @@ static void omap_iommu_remove(struct platform_device *pdev)
 {
 	struct omap_iommu *obj = platform_get_drvdata(pdev);
 
-	if (obj->group) {
-		iommu_group_put(obj->group);
-		obj->group = NULL;
-
+	if (obj->has_iommu_driver) {
 		iommu_device_sysfs_remove(&obj->iommu);
 		iommu_device_unregister(&obj->iommu);
 	}
@@ -1717,25 +1715,11 @@ static void omap_iommu_release_device(struct device *dev)
 
 }
 
-static struct iommu_group *omap_iommu_device_group(struct device *dev)
-{
-	struct omap_iommu_arch_data *arch_data = dev_iommu_priv_get(dev);
-	struct iommu_group *group = ERR_PTR(-EINVAL);
-
-	if (!arch_data)
-		return ERR_PTR(-ENODEV);
-
-	if (arch_data->iommu_dev)
-		group = iommu_group_ref_get(arch_data->iommu_dev->group);
-
-	return group;
-}
-
 static const struct iommu_ops omap_iommu_ops = {
 	.domain_alloc	= omap_iommu_domain_alloc,
 	.probe_device	= omap_iommu_probe_device,
 	.release_device	= omap_iommu_release_device,
-	.device_group	= omap_iommu_device_group,
+	.device_group	= generic_single_device_group,
 	.set_platform_dma_ops = omap_iommu_set_platform_dma,
 	.pgsize_bitmap	= OMAP_IOMMU_PGSIZES,
 	.default_domain_ops = &(const struct iommu_domain_ops) {

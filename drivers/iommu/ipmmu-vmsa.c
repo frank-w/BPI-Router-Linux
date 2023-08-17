@@ -14,11 +14,12 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/io-pgtable.h>
 #include <linux/iommu.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/of_platform.h>
+#include <linux/pci.h>
 #include <linux/platform_device.h>
 #include <linux/sizes.h>
 #include <linux/slab.h>
@@ -63,7 +64,6 @@ struct ipmmu_vmsa_device {
 	struct ipmmu_vmsa_domain *domains[IPMMU_CTX_MAX];
 	s8 utlb_ctx[IPMMU_UTLB_MAX];
 
-	struct iommu_group *group;
 	struct dma_iommu_mapping *mapping;
 };
 
@@ -253,17 +253,13 @@ static void ipmmu_imuctr_write(struct ipmmu_vmsa_device *mmu,
 /* Wait for any pending TLB invalidations to complete */
 static void ipmmu_tlb_sync(struct ipmmu_vmsa_domain *domain)
 {
-	unsigned int count = 0;
+	u32 val;
 
-	while (ipmmu_ctx_read_root(domain, IMCTR) & IMCTR_FLUSH) {
-		cpu_relax();
-		if (++count == TLB_LOOP_TIMEOUT) {
-			dev_err_ratelimited(domain->mmu->dev,
+	if (read_poll_timeout_atomic(ipmmu_ctx_read_root, val,
+				     !(val & IMCTR_FLUSH), 1, TLB_LOOP_TIMEOUT,
+				     false, domain, IMCTR))
+		dev_err_ratelimited(domain->mmu->dev,
 			"TLB sync timed out -- MMU may be deadlocked\n");
-			return;
-		}
-		udelay(1);
-	}
 }
 
 static void ipmmu_tlb_invalidate(struct ipmmu_vmsa_domain *domain)
@@ -723,6 +719,10 @@ static bool ipmmu_device_is_allowed(struct device *dev)
 	if (soc_device_match(soc_denylist))
 		return false;
 
+	/* Check whether this device is a PCI device */
+	if (dev_is_pci(dev))
+		return true;
+
 	/* Check whether this device can work with the IPMMU */
 	for (i = 0; i < ARRAY_SIZE(devices_allowlist); i++) {
 		if (!strcmp(dev_name(dev), devices_allowlist[i]))
@@ -832,28 +832,17 @@ static void ipmmu_release_device(struct device *dev)
 	arm_iommu_release_mapping(mmu->mapping);
 }
 
-static struct iommu_group *ipmmu_find_group(struct device *dev)
-{
-	struct ipmmu_vmsa_device *mmu = to_ipmmu(dev);
-	struct iommu_group *group;
-
-	if (mmu->group)
-		return iommu_group_ref_get(mmu->group);
-
-	group = iommu_group_alloc();
-	if (!IS_ERR(group))
-		mmu->group = group;
-
-	return group;
-}
-
 static const struct iommu_ops ipmmu_ops = {
 	.domain_alloc = ipmmu_domain_alloc,
 	.probe_device = ipmmu_probe_device,
 	.release_device = ipmmu_release_device,
 	.probe_finalize = ipmmu_probe_finalize,
+	/*
+	 * FIXME: The device grouping is a fixed property of the hardware's
+	 * ability to isolate and control DMA, it should not depend on kconfig.
+	 */
 	.device_group = IS_ENABLED(CONFIG_ARM) && !IS_ENABLED(CONFIG_IOMMU_DMA)
-			? generic_device_group : ipmmu_find_group,
+			? generic_device_group : generic_single_device_group,
 	.pgsize_bitmap = SZ_1G | SZ_2M | SZ_4K,
 	.of_xlate = ipmmu_of_xlate,
 	.default_domain_ops = &(const struct iommu_domain_ops) {
