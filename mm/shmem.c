@@ -970,7 +970,7 @@ static void shmem_undo_range(struct inode *inode, loff_t lstart, loff_t lend,
 		same_folio = lend < folio_pos(folio) + folio_size(folio);
 		folio_mark_dirty(folio);
 		if (!truncate_inode_partial_folio(folio, lstart, lend)) {
-			start = folio->index + folio_nr_pages(folio);
+			start = folio_next_index(folio);
 			if (same_folio)
 				end = folio->index;
 		}
@@ -1724,7 +1724,7 @@ static void shmem_set_folio_swapin_error(struct inode *inode, pgoff_t index,
 	swp_entry_t swapin_error;
 	void *old;
 
-	swapin_error = make_swapin_error_entry();
+	swapin_error = make_poisoned_swp_entry();
 	old = xa_cmpxchg_irq(&mapping->i_pages, index,
 			     swp_to_radix_entry(swap),
 			     swp_to_radix_entry(swapin_error), 0);
@@ -1769,7 +1769,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	swap = radix_to_swp_entry(*foliop);
 	*foliop = NULL;
 
-	if (is_swapin_error_entry(swap))
+	if (is_poisoned_swp_entry(swap))
 		return -EIO;
 
 	si = get_swap_device(swap);

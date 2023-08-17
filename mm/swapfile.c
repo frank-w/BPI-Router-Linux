@@ -714,10 +714,8 @@ static void add_to_avail_list(struct swap_info_struct *p)
 	int nid;
 
 	spin_lock(&swap_avail_lock);
-	for_each_node(nid) {
-		WARN_ON(!plist_node_empty(&p->avail_lists[nid]));
+	for_each_node(nid)
 		plist_add(&p->avail_lists[nid], &swap_avail_heads[nid]);
-	}
 	spin_unlock(&swap_avail_lock);
 }
 
@@ -1773,12 +1771,19 @@ static int unuse_pte(struct vm_area_struct *vma, pmd_t *pmd,
 			swp_entry = make_hwpoison_entry(swapcache);
 			page = swapcache;
 		} else {
-			swp_entry = make_swapin_error_entry();
+			swp_entry = make_poisoned_swp_entry();
 		}
 		new_pte = swp_entry_to_pte(swp_entry);
 		ret = 0;
 		goto setpte;
 	}
+
+	/*
+	 * Some architectures may have to restore extra metadata to the page
+	 * when reading from swap. This metadata may be indexed by swap entry
+	 * so this must be called before swap_free().
+	 */
+	arch_swap_restore(entry, page_folio(page));
 
 	/* See do_swap_page() */
 	BUG_ON(!PageAnon(page) && PageMappedToDisk(page));
@@ -2330,7 +2335,10 @@ static void _enable_swap_info(struct swap_info_struct *p)
 	 * swap_info_struct.
 	 */
 	plist_add(&p->list, &swap_active_head);
-	add_to_avail_list(p);
+
+	/* add to available list iff swap device is not full */
+	if (p->highest_bit)
+		add_to_avail_list(p);
 }
 
 static void enable_swap_info(struct swap_info_struct *p, int prio,
