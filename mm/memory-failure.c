@@ -717,7 +717,7 @@ static void collect_procs(struct page *page, struct list_head *tokill,
 		collect_procs_file(page, tokill, force_early);
 }
 
-struct hwp_walk {
+struct hwpoison_walk {
 	struct to_kill tk;
 	unsigned long pfn;
 	int flags;
@@ -752,7 +752,7 @@ static int check_hwpoisoned_entry(pte_t pte, unsigned long addr, short shift,
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 static int check_hwpoisoned_pmd_entry(pmd_t *pmdp, unsigned long addr,
-				      struct hwp_walk *hwp)
+				      struct hwpoison_walk *hwp)
 {
 	pmd_t pmd = *pmdp;
 	unsigned long pfn;
@@ -770,7 +770,7 @@ static int check_hwpoisoned_pmd_entry(pmd_t *pmdp, unsigned long addr,
 }
 #else
 static int check_hwpoisoned_pmd_entry(pmd_t *pmdp, unsigned long addr,
-				      struct hwp_walk *hwp)
+				      struct hwpoison_walk *hwp)
 {
 	return 0;
 }
@@ -779,7 +779,7 @@ static int check_hwpoisoned_pmd_entry(pmd_t *pmdp, unsigned long addr,
 static int hwpoison_pte_range(pmd_t *pmdp, unsigned long addr,
 			      unsigned long end, struct mm_walk *walk)
 {
-	struct hwp_walk *hwp = walk->private;
+	struct hwpoison_walk *hwp = walk->private;
 	int ret = 0;
 	pte_t *ptep, *mapped_pte;
 	spinlock_t *ptl;
@@ -813,7 +813,7 @@ static int hwpoison_hugetlb_range(pte_t *ptep, unsigned long hmask,
 			    unsigned long addr, unsigned long end,
 			    struct mm_walk *walk)
 {
-	struct hwp_walk *hwp = walk->private;
+	struct hwpoison_walk *hwp = walk->private;
 	pte_t pte = huge_ptep_get(ptep);
 	struct hstate *h = hstate_vma(walk->vma);
 
@@ -824,7 +824,7 @@ static int hwpoison_hugetlb_range(pte_t *ptep, unsigned long hmask,
 #define hwpoison_hugetlb_range	NULL
 #endif
 
-static const struct mm_walk_ops hwp_walk_ops = {
+static const struct mm_walk_ops hwpoison_walk_ops = {
 	.pmd_entry = hwpoison_pte_range,
 	.hugetlb_entry = hwpoison_hugetlb_range,
 	.walk_lock = PGWALK_RDLOCK,
@@ -847,7 +847,7 @@ static int kill_accessing_process(struct task_struct *p, unsigned long pfn,
 				  int flags)
 {
 	int ret;
-	struct hwp_walk priv = {
+	struct hwpoison_walk priv = {
 		.pfn = pfn,
 	};
 	priv.tk.tsk = p;
@@ -856,7 +856,7 @@ static int kill_accessing_process(struct task_struct *p, unsigned long pfn,
 		return -EFAULT;
 
 	mmap_read_lock(p->mm);
-	ret = walk_page_range(p->mm, 0, TASK_SIZE, &hwp_walk_ops,
+	ret = walk_page_range(p->mm, 0, TASK_SIZE, &hwpoison_walk_ops,
 			      (void *)&priv);
 	if (ret == 1 && priv.tk.addr)
 		kill_proc(&priv.tk, pfn, flags);
@@ -1562,7 +1562,7 @@ static bool hwpoison_user_mappings(struct page *p, unsigned long pfn,
 	 * Here we are interested only in user-mapped pages, so skip any
 	 * other types of pages.
 	 */
-	if (PageReserved(p) || PageSlab(p) || PageTable(p))
+	if (PageReserved(p) || PageSlab(p) || PageTable(p) || PageOffline(p))
 		return true;
 	if (!(PageLRU(hpage) || PageHuge(p)))
 		return true;
@@ -1869,13 +1869,12 @@ bool is_raw_hwpoison_page_in_hugepage(struct page *page)
 
 static unsigned long __folio_free_raw_hwp(struct folio *folio, bool move_flag)
 {
-	struct llist_node *t, *tnode, *head;
+	struct llist_node *head;
+	struct raw_hwp_page *p, *next;
 	unsigned long count = 0;
 
 	head = llist_del_all(raw_hwp_list_head(folio));
-	llist_for_each_safe(tnode, t, head) {
-		struct raw_hwp_page *p = container_of(tnode, struct raw_hwp_page, node);
-
+	llist_for_each_entry_safe(p, next, head, node) {
 		if (move_flag)
 			SetPageHWPoison(p->page);
 		else
@@ -1890,7 +1889,7 @@ static int folio_set_hugetlb_hwpoison(struct folio *folio, struct page *page)
 {
 	struct llist_head *head;
 	struct raw_hwp_page *raw_hwp;
-	struct llist_node *t, *tnode;
+	struct raw_hwp_page *p, *next;
 	int ret = folio_test_set_hwpoison(folio) ? -EHWPOISON : 0;
 
 	/*
@@ -1901,9 +1900,7 @@ static int folio_set_hugetlb_hwpoison(struct folio *folio, struct page *page)
 	if (folio_test_hugetlb_raw_hwp_unreliable(folio))
 		return -EHWPOISON;
 	head = raw_hwp_list_head(folio);
-	llist_for_each_safe(tnode, t, head->first) {
-		struct raw_hwp_page *p = container_of(tnode, struct raw_hwp_page, node);
-
+	llist_for_each_entry_safe(p, next, head->first, node) {
 		if (p->page == page)
 			return -EHWPOISON;
 	}
@@ -2120,8 +2117,6 @@ static int memory_failure_dev_pagemap(unsigned long pfn, int flags,
 {
 	int rc = -ENXIO;
 
-	put_ref_page(pfn, flags);
-
 	/* device metadata space is not recoverable */
 	if (!pgmap_pfn_valid(pgmap, pfn))
 		goto out;
@@ -2196,6 +2191,7 @@ int memory_failure(unsigned long pfn, int flags)
 
 		if (pfn_valid(pfn)) {
 			pgmap = get_dev_pagemap(pfn, NULL);
+			put_ref_page(pfn, flags);
 			if (pgmap) {
 				res = memory_failure_dev_pagemap(pfn, flags,
 								 pgmap);
@@ -2537,7 +2533,8 @@ int unpoison_memory(unsigned long pfn)
 		goto unlock_mutex;
 	}
 
-	if (folio_test_slab(folio) || PageTable(&folio->page) || folio_test_reserved(folio))
+	if (folio_test_slab(folio) || PageTable(&folio->page) ||
+	    folio_test_reserved(folio) || PageOffline(&folio->page))
 		goto unlock_mutex;
 
 	/*

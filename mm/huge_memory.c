@@ -577,25 +577,20 @@ struct deferred_split *get_deferred_split_queue(struct folio *folio)
 }
 #endif
 
-void prep_transhuge_page(struct page *page)
+void folio_prep_large_rmappable(struct folio *folio)
 {
-	struct folio *folio = (struct folio *)page;
-
 	VM_BUG_ON_FOLIO(folio_order(folio) < 2, folio);
 	INIT_LIST_HEAD(&folio->_deferred_list);
-	folio_set_compound_dtor(folio, TRANSHUGE_PAGE_DTOR);
+	folio_set_large_rmappable(folio);
 }
 
-static inline bool is_transparent_hugepage(struct page *page)
+static inline bool is_transparent_hugepage(struct folio *folio)
 {
-	struct folio *folio;
-
-	if (!PageCompound(page))
+	if (!folio_test_large(folio))
 		return false;
 
-	folio = page_folio(page);
 	return is_huge_zero_page(&folio->page) ||
-	       folio->_folio_dtor == TRANSHUGE_PAGE_DTOR;
+		folio_test_large_rmappable(folio);
 }
 
 static unsigned long __thp_get_unmapped_area(struct file *filp,
@@ -2776,10 +2771,9 @@ out:
 	return ret;
 }
 
-void free_transhuge_page(struct page *page)
+void folio_undo_large_rmappable(struct folio *folio)
 {
-	struct folio *folio = (struct folio *)page;
-	struct deferred_split *ds_queue = get_deferred_split_queue(folio);
+	struct deferred_split *ds_queue;
 	unsigned long flags;
 
 	/*
@@ -2787,15 +2781,16 @@ void free_transhuge_page(struct page *page)
 	 * deferred_list. If folio is not in deferred_list, it's safe
 	 * to check without acquiring the split_queue_lock.
 	 */
-	if (data_race(!list_empty(&folio->_deferred_list))) {
-		spin_lock_irqsave(&ds_queue->split_queue_lock, flags);
-		if (!list_empty(&folio->_deferred_list)) {
-			ds_queue->split_queue_len--;
-			list_del(&folio->_deferred_list);
-		}
-		spin_unlock_irqrestore(&ds_queue->split_queue_lock, flags);
+	if (data_race(list_empty(&folio->_deferred_list)))
+		return;
+
+	ds_queue = get_deferred_split_queue(folio);
+	spin_lock_irqsave(&ds_queue->split_queue_lock, flags);
+	if (!list_empty(&folio->_deferred_list)) {
+		ds_queue->split_queue_len--;
+		list_del(&folio->_deferred_list);
 	}
-	free_compound_page(page);
+	spin_unlock_irqrestore(&ds_queue->split_queue_lock, flags);
 }
 
 void deferred_split_folio(struct folio *folio)
@@ -3014,6 +3009,7 @@ static int split_huge_pages_pid(int pid, unsigned long vaddr_start,
 	for (addr = vaddr_start; addr < vaddr_end; addr += PAGE_SIZE) {
 		struct vm_area_struct *vma = vma_lookup(mm, addr);
 		struct page *page;
+		struct folio *folio;
 
 		if (!vma)
 			break;
@@ -3030,22 +3026,23 @@ static int split_huge_pages_pid(int pid, unsigned long vaddr_start,
 		if (IS_ERR_OR_NULL(page))
 			continue;
 
-		if (!is_transparent_hugepage(page))
+		folio = page_folio(page);
+		if (!is_transparent_hugepage(folio))
 			goto next;
 
 		total++;
-		if (!can_split_folio(page_folio(page), NULL))
+		if (!can_split_folio(folio, NULL))
 			goto next;
 
-		if (!trylock_page(page))
+		if (!folio_trylock(folio))
 			goto next;
 
-		if (!split_huge_page(page))
+		if (!split_folio(folio))
 			split++;
 
-		unlock_page(page);
+		folio_unlock(folio);
 next:
-		put_page(page);
+		folio_put(folio);
 		cond_resched();
 	}
 	mmap_read_unlock(mm);

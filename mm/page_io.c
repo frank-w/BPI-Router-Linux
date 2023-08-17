@@ -19,12 +19,12 @@
 #include <linux/bio.h>
 #include <linux/swapops.h>
 #include <linux/writeback.h>
-#include <linux/frontswap.h>
 #include <linux/blkdev.h>
 #include <linux/psi.h>
 #include <linux/uio.h>
 #include <linux/sched/task.h>
 #include <linux/delayacct.h>
+#include <linux/zswap.h>
 #include "swap.h"
 
 static void __end_swap_bio_write(struct bio *bio)
@@ -195,7 +195,7 @@ int swap_writepage(struct page *page, struct writeback_control *wbc)
 		folio_unlock(folio);
 		return ret;
 	}
-	if (frontswap_store(&folio->page) == 0) {
+	if (zswap_store(folio)) {
 		folio_start_writeback(folio);
 		folio_unlock(folio);
 		folio_end_writeback(folio);
@@ -492,14 +492,15 @@ static void swap_readpage_bdev_async(struct page *page,
 
 void swap_readpage(struct page *page, bool synchronous, struct swap_iocb **plug)
 {
+	struct folio *folio = page_folio(page);
 	struct swap_info_struct *sis = page_swap_info(page);
-	bool workingset = PageWorkingset(page);
+	bool workingset = folio_test_workingset(folio);
 	unsigned long pflags;
 	bool in_thrashing;
 
-	VM_BUG_ON_PAGE(!PageSwapCache(page) && !synchronous, page);
-	VM_BUG_ON_PAGE(!PageLocked(page), page);
-	VM_BUG_ON_PAGE(PageUptodate(page), page);
+	VM_BUG_ON_FOLIO(!folio_test_swapcache(folio) && !synchronous, folio);
+	VM_BUG_ON_FOLIO(!folio_test_locked(folio), folio);
+	VM_BUG_ON_FOLIO(folio_test_uptodate(folio), folio);
 
 	/*
 	 * Count submission time as memory stall and delay. When the device
@@ -512,9 +513,9 @@ void swap_readpage(struct page *page, bool synchronous, struct swap_iocb **plug)
 	}
 	delayacct_swapin_start();
 
-	if (frontswap_load(page) == 0) {
-		SetPageUptodate(page);
-		unlock_page(page);
+	if (zswap_load(folio)) {
+		folio_mark_uptodate(folio);
+		folio_unlock(folio);
 	} else if (data_race(sis->flags & SWP_FS_OPS)) {
 		swap_readpage_fs(page, plug);
 	} else if (synchronous || (sis->flags & SWP_SYNCHRONOUS_IO)) {

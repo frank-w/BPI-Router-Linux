@@ -25,7 +25,6 @@ menuconfig SWAP
 config ZSWAP
 	bool "Compressed cache for swap pages"
 	depends on SWAP
-	select FRONTSWAP
 	select CRYPTO
 	select ZPOOL
 	help
@@ -572,6 +571,9 @@ config MHP_MEMMAP_ON_MEMORY
 
 endif # MEMORY_HOTPLUG
 
+config ARCH_MHP_MEMMAP_ON_MEMORY_ENABLE
+       bool
+
 # Heavily threaded applications may benefit from splitting the mm-wide
 # page_table_lock, so that faults on different parts of the user address
 # space can be handled with less contention: split it at this NR_CPUS.
@@ -871,9 +873,6 @@ config USE_PERCPU_NUMA_NODE_ID
 	bool
 
 config HAVE_SETUP_PER_CPU_AREA
-	bool
-
-config FRONTSWAP
 	bool
 
 config CMA
