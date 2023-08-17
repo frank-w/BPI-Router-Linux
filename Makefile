@@ -1090,6 +1090,9 @@ KBUILD_CFLAGS   += $(call cc-option,-Werror=incompatible-pointer-types)
 # Require designated initializers for all marked structures
 KBUILD_CFLAGS   += $(call cc-option,-Werror=designated-init)
 
+# Warn if there is an enum types mismatch
+KBUILD_CFLAGS	+= $(call cc-option,-Wenum-conversion)
+
 # change __FILE__ to the relative path from the srctree
 KBUILD_CPPFLAGS += $(call cc-option,-fmacro-prefix-map=$(srctree)/=)
 
@@ -1607,7 +1610,7 @@ MRPROPER_FILES += include/config include/generated          \
 		  certs/signing_key.pem \
 		  certs/x509.genkey \
 		  vmlinux-gdb.py \
-		  *.spec rpmbuild \
+		  kernel.spec rpmbuild \
 		  rust/libmacros.so
 
 # clean - Delete most, but leave enough to build external modules
@@ -2144,6 +2147,10 @@ kernelversion:
 
 image_name:
 	@echo $(KBUILD_IMAGE)
+
+PHONY += run-command
+run-command:
+	$(Q)$(KBUILD_RUN_COMMAND)
 
 quiet_cmd_rmfiles = $(if $(wildcard $(rm-files)),CLEAN   $(wildcard $(rm-files)))
       cmd_rmfiles = rm -rf $(rm-files)
