@@ -9,12 +9,13 @@
 #ifndef GPIOLIB_H
 #define GPIOLIB_H
 
-#include <linux/gpio/driver.h>
-#include <linux/gpio/consumer.h> /* for enum gpiod_flags */
-#include <linux/err.h>
-#include <linux/device.h>
-#include <linux/module.h>
 #include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/err.h>
+#include <linux/gpio/consumer.h> /* for enum gpiod_flags */
+#include <linux/gpio/driver.h>
+#include <linux/module.h>
+#include <linux/notifier.h>
 #include <linux/rwsem.h>
 
 #define GPIOCHIP_NAME	"gpiochip"
@@ -217,6 +218,7 @@ int gpiod_configure_flags(struct gpio_desc *desc, const char *con_id,
 int gpio_set_debounce_timeout(struct gpio_desc *desc, unsigned int debounce);
 int gpiod_hog(struct gpio_desc *desc, const char *name,
 		unsigned long lflags, enum gpiod_flags dflags);
+int gpiochip_get_ngpios(struct gpio_chip *gc, struct device *dev);
 
 /*
  * Return the GPIO number of the passed descriptor relative to its chip

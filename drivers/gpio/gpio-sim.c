@@ -489,7 +489,7 @@ struct gpio_sim_device {
 	 * This structure however can be modified by callbacks of different
 	 * attributes so we need another lock.
 	 *
-	 * We use this lock fo protecting all data structures owned by this
+	 * We use this lock for protecting all data structures owned by this
 	 * object too.
 	 */
 	struct mutex lock;
@@ -643,16 +643,13 @@ static bool gpio_sim_device_is_live_unlocked(struct gpio_sim_device *dev)
 
 static char *gpio_sim_strdup_trimmed(const char *str, size_t count)
 {
-	char *dup, *trimmed;
+	char *trimmed;
 
-	dup = kstrndup(str, count, GFP_KERNEL);
-	if (!dup)
+	trimmed = kstrndup(skip_spaces(str), count, GFP_KERNEL);
+	if (!trimmed)
 		return NULL;
 
-	trimmed = strstrip(dup);
-	memmove(dup, trimmed, strlen(trimmed) + 1);
-
-	return dup;
+	return strim(trimmed);
 }
 
 static ssize_t gpio_sim_device_config_dev_name_show(struct config_item *item,
@@ -987,8 +984,7 @@ gpio_sim_device_config_live_store(struct config_item *item,
 
 	mutex_lock(&dev->lock);
 
-	if ((!live && !gpio_sim_device_is_live_unlocked(dev)) ||
-	    (live && gpio_sim_device_is_live_unlocked(dev)))
+	if (live == gpio_sim_device_is_live_unlocked(dev))
 		ret = -EPERM;
 	else if (live)
 		ret = gpio_sim_device_activate_unlocked(dev);
@@ -1273,7 +1269,6 @@ gpio_sim_hog_config_direction_store(struct config_item *item,
 {
 	struct gpio_sim_hog *hog = to_gpio_sim_hog(item);
 	struct gpio_sim_device *dev = gpio_sim_hog_get_device(hog);
-	char *trimmed;
 	int dir;
 
 	mutex_lock(&dev->lock);
@@ -1283,22 +1278,14 @@ gpio_sim_hog_config_direction_store(struct config_item *item,
 		return -EBUSY;
 	}
 
-	trimmed = gpio_sim_strdup_trimmed(page, count);
-	if (!trimmed) {
-		mutex_unlock(&dev->lock);
-		return -ENOMEM;
-	}
-
-	if (strcmp(trimmed, "input") == 0)
+	if (sysfs_streq(page, "input"))
 		dir = GPIOD_IN;
-	else if (strcmp(trimmed, "output-high") == 0)
+	else if (sysfs_streq(page, "output-high"))
 		dir = GPIOD_OUT_HIGH;
-	else if (strcmp(trimmed, "output-low") == 0)
+	else if (sysfs_streq(page, "output-low"))
 		dir = GPIOD_OUT_LOW;
 	else
 		dir = -EINVAL;
-
-	kfree(trimmed);
 
 	if (dir < 0) {
 		mutex_unlock(&dev->lock);
