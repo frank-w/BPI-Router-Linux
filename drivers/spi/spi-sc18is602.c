@@ -12,7 +12,6 @@
 #include <linux/i2c.h>
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
-#include <linux/of_device.h>
 #include <linux/of.h>
 #include <linux/platform_data/sc18is602.h>
 #include <linux/gpio/consumer.h>
@@ -267,7 +266,7 @@ static int sc18is602_probe(struct i2c_client *client)
 	hw->ctrl = 0xff;
 
 	if (client->dev.of_node)
-		hw->id = (enum chips)of_device_get_match_data(&client->dev);
+		hw->id = (uintptr_t)of_device_get_match_data(&client->dev);
 	else
 		hw->id = id->driver_data;
 
