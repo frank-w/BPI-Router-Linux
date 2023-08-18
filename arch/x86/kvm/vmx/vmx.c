@@ -3315,7 +3315,7 @@ void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	vmx->emulation_required = vmx_emulation_required(vcpu);
 }
 
-static int vmx_get_max_tdp_level(void)
+static int vmx_get_max_ept_level(void)
 {
 	if (cpu_has_vmx_ept_5levels())
 		return 5;
@@ -6767,8 +6767,10 @@ static void vmx_set_apic_access_page_addr(struct kvm_vcpu *vcpu)
 	vmcs_write64(APIC_ACCESS_ADDR, pfn_to_hpa(pfn));
 	read_unlock(&vcpu->kvm->mmu_lock);
 
-	vmx_flush_tlb_current(vcpu);
-
+	/*
+	 * No need for a manual TLB flush at this point, KVM has already done a
+	 * flush if there were SPTEs pointing at the previous page.
+	 */
 out:
 	/*
 	 * Do not pin apic access page in memory, the MMU notifier
@@ -8496,7 +8498,7 @@ static __init int hardware_setup(void)
 	 */
 	vmx_setup_me_spte_mask();
 
-	kvm_configure_mmu(enable_ept, 0, vmx_get_max_tdp_level(),
+	kvm_configure_mmu(enable_ept, 0, vmx_get_max_ept_level(),
 			  ept_caps_to_lpage_level(vmx_capability.ept));
 
 	/*
