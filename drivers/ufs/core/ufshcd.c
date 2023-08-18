@@ -969,10 +969,11 @@ static inline void ufshcd_hba_start(struct ufs_hba *hba)
  *
  * Return: true if and only if the controller is active.
  */
-static inline bool ufshcd_is_hba_active(struct ufs_hba *hba)
+bool ufshcd_is_hba_active(struct ufs_hba *hba)
 {
 	return ufshcd_readl(hba, REG_CONTROLLER_ENABLE) & CONTROLLER_ENABLE;
 }
+EXPORT_SYMBOL_GPL(ufshcd_is_hba_active);
 
 u32 ufshcd_get_local_unipro_ver(struct ufs_hba *hba)
 {
@@ -10564,6 +10565,14 @@ static const struct dev_pm_ops ufshcd_wl_pm_ops = {
 
 static void ufshcd_check_header_layout(void)
 {
+	/*
+	 * gcc compilers before version 10 cannot do constant-folding for
+	 * sub-byte bitfields. Hence skip the layout checks for gcc 9 and
+	 * before.
+	 */
+	if (IS_ENABLED(CONFIG_CC_IS_GCC) && CONFIG_GCC_VERSION < 100000)
+		return;
+
 	BUILD_BUG_ON(((u8 *)&(struct request_desc_header){
 				.cci = 3})[0] != 3);
 
