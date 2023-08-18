@@ -82,10 +82,6 @@ static int tzp;
 module_param(tzp, int, 0444);
 MODULE_PARM_DESC(tzp, "Thermal zone polling frequency, in 1/10 seconds.");
 
-static int nocrt;
-module_param(nocrt, int, 0);
-MODULE_PARM_DESC(nocrt, "Set to take no action upon ACPI thermal zone critical trips points.");
-
 static int off;
 module_param(off, int, 0);
 MODULE_PARM_DESC(off, "Set to disable ACPI thermal support.");
@@ -119,7 +115,6 @@ struct acpi_thermal_active {
 	struct acpi_handle_list devices;
 	unsigned long temperature;
 	bool valid;
-	bool enabled;
 };
 
 struct acpi_thermal_trips {
@@ -747,7 +742,6 @@ static int acpi_thermal_register_thermal_zone(struct acpi_thermal *tz)
 {
 	int trips = 0;
 	int result;
-	acpi_status status;
 	int i;
 
 	if (tz->trips.critical.valid)
@@ -780,24 +774,15 @@ static int acpi_thermal_register_thermal_zone(struct acpi_thermal *tz)
 	if (result)
 		goto unregister_tzd;
 
-	status =  acpi_bus_attach_private_data(tz->device->handle,
-					       tz->thermal_zone);
-	if (ACPI_FAILURE(status)) {
-		result = -ENODEV;
-		goto remove_links;
-	}
-
 	result = thermal_zone_device_enable(tz->thermal_zone);
 	if (result)
-		goto acpi_bus_detach;
+		goto remove_links;
 
 	dev_info(&tz->device->dev, "registered as thermal_zone%d\n",
 		 thermal_zone_device_id(tz->thermal_zone));
 
 	return 0;
 
-acpi_bus_detach:
-	acpi_bus_detach_private_data(tz->device->handle);
 remove_links:
 	acpi_thermal_zone_sysfs_remove(tz);
 unregister_tzd:
@@ -811,7 +796,6 @@ static void acpi_thermal_unregister_thermal_zone(struct acpi_thermal *tz)
 	acpi_thermal_zone_sysfs_remove(tz);
 	thermal_zone_device_unregister(tz->thermal_zone);
 	tz->thermal_zone = NULL;
-	acpi_bus_detach_private_data(tz->device->handle);
 }
 
 
@@ -825,8 +809,9 @@ static void acpi_queue_thermal_check(struct acpi_thermal *tz)
 		queue_work(acpi_thermal_pm_queue, &tz->thermal_check_work);
 }
 
-static void acpi_thermal_notify(struct acpi_device *device, u32 event)
+static void acpi_thermal_notify(acpi_handle handle, u32 event, void *data)
 {
+	struct acpi_device *device = data;
 	struct acpi_thermal *tz = acpi_driver_data(device);
 
 	if (!tz)
@@ -997,11 +982,20 @@ static int acpi_thermal_add(struct acpi_device *device)
 
 	pr_info("%s [%s] (%ld C)\n", acpi_device_name(device),
 		acpi_device_bid(device), deci_kelvin_to_celsius(tz->temperature));
-	goto end;
 
+	result = acpi_dev_install_notify_handler(device, ACPI_DEVICE_NOTIFY,
+						 acpi_thermal_notify);
+	if (result)
+		goto flush_wq;
+
+	return 0;
+
+flush_wq:
+	flush_workqueue(acpi_thermal_pm_queue);
+	acpi_thermal_unregister_thermal_zone(tz);
 free_memory:
 	kfree(tz);
-end:
+
 	return result;
 }
 
@@ -1012,10 +1006,14 @@ static void acpi_thermal_remove(struct acpi_device *device)
 	if (!device || !acpi_driver_data(device))
 		return;
 
-	flush_workqueue(acpi_thermal_pm_queue);
 	tz = acpi_driver_data(device);
 
+	acpi_dev_remove_notify_handler(device, ACPI_DEVICE_NOTIFY,
+				       acpi_thermal_notify);
+
+	flush_workqueue(acpi_thermal_pm_queue);
 	acpi_thermal_unregister_thermal_zone(tz);
+
 	kfree(tz);
 }
 
@@ -1030,7 +1028,7 @@ static int acpi_thermal_suspend(struct device *dev)
 static int acpi_thermal_resume(struct device *dev)
 {
 	struct acpi_thermal *tz;
-	int i, j, power_state, result;
+	int i, j, power_state;
 
 	if (!dev)
 		return -EINVAL;
@@ -1043,15 +1041,9 @@ static int acpi_thermal_resume(struct device *dev)
 		if (!tz->trips.active[i].valid)
 			break;
 
-		tz->trips.active[i].enabled = true;
 		for (j = 0; j < tz->trips.active[i].devices.count; j++) {
-			result = acpi_bus_update_power(
-					tz->trips.active[i].devices.handles[j],
-					&power_state);
-			if (result || (power_state != ACPI_STATE_D0)) {
-				tz->trips.active[i].enabled = false;
-				break;
-			}
+			acpi_bus_update_power(tz->trips.active[i].devices.handles[j],
+					      &power_state);
 		}
 	}
 
@@ -1078,7 +1070,6 @@ static struct acpi_driver acpi_thermal_driver = {
 	.ops = {
 		.add = acpi_thermal_add,
 		.remove = acpi_thermal_remove,
-		.notify = acpi_thermal_notify,
 		},
 	.drv.pm = &acpi_thermal_pm,
 };
@@ -1094,7 +1085,7 @@ static int thermal_act(const struct dmi_system_id *d) {
 static int thermal_nocrt(const struct dmi_system_id *d) {
 	pr_notice("%s detected: disabling all critical thermal trip point actions.\n",
 		  d->ident);
-	nocrt = 1;
+	crt = -1;
 	return 0;
 }
 static int thermal_tzp(const struct dmi_system_id *d) {
