@@ -590,25 +590,26 @@ struct gfs2_tune {
 };
 
 enum {
-	SDF_JOURNAL_CHECKED	= 0,
-	SDF_JOURNAL_LIVE	= 1,
-	SDF_WITHDRAWN		= 2,
-	SDF_NOBARRIERS		= 3,
-	SDF_NORECOVERY		= 4,
-	SDF_DEMOTE		= 5,
-	SDF_NOJOURNALID		= 6,
-	SDF_RORECOVERY		= 7, /* read only recovery */
-	SDF_SKIP_DLM_UNLOCK	= 8,
-	SDF_FORCE_AIL_FLUSH     = 9,
-	SDF_FREEZE_INITIATOR	= 10,
-	SDF_WITHDRAWING		= 11, /* Will withdraw eventually */
-	SDF_WITHDRAW_IN_PROG	= 12, /* Withdraw is in progress */
-	SDF_REMOTE_WITHDRAW	= 13, /* Performing remote recovery */
-	SDF_WITHDRAW_RECOVERY	= 14, /* Wait for journal recovery when we are
-					 withdrawing */
-	SDF_DEACTIVATING	= 15,
-	SDF_EVICTING		= 16,
-	SDF_FROZEN		= 17,
+	SDF_JOURNAL_CHECKED,
+	SDF_JOURNAL_LIVE,
+	SDF_WITHDRAWN,
+	SDF_NOBARRIERS,
+	SDF_NORECOVERY,
+	SDF_DEMOTE,
+	SDF_NOJOURNALID,
+	SDF_RORECOVERY,		/* read only recovery */
+	SDF_SKIP_DLM_UNLOCK,
+	SDF_FLUSH,
+	SDF_FORCE_AIL_FLUSH,
+	SDF_FREEZE_INITIATOR,
+	SDF_WITHDRAWING,	/* Will withdraw eventually */
+	SDF_WITHDRAW_IN_PROG,	/* Withdraw is in progress */
+	SDF_REMOTE_WITHDRAW,	/* Performing remote recovery */
+	SDF_WITHDRAW_RECOVERY,	/* Wait for journal recovery
+				   when we are withdrawing */
+	SDF_DEACTIVATING,
+	SDF_EVICTING,
+	SDF_FROZEN,
 };
 
 #define GFS2_FSNAME_LEN		256
