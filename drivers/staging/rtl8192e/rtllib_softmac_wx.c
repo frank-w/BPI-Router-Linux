@@ -310,7 +310,7 @@ void rtllib_wx_sync_scan_wq(void *data)
 
 	mutex_lock(&ieee->wx_mutex);
 	if (!(ieee->softmac_features & IEEE_SOFTMAC_SCAN)) {
-		rtllib_start_scan_syncro(ieee, 0);
+		rtllib_start_scan_syncro(ieee);
 		goto out;
 	}
 
@@ -339,7 +339,7 @@ void rtllib_wx_sync_scan_wq(void *data)
 				       HT_EXTCHNL_OFFSET_NO_EXT);
 	}
 
-	rtllib_start_scan_syncro(ieee, 0);
+	rtllib_start_scan_syncro(ieee);
 
 	if (b40M) {
 		if (chan_offset == HT_EXTCHNL_OFFSET_UPPER)
@@ -487,11 +487,9 @@ EXPORT_SYMBOL(rtllib_wx_set_rawtx);
 int rtllib_wx_get_name(struct rtllib_device *ieee, struct iw_request_info *info,
 		       union iwreq_data *wrqu, char *extra)
 {
-	const char *b = ieee->modulation & RTLLIB_CCK_MODULATION ? "b" : "";
-	const char *g = ieee->modulation & RTLLIB_OFDM_MODULATION ? "g" : "";
 	const char *n = ieee->mode & (WIRELESS_MODE_N_24G) ? "n" : "";
 
-	scnprintf(wrqu->name, sizeof(wrqu->name), "802.11%s%s%s", b, g, n);
+	scnprintf(wrqu->name, sizeof(wrqu->name), "802.11bg%s", n);
 	return 0;
 }
 EXPORT_SYMBOL(rtllib_wx_get_name);

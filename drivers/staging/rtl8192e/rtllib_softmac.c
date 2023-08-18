@@ -35,12 +35,8 @@ static unsigned int rtllib_MFIE_rate_len(struct rtllib_device *ieee)
 {
 	unsigned int rate_len = 0;
 
-	if (ieee->modulation & RTLLIB_CCK_MODULATION)
-		rate_len = RTLLIB_CCK_RATE_LEN + 2;
-
-	if (ieee->modulation & RTLLIB_OFDM_MODULATION)
-
-		rate_len += RTLLIB_OFDM_RATE_LEN + 2;
+	rate_len = RTLLIB_CCK_RATE_LEN + 2;
+	rate_len += RTLLIB_OFDM_RATE_LEN + 2;
 
 	return rate_len;
 }
@@ -53,14 +49,12 @@ static void rtllib_MFIE_Brate(struct rtllib_device *ieee, u8 **tag_p)
 {
 	u8 *tag = *tag_p;
 
-	if (ieee->modulation & RTLLIB_CCK_MODULATION) {
-		*tag++ = MFIE_TYPE_RATES;
-		*tag++ = 4;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_1MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_2MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_5MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_11MB;
-	}
+	*tag++ = MFIE_TYPE_RATES;
+	*tag++ = 4;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_1MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_2MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_5MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_11MB;
 
 	/* We may add an option for custom rates that specific HW
 	 * might support
@@ -72,18 +66,17 @@ static void rtllib_MFIE_Grate(struct rtllib_device *ieee, u8 **tag_p)
 {
 	u8 *tag = *tag_p;
 
-	if (ieee->modulation & RTLLIB_OFDM_MODULATION) {
-		*tag++ = MFIE_TYPE_RATES_EX;
-		*tag++ = 8;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_6MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_9MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_12MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_18MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_24MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_36MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_48MB;
-		*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_54MB;
-	}
+	*tag++ = MFIE_TYPE_RATES_EX;
+	*tag++ = 8;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_6MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_9MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_12MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_18MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_24MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_36MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_48MB;
+	*tag++ = RTLLIB_BASIC_RATE_MASK | RTLLIB_OFDM_RATE_54MB;
+
 	/* We may add an option for custom rates that specific HW might
 	 * support
 	 */
@@ -456,7 +449,7 @@ void rtllib_DisableIntelPromiscuousMode(struct net_device *dev,
 }
 EXPORT_SYMBOL(rtllib_DisableIntelPromiscuousMode);
 
-static void rtllib_send_probe(struct rtllib_device *ieee, u8 is_mesh)
+static void rtllib_send_probe(struct rtllib_device *ieee)
 {
 	struct sk_buff *skb;
 
@@ -467,12 +460,12 @@ static void rtllib_send_probe(struct rtllib_device *ieee, u8 is_mesh)
 	}
 }
 
-static void rtllib_send_probe_requests(struct rtllib_device *ieee, u8 is_mesh)
+static void rtllib_send_probe_requests(struct rtllib_device *ieee)
 {
 	if (ieee->active_scan && (ieee->softmac_features &
 	    IEEE_SOFTMAC_PROBERQ)) {
-		rtllib_send_probe(ieee, 0);
-		rtllib_send_probe(ieee, 0);
+		rtllib_send_probe(ieee);
+		rtllib_send_probe(ieee);
 	}
 }
 
@@ -485,7 +478,7 @@ static void rtllib_update_active_chan_map(struct rtllib_device *ieee)
 /* this performs syncro scan blocking the caller until all channels
  * in the allowed channel map has been checked.
  */
-static void rtllib_softmac_scan_syncro(struct rtllib_device *ieee, u8 is_mesh)
+static void rtllib_softmac_scan_syncro(struct rtllib_device *ieee)
 {
 	union iwreq_data wrqu;
 	short ch = 0;
@@ -532,7 +525,7 @@ static void rtllib_softmac_scan_syncro(struct rtllib_device *ieee, u8 is_mesh)
 
 		ieee->set_chan(ieee->dev, ch);
 		if (ieee->active_channel_map[ch] == 1)
-			rtllib_send_probe_requests(ieee, 0);
+			rtllib_send_probe_requests(ieee);
 
 		/* this prevent excessive time wait when we
 		 * need to wait for a syncro scan to end..
@@ -594,7 +587,7 @@ static void rtllib_softmac_scan_wq(void *data)
 	ieee->set_chan(ieee->dev, ieee->current_network.channel);
 
 	if (ieee->active_channel_map[ieee->current_network.channel] == 1)
-		rtllib_send_probe_requests(ieee, 0);
+		rtllib_send_probe_requests(ieee);
 
 	schedule_delayed_work(&ieee->softmac_scan_wq,
 			      msecs_to_jiffies(RTLLIB_SOFTMAC_SCAN_TIME));
@@ -714,7 +707,7 @@ static void rtllib_start_scan(struct rtllib_device *ieee)
 }
 
 /* called with wx_mutex held */
-void rtllib_start_scan_syncro(struct rtllib_device *ieee, u8 is_mesh)
+void rtllib_start_scan_syncro(struct rtllib_device *ieee)
 {
 	if (IS_DOT11D_ENABLE(ieee)) {
 		if (IS_COUNTRY_IE_VALID(ieee))
@@ -722,7 +715,7 @@ void rtllib_start_scan_syncro(struct rtllib_device *ieee, u8 is_mesh)
 	}
 	ieee->sync_scan_hurryup = 0;
 	if (ieee->softmac_features & IEEE_SOFTMAC_SCAN)
-		rtllib_softmac_scan_syncro(ieee, is_mesh);
+		rtllib_softmac_scan_syncro(ieee);
 }
 EXPORT_SYMBOL(rtllib_start_scan_syncro);
 
@@ -814,7 +807,7 @@ static struct sk_buff *rtllib_probe_resp(struct rtllib_device *ieee,
 	}
 
 	crypt = ieee->crypt_info.crypt[ieee->crypt_info.tx_keyidx];
-	encrypt = ieee->host_encrypt && crypt && crypt->ops &&
+	encrypt = crypt && crypt->ops &&
 		((strcmp(crypt->ops->name, "R-WEP") == 0 || wpa_ie_len));
 	if (ieee->ht_info->bCurrentHTSupport) {
 		tmp_ht_cap_buf = (u8 *)&(ieee->ht_info->SelfHTCap);
@@ -859,8 +852,7 @@ static struct sk_buff *rtllib_probe_resp(struct rtllib_device *ieee,
 		cpu_to_le16(ieee->current_network.capability &
 		WLAN_CAPABILITY_SHORT_PREAMBLE);
 
-	if (ieee->short_slot && (ieee->current_network.capability &
-	    WLAN_CAPABILITY_SHORT_SLOT_TIME))
+	if (ieee->current_network.capability & WLAN_CAPABILITY_SHORT_SLOT_TIME)
 		beacon_buf->capability |=
 			cpu_to_le16(WLAN_CAPABILITY_SHORT_SLOT_TIME);
 
@@ -946,14 +938,9 @@ static struct sk_buff *rtllib_assoc_resp(struct rtllib_device *ieee, u8 *dest)
 	assoc->capability = cpu_to_le16(ieee->iw_mode == IW_MODE_MASTER ?
 		WLAN_CAPABILITY_ESS : WLAN_CAPABILITY_IBSS);
 
-	if (ieee->short_slot)
-		assoc->capability |=
-				 cpu_to_le16(WLAN_CAPABILITY_SHORT_SLOT_TIME);
+	assoc->capability |= cpu_to_le16(WLAN_CAPABILITY_SHORT_SLOT_TIME);
 
-	if (ieee->host_encrypt)
-		crypt = ieee->crypt_info.crypt[ieee->crypt_info.tx_keyidx];
-	else
-		crypt = NULL;
+	crypt = ieee->crypt_info.crypt[ieee->crypt_info.tx_keyidx];
 
 	encrypt = (crypt && crypt->ops);
 
@@ -1122,7 +1109,7 @@ rtllib_association_req(struct rtllib_network *beacon,
 
 	crypt = ieee->crypt_info.crypt[ieee->crypt_info.tx_keyidx];
 	if (crypt != NULL)
-		encrypt = ieee->host_encrypt && crypt && crypt->ops &&
+		encrypt = crypt && crypt->ops &&
 			  ((strcmp(crypt->ops->name, "R-WEP") == 0 ||
 			  wpa_ie_len));
 	else
@@ -1200,8 +1187,7 @@ rtllib_association_req(struct rtllib_network *beacon,
 	if (beacon->capability & WLAN_CAPABILITY_SHORT_PREAMBLE)
 		hdr->capability |= cpu_to_le16(WLAN_CAPABILITY_SHORT_PREAMBLE);
 
-	if (ieee->short_slot &&
-	   (beacon->capability & WLAN_CAPABILITY_SHORT_SLOT_TIME))
+	if (beacon->capability & WLAN_CAPABILITY_SHORT_SLOT_TIME)
 		hdr->capability |= cpu_to_le16(WLAN_CAPABILITY_SHORT_SLOT_TIME);
 
 	hdr->listen_interval = cpu_to_le16(beacon->listen_interval);
@@ -1465,8 +1451,7 @@ static void rtllib_associate_complete_wq(void *data)
 
 	netif_carrier_on(ieee->dev);
 	ieee->is_roaming = false;
-	if (rtllib_is_54g(&ieee->current_network) &&
-	   (ieee->modulation & RTLLIB_OFDM_MODULATION)) {
+	if (rtllib_is_54g(&ieee->current_network)) {
 		ieee->rate = 108;
 		netdev_info(ieee->dev, "Using G rates:%d\n", ieee->rate);
 	} else {
@@ -1652,9 +1637,7 @@ inline void rtllib_softmac_new_net(struct rtllib_device *ieee,
 				schedule_delayed_work(
 					   &ieee->associate_procedure_wq, 0);
 			} else {
-				if (rtllib_is_54g(&ieee->current_network) &&
-				    (ieee->modulation &
-				     RTLLIB_OFDM_MODULATION)) {
+				if (rtllib_is_54g(&ieee->current_network)) {
 					ieee->rate = 108;
 					ieee->set_wireless_mode(ieee->dev, WIRELESS_MODE_G);
 					netdev_info(ieee->dev,
@@ -2517,7 +2500,7 @@ static void rtllib_start_ibss_wq(void *data)
 	 * associated.
 	 */
 	if (ieee->link_state == MAC80211_NOLINK)
-		rtllib_start_scan_syncro(ieee, 0);
+		rtllib_start_scan_syncro(ieee);
 
 	/* the network definitively is not here.. create a new cell */
 	if (ieee->link_state == MAC80211_NOLINK) {
@@ -2526,47 +2509,34 @@ static void rtllib_start_ibss_wq(void *data)
 		if (!ieee->wap_set)
 			eth_random_addr(ieee->current_network.bssid);
 
-		if (ieee->modulation & RTLLIB_CCK_MODULATION) {
-			ieee->current_network.rates_len = 4;
+		ieee->current_network.rates_len = 4;
+		ieee->current_network.rates[0] =
+			RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_1MB;
+		ieee->current_network.rates[1] =
+			RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_2MB;
+		ieee->current_network.rates[2] =
+			RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_5MB;
+		ieee->current_network.rates[3] =
+			RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_11MB;
 
-			ieee->current_network.rates[0] =
-				 RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_1MB;
-			ieee->current_network.rates[1] =
-				 RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_2MB;
-			ieee->current_network.rates[2] =
-				 RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_5MB;
-			ieee->current_network.rates[3] =
-				 RTLLIB_BASIC_RATE_MASK | RTLLIB_CCK_RATE_11MB;
-
-		} else {
-			ieee->current_network.rates_len = 0;
-		}
-
-		if (ieee->modulation & RTLLIB_OFDM_MODULATION) {
-			ieee->current_network.rates_ex_len = 8;
-
-			ieee->current_network.rates_ex[0] =
-						 RTLLIB_OFDM_RATE_6MB;
-			ieee->current_network.rates_ex[1] =
-						 RTLLIB_OFDM_RATE_9MB;
-			ieee->current_network.rates_ex[2] =
-						 RTLLIB_OFDM_RATE_12MB;
-			ieee->current_network.rates_ex[3] =
-						 RTLLIB_OFDM_RATE_18MB;
-			ieee->current_network.rates_ex[4] =
-						 RTLLIB_OFDM_RATE_24MB;
-			ieee->current_network.rates_ex[5] =
-						 RTLLIB_OFDM_RATE_36MB;
-			ieee->current_network.rates_ex[6] =
-						 RTLLIB_OFDM_RATE_48MB;
-			ieee->current_network.rates_ex[7] =
-						 RTLLIB_OFDM_RATE_54MB;
-
-			ieee->rate = 108;
-		} else {
-			ieee->current_network.rates_ex_len = 0;
-			ieee->rate = 22;
-		}
+		ieee->current_network.rates_ex_len = 8;
+		ieee->current_network.rates_ex[0] =
+			RTLLIB_OFDM_RATE_6MB;
+		ieee->current_network.rates_ex[1] =
+			RTLLIB_OFDM_RATE_9MB;
+		ieee->current_network.rates_ex[2] =
+			RTLLIB_OFDM_RATE_12MB;
+		ieee->current_network.rates_ex[3] =
+			RTLLIB_OFDM_RATE_18MB;
+		ieee->current_network.rates_ex[4] =
+			RTLLIB_OFDM_RATE_24MB;
+		ieee->current_network.rates_ex[5] =
+			RTLLIB_OFDM_RATE_36MB;
+		ieee->current_network.rates_ex[6] =
+			RTLLIB_OFDM_RATE_48MB;
+		ieee->current_network.rates_ex[7] =
+			RTLLIB_OFDM_RATE_54MB;
+		ieee->rate = 108;
 
 		ieee->current_network.qos_data.supported = 0;
 		ieee->set_wireless_mode(ieee->dev, WIRELESS_MODE_G);
@@ -3018,8 +2988,7 @@ u8 rtllib_ap_sec_type(struct rtllib_device *ieee)
 
 	crypt = ieee->crypt_info.crypt[ieee->crypt_info.tx_keyidx];
 	encrypt = (ieee->current_network.capability & WLAN_CAPABILITY_PRIVACY)
-		  || (ieee->host_encrypt && crypt && crypt->ops &&
-		  (strcmp(crypt->ops->name, "R-WEP") == 0));
+		  || (crypt && crypt->ops && (strcmp(crypt->ops->name, "R-WEP") == 0));
 
 	/* simply judge  */
 	if (encrypt && (wpa_ie_len == 0)) {
