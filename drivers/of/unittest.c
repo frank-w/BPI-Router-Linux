@@ -77,7 +77,7 @@ static void __init of_unittest_find_node_by_name(void)
 
 	np = of_find_node_by_path("/testcase-data");
 	name = kasprintf(GFP_KERNEL, "%pOF", np);
-	unittest(np && !strcmp("/testcase-data", name),
+	unittest(np && name && !strcmp("/testcase-data", name),
 		"find /testcase-data failed\n");
 	of_node_put(np);
 	kfree(name);
@@ -88,14 +88,14 @@ static void __init of_unittest_find_node_by_name(void)
 
 	np = of_find_node_by_path("/testcase-data/phandle-tests/consumer-a");
 	name = kasprintf(GFP_KERNEL, "%pOF", np);
-	unittest(np && !strcmp("/testcase-data/phandle-tests/consumer-a", name),
+	unittest(np && name && !strcmp("/testcase-data/phandle-tests/consumer-a", name),
 		"find /testcase-data/phandle-tests/consumer-a failed\n");
 	of_node_put(np);
 	kfree(name);
 
 	np = of_find_node_by_path("testcase-alias");
 	name = kasprintf(GFP_KERNEL, "%pOF", np);
-	unittest(np && !strcmp("/testcase-data", name),
+	unittest(np && name && !strcmp("/testcase-data", name),
 		"find testcase-alias failed\n");
 	of_node_put(np);
 	kfree(name);
@@ -106,7 +106,7 @@ static void __init of_unittest_find_node_by_name(void)
 
 	np = of_find_node_by_path("testcase-alias/phandle-tests/consumer-a");
 	name = kasprintf(GFP_KERNEL, "%pOF", np);
-	unittest(np && !strcmp("/testcase-data/phandle-tests/consumer-a", name),
+	unittest(np && name && !strcmp("/testcase-data/phandle-tests/consumer-a", name),
 		"find testcase-alias/phandle-tests/consumer-a failed\n");
 	of_node_put(np);
 	kfree(name);
@@ -1533,6 +1533,8 @@ static void attach_node_and_children(struct device_node *np)
 	const char *full_name;
 
 	full_name = kasprintf(GFP_KERNEL, "%pOF", np);
+	if (!full_name)
+		return;
 
 	if (!strcmp(full_name, "/__local_fixups__") ||
 	    !strcmp(full_name, "/__fixups__")) {
@@ -1694,7 +1696,7 @@ static struct platform_driver unittest_driver = {
 	.remove_new		= unittest_remove,
 	.driver = {
 		.name		= "unittest",
-		.of_match_table	= of_match_ptr(unittest_match),
+		.of_match_table	= unittest_match,
 	},
 };
 
@@ -1795,7 +1797,7 @@ static struct platform_driver unittest_gpio_driver = {
 	.remove_new = unittest_gpio_remove,
 	.driver	= {
 		.name		= "unittest-gpio",
-		.of_match_table	= of_match_ptr(unittest_gpio_id),
+		.of_match_table	= unittest_gpio_id,
 	},
 };
 
@@ -2622,7 +2624,7 @@ static struct platform_driver unittest_i2c_bus_driver = {
 	.remove_new		= unittest_i2c_bus_remove,
 	.driver = {
 		.name		= "unittest-i2c-bus",
-		.of_match_table	= of_match_ptr(unittest_i2c_bus_match),
+		.of_match_table	= unittest_i2c_bus_match,
 	},
 };
 
