@@ -7,8 +7,10 @@
  *
  */
 
+#include <linux/mod_devicetable.h>
+#include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/mfd/syscon.h>
-#include <linux/of_device.h>
 #include <linux/regmap.h>
 
 #include "stmmac_platform.h"
@@ -22,7 +24,7 @@ struct starfive_dwmac {
 	struct clk *clk_tx;
 };
 
-static void starfive_dwmac_fix_mac_speed(void *priv, unsigned int speed)
+static void starfive_dwmac_fix_mac_speed(void *priv, unsigned int speed, unsigned int mode)
 {
 	struct starfive_dwmac *dwmac = priv;
 	unsigned long rate;
