@@ -1818,7 +1818,7 @@ static void hl_release_dmabuf(struct dma_buf *dmabuf)
 	hl_ctx_put(ctx);
 
 	/* Paired with get_file() in export_dmabuf() */
-	fput(ctx->hpriv->filp);
+	fput(ctx->hpriv->file_priv->filp);
 
 	kfree(hl_dmabuf);
 }
@@ -1864,7 +1864,7 @@ static int export_dmabuf(struct hl_ctx *ctx,
 	 * released first and only then the compute device.
 	 * Paired with fput() in hl_release_dmabuf().
 	 */
-	get_file(ctx->hpriv->filp);
+	get_file(ctx->hpriv->file_priv->filp);
 
 	*dmabuf_fd = fd;
 
@@ -2171,8 +2171,9 @@ static int allocate_timestamps_buffers(struct hl_fpriv *hpriv, struct hl_mem_in 
 	return 0;
 }
 
-int hl_mem_ioctl(struct hl_fpriv *hpriv, void *data)
+int hl_mem_ioctl(struct drm_device *ddev, void *data, struct drm_file *file_priv)
 {
+	struct hl_fpriv *hpriv = file_priv->driver_priv;
 	enum hl_device_status status;
 	union hl_mem_args *args = data;
 	struct hl_device *hdev = hpriv->hdev;
