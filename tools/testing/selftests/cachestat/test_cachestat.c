@@ -15,11 +15,12 @@
 
 #include "../kselftest.h"
 
+#define NR_TESTS	8
+
 static const char * const dev_files[] = {
 	"/dev/zero", "/dev/null", "/dev/urandom",
 	"/proc/version", "/proc"
 };
-static const int cachestat_nr = 451;
 
 void print_cachestat(struct cachestat *cs)
 {
@@ -126,7 +127,7 @@ bool test_cachestat(const char *filename, bool write_random, bool create,
 		}
 	}
 
-	syscall_ret = syscall(cachestat_nr, fd, &cs_range, &cs, 0);
+	syscall_ret = syscall(__NR_cachestat, fd, &cs_range, &cs, 0);
 
 	ksft_print_msg("Cachestat call returned %ld\n", syscall_ret);
 
@@ -152,7 +153,7 @@ bool test_cachestat(const char *filename, bool write_random, bool create,
 			ksft_print_msg("fsync fails.\n");
 			ret = false;
 		} else {
-			syscall_ret = syscall(cachestat_nr, fd, &cs_range, &cs, 0);
+			syscall_ret = syscall(__NR_cachestat, fd, &cs_range, &cs, 0);
 
 			ksft_print_msg("Cachestat call (after fsync) returned %ld\n",
 				syscall_ret);
@@ -213,7 +214,7 @@ bool test_cachestat_shmem(void)
 		goto close_fd;
 	}
 
-	syscall_ret = syscall(cachestat_nr, fd, &cs_range, &cs, 0);
+	syscall_ret = syscall(__NR_cachestat, fd, &cs_range, &cs, 0);
 
 	if (syscall_ret) {
 		ksft_print_msg("Cachestat returned non-zero.\n");
@@ -236,7 +237,25 @@ out:
 
 int main(void)
 {
-	int ret = 0;
+	int ret;
+
+	ksft_print_header();
+
+	ret = syscall(__NR_cachestat, -1, NULL, NULL, 0);
+	if (ret == -1 && errno == ENOSYS) {
+		printf("1..0 # Skipped: cachestat syscall not available\n");
+		return KSFT_SKIP;
+	}
+
+	ksft_set_plan(NR_TESTS);
+
+	if (ret == -1 && errno == EBADF) {
+		ksft_test_result_pass("bad file descriptor recognized\n");
+		ret = 0;
+	} else {
+		ksft_test_result_fail("bad file descriptor ignored\n");
+		ret = 1;
+	}
 
 	for (int i = 0; i < 5; i++) {
 		const char *dev_filename = dev_files[i];
