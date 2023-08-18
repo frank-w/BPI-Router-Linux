@@ -2415,10 +2415,13 @@ static void pci_pme_list_scan(struct work_struct *work)
 
 	mutex_lock(&pci_pme_list_mutex);
 	list_for_each_entry_safe(pme_dev, n, &pci_pme_list, list) {
-		if (pme_dev->dev->pme_poll) {
-			struct pci_dev *bridge;
+		struct pci_dev *pdev = pme_dev->dev;
 
-			bridge = pme_dev->dev->bus->self;
+		if (pdev->pme_poll) {
+			struct pci_dev *bridge = pdev->bus->self;
+			struct device *dev = &pdev->dev;
+			int pm_status;
+
 			/*
 			 * If bridge is in low power state, the
 			 * configuration space of subordinate devices
@@ -2426,14 +2429,20 @@ static void pci_pme_list_scan(struct work_struct *work)
 			 */
 			if (bridge && bridge->current_state != PCI_D0)
 				continue;
+
 			/*
-			 * If the device is in D3cold it should not be
-			 * polled either.
+			 * If the device is in a low power state it
+			 * should not be polled either.
 			 */
-			if (pme_dev->dev->current_state == PCI_D3cold)
+			pm_status = pm_runtime_get_if_active(dev, true);
+			if (!pm_status)
 				continue;
 
-			pci_pme_wakeup(pme_dev->dev, NULL);
+			if (pdev->current_state != PCI_D3cold)
+				pci_pme_wakeup(pdev, NULL);
+
+			if (pm_status > 0)
+				pm_runtime_put(dev);
 		} else {
 			list_del(&pme_dev->list);
 			kfree(pme_dev);
@@ -4927,7 +4936,6 @@ static int pcie_wait_for_link_status(struct pci_dev *pdev,
 int pcie_retrain_link(struct pci_dev *pdev, bool use_lt)
 {
 	int rc;
-	u16 lnkctl;
 
 	/*
 	 * Ensure the updated LNKCTL parameters are used during link
@@ -4939,17 +4947,14 @@ int pcie_retrain_link(struct pci_dev *pdev, bool use_lt)
 	if (rc)
 		return rc;
 
-	pcie_capability_read_word(pdev, PCI_EXP_LNKCTL, &lnkctl);
-	lnkctl |= PCI_EXP_LNKCTL_RL;
-	pcie_capability_write_word(pdev, PCI_EXP_LNKCTL, lnkctl);
+	pcie_capability_set_word(pdev, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_RL);
 	if (pdev->clear_retrain_link) {
 		/*
 		 * Due to an erratum in some devices the Retrain Link bit
 		 * needs to be cleared again manually to allow the link
 		 * training to succeed.
 		 */
-		lnkctl &= ~PCI_EXP_LNKCTL_RL;
-		pcie_capability_write_word(pdev, PCI_EXP_LNKCTL, lnkctl);
+		pcie_capability_clear_word(pdev, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_RL);
 	}
 
 	return pcie_wait_for_link_status(pdev, use_lt, !use_lt);
