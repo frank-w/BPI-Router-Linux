@@ -742,7 +742,10 @@ ext2_xattr_set2(struct inode *inode, struct buffer_head *old_bh,
 			/* We need to allocate a new block */
 			ext2_fsblk_t goal = ext2_group_first_block_no(sb,
 						EXT2_I(inode)->i_block_group);
-			ext2_fsblk_t block = ext2_new_block(inode, goal, &error);
+			unsigned long count = 1;
+			ext2_fsblk_t block = ext2_new_blocks(inode, goal,
+						&count, &error,
+						EXT2_ALLOC_NORESERVE);
 			if (error)
 				goto cleanup;
 			ea_idebug(inode, "creating block %lu", block);
