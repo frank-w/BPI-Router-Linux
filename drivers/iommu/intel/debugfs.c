@@ -365,23 +365,25 @@ static int show_device_domain_translation(struct device *dev, void *data)
 {
 	struct iommu_group *group;
 
+	device_lock(dev);
 	group = iommu_group_get(dev);
-	if (group) {
-		/*
-		 * The group->mutex is held across the callback, which will
-		 * block calls to iommu_attach/detach_group/device. Hence,
-		 * the domain of the device will not change during traversal.
-		 *
-		 * All devices in an iommu group share a single domain, hence
-		 * we only dump the domain of the first device. Even though,
-		 * this code still possibly races with the iommu_unmap()
-		 * interface. This could be solved by RCU-freeing the page
-		 * table pages in the iommu_unmap() path.
-		 */
-		iommu_group_for_each_dev(group, data,
-					 __show_device_domain_translation);
-		iommu_group_put(group);
-	}
+	device_unlock(dev);
+	if (!group)
+		return 0;
+
+	/*
+	 * The group->mutex is held across the callback, which will
+	 * block calls to iommu_attach/detach_group/device. Hence,
+	 * the domain of the device will not change during traversal.
+	 *
+	 * All devices in an iommu group share a single domain, hence
+	 * we only dump the domain of the first device. Even though,
+	 * this code still possibly races with the iommu_unmap()
+	 * interface. This could be solved by RCU-freeing the page
+	 * table pages in the iommu_unmap() path.
+	 */
+	iommu_group_for_each_dev(group, data, __show_device_domain_translation);
+	iommu_group_put(group);
 
 	return 0;
 }
