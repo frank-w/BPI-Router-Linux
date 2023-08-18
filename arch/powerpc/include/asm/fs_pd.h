@@ -14,14 +14,4 @@
 #include <sysdev/fsl_soc.h>
 #include <asm/time.h>
 
-static inline int uart_baudrate(void)
-{
-        return get_baudrate();
-}
-
-static inline int uart_clock(void)
-{
-        return ppc_proc_freq;
-}
-
 #endif

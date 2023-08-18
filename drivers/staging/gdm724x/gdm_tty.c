@@ -17,9 +17,9 @@
 #define GDM_TTY_MAJOR 0
 #define GDM_TTY_MINOR 32
 
-#define WRITE_SIZE 2048
+#define WRITE_SIZE 2048UL
 
-#define MUX_TX_MAX_SIZE 2048
+#define MUX_TX_MAX_SIZE 2048UL
 
 static inline bool gdm_tty_ready(struct gdm *gdm)
 {
@@ -149,22 +149,17 @@ static void gdm_tty_send_complete(void *arg)
 	tty_port_tty_wakeup(&gdm->port);
 }
 
-static int gdm_tty_write(struct tty_struct *tty, const unsigned char *buf,
-			 int len)
+static ssize_t gdm_tty_write(struct tty_struct *tty, const u8 *buf, size_t len)
 {
 	struct gdm *gdm = tty->driver_data;
-	int remain = len;
-	int sent_len = 0;
-	int sending_len = 0;
+	size_t remain = len;
+	size_t sent_len = 0;
 
 	if (!gdm_tty_ready(gdm))
 		return -ENODEV;
 
-	if (!len)
-		return 0;
-
-	while (1) {
-		sending_len = min(MUX_TX_MAX_SIZE, remain);
+	while (remain) {
+		size_t sending_len = min(MUX_TX_MAX_SIZE, remain);
 		gdm->tty_dev->send_func(gdm->tty_dev->priv_dev,
 					(void *)(buf + sent_len),
 					sending_len,
@@ -173,8 +168,6 @@ static int gdm_tty_write(struct tty_struct *tty, const unsigned char *buf,
 					gdm);
 		sent_len += sending_len;
 		remain -= sending_len;
-		if (remain <= 0)
-			break;
 	}
 
 	return len;
