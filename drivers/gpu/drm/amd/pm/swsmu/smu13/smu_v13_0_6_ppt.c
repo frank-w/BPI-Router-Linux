@@ -80,11 +80,16 @@
 /* possible frequency drift (1Mhz) */
 #define EPSILON 1
 
-#define smnPCIE_ESM_CTRL 0x193D0
+#define smnPCIE_ESM_CTRL 0x93D0
 #define smnPCIE_LC_LINK_WIDTH_CNTL 0x1a340288
 #define PCIE_LC_LINK_WIDTH_CNTL__LC_LINK_WIDTH_RD_MASK 0x00000070L
 #define PCIE_LC_LINK_WIDTH_CNTL__LC_LINK_WIDTH_RD__SHIFT 0x4
 #define MAX_LINK_WIDTH 6
+
+#define smnPCIE_LC_SPEED_CNTL                   0x1a340290
+#define PCIE_LC_SPEED_CNTL__LC_CURRENT_DATA_RATE_MASK 0xE0
+#define PCIE_LC_SPEED_CNTL__LC_CURRENT_DATA_RATE__SHIFT 0x5
+#define LINK_SPEED_MAX				4
 
 static const struct cmn2asic_msg_mapping smu_v13_0_6_message_map[SMU_MSG_MAX_COUNT] = {
 	MSG_MAP(TestMessage,			     PPSMC_MSG_TestMessage,			0),
@@ -326,14 +331,24 @@ static int smu_v13_0_6_setup_driver_pptable(struct smu_context *smu)
 	MetricsTable_t *metrics = (MetricsTable_t *)smu_table->metrics_table;
 	struct PPTable_t *pptable =
 		(struct PPTable_t *)smu_table->driver_pptable;
-	int ret;
-	int i;
+	int ret, i, retry = 100;
 
 	/* Store one-time values in driver PPTable */
 	if (!pptable->Init) {
-		ret = smu_v13_0_6_get_metrics_table(smu, NULL, false);
-		if (ret)
-			return ret;
+		while (retry--) {
+			ret = smu_v13_0_6_get_metrics_table(smu, NULL, true);
+			if (ret)
+				return ret;
+
+			/* Ensure that metrics have been updated */
+			if (metrics->AccumulationCounter)
+				break;
+
+			usleep_range(1000, 1100);
+		}
+
+		if (!retry)
+			return -ETIME;
 
 		pptable->MaxSocketPowerLimit =
 			SMUQ10_TO_UINT(metrics->MaxSocketPowerLimit);
@@ -705,7 +720,7 @@ static int smu_v13_0_6_get_smu_metrics_data(struct smu_context *smu,
 	case METRICS_AVERAGE_MEMACTIVITY:
 		*value = SMUQ10_TO_UINT(metrics->DramBandwidthUtilization);
 		break;
-	case METRICS_AVERAGE_SOCKETPOWER:
+	case METRICS_CURR_SOCKETPOWER:
 		*value = SMUQ10_TO_UINT(metrics->SocketPower) << 8;
 		break;
 	case METRICS_TEMPERATURE_HOTSPOT:
@@ -1130,15 +1145,6 @@ static int smu_v13_0_6_get_current_activity_percent(struct smu_context *smu,
 	return ret;
 }
 
-static int smu_v13_0_6_get_gpu_power(struct smu_context *smu, uint32_t *value)
-{
-	if (!value)
-		return -EINVAL;
-
-	return smu_v13_0_6_get_smu_metrics_data(smu, METRICS_AVERAGE_SOCKETPOWER,
-					       value);
-}
-
 static int smu_v13_0_6_thermal_get_temperature(struct smu_context *smu,
 					       enum amd_pp_sensors sensor,
 					       uint32_t *value)
@@ -1184,8 +1190,10 @@ static int smu_v13_0_6_read_sensor(struct smu_context *smu,
 							       (uint32_t *)data);
 		*size = 4;
 		break;
-	case AMDGPU_PP_SENSOR_GPU_POWER:
-		ret = smu_v13_0_6_get_gpu_power(smu, (uint32_t *)data);
+	case AMDGPU_PP_SENSOR_GPU_INPUT_POWER:
+		ret = smu_v13_0_6_get_smu_metrics_data(smu,
+						       METRICS_CURR_SOCKETPOWER,
+						       (uint32_t *)data);
 		*size = 4;
 		break;
 	case AMDGPU_PP_SENSOR_HOTSPOT_TEMP:
@@ -1211,6 +1219,7 @@ static int smu_v13_0_6_read_sensor(struct smu_context *smu,
 		ret = smu_v13_0_get_gfx_vdd(smu, (uint32_t *)data);
 		*size = 4;
 		break;
+	case AMDGPU_PP_SENSOR_GPU_AVG_POWER:
 	default:
 		ret = -EOPNOTSUPP;
 		break;
@@ -1926,6 +1935,7 @@ smu_v13_0_6_get_current_pcie_link_width_level(struct smu_context *smu)
 static int smu_v13_0_6_get_current_pcie_link_speed(struct smu_context *smu)
 {
 	struct amdgpu_device *adev = smu->adev;
+	uint32_t speed_level;
 	uint32_t esm_ctrl;
 
 	/* TODO: confirm this on real target */
@@ -1933,7 +1943,13 @@ static int smu_v13_0_6_get_current_pcie_link_speed(struct smu_context *smu)
 	if ((esm_ctrl >> 15) & 0x1FFFF)
 		return (((esm_ctrl >> 8) & 0x3F) + 128);
 
-	return smu_v13_0_get_current_pcie_link_speed(smu);
+	speed_level = (RREG32_PCIE(smnPCIE_LC_SPEED_CNTL) &
+		PCIE_LC_SPEED_CNTL__LC_CURRENT_DATA_RATE_MASK)
+		>> PCIE_LC_SPEED_CNTL__LC_CURRENT_DATA_RATE__SHIFT;
+	if (speed_level > LINK_SPEED_MAX)
+		speed_level = 0;
+
+	return pcie_gen_to_speed(speed_level + 1);
 }
 
 static ssize_t smu_v13_0_6_get_gpu_metrics(struct smu_context *smu, void **table)
