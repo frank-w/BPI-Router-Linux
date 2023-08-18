@@ -17,7 +17,7 @@
 #include <linux/kexec.h>
 #include <linux/of_fdt.h>
 #include <linux/libfdt.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/memblock.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
@@ -933,9 +933,9 @@ out:
 }
 
 /**
- * get_cpu_node_size - Compute the size of a CPU node in the FDT.
- *                     This should be done only once and the value is stored in
- *                     a static variable.
+ * cpu_node_size - Compute the size of a CPU node in the FDT.
+ *                 This should be done only once and the value is stored in
+ *                 a static variable.
  * Returns the max size of a CPU node in the FDT.
  */
 static unsigned int cpu_node_size(void)
