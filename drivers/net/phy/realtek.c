@@ -765,29 +765,6 @@ static int rtl822x_config_aneg(struct phy_device *phydev)
 	return __genphy_config_aneg(phydev, ret);
 }
 
-static void rtl822x_update_interface(struct phy_device *phydev)
-{
-	int val;
-
-	/* Automatically switch SERDES interface between
-	 * SGMII and 2500-BaseX according to speed.
-	 */
-	val = phy_read_mmd(phydev, MDIO_MMD_VEND1, RTL8221B_SERDES_CTRL3);
-	if (val < 0)
-		return;
-
-	switch (val & RTL8221B_SERDES_CTRL3_MODE_MASK) {
-	case RTL8221B_SERDES_CTRL3_MODE_2500BASEX:
-		phydev->interface = PHY_INTERFACE_MODE_2500BASEX;
-		break;
-	case RTL8221B_SERDES_CTRL3_MODE_SGMII:
-		phydev->interface = PHY_INTERFACE_MODE_SGMII;
-		break;
-	default:
-		break;
-	}
-}
-
 static int rtl822x_read_status(struct phy_device *phydev)
 {
 	int ret, val;
