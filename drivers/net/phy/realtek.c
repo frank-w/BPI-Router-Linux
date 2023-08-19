@@ -972,7 +972,7 @@ static int rtl8221_vb_cg_c22_match_phy_device(struct phy_device *phydev)
 			!rtl822x_use_c45(phydev);
 }
 
-static int rtl8221b_vb_cg_match_phy_device(struct phy_device *phydev)
+/*static int rtl8221b_vb_cg_match_phy_device(struct phy_device *phydev)
 {
 	int val;
 	u32 id;
@@ -1002,7 +1002,7 @@ static int rtl8221b_vb_cg_match_phy_device(struct phy_device *phydev)
 	}
 
 	return (id == 0x001cc849);
-}
+}*/
 
 static int rtl822x_probe(struct phy_device *phydev)
 {
