@@ -5855,9 +5855,9 @@ out:
  * * MC_TARGET_NONE - If the pte is not a target for move charge.
  * * MC_TARGET_PAGE - If the page corresponding to this pte is a target for
  *   move charge. If @target is not NULL, the page is stored in target->page
- *   with extra refcnt got (Callers should handle it).
+ *   with extra refcnt taken (Callers should handle it).
  * * MC_TARGET_SWAP - If the swap entry corresponding to this pte is a
- *   target for charge migration. if @target is not NULL, the entry is stored
+ *   target for charge migration.  If @target is not NULL, the entry is stored
  *   in target->ent.
  * * MC_TARGET_DEVICE - Like MC_TARGET_PAGE but page is device memory and
  *   thus not on the lru.  For now such page is charged like a regular page
