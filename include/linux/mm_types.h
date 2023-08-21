@@ -333,11 +333,8 @@ struct folio {
 			atomic_t _pincount;
 #ifdef CONFIG_64BIT
 			unsigned int _folio_nr_pages;
-			/* 4 byte gap here */
-	/* private: the union with struct page is transitional */
-			/* Fix THP_SWAP to not use tail->private */
-			unsigned long _private_1;
 #endif
+	/* private: the union with struct page is transitional */
 		};
 		struct page __page_1;
 	};
@@ -358,9 +355,6 @@ struct folio {
 	/* public: */
 			struct list_head _deferred_list;
 	/* private: the union with struct page is transitional */
-			unsigned long _avail_2a;
-			/* Fix THP_SWAP to not use tail->private */
-			unsigned long _private_2a;
 		};
 		struct page __page_2;
 	};
@@ -385,9 +379,6 @@ FOLIO_MATCH(memcg_data, memcg_data);
 			offsetof(struct page, pg) + sizeof(struct page))
 FOLIO_MATCH(flags, _flags_1);
 FOLIO_MATCH(compound_head, _head_1);
-#ifdef CONFIG_64BIT
-FOLIO_MATCH(private, _private_1);
-#endif
 #undef FOLIO_MATCH
 #define FOLIO_MATCH(pg, fl)						\
 	static_assert(offsetof(struct folio, fl) ==			\
@@ -396,7 +387,6 @@ FOLIO_MATCH(flags, _flags_2);
 FOLIO_MATCH(compound_head, _head_2);
 FOLIO_MATCH(flags, _flags_2a);
 FOLIO_MATCH(compound_head, _head_2a);
-FOLIO_MATCH(private, _private_2a);
 #undef FOLIO_MATCH
 
 /**
