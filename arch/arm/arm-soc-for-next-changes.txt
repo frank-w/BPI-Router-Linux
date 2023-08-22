@@ -49,9 +49,9 @@ soc/dt
 		ARM: dts: nspire: Remove file name from the files themselves
 		ARM: dts: aspeed: Fix pca954x i2c-mux node names
 		ARM: dts: nuvoton: Fix pca954x i2c-mux node names
-	<no branch> (58fe732052196777112fdba536fb9db5cdd42ec6)
+	mvebu/dt64
 		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-6.6-1
-	<no branch> (afc19882dfc89211cf188284c78ff79a08b23802)
+	mvebu/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt-6.6-1
 	riscv/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-for-v6.6
@@ -67,6 +67,24 @@ soc/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.6
 	dt/cleanup-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt64-cleanup-6.6
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v6.6-1
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-dts64-1
+	rockchip/dt32
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-dts32-1
+	qcom/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-dts-for-6.6
+	qcom/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-6.6
+	riscv/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-for-v6.6-pt2
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_updates_for_v6.6
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/devicetree
+	broadcom/dt64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/devicetree-arm64
 
 soc/drivers
 	<no branch> (b43f11e5b453a9c48159d7121c88d79d81901276)
@@ -89,7 +107,7 @@ soc/drivers
 		git://git.pengutronix.de/pza/linux tags/reset-for-v6.6
 	samsung/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-6.6
-	<no branch> (b51022b416f5be113cd5345a2cab287d78e6b74c)
+	hisi/drivers
 		https://github.com/hisilicon/linux-hisi tags/hisi-drivers-for-6.6
 	patch
 		soc: kunpeng_hccs: fix size_t format string
@@ -102,6 +120,18 @@ soc/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.6
 	drivers/memory
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.6
+	patch
+		soc: dt-bindings: add loongson-2 pm
+		soc: loongson2_pm: add power management support
+		soc: kunpeng_hccs: fix some sparse warnings about incorrect type
+	rockchip/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-drivers1
+	qcom/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.6
+	omap/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/ti-sysc-signed
+	broadcom/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/drivers
 
 arm/defconfig
 
@@ -116,6 +146,12 @@ arm/fixes
 		ARM: dts: integrator: fix PCI bus dtc warnings
 		soc: aspeed: uart-routing: Use __sysfs_match_string
 		soc: aspeed: socinfo: Add kfree for kstrdup
+	<no branch> (ebceec271e552a2b05e47d8ef0597052b1a39449)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.5-rockchip-dtsfixes1
+	<no branch> (7aff940ec88658f7fd21137cf515956a7deaaf54)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.5/fixes-signed
+	<no branch> (6d4cc57630a867a944483fdf7f8a060d2bbebdb9)
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-fixes-for-6.5
 
 soc/arm
 	patch
@@ -170,6 +206,8 @@ soc/arm
 		ARM: s5pv210: Explicitly include correct DT includes
 	keystone/soc
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-soc-for-v6.6
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/soc
 
 soc/defconfig
 	renesas/defconfig
@@ -178,9 +216,14 @@ soc/defconfig
 		ARM: multi_v7_defconfig: Enable TLV320AIC3x
 		ARM: multi_v7_defconfig: Enable TI Remoteproc and related configs
 		ARM: multi_v7_defconfig: Enable OMAP audio/display support
-	<no branch> (95afa02c9e42cdbc2f91dc0f64e59ea10d710a4f)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.6
 	imx/defconfig
-k3/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.6
+	k3/defconfig
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-config-for-v6.6
+	patch
+		ARM: multi_v7_defconfig: Add SCMI regulator support
+	rockchip/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-defconfig64-1
+	qcom/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-6.6
 
