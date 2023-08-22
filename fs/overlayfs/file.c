@@ -278,29 +278,43 @@ static inline void ovl_aio_put(struct ovl_aio_req *aio_req)
 	}
 }
 
-static void ovl_aio_cleanup_handler(struct ovl_aio_req *aio_req)
+/* Completion for submitted/failed sync/async rw io */
+static void ovl_rw_complete(struct kiocb *orig_iocb)
+{
+	struct file *file = orig_iocb->ki_filp;
+
+	if (orig_iocb->ki_flags & IOCB_WRITE) {
+		/* Update size/mtime */
+		ovl_copyattr(file_inode(file));
+	} else {
+		/* Update atime */
+		ovl_file_accessed(file);
+	}
+}
+
+/* Completion for submitted/failed async rw io */
+static void ovl_aio_cleanup(struct ovl_aio_req *aio_req)
 {
 	struct kiocb *iocb = &aio_req->iocb;
 	struct kiocb *orig_iocb = aio_req->orig_iocb;
 
-	if (iocb->ki_flags & IOCB_WRITE) {
-		struct inode *inode = file_inode(orig_iocb->ki_filp);
-
+	if (iocb->ki_flags & IOCB_WRITE)
 		kiocb_end_write(iocb);
-		ovl_copyattr(inode);
-	}
 
 	orig_iocb->ki_pos = iocb->ki_pos;
+	ovl_rw_complete(orig_iocb);
+
 	ovl_aio_put(aio_req);
 }
 
+/* Completion for submitted async rw io */
 static void ovl_aio_rw_complete(struct kiocb *iocb, long res)
 {
 	struct ovl_aio_req *aio_req = container_of(iocb,
 						   struct ovl_aio_req, iocb);
 	struct kiocb *orig_iocb = aio_req->orig_iocb;
 
-	ovl_aio_cleanup_handler(aio_req);
+	ovl_aio_cleanup(aio_req);
 	orig_iocb->ki_complete(orig_iocb, res);
 }
 
@@ -328,6 +342,7 @@ static ssize_t ovl_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		rwf_t rwf = iocb_to_rw_flags(iocb->ki_flags);
 
 		ret = vfs_iter_read(real.file, iter, &iocb->ki_pos, rwf);
+		ovl_rw_complete(iocb);
 	} else {
 		struct ovl_aio_req *aio_req;
 
@@ -344,11 +359,10 @@ static ssize_t ovl_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		ret = vfs_iocb_iter_read(real.file, &aio_req->iocb, iter);
 		ovl_aio_put(aio_req);
 		if (ret != -EIOCBQUEUED)
-			ovl_aio_cleanup_handler(aio_req);
+			ovl_aio_cleanup(aio_req);
 	}
 out:
 	revert_creds(old_cred);
-	ovl_file_accessed(file);
 out_fdput:
 	fdput(real);
 
@@ -386,15 +400,14 @@ static ssize_t ovl_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 	if (!ovl_should_sync(OVL_FS(inode->i_sb)))
 		flags &= ~(IOCB_DSYNC | IOCB_SYNC);
 
-	old_cred = ovl_override_creds(file_inode(file)->i_sb);
+	old_cred = ovl_override_creds(inode->i_sb);
 	if (is_sync_kiocb(iocb)) {
 		rwf_t rwf = iocb_to_rw_flags(flags);
 
 		file_start_write(real.file);
 		ret = vfs_iter_write(real.file, iter, &iocb->ki_pos, rwf);
 		file_end_write(real.file);
-		/* Update size */
-		ovl_copyattr(inode);
+		ovl_rw_complete(iocb);
 	} else {
 		struct ovl_aio_req *aio_req;
 
@@ -413,7 +426,7 @@ static ssize_t ovl_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 		ret = vfs_iocb_iter_write(real.file, &aio_req->iocb, iter);
 		ovl_aio_put(aio_req);
 		if (ret != -EIOCBQUEUED)
-			ovl_aio_cleanup_handler(aio_req);
+			ovl_aio_cleanup(aio_req);
 	}
 out:
 	revert_creds(old_cred);
