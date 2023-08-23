@@ -1433,26 +1433,6 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 			ret = PTR_ERR(ordered);
 			goto out_drop_extent_cache;
 		}
-
-		if (btrfs_is_data_reloc_root(root)) {
-			ret = btrfs_reloc_clone_csums(ordered);
-
-			/*
-			 * Only drop cache here, and process as normal.
-			 *
-			 * We must not allow extent_clear_unlock_delalloc()
-			 * at out_unlock label to free meta of this ordered
-			 * extent, as its meta should be freed by
-			 * btrfs_finish_ordered_io().
-			 *
-			 * So we must continue until @start is increased to
-			 * skip current ordered extent.
-			 */
-			if (ret)
-				btrfs_drop_extent_map_range(inode, start,
-							    start + ram_size - 1,
-							    false);
-		}
 		btrfs_put_ordered_extent(ordered);
 
 		btrfs_dec_block_group_reservations(fs_info, ins.objectid);
@@ -1479,14 +1459,6 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 		alloc_hint = ins.objectid + ins.offset;
 		start += cur_alloc_size;
 		extent_reserved = false;
-
-		/*
-		 * btrfs_reloc_clone_csums() error, since start is increased
-		 * extent_clear_unlock_delalloc() at out_unlock label won't
-		 * free metadata of current ordered extent, we're OK to exit.
-		 */
-		if (ret)
-			goto out_unlock;
 	}
 done:
 	if (done_offset)
@@ -2168,14 +2140,6 @@ must_cow:
 			ret = PTR_ERR(ordered);
 			goto error;
 		}
-
-		if (btrfs_is_data_reloc_root(root))
-			/*
-			 * Error handled later, as we must prevent
-			 * extent_clear_unlock_delalloc() in error handler
-			 * from freeing metadata of created ordered extent.
-			 */
-			ret = btrfs_reloc_clone_csums(ordered);
 		btrfs_put_ordered_extent(ordered);
 
 		extent_clear_unlock_delalloc(inode, cur_offset, nocow_end,
@@ -2184,15 +2148,7 @@ must_cow:
 					     EXTENT_CLEAR_DATA_RESV,
 					     PAGE_UNLOCK | PAGE_SET_ORDERED);
 
-		cur_offset = extent_end;
-
-		/*
-		 * btrfs_reloc_clone_csums() error, now we're OK to call error
-		 * handler, as metadata for created ordered extent will only
-		 * be freed by btrfs_finish_ordered_io().
-		 */
-		if (ret)
-			goto error;
+		cur_offset = nocow_end + 1;
 		if (cur_offset > end)
 			break;
 	}
