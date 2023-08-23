@@ -333,15 +333,13 @@ struct swap_info_struct {
 					   */
 };
 
-static inline swp_entry_t folio_swap_entry(struct folio *folio)
+static inline swp_entry_t page_swap_entry(struct page *page)
 {
-	swp_entry_t entry = { .val = page_private(&folio->page) };
-	return entry;
-}
+	struct folio *folio = page_folio(page);
+	swp_entry_t entry = folio->swap;
 
-static inline void folio_set_swap_entry(struct folio *folio, swp_entry_t entry)
-{
-	folio->private = (void *)entry.val;
+	entry.val += folio_page_idx(folio, page);
+	return entry;
 }
 
 /* linux/mm/workingset.c */

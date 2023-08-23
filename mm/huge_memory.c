@@ -2401,10 +2401,16 @@ static void lru_add_page_tail(struct page *head, struct page *tail,
 	}
 }
 
-static void __split_huge_page_tail(struct page *head, int tail,
+static void __split_huge_page_tail(struct folio *folio, int tail,
 		struct lruvec *lruvec, struct list_head *list)
 {
+	struct page *head = &folio->page;
 	struct page *page_tail = head + tail;
+	/*
+	 * Careful: new_folio is not a "real" folio before we cleared PageTail.
+	 * Don't pass it around before clear_compound_head().
+	 */
+	struct folio *new_folio = (struct folio *)page_tail;
 
 	VM_BUG_ON_PAGE(atomic_read(&page_tail->_mapcount) != -1, page_tail);
 
@@ -2439,25 +2445,22 @@ static void __split_huge_page_tail(struct page *head, int tail,
 			 (1L << PG_dirty) |
 			 LRU_GEN_MASK | LRU_REFS_MASK));
 
-	/* ->mapping in first and second tail page is replaced by other uses */
-	VM_BUG_ON_PAGE(tail > 2 && page_tail->mapping != TAIL_MAPPING,
-			page_tail);
+	/* ->mapping in <=TAIL_MAPPING_REUSED_MAX tail pages are reused */
+	VM_BUG_ON_PAGE(tail > TAIL_MAPPING_REUSED_MAX &&
+		       page_tail->mapping != TAIL_MAPPING, page_tail);
 	page_tail->mapping = head->mapping;
 	page_tail->index = head->index + tail;
 
 	/*
-	 * page->private should not be set in tail pages with the exception
-	 * of swap cache pages that store the swp_entry_t in tail pages.
-	 * Fix up and warn once if private is unexpectedly set.
-	 *
-	 * What of 32-bit systems, on which folio->_pincount overlays
-	 * head[1].private?  No problem: THP_SWAP is not enabled on 32-bit, and
-	 * pincount must be 0 for folio_ref_freeze() to have succeeded.
+	 * page->private should not be set in tail pages. Fix up and warn once
+	 * if private is unexpectedly set.
 	 */
-	if (!folio_test_swapcache(page_folio(head))) {
-		VM_WARN_ON_ONCE_PAGE(page_tail->private != 0, page_tail);
+	if (unlikely(page_tail->private)) {
+		VM_WARN_ON_ONCE_PAGE(true, page_tail);
 		page_tail->private = 0;
 	}
+	if (folio_test_swapcache(folio))
+		new_folio->swap.val = folio->swap.val + tail;
 
 	/* Page flags must be visible before we make the page non-compound. */
 	smp_wmb();
@@ -2503,11 +2506,9 @@ static void __split_huge_page(struct page *page, struct list_head *list,
 	/* complete memcg works before add pages to LRU */
 	split_page_memcg(head, nr);
 
-	if (PageAnon(head) && PageSwapCache(head)) {
-		swp_entry_t entry = { .val = page_private(head) };
-
-		offset = swp_offset(entry);
-		swap_cache = swap_address_space(entry);
+	if (folio_test_anon(folio) && folio_test_swapcache(folio)) {
+		offset = swp_offset(folio->swap);
+		swap_cache = swap_address_space(folio->swap);
 		xa_lock(&swap_cache->i_pages);
 	}
 
@@ -2517,7 +2518,7 @@ static void __split_huge_page(struct page *page, struct list_head *list,
 	ClearPageHasHWPoisoned(head);
 
 	for (i = nr - 1; i >= 1; i--) {
-		__split_huge_page_tail(head, i, lruvec, list);
+		__split_huge_page_tail(folio, i, lruvec, list);
 		/* Some pages can be beyond EOF: drop them from page cache */
 		if (head[i].index >= end) {
 			struct folio *tail = page_folio(head + i);
@@ -2562,11 +2563,8 @@ static void __split_huge_page(struct page *page, struct list_head *list,
 
 	remap_page(folio, nr);
 
-	if (PageSwapCache(head)) {
-		swp_entry_t entry = { .val = page_private(head) };
-
-		split_swap_cluster(entry);
-	}
+	if (folio_test_swapcache(folio))
+		split_swap_cluster(folio->swap);
 
 	for (i = 0; i < nr; i++) {
 		struct page *subpage = head + i;

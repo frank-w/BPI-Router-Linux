@@ -248,6 +248,25 @@ static inline struct page *encoded_page_ptr(struct encoded_page *page)
 	return (struct page *)(~ENCODE_PAGE_BITS & (unsigned long)page);
 }
 
+/*
+ * This macro defines the maximum tail pages (of a folio) that can have the
+ * page->mapping field reused.
+ *
+ * When the tail page's mapping field reused, it'll be exempted from
+ * ->mapping poisoning and checks.  Also see the macro TAIL_MAPPING.
+ *
+ * When grow the folio struct, please consider growing this too.
+ */
+#define  TAIL_MAPPING_REUSED_MAX  (2)
+
+/*
+ * A swap entry has to fit into a "unsigned long", as the entry is hidden
+ * in the "index" field of the swapper address space.
+ */
+typedef struct {
+	unsigned long val;
+} swp_entry_t;
+
 /**
  * struct folio - Represents a contiguous set of bytes.
  * @flags: Identical to the page flags.
@@ -258,7 +277,7 @@ static inline struct page *encoded_page_ptr(struct encoded_page *page)
  * @index: Offset within the file, in units of pages.  For anonymous memory,
  *    this is the index from the beginning of the mmap.
  * @private: Filesystem per-folio data (see folio_attach_private()).
- *    Used for swp_entry_t if folio_test_swapcache().
+ * @swap: Used for swp_entry_t if folio_test_swapcache().
  * @_mapcount: Do not access this member directly.  Use folio_mapcount() to
  *    find out how many times this folio is mapped by userspace.
  * @_refcount: Do not access this member directly.  Use folio_ref_count()
@@ -301,7 +320,10 @@ struct folio {
 			};
 			struct address_space *mapping;
 			pgoff_t index;
-			void *private;
+			union {
+				void *private;
+				swp_entry_t swap;
+			};
 			atomic_t _mapcount;
 			atomic_t _refcount;
 #ifdef CONFIG_MEMCG
@@ -322,11 +344,8 @@ struct folio {
 			atomic_t _pincount;
 #ifdef CONFIG_64BIT
 			unsigned int _folio_nr_pages;
-			/* 4 byte gap here */
-	/* private: the union with struct page is transitional */
-			/* Fix THP_SWAP to not use tail->private */
-			unsigned long _private_1;
 #endif
+	/* private: the union with struct page is transitional */
 		};
 		struct page __page_1;
 	};
@@ -347,9 +366,6 @@ struct folio {
 	/* public: */
 			struct list_head _deferred_list;
 	/* private: the union with struct page is transitional */
-			unsigned long _avail_2a;
-			/* Fix THP_SWAP to not use tail->private */
-			unsigned long _private_2a;
 		};
 		struct page __page_2;
 	};
@@ -374,9 +390,6 @@ FOLIO_MATCH(memcg_data, memcg_data);
 			offsetof(struct page, pg) + sizeof(struct page))
 FOLIO_MATCH(flags, _flags_1);
 FOLIO_MATCH(compound_head, _head_1);
-#ifdef CONFIG_64BIT
-FOLIO_MATCH(private, _private_1);
-#endif
 #undef FOLIO_MATCH
 #define FOLIO_MATCH(pg, fl)						\
 	static_assert(offsetof(struct folio, fl) ==			\
@@ -385,7 +398,6 @@ FOLIO_MATCH(flags, _flags_2);
 FOLIO_MATCH(compound_head, _head_2);
 FOLIO_MATCH(flags, _flags_2a);
 FOLIO_MATCH(compound_head, _head_2a);
-FOLIO_MATCH(private, _private_2a);
 #undef FOLIO_MATCH
 
 /**
@@ -1184,7 +1196,8 @@ enum vm_fault_reason {
 	{ VM_FAULT_RETRY,               "RETRY" },	\
 	{ VM_FAULT_FALLBACK,            "FALLBACK" },	\
 	{ VM_FAULT_DONE_COW,            "DONE_COW" },	\
-	{ VM_FAULT_NEEDDSYNC,           "NEEDDSYNC" }
+	{ VM_FAULT_NEEDDSYNC,           "NEEDDSYNC" },	\
+	{ VM_FAULT_COMPLETED,           "COMPLETED" }
 
 struct vm_special_mapping {
 	const char *name;	/* The name, e.g. "[vdso]". */
@@ -1217,14 +1230,6 @@ enum tlb_flush_reason {
 	TLB_REMOTE_SEND_IPI,
 	NR_TLB_FLUSH_REASONS,
 };
-
- /*
-  * A swap entry has to fit into a "unsigned long", as the entry is hidden
-  * in the "index" field of the swapper address space.
-  */
-typedef struct {
-	unsigned long val;
-} swp_entry_t;
 
 /**
  * enum fault_flag - Fault flag definitions.

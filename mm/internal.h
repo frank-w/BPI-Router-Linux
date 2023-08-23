@@ -429,7 +429,8 @@ static inline void prep_compound_tail(struct page *head, int tail_idx)
 {
 	struct page *p = head + tail_idx;
 
-	p->mapping = TAIL_MAPPING;
+	if (tail_idx > TAIL_MAPPING_REUSED_MAX)
+		p->mapping = TAIL_MAPPING;
 	set_compound_head(p, head);
 	set_page_private(p, 0);
 }

@@ -1659,7 +1659,7 @@ static int shmem_replace_folio(struct folio **foliop, gfp_t gfp,
 	int error;
 
 	old = *foliop;
-	entry = folio_swap_entry(old);
+	entry = old->swap;
 	swap_index = swp_offset(entry);
 	swap_mapping = swap_address_space(entry);
 
@@ -1680,7 +1680,7 @@ static int shmem_replace_folio(struct folio **foliop, gfp_t gfp,
 	__folio_set_locked(new);
 	__folio_set_swapbacked(new);
 	folio_mark_uptodate(new);
-	folio_set_swap_entry(new, entry);
+	new->swap = entry;
 	folio_set_swapcache(new);
 
 	/*
@@ -1802,7 +1802,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	/* We have to do this with folio locked to prevent races */
 	folio_lock(folio);
 	if (!folio_test_swapcache(folio) ||
-	    folio_swap_entry(folio).val != swap.val ||
+	    folio->swap.val != swap.val ||
 	    !shmem_confirm_swap(mapping, index, swap)) {
 		error = -EEXIST;
 		goto unlock;
