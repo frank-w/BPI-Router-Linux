@@ -344,7 +344,7 @@ static inline swp_entry_t page_swap_entry(struct page *page)
 	struct folio *folio = page_folio(page);
 	swp_entry_t entry = folio_swap_entry(folio);
 
-	entry.val += page - &folio->page;
+	entry.val += folio_page_idx(folio, page);
 	return entry;
 }
 
