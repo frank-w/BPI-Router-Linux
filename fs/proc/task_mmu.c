@@ -437,9 +437,9 @@ static void smaps_page_accumulate(struct mem_size_stats *mss,
 	}
 }
 
-static void smaps_account(struct mem_size_stats *mss, pte_t *pte,
-		struct page *page, bool compound, bool young, bool dirty,
-		bool locked, bool migration)
+static void smaps_account(struct mem_size_stats *mss, struct page *page,
+		bool compound, bool young, bool dirty, bool locked,
+		bool migration)
 {
 	int i, nr = compound ? compound_nr(page) : 1;
 	unsigned long size = nr * PAGE_SIZE;
@@ -454,7 +454,7 @@ static void smaps_account(struct mem_size_stats *mss, pte_t *pte,
 			mss->lazyfree += size;
 	}
 
-	if (PageKsm(page) && (!pte || !is_ksm_zero_pte(*pte)))
+	if (PageKsm(page))
 		mss->ksm += size;
 
 	mss->resident += size;
@@ -562,7 +562,7 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 	if (!page)
 		return;
 
-	smaps_account(mss, pte, page, false, young, dirty, locked, migration);
+	smaps_account(mss, page, false, young, dirty, locked, migration);
 }
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
@@ -596,7 +596,7 @@ static void smaps_pmd_entry(pmd_t *pmd, unsigned long addr,
 	else
 		mss->file_thp += HPAGE_PMD_SIZE;
 
-	smaps_account(mss, NULL, page, true, pmd_young(*pmd), pmd_dirty(*pmd),
+	smaps_account(mss, page, true, pmd_young(*pmd), pmd_dirty(*pmd),
 		      locked, migration);
 }
 #else
