@@ -766,7 +766,7 @@ same:
 		clear_inode_flag(inode, FI_ACL_MODE);
 	}
 
-	inode->i_ctime = current_time(inode);
+	inode_set_ctime_current(inode);
 	f2fs_mark_inode_dirty_sync(inode, true);
 exit:
 	kfree(base_addr);
