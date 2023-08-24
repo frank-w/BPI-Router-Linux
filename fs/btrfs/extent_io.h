@@ -140,6 +140,16 @@ static inline unsigned long get_eb_page_index(unsigned long offset)
 	return offset >> PAGE_SHIFT;
 }
 
+static inline void *btrfs_get_eb_addr(const struct extent_buffer *eb)
+{
+	/* For fallback vmapped extent buffer. */
+	if (eb->vaddr)
+		return eb->vaddr;
+
+	/* For physically contiguous pages and subpage cases. */
+	return page_address(eb->pages[0]) + offset_in_page(eb->start);
+}
+
 /*
  * Structure to record how many bytes and which ranges are set/cleared
  */
