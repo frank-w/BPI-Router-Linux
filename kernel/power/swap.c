@@ -1518,7 +1518,7 @@ static void *swsusp_holder;
 
 int swsusp_check(bool snapshot_test)
 {
-	void *holder = snapshot_test ? &swsusp_holder : NULL;
+	void *holder = snapshot_test ? NULL : &swsusp_holder;
 	int error;
 
 	hib_resume_bdev = blkdev_get_by_dev(swsusp_resume_device, BLK_OPEN_READ,
@@ -1573,7 +1573,7 @@ void swsusp_close(bool snapshot_test)
 		return;
 	}
 
-	blkdev_put(hib_resume_bdev, snapshot_test ? &swsusp_holder : NULL);
+	blkdev_put(hib_resume_bdev, snapshot_test ? NULL : &swsusp_holder);
 }
 
 /**
