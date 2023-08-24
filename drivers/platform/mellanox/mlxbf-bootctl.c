@@ -79,6 +79,9 @@ static void __iomem *mlxbf_rsh_scratch_buf_data;
 static const char * const mlxbf_rsh_log_level[] = {
 	"INFO", "WARN", "ERR", "ASSERT"};
 
+static DEFINE_MUTEX(icm_ops_lock);
+static DEFINE_MUTEX(os_up_lock);
+
 /* ARM SMC call which is atomic and no need for lock. */
 static int mlxbf_bootctl_smc(unsigned int smc_op, int smc_arg)
 {
@@ -391,6 +394,66 @@ done:
 	return count;
 }
 
+static ssize_t large_icm_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct arm_smccc_res res;
+
+	mutex_lock(&icm_ops_lock);
+	arm_smccc_smc(MLNX_HANDLE_GET_ICM_INFO, 0, 0, 0, 0,
+		      0, 0, 0, &res);
+	mutex_unlock(&icm_ops_lock);
+	if (res.a0)
+		return -EPERM;
+
+	return snprintf(buf, PAGE_SIZE, "0x%lx", res.a1);
+}
+
+static ssize_t large_icm_store(struct device *dev,
+			       struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct arm_smccc_res res;
+	unsigned long icm_data;
+	int err;
+
+	err = kstrtoul(buf, MLXBF_LARGE_ICMC_MAX_STRING_SIZE, &icm_data);
+	if (err)
+		return err;
+
+	if ((icm_data != 0 && icm_data < MLXBF_LARGE_ICMC_SIZE_MIN) ||
+	    icm_data > MLXBF_LARGE_ICMC_SIZE_MAX || icm_data % MLXBF_LARGE_ICMC_GRANULARITY)
+		return -EPERM;
+
+	mutex_lock(&icm_ops_lock);
+	arm_smccc_smc(MLNX_HANDLE_SET_ICM_INFO, icm_data, 0, 0, 0, 0, 0, 0, &res);
+	mutex_unlock(&icm_ops_lock);
+
+	return res.a0 ? -EPERM : count;
+}
+
+static ssize_t os_up_store(struct device *dev,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct arm_smccc_res res;
+	unsigned long val;
+	int err;
+
+	err = kstrtoul(buf, 10, &val);
+	if (err)
+		return err;
+
+	if (val != 1)
+		return -EINVAL;
+
+	mutex_lock(&os_up_lock);
+	arm_smccc_smc(MLNX_HANDLE_OS_UP, 0, 0, 0, 0, 0, 0, 0, &res);
+	mutex_unlock(&os_up_lock);
+
+	return count;
+}
+
 static DEVICE_ATTR_RW(post_reset_wdog);
 static DEVICE_ATTR_RW(reset_action);
 static DEVICE_ATTR_RW(second_reset_action);
@@ -398,6 +461,8 @@ static DEVICE_ATTR_RO(lifecycle_state);
 static DEVICE_ATTR_RO(secure_boot_fuse_state);
 static DEVICE_ATTR_WO(fw_reset);
 static DEVICE_ATTR_WO(rsh_log);
+static DEVICE_ATTR_RW(large_icm);
+static DEVICE_ATTR_WO(os_up);
 
 static struct attribute *mlxbf_bootctl_attrs[] = {
 	&dev_attr_post_reset_wdog.attr,
@@ -407,6 +472,8 @@ static struct attribute *mlxbf_bootctl_attrs[] = {
 	&dev_attr_secure_boot_fuse_state.attr,
 	&dev_attr_fw_reset.attr,
 	&dev_attr_rsh_log.attr,
+	&dev_attr_large_icm.attr,
+	&dev_attr_os_up.attr,
 	NULL
 };
 
