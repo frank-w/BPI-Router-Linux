@@ -189,8 +189,10 @@ static int gfs2_writepages(struct address_space *mapping,
 	 * pages held in the ail that it can't find.
 	 */
 	ret = iomap_writepages(mapping, wbc, &wpc, &gfs2_writeback_ops);
-	if (ret == 0)
+	if (ret == 0) {
 		set_bit(SDF_FORCE_AIL_FLUSH, &sdp->sd_flags);
+		wake_up(&sdp->sd_logd_waitq);
+	}
 	return ret;
 }
 
@@ -272,8 +274,7 @@ continue_unlock:
 				 * not be suitable for data integrity
 				 * writeout).
 				 */
-				*done_index = folio->index +
-					folio_nr_pages(folio);
+				*done_index = folio_next_index(folio);
 				ret = 1;
 				break;
 			}
