@@ -3490,8 +3490,8 @@ static void gsmld_detach_gsm(struct tty_struct *tty, struct gsm_mux *gsm)
 	gsm->tty = NULL;
 }
 
-static void gsmld_receive_buf(struct tty_struct *tty, const unsigned char *cp,
-			      const char *fp, int count)
+static void gsmld_receive_buf(struct tty_struct *tty, const u8 *cp,
+			      const u8 *fp, size_t count)
 {
 	struct gsm_mux *gsm = tty->disc_data;
 	char flags = TTY_NORMAL;
@@ -3577,6 +3577,9 @@ static int gsmld_open(struct tty_struct *tty)
 {
 	struct gsm_mux *gsm;
 
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
 	if (tty->ops->write == NULL)
 		return -EINVAL;
 
@@ -3636,9 +3639,8 @@ static void gsmld_write_wakeup(struct tty_struct *tty)
  *	This code must be sure never to sleep through a hangup.
  */
 
-static ssize_t gsmld_read(struct tty_struct *tty, struct file *file,
-			  unsigned char *buf, size_t nr,
-			  void **cookie, unsigned long offset)
+static ssize_t gsmld_read(struct tty_struct *tty, struct file *file, u8 *buf,
+			  size_t nr, void **cookie, unsigned long offset)
 {
 	return -EOPNOTSUPP;
 }
@@ -3658,7 +3660,7 @@ static ssize_t gsmld_read(struct tty_struct *tty, struct file *file,
  */
 
 static ssize_t gsmld_write(struct tty_struct *tty, struct file *file,
-			   const unsigned char *buf, size_t nr)
+			   const u8 *buf, size_t nr)
 {
 	struct gsm_mux *gsm = tty->disc_data;
 	unsigned long flags;
@@ -4254,8 +4256,7 @@ static void gsmtty_hangup(struct tty_struct *tty)
 	gsm_dlci_begin_close(dlci);
 }
 
-static int gsmtty_write(struct tty_struct *tty, const unsigned char *buf,
-								    int len)
+static ssize_t gsmtty_write(struct tty_struct *tty, const u8 *buf, size_t len)
 {
 	int sent;
 	struct gsm_dlci *dlci = tty->driver_data;

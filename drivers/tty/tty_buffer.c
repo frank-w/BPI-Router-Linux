@@ -316,8 +316,8 @@ EXPORT_SYMBOL_GPL(tty_buffer_request_room);
  *
  * Returns: the number added.
  */
-int tty_insert_flip_string_fixed_flag(struct tty_port *port,
-		const unsigned char *chars, char flag, size_t size)
+int tty_insert_flip_string_fixed_flag(struct tty_port *port, const u8 *chars,
+				      u8 flag, size_t size)
 {
 	int copied = 0;
 	bool flags = flag != TTY_NORMAL;
@@ -355,8 +355,8 @@ EXPORT_SYMBOL(tty_insert_flip_string_fixed_flag);
  *
  * Returns: the number added.
  */
-int tty_insert_flip_string_flags(struct tty_port *port,
-		const unsigned char *chars, const char *flags, size_t size)
+int tty_insert_flip_string_flags(struct tty_port *port, const u8 *chars,
+				 const u8 *flags, size_t size)
 {
 	int copied = 0;
 
@@ -390,7 +390,7 @@ EXPORT_SYMBOL(tty_insert_flip_string_flags);
  * Queue a single byte @ch to the tty buffering, with an optional flag. This is
  * the slow path of tty_insert_flip_char().
  */
-int __tty_insert_flip_char(struct tty_port *port, unsigned char ch, char flag)
+int __tty_insert_flip_char(struct tty_port *port, u8 ch, u8 flag)
 {
 	struct tty_buffer *tb;
 	bool flags = flag != TTY_NORMAL;
@@ -421,8 +421,7 @@ EXPORT_SYMBOL(__tty_insert_flip_char);
  * Returns: the length available and buffer pointer (@chars) to the space which
  * is now allocated and accounted for as ready for normal characters.
  */
-int tty_prepare_flip_string(struct tty_port *port, unsigned char **chars,
-		size_t size)
+int tty_prepare_flip_string(struct tty_port *port, u8 **chars, size_t size)
 {
 	int space = __tty_buffer_request_room(port, size, false);
 
@@ -450,13 +449,13 @@ EXPORT_SYMBOL_GPL(tty_prepare_flip_string);
  *
  * Returns: the number of bytes processed.
  */
-int tty_ldisc_receive_buf(struct tty_ldisc *ld, const unsigned char *p,
-			  const char *f, int count)
+size_t tty_ldisc_receive_buf(struct tty_ldisc *ld, const u8 *p, const u8 *f,
+			     size_t count)
 {
 	if (ld->ops->receive_buf2)
 		count = ld->ops->receive_buf2(ld->tty, p, f, count);
 	else {
-		count = min_t(int, count, ld->tty->receive_room);
+		count = min_t(size_t, count, ld->tty->receive_room);
 		if (count && ld->ops->receive_buf)
 			ld->ops->receive_buf(ld->tty, p, f, count);
 	}
@@ -489,7 +488,7 @@ static void lookahead_bufs(struct tty_port *port, struct tty_buffer *head)
 		}
 
 		if (port->client_ops->lookahead_buf) {
-			unsigned char *p, *f = NULL;
+			u8 *p, *f = NULL;
 
 			p = char_buf_ptr(head, head->lookahead);
 			if (head->flags)
@@ -502,12 +501,12 @@ static void lookahead_bufs(struct tty_port *port, struct tty_buffer *head)
 	}
 }
 
-static int
-receive_buf(struct tty_port *port, struct tty_buffer *head, int count)
+static size_t
+receive_buf(struct tty_port *port, struct tty_buffer *head, size_t count)
 {
-	unsigned char *p = char_buf_ptr(head, head->read);
-	const char *f = NULL;
-	int n;
+	u8 *p = char_buf_ptr(head, head->read);
+	const u8 *f = NULL;
+	size_t n;
 
 	if (head->flags)
 		f = flag_buf_ptr(head, head->read);
@@ -539,7 +538,7 @@ static void flush_to_ldisc(struct work_struct *work)
 	while (1) {
 		struct tty_buffer *head = buf->head;
 		struct tty_buffer *next;
-		int count, rcvd;
+		size_t count, rcvd;
 
 		/* Ldisc or user is trying to gain exclusive access */
 		if (atomic_read(&buf->priority))
@@ -620,7 +619,7 @@ EXPORT_SYMBOL(tty_flip_buffer_push);
  * Returns: the number added.
  */
 int tty_insert_flip_string_and_push_buffer(struct tty_port *port,
-		const unsigned char *chars, size_t size)
+					   const u8 *chars, size_t size)
 {
 	struct tty_bufhead *buf = &port->buf;
 	unsigned long flags;

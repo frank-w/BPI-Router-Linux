@@ -158,16 +158,14 @@ static inline unsigned char *echo_buf_addr(struct n_tty_data *ldata, size_t i)
 }
 
 /* If we are not echoing the data, perhaps this is a secret so erase it */
-static void zero_buffer(struct tty_struct *tty, u8 *buffer, int size)
+static void zero_buffer(const struct tty_struct *tty, u8 *buffer, size_t size)
 {
-	bool icanon = !!L_ICANON(tty);
-	bool no_echo = !L_ECHO(tty);
-
-	if (icanon && no_echo)
-		memset(buffer, 0x00, size);
+	if (L_ICANON(tty) && !L_ECHO(tty))
+		memset(buffer, 0, size);
 }
 
-static void tty_copy(struct tty_struct *tty, void *to, size_t tail, size_t n)
+static void tty_copy(const struct tty_struct *tty, void *to, size_t tail,
+		     size_t n)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 	size_t size = N_TTY_BUF_SIZE - tail;
@@ -198,7 +196,7 @@ static void tty_copy(struct tty_struct *tty, void *to, size_t tail, size_t n)
  *  * n_tty_read()/consumer path:
  *	holds non-exclusive %termios_rwsem
  */
-static void n_tty_kick_worker(struct tty_struct *tty)
+static void n_tty_kick_worker(const struct tty_struct *tty)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 
@@ -218,9 +216,9 @@ static void n_tty_kick_worker(struct tty_struct *tty)
 	}
 }
 
-static ssize_t chars_in_buffer(struct tty_struct *tty)
+static ssize_t chars_in_buffer(const struct tty_struct *tty)
 {
-	struct n_tty_data *ldata = tty->disc_data;
+	const struct n_tty_data *ldata = tty->disc_data;
 	ssize_t n = 0;
 
 	if (!ldata->icanon)
@@ -396,7 +394,7 @@ static inline int is_utf8_continuation(unsigned char c)
  * Returns: true if the utf8 character @c is a multibyte continuation character
  * and the terminal is in unicode mode.
  */
-static inline int is_continuation(unsigned char c, struct tty_struct *tty)
+static inline int is_continuation(unsigned char c, const struct tty_struct *tty)
 {
 	return I_IUTF8(tty) && is_utf8_continuation(c);
 }
@@ -916,7 +914,7 @@ static void echo_char_raw(unsigned char c, struct n_tty_data *ldata)
  * This variant tags control characters to be echoed as "^X" (where X is the
  * letter representing the control char).
  */
-static void echo_char(unsigned char c, struct tty_struct *tty)
+static void echo_char(unsigned char c, const struct tty_struct *tty)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 
@@ -954,7 +952,7 @@ static inline void finish_erasing(struct n_tty_data *ldata)
  * Locking: n_tty_receive_buf()/producer path:
  *	caller holds non-exclusive %termios_rwsem
  */
-static void eraser(unsigned char c, struct tty_struct *tty)
+static void eraser(unsigned char c, const struct tty_struct *tty)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 	enum { ERASE, WERASE, KILL } kill_type;
@@ -1170,7 +1168,7 @@ static void n_tty_receive_break(struct tty_struct *tty)
  * Called from the receive_buf path so single threaded. Does not need locking
  * as num_overrun and overrun_time are function private.
  */
-static void n_tty_receive_overrun(struct tty_struct *tty)
+static void n_tty_receive_overrun(const struct tty_struct *tty)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 
@@ -1194,7 +1192,8 @@ static void n_tty_receive_overrun(struct tty_struct *tty)
  * Locking: n_tty_receive_buf()/producer path:
  * 	caller holds non-exclusive %termios_rwsem
  */
-static void n_tty_receive_parity_error(struct tty_struct *tty, unsigned char c)
+static void n_tty_receive_parity_error(const struct tty_struct *tty,
+				       unsigned char c)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 
@@ -1480,8 +1479,8 @@ n_tty_receive_char_lnext(struct tty_struct *tty, unsigned char c, char flag)
 }
 
 /* Caller must ensure count > 0 */
-static void n_tty_lookahead_flow_ctrl(struct tty_struct *tty, const unsigned char *cp,
-				      const unsigned char *fp, unsigned int count)
+static void n_tty_lookahead_flow_ctrl(struct tty_struct *tty, const u8 *cp,
+				      const u8 *fp, size_t count)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 	unsigned char flag = TTY_NORMAL;
@@ -1501,8 +1500,8 @@ static void n_tty_lookahead_flow_ctrl(struct tty_struct *tty, const unsigned cha
 }
 
 static void
-n_tty_receive_buf_real_raw(struct tty_struct *tty, const unsigned char *cp,
-			   const char *fp, int count)
+n_tty_receive_buf_real_raw(const struct tty_struct *tty, const u8 *cp,
+			   int count)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 	size_t n, head;
@@ -1521,11 +1520,11 @@ n_tty_receive_buf_real_raw(struct tty_struct *tty, const unsigned char *cp,
 }
 
 static void
-n_tty_receive_buf_raw(struct tty_struct *tty, const unsigned char *cp,
-		      const char *fp, int count)
+n_tty_receive_buf_raw(struct tty_struct *tty, const u8 *cp, const u8 *fp,
+		      int count)
 {
 	struct n_tty_data *ldata = tty->disc_data;
-	char flag = TTY_NORMAL;
+	u8 flag = TTY_NORMAL;
 
 	while (count--) {
 		if (fp)
@@ -1538,8 +1537,8 @@ n_tty_receive_buf_raw(struct tty_struct *tty, const unsigned char *cp,
 }
 
 static void
-n_tty_receive_buf_closing(struct tty_struct *tty, const unsigned char *cp,
-			  const char *fp, int count, bool lookahead_done)
+n_tty_receive_buf_closing(struct tty_struct *tty, const u8 *cp, const u8 *fp,
+			  int count, bool lookahead_done)
 {
 	char flag = TTY_NORMAL;
 
@@ -1551,14 +1550,15 @@ n_tty_receive_buf_closing(struct tty_struct *tty, const unsigned char *cp,
 	}
 }
 
-static void n_tty_receive_buf_standard(struct tty_struct *tty,
-		const unsigned char *cp, const char *fp, int count, bool lookahead_done)
+static void n_tty_receive_buf_standard(struct tty_struct *tty, const u8 *cp,
+				       const u8 *fp, int count,
+				       bool lookahead_done)
 {
 	struct n_tty_data *ldata = tty->disc_data;
-	char flag = TTY_NORMAL;
+	u8 flag = TTY_NORMAL;
 
 	while (count--) {
-		unsigned char c = *cp++;
+		u8 c = *cp++;
 
 		if (fp)
 			flag = *fp++;
@@ -1589,15 +1589,15 @@ static void n_tty_receive_buf_standard(struct tty_struct *tty,
 	}
 }
 
-static void __receive_buf(struct tty_struct *tty, const unsigned char *cp,
-			  const char *fp, int count)
+static void __receive_buf(struct tty_struct *tty, const u8 *cp, const u8 *fp,
+			  int count)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 	bool preops = I_ISTRIP(tty) || (I_IUCLC(tty) && L_IEXTEN(tty));
 	size_t la_count = min_t(size_t, ldata->lookahead_count, count);
 
 	if (ldata->real_raw)
-		n_tty_receive_buf_real_raw(tty, cp, fp, count);
+		n_tty_receive_buf_real_raw(tty, cp, count);
 	else if (ldata->raw || (L_EXTPROC(tty) && !preops))
 		n_tty_receive_buf_raw(tty, cp, fp, count);
 	else if (tty->closing && !L_EXTPROC(tty)) {
@@ -1663,12 +1663,13 @@ static void __receive_buf(struct tty_struct *tty, const unsigned char *cp,
  *	claims non-exclusive %termios_rwsem
  *	publishes commit_head or canon_head
  */
-static int
-n_tty_receive_buf_common(struct tty_struct *tty, const unsigned char *cp,
-			 const char *fp, int count, int flow)
+static size_t
+n_tty_receive_buf_common(struct tty_struct *tty, const u8 *cp, const u8 *fp,
+			 int count, int flow)
 {
 	struct n_tty_data *ldata = tty->disc_data;
-	int room, n, rcvd = 0, overflow;
+	size_t rcvd = 0;
+	int room, n, overflow;
 
 	down_read(&tty->termios_rwsem);
 
@@ -1744,14 +1745,14 @@ n_tty_receive_buf_common(struct tty_struct *tty, const unsigned char *cp,
 	return rcvd;
 }
 
-static void n_tty_receive_buf(struct tty_struct *tty, const unsigned char *cp,
-			      const char *fp, int count)
+static void n_tty_receive_buf(struct tty_struct *tty, const u8 *cp,
+			      const u8 *fp, size_t count)
 {
 	n_tty_receive_buf_common(tty, cp, fp, count, 0);
 }
 
-static int n_tty_receive_buf2(struct tty_struct *tty, const unsigned char *cp,
-			      const char *fp, int count)
+static size_t n_tty_receive_buf2(struct tty_struct *tty, const u8 *cp,
+				 const u8 *fp, size_t count)
 {
 	return n_tty_receive_buf_common(tty, cp, fp, count, 1);
 }
@@ -1903,9 +1904,9 @@ static int n_tty_open(struct tty_struct *tty)
 	return 0;
 }
 
-static inline int input_available_p(struct tty_struct *tty, int poll)
+static inline int input_available_p(const struct tty_struct *tty, int poll)
 {
-	struct n_tty_data *ldata = tty->disc_data;
+	const struct n_tty_data *ldata = tty->disc_data;
 	int amt = poll && !TIME_CHAR(tty) && MIN_CHAR(tty) ? MIN_CHAR(tty) : 1;
 
 	if (ldata->icanon && !L_EXTPROC(tty))
@@ -1932,7 +1933,7 @@ static inline int input_available_p(struct tty_struct *tty, int poll)
  *		caller holds non-exclusive %termios_rwsem;
  *		read_tail published
  */
-static bool copy_from_read_buf(struct tty_struct *tty,
+static bool copy_from_read_buf(const struct tty_struct *tty,
 				      unsigned char **kbp,
 				      size_t *nr)
 
@@ -1987,7 +1988,7 @@ static bool copy_from_read_buf(struct tty_struct *tty,
  *	caller holds non-exclusive %termios_rwsem;
  *	read_tail published
  */
-static bool canon_copy_from_read_buf(struct tty_struct *tty,
+static bool canon_copy_from_read_buf(const struct tty_struct *tty,
 				     unsigned char **kbp,
 				     size_t *nr)
 {
@@ -2056,9 +2057,8 @@ static bool canon_copy_from_read_buf(struct tty_struct *tty,
  * EOF (special EOL character that's a __DISABLED_CHAR)
  * in the stream, silently eat the EOF.
  */
-static void canon_skip_eof(struct tty_struct *tty)
+static void canon_skip_eof(struct n_tty_data *ldata)
 {
-	struct n_tty_data *ldata = tty->disc_data;
 	size_t tail, canon_head;
 
 	canon_head = smp_load_acquire(&ldata->canon_head);
@@ -2128,12 +2128,11 @@ static int job_control(struct tty_struct *tty, struct file *file)
  *	claims non-exclusive termios_rwsem;
  *	publishes read_tail
  */
-static ssize_t n_tty_read(struct tty_struct *tty, struct file *file,
-			  unsigned char *kbuf, size_t nr,
-			  void **cookie, unsigned long offset)
+static ssize_t n_tty_read(struct tty_struct *tty, struct file *file, u8 *kbuf,
+			  size_t nr, void **cookie, unsigned long offset)
 {
 	struct n_tty_data *ldata = tty->disc_data;
-	unsigned char *kb = kbuf;
+	u8 *kb = kbuf;
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
 	int c;
 	int minimum, time;
@@ -2156,7 +2155,7 @@ static ssize_t n_tty_read(struct tty_struct *tty, struct file *file,
 			 * releasing the lock and returning done.
 			 */
 			if (!nr)
-				canon_skip_eof(tty);
+				canon_skip_eof(ldata);
 			else if (canon_copy_from_read_buf(tty, &kb, &nr))
 				return kb - kbuf;
 		} else {
@@ -2332,9 +2331,9 @@ more_to_be_read:
  */
 
 static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
-			   const unsigned char *buf, size_t nr)
+			   const u8 *buf, size_t nr)
 {
-	const unsigned char *b = buf;
+	const u8 *b = buf;
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
 	int c;
 	ssize_t retval = 0;
