@@ -109,10 +109,9 @@ devlink_get_from_attrs_lock(struct net *net, struct nlattr **attrs)
 	return ERR_PTR(-ENODEV);
 }
 
-static int devlink_nl_pre_doit(const struct genl_split_ops *ops,
-			       struct sk_buff *skb, struct genl_info *info)
+static int __devlink_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,
+				 u8 flags)
 {
-	struct devlink_linecard *linecard;
 	struct devlink_port *devlink_port;
 	struct devlink *devlink;
 	int err;
@@ -122,42 +121,17 @@ static int devlink_nl_pre_doit(const struct genl_split_ops *ops,
 		return PTR_ERR(devlink);
 
 	info->user_ptr[0] = devlink;
-	if (ops->internal_flags & DEVLINK_NL_FLAG_NEED_PORT) {
+	if (flags & DEVLINK_NL_FLAG_NEED_PORT) {
 		devlink_port = devlink_port_get_from_info(devlink, info);
 		if (IS_ERR(devlink_port)) {
 			err = PTR_ERR(devlink_port);
 			goto unlock;
 		}
 		info->user_ptr[1] = devlink_port;
-	} else if (ops->internal_flags & DEVLINK_NL_FLAG_NEED_DEVLINK_OR_PORT) {
+	} else if (flags & DEVLINK_NL_FLAG_NEED_DEVLINK_OR_PORT) {
 		devlink_port = devlink_port_get_from_info(devlink, info);
 		if (!IS_ERR(devlink_port))
 			info->user_ptr[1] = devlink_port;
-	} else if (ops->internal_flags & DEVLINK_NL_FLAG_NEED_RATE) {
-		struct devlink_rate *devlink_rate;
-
-		devlink_rate = devlink_rate_get_from_info(devlink, info);
-		if (IS_ERR(devlink_rate)) {
-			err = PTR_ERR(devlink_rate);
-			goto unlock;
-		}
-		info->user_ptr[1] = devlink_rate;
-	} else if (ops->internal_flags & DEVLINK_NL_FLAG_NEED_RATE_NODE) {
-		struct devlink_rate *rate_node;
-
-		rate_node = devlink_rate_node_get_from_info(devlink, info);
-		if (IS_ERR(rate_node)) {
-			err = PTR_ERR(rate_node);
-			goto unlock;
-		}
-		info->user_ptr[1] = rate_node;
-	} else if (ops->internal_flags & DEVLINK_NL_FLAG_NEED_LINECARD) {
-		linecard = devlink_linecard_get_from_info(devlink, info);
-		if (IS_ERR(linecard)) {
-			err = PTR_ERR(linecard);
-			goto unlock;
-		}
-		info->user_ptr[1] = linecard;
 	}
 	return 0;
 
@@ -167,8 +141,27 @@ unlock:
 	return err;
 }
 
-static void devlink_nl_post_doit(const struct genl_split_ops *ops,
-				 struct sk_buff *skb, struct genl_info *info)
+int devlink_nl_pre_doit(const struct genl_split_ops *ops,
+			struct sk_buff *skb, struct genl_info *info)
+{
+	return __devlink_nl_pre_doit(skb, info, ops->internal_flags);
+}
+
+int devlink_nl_pre_doit_port(const struct genl_split_ops *ops,
+			     struct sk_buff *skb, struct genl_info *info)
+{
+	return __devlink_nl_pre_doit(skb, info, DEVLINK_NL_FLAG_NEED_PORT);
+}
+
+int devlink_nl_pre_doit_port_optional(const struct genl_split_ops *ops,
+				      struct sk_buff *skb,
+				      struct genl_info *info)
+{
+	return __devlink_nl_pre_doit(skb, info, DEVLINK_NL_FLAG_NEED_DEVLINK_OR_PORT);
+}
+
+void devlink_nl_post_doit(const struct genl_split_ops *ops,
+			  struct sk_buff *skb, struct genl_info *info)
 {
 	struct devlink *devlink;
 
@@ -177,42 +170,41 @@ static void devlink_nl_post_doit(const struct genl_split_ops *ops,
 	devlink_put(devlink);
 }
 
-static const struct devlink_cmd *devl_cmds[] = {
-	[DEVLINK_CMD_GET]		= &devl_cmd_get,
-	[DEVLINK_CMD_PORT_GET]		= &devl_cmd_port_get,
-	[DEVLINK_CMD_SB_GET]		= &devl_cmd_sb_get,
-	[DEVLINK_CMD_SB_POOL_GET]	= &devl_cmd_sb_pool_get,
-	[DEVLINK_CMD_SB_PORT_POOL_GET]	= &devl_cmd_sb_port_pool_get,
-	[DEVLINK_CMD_SB_TC_POOL_BIND_GET] = &devl_cmd_sb_tc_pool_bind_get,
-	[DEVLINK_CMD_PARAM_GET]		= &devl_cmd_param_get,
-	[DEVLINK_CMD_REGION_GET]	= &devl_cmd_region_get,
-	[DEVLINK_CMD_INFO_GET]		= &devl_cmd_info_get,
-	[DEVLINK_CMD_HEALTH_REPORTER_GET] = &devl_cmd_health_reporter_get,
-	[DEVLINK_CMD_TRAP_GET]		= &devl_cmd_trap_get,
-	[DEVLINK_CMD_TRAP_GROUP_GET]	= &devl_cmd_trap_group_get,
-	[DEVLINK_CMD_TRAP_POLICER_GET]	= &devl_cmd_trap_policer_get,
-	[DEVLINK_CMD_RATE_GET]		= &devl_cmd_rate_get,
-	[DEVLINK_CMD_LINECARD_GET]	= &devl_cmd_linecard_get,
-	[DEVLINK_CMD_SELFTESTS_GET]	= &devl_cmd_selftests_get,
-};
-
-int devlink_nl_instance_iter_dumpit(struct sk_buff *msg,
-				    struct netlink_callback *cb)
+static int devlink_nl_inst_single_dumpit(struct sk_buff *msg,
+					 struct netlink_callback *cb, int flags,
+					 devlink_nl_dump_one_func_t *dump_one,
+					 struct nlattr **attrs)
 {
-	const struct genl_dumpit_info *info = genl_dumpit_info(cb);
+	struct devlink *devlink;
+	int err;
+
+	devlink = devlink_get_from_attrs_lock(sock_net(msg->sk), attrs);
+	if (IS_ERR(devlink))
+		return PTR_ERR(devlink);
+	err = dump_one(msg, devlink, cb, flags | NLM_F_DUMP_FILTERED);
+
+	devl_unlock(devlink);
+	devlink_put(devlink);
+
+	if (err != -EMSGSIZE)
+		return err;
+	return msg->len;
+}
+
+static int devlink_nl_inst_iter_dumpit(struct sk_buff *msg,
+				       struct netlink_callback *cb, int flags,
+				       devlink_nl_dump_one_func_t *dump_one)
+{
 	struct devlink_nl_dump_state *state = devlink_dump_state(cb);
-	const struct devlink_cmd *cmd;
 	struct devlink *devlink;
 	int err = 0;
-
-	cmd = devl_cmds[info->op.cmd];
 
 	while ((devlink = devlinks_xa_find_get(sock_net(msg->sk),
 					       &state->instance))) {
 		devl_lock(devlink);
 
 		if (devl_is_registered(devlink))
-			err = cmd->dump_one(msg, devlink, cb);
+			err = dump_one(msg, devlink, cb, flags);
 		else
 			err = 0;
 
@@ -233,6 +225,21 @@ int devlink_nl_instance_iter_dumpit(struct sk_buff *msg,
 	return msg->len;
 }
 
+int devlink_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
+		      devlink_nl_dump_one_func_t *dump_one)
+{
+	const struct genl_info *info = genl_info_dump(cb);
+	struct nlattr **attrs = info->attrs;
+	int flags = NLM_F_MULTI;
+
+	if (attrs &&
+	    (attrs[DEVLINK_ATTR_BUS_NAME] || attrs[DEVLINK_ATTR_DEV_NAME]))
+		return devlink_nl_inst_single_dumpit(msg, cb, flags, dump_one,
+						     attrs);
+	else
+		return devlink_nl_inst_iter_dumpit(msg, cb, flags, dump_one);
+}
+
 struct genl_family devlink_nl_family __ro_after_init = {
 	.name		= DEVLINK_GENL_NAME,
 	.version	= DEVLINK_GENL_VERSION,
@@ -243,8 +250,10 @@ struct genl_family devlink_nl_family __ro_after_init = {
 	.pre_doit	= devlink_nl_pre_doit,
 	.post_doit	= devlink_nl_post_doit,
 	.module		= THIS_MODULE,
-	.small_ops	= devlink_nl_ops,
-	.n_small_ops	= ARRAY_SIZE(devlink_nl_ops),
+	.small_ops	= devlink_nl_small_ops,
+	.n_small_ops	= ARRAY_SIZE(devlink_nl_small_ops),
+	.split_ops	= devlink_nl_ops,
+	.n_split_ops	= ARRAY_SIZE(devlink_nl_ops),
 	.resv_start_op	= DEVLINK_CMD_SELFTESTS_RUN + 1,
 	.mcgrps		= devlink_nl_mcgrps,
 	.n_mcgrps	= ARRAY_SIZE(devlink_nl_mcgrps),

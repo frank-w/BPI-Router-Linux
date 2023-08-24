@@ -1743,9 +1743,6 @@ int devl_resource_size_get(struct devlink *devlink,
 int devl_dpipe_table_resource_set(struct devlink *devlink,
 				  const char *table_name, u64 resource_id,
 				  u64 resource_units);
-int devlink_dpipe_table_resource_set(struct devlink *devlink,
-				     const char *table_name, u64 resource_id,
-				     u64 resource_units);
 void devl_resource_occ_get_register(struct devlink *devlink,
 				    u64 resource_id,
 				    devlink_resource_occ_get_t *occ_get,
@@ -1790,8 +1787,6 @@ devlink_port_region_create(struct devlink_port *port,
 			   u32 region_max_snapshots, u64 region_size);
 void devl_region_destroy(struct devlink_region *region);
 void devlink_region_destroy(struct devlink_region *region);
-void devlink_port_region_destroy(struct devlink_region *region);
-
 int devlink_region_snapshot_id_get(struct devlink *devlink, u32 *id);
 void devlink_region_snapshot_id_put(struct devlink *devlink, u32 id);
 int devlink_region_snapshot_create(struct devlink_region *region,
