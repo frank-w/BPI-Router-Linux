@@ -284,22 +284,6 @@ static inline int is_syscall_trace_event(struct trace_event_call *tp_event)
 #endif
 
 /*
- * Called before coming back to user-mode. Returning to user-mode with an
- * address limit different than USER_DS can allow to overwrite kernel memory.
- */
-static inline void addr_limit_user_check(void)
-{
-#ifdef TIF_FSCHECK
-	if (!test_thread_flag(TIF_FSCHECK))
-		return;
-#endif
-
-#ifdef TIF_FSCHECK
-	clear_thread_flag(TIF_FSCHECK);
-#endif
-}
-
-/*
  * These syscall function prototypes are kept in the same order as
  * include/uapi/asm-generic/unistd.h. Architecture specific entries go below,
  * followed by deprecated or obsolete system calls.
@@ -955,6 +939,7 @@ asmlinkage long sys_set_mempolicy_home_node(unsigned long start, unsigned long l
 asmlinkage long sys_cachestat(unsigned int fd,
 		struct cachestat_range __user *cstat_range,
 		struct cachestat __user *cstat, unsigned int flags);
+asmlinkage long sys_map_shadow_stack(unsigned long addr, unsigned long size, unsigned int flags);
 
 /*
  * Architecture-specific system calls
