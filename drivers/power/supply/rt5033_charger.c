@@ -6,11 +6,12 @@
  * Author: Beomho Seo <beomho.seo@samsung.com>
  */
 
+#include <linux/mod_devicetable.h>
 #include <linux/devm-helpers.h>
 #include <linux/extcon.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/regmap.h>
