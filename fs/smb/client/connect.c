@@ -453,10 +453,10 @@ static int reconnect_target_unlocked(struct TCP_Server_Info *server, struct dfs_
 
 static int reconnect_dfs_server(struct TCP_Server_Info *server)
 {
-	int rc = 0;
-	struct dfs_cache_tgt_list tl = DFS_CACHE_TGT_LIST_INIT(tl);
 	struct dfs_cache_tgt_iterator *target_hint = NULL;
+	DFS_CACHE_TGT_LIST(tl);
 	int num_targets = 0;
+	int rc = 0;
 
 	/*
 	 * Determine the number of dfs targets the referral path in @cifs_sb resolves to.
@@ -911,8 +911,8 @@ cifs_enable_signing(struct TCP_Server_Info *server, bool mnt_sign_required)
 	return 0;
 }
 
-
-static void clean_demultiplex_info(struct TCP_Server_Info *server)
+static noinline_for_stack void
+clean_demultiplex_info(struct TCP_Server_Info *server)
 {
 	int length;
 
