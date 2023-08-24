@@ -86,6 +86,13 @@ struct extent_buffer {
 
 	struct rw_semaphore lock;
 
+	/*
+	 * For virtually mapped address of the associated pages.
+	 *
+	 * NULL if the pages are physically contiguous.
+	 */
+	void *vaddr;
+
 	struct page *pages[INLINE_EXTENT_BUFFER_PAGES];
 #ifdef CONFIG_BTRFS_DEBUG
 	struct list_head leak_list;
