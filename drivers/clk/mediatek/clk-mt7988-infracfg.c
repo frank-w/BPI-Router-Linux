@@ -14,6 +14,7 @@
 #include "clk-gate.h"
 #include "clk-mux.h"
 #include <dt-bindings/clock/mediatek,mt7988-clk.h>
+#include <dt-bindings/reset/mediatek,mt7988-resets.h>
 
 static DEFINE_SPINLOCK(mt7988_clk_lock);
 
@@ -352,12 +353,51 @@ static const struct mtk_gate infra_clks[] = {
 		    "sysaxi_sel", 31),
 };
 
+static u16 infra_rst_ofs[] = {
+	0x80, //drivers/clk/mediatek/reset.h:15:#define INFRA_RST0_SET_OFFSET 0x120
+};
+
+//infra global reset set 0x10001080 BIT(9)
+//infra global reset clear 0x10001084 BIT(9)
+//infra global reset status 0x10001088 BIT(9)
+
+//0x10001080 INFRA_GLOBALCON_RST1_SE
+//values:
+//BIT(0) = AP_DMS_SWRST
+//BIT(1) = I2C_SWRST
+//BIT(2) = NFI_SWRST
+//BIT(3) = SPI0_SWRST
+//BIT(4) = SPI1_SWRST
+//BIT(5) = UART0_SWRST
+//BIT(6) = UART1_SWRST
+//BIT(7) = UART2_SWRST
+//BIT(8) = PTP_SWRST
+//BIT(9) = PTP_THERM_SWRST
+//BIT(10) = PTP_H_SWRST
+//BIT(11) = AUXADC_SWRST
+//BIT(12) = SPI2_SWRST
+//BIT(13) = I2C_PWR_GATE_GRST
+//BIT(14) = MSDC0_SWRST
+
+static u16 infra_idx_map[] = {
+	[MT7988_INFRA_RST0_THERM_CTRL_SWRST] = 0 * RST_NR_PER_BANK + 9,
+};
+
+static struct mtk_clk_rst_desc infra_rst_desc = {
+	.version = MTK_RST_SET_CLR,
+	.rst_bank_ofs = infra_rst_ofs,
+	.rst_bank_nr = ARRAY_SIZE(infra_rst_ofs),
+	.rst_idx_map = infra_idx_map,
+	.rst_idx_map_nr = ARRAY_SIZE(infra_idx_map),
+};
+
 static const struct mtk_clk_desc infra_desc = {
 	.clks = infra_clks,
 	.num_clks = ARRAY_SIZE(infra_clks),
 	.mux_clks = infra_muxes,
 	.num_mux_clks = ARRAY_SIZE(infra_muxes),
 	.clk_lock = &mt7988_clk_lock,
+	.rst_desc = &infra_rst_desc,
 };
 
 static const struct of_device_id of_match_clk_mt7988_infracfg[] = {
