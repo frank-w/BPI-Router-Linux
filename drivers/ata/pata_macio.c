@@ -918,6 +918,7 @@ static const struct scsi_host_template pata_macio_sht = {
 	 * use 64K minus 256
 	 */
 	.max_segment_size	= MAX_DBDMA_SEG,
+	.slave_alloc		= ata_scsi_slave_alloc,
 	.slave_configure	= pata_macio_slave_config,
 	.sdev_groups		= ata_common_sdev_groups,
 	.can_queue		= ATA_DEF_QUEUE,
