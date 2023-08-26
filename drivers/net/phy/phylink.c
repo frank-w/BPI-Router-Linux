@@ -3274,11 +3274,17 @@ static void phylink_sfp_link_up(void *upstream)
 	phylink_enable_and_run_resolve(pl, PHYLINK_DISABLE_LINK);
 }
 
-/* The Broadcom BCM84881 in the Methode DM7052 is unable to provide a SGMII
- * or 802.3z control word, so inband will not work.
- */
 static bool phylink_phy_no_inband(struct phy_device *phy)
 {
+	/* Inband is disabled for these PHY's */
+	if (phy->is_c45 && (phy->c45_ids.device_ids[1] == 0x001cc838 ||
+			phy_id_compare(phy->c45_ids.device_ids[1],
+					0x001cc840, 0xfffffff0)))
+		return true;
+
+	/* The Broadcom BCM84881 in the Methode DM7052 is unable to provide
+	* a SGMII or 802.3z control word, so inband will not work.
+	*/
 	return phy->is_c45 && phy_id_compare(phy->c45_ids.device_ids[1],
 					     0xae025150, 0xfffffff0);
 }
