@@ -464,8 +464,8 @@ static int mtk_usxgmii_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode
 		return -ENODEV;
 
 	if (interface == PHY_INTERFACE_MODE_USXGMII) {
-		an_ctrl = FIELD_PREP(USXGMII_AN_SYNC_CNT, 0x1FF) |
-			  (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED) ?
+		an_ctrl = (FIELD_PREP(USXGMII_AN_SYNC_CNT, 0x1FF) |
+			  (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED)) ?
 			  USXGMII_AN_ENABLE : 0;
 		link_timer = FIELD_PREP(USXGMII_LINK_TIMER_IDLE_DETECT, 0x7B) |
 			     FIELD_PREP(USXGMII_LINK_TIMER_COMP_ACK_DETECT, 0x7B) |
@@ -666,7 +666,7 @@ int mtk_usxgmii_init(struct mtk_eth *eth)
 		if (!np)
 			break;
 
-		eth->usxgmii_pcs[i] = devm_kzalloc(dev, sizeof(*eth->usxgmii_pcs), GFP_KERNEL);
+		eth->usxgmii_pcs[i] = devm_kzalloc(dev, sizeof(*eth->usxgmii_pcs[i]), GFP_KERNEL);
 		if (!eth->usxgmii_pcs[i])
 			return -ENOMEM;
 
