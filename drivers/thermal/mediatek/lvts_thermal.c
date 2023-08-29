@@ -339,7 +339,7 @@ static irqreturn_t lvts_ctrl_irq_handler(struct lvts_ctrl *lvts_ctrl)
 		LVTS_INT_SENSOR3
 	};
 	int i;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	/*
 	 * Interrupt monitoring status
 	 *
@@ -412,12 +412,13 @@ static irqreturn_t lvts_ctrl_irq_handler(struct lvts_ctrl *lvts_ctrl)
 	 * sensor0.
 	 */
 	for (i = 0; i < ARRAY_SIZE(masks); i++) {
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		if (!(value & masks[i]))
 			continue;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d i:%d\n",__FUNCTION__,__LINE__,i);
 		thermal_zone_device_update(lvts_ctrl->sensors[i].tz,
 					   THERMAL_TRIP_VIOLATED);
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		iret = IRQ_HANDLED;
 	}
 
@@ -450,11 +451,11 @@ static irqreturn_t lvts_irq_handler(int irq, void *data)
 	int i;
 
 	for (i = 0; i < lvts_td->num_lvts_ctrl; i++) {
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		aux = lvts_ctrl_irq_handler(lvts_td->lvts_ctrl);
 		if (aux != IRQ_HANDLED)
 			continue;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		iret = IRQ_HANDLED;
 	}
 
@@ -979,7 +980,7 @@ static int lvts_ctrl_start(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	struct thermal_zone_device *tz;
 	u32 sensor_map = 0;
 	int i;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	for (i = 0; i < lvts_ctrl->num_lvts_sensor; i++) {
 
 		int dt_id = lvts_sensors[i].dt_id;
@@ -1029,8 +1030,9 @@ static int lvts_ctrl_start(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	 * was not described in the device tree, it won't be
 	 * enabled here in the sensor map.
 	 */
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	writel(sensor_map | BIT(9), LVTS_MONCTL0(lvts_ctrl->base));
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
@@ -1039,21 +1041,21 @@ static int lvts_domain_init(struct device *dev, struct lvts_domain *lvts_td,
 {
 	struct lvts_ctrl *lvts_ctrl;
 	int i, ret;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	ret = lvts_ctrl_init(dev, lvts_td, lvts_data);
 	if (ret)
 		return ret;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	ret = lvts_domain_reset(dev, lvts_td->reset);
 	if (ret) {
 		dev_dbg(dev, "Failed to reset domain");
 		return ret;
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	for (i = 0; i < lvts_td->num_lvts_ctrl; i++) {
 
 		lvts_ctrl = &lvts_td->lvts_ctrl[i];
-
+printk(KERN_ALERT "DEBUG: Passed %s %d %d\n",__FUNCTION__,__LINE__,i);
 		/*
 		 * Initialization steps:
 		 *
@@ -1067,42 +1069,48 @@ static int lvts_domain_init(struct device *dev, struct lvts_domain *lvts_td,
 		 * - Start measurement
 		 */
 		ret = lvts_ctrl_set_enable(lvts_ctrl, true);
+printk(KERN_ALERT "DEBUG: Passed %s %d %d\n",__FUNCTION__,__LINE__,ret);
 		if (ret) {
 			dev_dbg(dev, "Failed to enable LVTS clock");
 			return ret;
 		}
 
 		ret = lvts_ctrl_connect(dev, lvts_ctrl);
+printk(KERN_ALERT "DEBUG: Passed %s %d %d\n",__FUNCTION__,__LINE__,ret);
 		if (ret) {
 			dev_dbg(dev, "Failed to connect to LVTS controller");
 			return ret;
 		}
 
 		ret = lvts_ctrl_initialize(dev, lvts_ctrl);
+printk(KERN_ALERT "DEBUG: Passed %s %d %d\n",__FUNCTION__,__LINE__,ret);
 		if (ret) {
 			dev_dbg(dev, "Failed to initialize controller");
 			return ret;
 		}
 
 		ret = lvts_ctrl_calibrate(dev, lvts_ctrl);
+printk(KERN_ALERT "DEBUG: Passed %s %d %d\n",__FUNCTION__,__LINE__,ret);
 		if (ret) {
 			dev_dbg(dev, "Failed to calibrate controller");
 			return ret;
 		}
 
 		ret = lvts_ctrl_configure(dev, lvts_ctrl);
+printk(KERN_ALERT "DEBUG: Passed %s %d %d\n",__FUNCTION__,__LINE__,ret);
 		if (ret) {
 			dev_dbg(dev, "Failed to configure controller");
 			return ret;
 		}
 
 		ret = lvts_ctrl_start(dev, lvts_ctrl);
+printk(KERN_ALERT "DEBUG: Passed %s %d %d\n",__FUNCTION__,__LINE__,ret);
 		if (ret) {
 			dev_dbg(dev, "Failed to start controller");
 			return ret;
 		}
 	}
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return lvts_debugfs_init(dev, lvts_td);
 }
 
