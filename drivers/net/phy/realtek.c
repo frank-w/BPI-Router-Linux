@@ -70,6 +70,10 @@
 #define RTL8221B_SERDES_CTRL3_MODE_2500BASEX	0x16
 #define RTL8221B_SERDES_CTRL3_MODE_OFF		0x1F
 
+#define RTL8221B_PHYCR1				0xa430
+#define RTL8221B_PHYCR1_ALDPS_EN			BIT(2)
+#define RTL8221B_PHYCR1_ALDPS_XTAL_OFF_EN		BIT(12)
+
 #define RTL8366RB_POWER_SAVE			0x15
 #define RTL8366RB_POWER_SAVE_ON			BIT(12)
 
@@ -914,8 +918,21 @@ static irqreturn_t rtl9000a_handle_interrupt(struct phy_device *phydev)
 
 static int rtl8221b_config_init(struct phy_device *phydev)
 {
+	struct device *dev = &phydev->mdio.dev;
 	u16 option_mode;
 	int val;
+
+	val = phy_read_mmd(phydev, RTL8221B_MMD_PHY_CTRL, RTL8221B_PHYCR1);
+	if (val < 0)
+		return val;
+
+	if (of_property_read_bool(dev->of_node, "realtek,aldps-enable") ||
+			phydev->is_on_sfp_module)
+		val |= RTL8221B_PHYCR1_ALDPS_EN | RTL8221B_PHYCR1_ALDPS_XTAL_OFF_EN;
+	else
+		val &= ~(RTL8221B_PHYCR1_ALDPS_EN | RTL8221B_PHYCR1_ALDPS_XTAL_OFF_EN);
+
+	phy_write_mmd(phydev, RTL8221B_MMD_PHY_CTRL, RTL8221B_PHYCR1, val);
 
 	if (!phy_interface_empty(phydev->host_interfaces)) {
 		if (!test_bit(PHY_INTERFACE_MODE_2500BASEX, phydev->host_interfaces))
