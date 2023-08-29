@@ -85,6 +85,9 @@ soc/dt
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/devicetree
 	broadcom/dt64
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/devicetree-arm64
+	patch
+		ARM: dts: use capital "OR" for multiple licenses in SPDX
+		arm64: dts: use capital "OR" for multiple licenses in SPDX
 
 soc/drivers
 	<no branch> (b43f11e5b453a9c48159d7121c88d79d81901276)
@@ -132,6 +135,8 @@ soc/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/ti-sysc-signed
 	broadcom/drivers
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/drivers
+	patch
+		bus: fsl-mc: Use common ranges functions
 
 arm/defconfig
 
@@ -208,6 +213,10 @@ soc/arm
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-soc-for-v6.6
 	broadcom/soc
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/soc
+	<no branch> (37e2d7d23765c3948e21cb361100f1baeb65f4f3)
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_update_for_v6.6
+	patch
+		ARM: davinci: Drop unused includes
 
 soc/defconfig
 	renesas/defconfig
