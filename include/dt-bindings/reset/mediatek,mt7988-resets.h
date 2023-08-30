@@ -8,3 +8,7 @@
 #define MT7988_TOPRGU_XFI_PLL_GRST              16
 
 #define MT7988_TOPRGU_SW_RST_NUM                24
+
+/* INFRA resets */
+#define MT7988_INFRA_RST0_THERM_CTRL_SWRST	9
+
