@@ -1,0 +1,3 @@
+/* INFRA resets */
+#define MT7988_INFRA_RST0_THERM_CTRL_SWRST	9
+
