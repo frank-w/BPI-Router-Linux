@@ -117,5 +117,12 @@
 				algo = "sha1";
 			};
 		};
+		sata {
+			description = "SATA overlay";
+			fdt = "fdt-ov-sata";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 	};
 };
