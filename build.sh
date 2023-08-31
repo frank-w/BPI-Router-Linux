@@ -57,6 +57,13 @@ case $board in
 		#DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dts
 		DTSI=arch/arm64/boot/dts/mediatek/mt7986a.dtsi
 		;;
+	"bpi-r4")
+		ARCH=arm64
+		CONFIGPATH=arch/$ARCH/configs
+		DEFCONFIG=$CONFIGPATH/mt7988a_bpi-r4_defconfig
+		DTS=arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4.dts
+		DTSI=arch/arm64/boot/dts/mediatek/mt7988a.dtsi
+		;;
 	*) #bpir2
 		ARCH=arm
 		CONFIGPATH=arch/$ARCH/configs
@@ -138,7 +145,7 @@ fi
 function edit()
 {
 	file=$1
-	EDITOR=nano
+	if [[ -z "$EDITOR" ]];then EDITOR=/usr/bin/editor;fi #use alternatives setting
 	if [[ -e "$file" ]];then
 		if [[ -w "$file" ]];then
 			$EDITOR "$file"
@@ -197,7 +204,7 @@ function getuenvpath {
 	if [[ -d $uenv_base ]];then
 		if [[ "$board" == "bpi-r2pro" ]];then
 			uenv=${uenv_base}/extlinux/extlinux.conf
-		elif [[ "$board" == "bpi-r3" ]];then
+		elif [[ "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
 			uenv=${uenv_base}/uEnv.txt
 		else
 			#r2/r64 uboot: ${bpi}/${board}/${service}/${bootenv}
@@ -361,7 +368,7 @@ function upload {
 		dtbname="none-oftree-bpi-r2pro"
 		read -e -i $dtbname -p "dtb-filename: " input
 		dtbname="${input:-$dtbname}"
-	elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
+	elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
 		read -e -i y -p "upload fit? " fitupload
 		if [[ "$fitupload" == "y" ]];
 		then
@@ -381,7 +388,7 @@ function upload {
 	if [[ "$board" == "bpi-r2pro" ]];then
 		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
-	elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
+	elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
 		if [[ "$fitupload" == "y" ]];
 		then
 			scp ${board}.itb ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
@@ -438,7 +445,7 @@ function install
 
 			if [[ "$board" == "bpi-r2pro" ]];then
 				targetdir=/media/$USER/BPI-BOOT/extlinux
-			elif [[ "$board" == "bpi-r3" ]];then
+			elif [[ "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
 				targetdir=/media/$USER/BPI-BOOT
 			else
 				targetdir=/media/$USER/BPI-BOOT/bananapi/$board/linux
@@ -466,7 +473,7 @@ function install
 					if [[ $? -ne 0 ]];then exit 1;fi
 					ndtinput=n
 				fi
-			elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
+			elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
 				read -e -i "y" -p "install FIT kernel (itb) [yn]? " itbinput
 				if [[ "$itbinput" == "y" ]];then
 					itbname=${imagename//uImage_/}.itb
@@ -814,6 +821,7 @@ function build {
 		exec 3> >(tee build.log)
 		export LOCALVERSION="${gitbranch}"
 		#MAKEFLAGS="V=1"
+		export DTC_FLAGS="-@"
 		make ${MAKEFLAGS} ${CFLAGS} ${OWNCONFIGS} 2>&3
 		ret=$?
 		exec 3>&-
@@ -842,6 +850,11 @@ function build {
 						#dtc -O dtb -o bpi-r3-nor.dtbo mt7986a-bananapi-bpi-r3-nor.dts
 						#dtc -O dtb -o bpi-r3-nand.dtbo mt7986a-bananapi-bpi-r3-nand.dts
 					fi
+				;;
+				"bpi-r4")
+					IMAGE=arch/arm64/boot/Image
+					LADDR=40080000
+					ENTRY=40080000
 				;;
 				"bpi-r2")
 					IMAGE=arch/arm/boot/zImage
