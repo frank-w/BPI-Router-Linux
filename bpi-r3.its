@@ -117,6 +117,20 @@
 				algo = "sha1";
 			};
 		};
+		nand {
+			description = "NAND overlay";
+			fdt = "fdt-ov-nand";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		nor {
+			description = "NOR overlay";
+			fdt = "fdt-ov-nor";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		sata {
 			description = "SATA overlay";
 			fdt = "fdt-ov-sata";
