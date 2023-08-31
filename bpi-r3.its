@@ -122,6 +122,13 @@
 				algo = "sha1";
 			};
 		};
+		sata {
+			description = "SATA overlay";
+			fdt = "fdt-ov-sata";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		conf-sd-nand-sata {
 			description = "Boot Linux kernel with SD+NAND+SATA FDT blob";
 			kernel = "kernel-1";
