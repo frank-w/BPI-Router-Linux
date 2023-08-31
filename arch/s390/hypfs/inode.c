@@ -329,9 +329,8 @@ static void hypfs_kill_super(struct super_block *sb)
 		hypfs_delete_tree(sb->s_root);
 	if (sb_info && sb_info->update_file)
 		hypfs_remove(sb_info->update_file);
-	kfree(sb->s_fs_info);
-	sb->s_fs_info = NULL;
 	kill_litter_super(sb);
+	kfree(sb->s_fs_info);
 }
 
 static struct dentry *hypfs_create_file(struct dentry *parent, const char *name,
