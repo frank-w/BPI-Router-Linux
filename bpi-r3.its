@@ -49,6 +49,11 @@
 			type = "flat_dt";
 			arch = "arm64";
 		};
+		fdt-ov-sata{
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sata.dtbo");
+			type = "flat_dt";
+			arch = "arm64";
+		};
 /*		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");
@@ -112,6 +117,24 @@
 			description = "Boot Linux kernel with EMMC+NOR FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-base", "fdt-ov-emmc", "fdt-ov-nor";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-sd-nand-sata {
+			description = "Boot Linux kernel with SD+NAND+SATA FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-nand", "fdt-ov-sata";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-emmc-nand-sata {
+			description = "Boot Linux kernel with EMMC+NAND+SATA FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base", "fdt-ov-emmc", "fdt-ov-nand", "fdt-ov-sata";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
