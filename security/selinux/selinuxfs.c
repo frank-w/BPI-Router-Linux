@@ -2102,9 +2102,6 @@ static int sel_fill_super(struct super_block *sb, struct fs_context *fc)
 err:
 	pr_err("SELinux: %s:  failed while creating inodes\n",
 		__func__);
-
-	selinux_fs_info_free(sb);
-
 	return ret;
 }
 
@@ -2125,8 +2122,8 @@ static int sel_init_fs_context(struct fs_context *fc)
 
 static void sel_kill_sb(struct super_block *sb)
 {
-	selinux_fs_info_free(sb);
 	kill_litter_super(sb);
+	selinux_fs_info_free(sb);
 }
 
 static struct file_system_type sel_fs_type = {
