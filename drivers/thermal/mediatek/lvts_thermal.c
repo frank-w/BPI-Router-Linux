@@ -1221,8 +1221,8 @@ printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		return dev_err_probe(dev, PTR_ERR(lvts_td->reset), "Failed to get reset control\n");
 
 	irq = platform_get_irq(pdev, 0);
-	if (irq < 0)
-		return irq;
+	//if (irq < 0)
+	//	return irq;
 
 	ret = lvts_domain_init(dev, lvts_td, lvts_data);
 	if (ret)
@@ -1232,10 +1232,12 @@ printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	 * At this point the LVTS is initialized and enabled. We can
 	 * safely enable the interrupt.
 	 */
-	ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
-					IRQF_ONESHOT, dev_name(dev), lvts_td);
-	if (ret)
-		return dev_err_probe(dev, ret, "Failed to request interrupt\n");
+	if (irq > 0) {
+		ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
+						IRQF_ONESHOT, dev_name(dev), lvts_td);
+		if (ret)
+			return dev_err_probe(dev, ret, "Failed to request interrupt\n");
+	}
 
 	platform_set_drvdata(pdev, lvts_td);
 
