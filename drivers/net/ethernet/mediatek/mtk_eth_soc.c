@@ -3914,10 +3914,13 @@ static void mtk_hw_warm_reset(struct mtk_eth *eth)
 static bool mtk_hw_check_dma_hang(struct mtk_eth *eth)
 {
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
-	bool gmac1_tx, gmac2_tx, gdm1_tx, gdm2_tx;
+	bool gmac1_tx, gmac2_tx, gmac3_tx = false, gdm1_tx, gdm2_tx, gdm3_tx = false;
 	bool oq_hang, cdm1_busy, adma_busy;
 	bool wtx_busy, cdm_full, oq_free;
-	u32 wdidx, val, gdm1_fc, gdm2_fc;
+	u32 wdidx, val, gdm1_fc, gdm2_fc, gdm3_fc;
+	u32 tdma_glo_cfg, cur_fsm, ipq10;
+	bool rx_busy, tx_busy, cur_fsm_tx, cur_fsm_rx;
+
 	bool qfsm_hang, qfwd_hang;
 	bool ret = false;
 
@@ -3953,12 +3956,19 @@ static bool mtk_hw_check_dma_hang(struct mtk_eth *eth)
 	gdm2_tx = FIELD_GET(GENMASK(31, 16), mtk_r32(eth, MTK_FE_GDM2_FSM)) > 0;
 	gmac1_tx = FIELD_GET(GENMASK(31, 24), mtk_r32(eth, MTK_MAC_FSM(0))) != 1;
 	gmac2_tx = FIELD_GET(GENMASK(31, 24), mtk_r32(eth, MTK_MAC_FSM(1))) != 1;
-	gdm1_fc = mtk_r32(eth, reg_map->gdm1_cnt + 0x24);
-	gdm2_fc = mtk_r32(eth, reg_map->gdm1_cnt + 0x64);
+	gdm1_fc = mtk_r32(eth, reg_map->gdm1_cnt + MTK_GDM_RX_FC_OFFSET(eth, 0));
+	gdm2_fc = mtk_r32(eth, reg_map->gdm1_cnt + MTK_GDM_RX_FC_OFFSET(eth, 1));
+
+	if (mtk_is_netsys_v3_or_greater(eth)) {
+		gdm3_tx = FIELD_GET(GENMASK(31, 16), mtk_r32(eth, MTK_FE_GDM3_FSM)) > 0;
+		gmac3_tx = FIELD_GET(GENMASK(31, 24), mtk_r32(eth, MTK_MAC_FSM(2))) != 1;
+		gdm3_fc = mtk_r32(eth, reg_map->gdm1_cnt + MTK_GDM_RX_FC_OFFSET(eth, 2));
+	}
 
 	if (qfsm_hang && qfwd_hang &&
 	    ((gdm1_tx && gmac1_tx && gdm1_fc < 1) ||
-	     (gdm2_tx && gmac2_tx && gdm2_fc < 1))) {
+	     (gdm2_tx && gmac2_tx && gdm2_fc < 1) ||
+	     (mtk_is_netsys_v3_or_greater(eth) && gdm3_tx && gmac3_tx && gdm3_fc < 1))) {
 		if (++eth->reset.qdma_hang_count > 2) {
 			eth->reset.qdma_hang_count = 0;
 			ret = true;
@@ -3980,12 +3990,47 @@ static bool mtk_hw_check_dma_hang(struct mtk_eth *eth)
 		goto out;
 	}
 
+	if (mtk_is_netsys_v3_or_greater(eth)) {
+		ipq10 = mtk_r32(eth, reg_map->pse_iq_sta + 24) & GENMASK(23, 0);
+		cur_fsm = mtk_r32(eth, MTK_FE_CDM6_FSM);
+		tdma_glo_cfg = mtk_r32(eth, MTK_TDMA_GLO_CFG);
+		cur_fsm_rx = !(cur_fsm & GENMASK(27, 16));
+		cur_fsm_tx = !(cur_fsm & GENMASK(24, 0));
+		tx_busy = !(tdma_glo_cfg & BIT(1));
+		rx_busy = !(tdma_glo_cfg & BIT(3));
+
+		if (ipq10 && cur_fsm_tx && tx_busy &&
+		    cur_fsm_tx == !!(eth->reset.pre_fsm  & GENMASK(24, 0)) &&
+		    ipq10 == eth->reset.pre_ipq10) {
+			if (++eth->reset.tdma_tx_hang_count > 2) {
+				eth->reset.tdma_tx_hang_count = 0;
+				ret = true;
+			}
+			goto out;
+		}
+
+		if (cur_fsm_rx && rx_busy &&
+		    cur_fsm_rx == (eth->reset.pre_fsm & GENMASK(27, 16))) {
+			if (++eth->reset.tdma_rx_hang_count > 2) {
+				eth->reset.tdma_rx_hang_count = 0;
+				ret = true;
+			}
+			goto out;
+		}
+	}
+
 	eth->reset.wdma_hang_count = 0;
 	eth->reset.qdma_hang_count = 0;
 	eth->reset.adma_hang_count = 0;
+	eth->reset.tdma_tx_hang_count = 0;
+	eth->reset.tdma_rx_hang_count = 0;
 out:
 	eth->reset.wdidx = wdidx;
 
+	if (mtk_is_netsys_v3_or_greater(eth)) {
+		eth->reset.pre_fsm = cur_fsm;
+		eth->reset.pre_ipq10 = ipq10;
+	}
 	return ret;
 }
 

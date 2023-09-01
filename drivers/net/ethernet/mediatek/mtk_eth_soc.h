@@ -391,6 +391,8 @@
 #define RX_DMA_VTAG_V2		BIT(0)
 #define RX_DMA_L4_VALID_V2	BIT(2)
 
+#define MTK_TDMA_GLO_CFG	0x6204
+
 /* PHY Polling and SMI Master Control registers */
 #define MTK_PPSC		0x10000
 #define PPSC_MDC_CFG		GENMASK(29, 24)
@@ -631,6 +633,11 @@
 #define MTK_FE_DROP_PPE		0x24C
 
 #define MTK_MAC_FSM(x)		(0x1010C + ((x) * 0x100))
+
+#define MTK_STAT_OFFSET		0x40
+#define MTK_STAT_OFFSET_V3	0x80
+#define MTK_GDM_RX_FC		0x24
+#define MTK_GDM_RX_FC_OFFSET(eth, i)	(i * (mtk_is_netsys_v3_or_greater(eth) ? MTK_STAT_OFFSET_V3 : MTK_STAT_OFFSET) + MTK_GDM_RX_FC)
 
 struct mtk_rx_dma {
 	unsigned int rxd1;
@@ -1359,6 +1366,10 @@ struct mtk_eth {
 		u8 wdma_hang_count;
 		u8 qdma_hang_count;
 		u8 adma_hang_count;
+		u8 tdma_rx_hang_count;
+		u8 tdma_tx_hang_count;
+		u32 pre_ipq10;
+		u32 pre_fsm;
 	} reset;
 };
 
