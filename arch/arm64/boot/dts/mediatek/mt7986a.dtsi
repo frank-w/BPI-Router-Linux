@@ -596,13 +596,13 @@
 				cpu-active-low {
 					/* active: set fan to cooling level 1 */
 					cooling-device = <&fan 1 1>;
-					trip = <&cpu_trip_active_low>;
+					trip = <&cpu_trip_active_med>;
 				};
 
 				cpu-passive {
 					/* passive: set fan to cooling level 0 */
 					cooling-device = <&fan 0 0>;
-					trip = <&cpu_trip_passive>;
+					trip = <&cpu_trip_active_low>;
 				};
 			};
 
