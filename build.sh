@@ -897,6 +897,9 @@ function build {
 					cp {,$builddir/}${board}.itb
 				fi
 			fi
+		else
+			echo "build failed"
+			exit 1
 		fi
 	else
 		echo "No Configfile found, Please Configure Kernel"
