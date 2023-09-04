@@ -97,8 +97,11 @@
 
 //todo: put this in the lvts_ctrl_data and pass A to lvts_raw_to_temp/lvts_temp_to_raw
 // and B to lvts_golden_temp_init
-#define LVTS_COEFF_A			LVTS_COEFF_A_MT7988
-#define LVTS_COEFF_B			LVTS_COEFF_B_MT7988
+#define LVTS_COEFF_A			LVTS_COEFF_A_MT8195
+#define LVTS_COEFF_B			LVTS_COEFF_B_MT8195
+
+static int lvts_coeff_a = LVTS_COEFF_A;
+static int lvts_coeff_b = LVTS_COEFF_B;
 
 static int golden_temp = LVTS_GOLDEN_TEMP_DEFAULT;
 static int coeff_b = LVTS_COEFF_B;
@@ -254,21 +257,21 @@ static void lvts_debugfs_exit(struct lvts_domain *lvts_td) { }
 
 #endif
 
-static int lvts_raw_to_temp(u32 raw_temp)
+static int lvts_raw_to_temp(u32 raw_temp/*, int coeff_a, int coeff_b*/)
 {
 	int temperature;
 
-	temperature = ((s64)(raw_temp & 0xFFFF) * LVTS_COEFF_A) >> 14;
+	temperature = ((s64)(raw_temp & 0xFFFF) * lvts_coeff_a) >> 14;
 	temperature += coeff_b;
 
 	return temperature;
 }
 
-static u32 lvts_temp_to_raw(int temperature)
+static u32 lvts_temp_to_raw(int temperature/*, int coeff_a, int coeff_b*/)
 {
 	u32 raw_temp = ((s64)(coeff_b - temperature)) << 14;
 
-	raw_temp = div_s64(raw_temp, -LVTS_COEFF_A);
+	raw_temp = div_s64(raw_temp, -lvts_coeff_a);
 
 	return raw_temp;
 }
@@ -308,7 +311,7 @@ static int lvts_get_temp(struct thermal_zone_device *tz, int *temp)
 	if (rc)
 		return -EAGAIN;
 
-	*temp = lvts_raw_to_temp(value & 0xFFFF);
+	*temp = lvts_raw_to_temp(value & 0xFFFF/*,coeff_a,coeff_b*/);
 
 	return 0;
 }
@@ -357,8 +360,8 @@ static int lvts_set_trips(struct thermal_zone_device *tz, int low, int high)
 	struct lvts_sensor *lvts_sensor = thermal_zone_device_priv(tz);
 	struct lvts_ctrl *lvts_ctrl = container_of(lvts_sensor, struct lvts_ctrl, sensors[lvts_sensor->id]);
 	void __iomem *base = lvts_sensor->base;
-	u32 raw_low = lvts_temp_to_raw(low != -INT_MAX ? low : LVTS_MINIMUM_THRESHOLD);
-	u32 raw_high = lvts_temp_to_raw(high);
+	u32 raw_low = lvts_temp_to_raw(low != -INT_MAX ? low : LVTS_MINIMUM_THRESHOLD/*,coeff_a,coeff_b*/);
+	u32 raw_high = lvts_temp_to_raw(high/*,coeff_a,coeff_b*/);
 	bool should_update_thresh;
 
 	lvts_sensor->low_thresh = low;
@@ -702,13 +705,13 @@ static int lvts_calibration_read(struct device *dev, struct lvts_domain *lvts_td
 static int lvts_golden_temp_init(struct device *dev, u32 *value)
 {
 	u32 gt;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d a:%d,b:%d\n",__FUNCTION__,__LINE__,lvts_coeff_a,lvts_coeff_b);
 	gt = (*value) >> 24;
 
 	if (gt && gt < LVTS_GOLDEN_TEMP_MAX)
 		golden_temp = gt;
 
-	coeff_b = golden_temp * 500 + LVTS_COEFF_B;
+	coeff_b = golden_temp * 500 + lvts_coeff_b;
 
 	return 0;
 }
@@ -765,7 +768,7 @@ static int lvts_ctrl_init(struct device *dev, struct lvts_domain *lvts_td,
 		 * after initializing the calibration.
 		 */
 		lvts_ctrl[i].hw_tshut_raw_temp =
-			lvts_temp_to_raw(lvts_data->lvts_ctrl[i].hw_tshut_temp);
+			lvts_temp_to_raw(lvts_data->lvts_ctrl[i].hw_tshut_temp/*,coeff_a,coeff_b*/);
 
 		lvts_ctrl[i].low_thresh = INT_MIN;
 		lvts_ctrl[i].high_thresh = INT_MIN;
@@ -1226,6 +1229,14 @@ printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	lvts_td->reset = devm_reset_control_get_by_index(dev, 0);
 	if (IS_ERR(lvts_td->reset))
 		return dev_err_probe(dev, PTR_ERR(lvts_td->reset), "Failed to get reset control\n");
+
+	//struct device_node *np;
+	
+	if (of_device_is_compatible(dev->of_node, "mediatek,mt7988-lvts")) {
+		printk(KERN_ALERT "DEBUG: Passed %s %d yes it is mt7986\n",__FUNCTION__,__LINE__);
+		lvts_coeff_a=LVTS_COEFF_A_MT7988;
+		lvts_coeff_b=LVTS_COEFF_B_MT7988;
+	}
 
 	//irq = platform_get_irq_optional(pdev, 0);
 	//if (irq < 0)
