@@ -130,8 +130,6 @@ struct qfq_aggregate;
 struct qfq_class {
 	struct Qdisc_class_common common;
 
-	unsigned int filter_cnt;
-
 	struct gnet_stats_basic_sync bstats;
 	struct gnet_stats_queue qstats;
 	struct net_rate_estimator __rcu *rate_est;
@@ -381,8 +379,13 @@ static int qfq_change_agg(struct Qdisc *sch, struct qfq_class *cl, u32 weight,
 			   u32 lmax)
 {
 	struct qfq_sched *q = qdisc_priv(sch);
-	struct qfq_aggregate *new_agg = qfq_find_agg(q, lmax, weight);
+	struct qfq_aggregate *new_agg;
 
+	/* 'lmax' can range from [QFQ_MIN_LMAX, pktlen + stab overhead] */
+	if (lmax > QFQ_MAX_LMAX)
+		return -EINVAL;
+
+	new_agg = qfq_find_agg(q, lmax, weight);
 	if (new_agg == NULL) { /* create new aggregate */
 		new_agg = kzalloc(sizeof(*new_agg), GFP_ATOMIC);
 		if (new_agg == NULL)
@@ -423,10 +426,17 @@ static int qfq_change_class(struct Qdisc *sch, u32 classid, u32 parentid,
 	else
 		weight = 1;
 
-	if (tb[TCA_QFQ_LMAX])
+	if (tb[TCA_QFQ_LMAX]) {
 		lmax = nla_get_u32(tb[TCA_QFQ_LMAX]);
-	else
+	} else {
+		/* MTU size is user controlled */
 		lmax = psched_mtu(qdisc_dev(sch));
+		if (lmax < QFQ_MIN_LMAX || lmax > QFQ_MAX_LMAX) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "MTU size out of bounds for qfq");
+			return -EINVAL;
+		}
+	}
 
 	inv_w = ONE_FP / weight;
 	weight = ONE_FP / inv_w;
@@ -533,8 +543,10 @@ static int qfq_delete_class(struct Qdisc *sch, unsigned long arg,
 	struct qfq_sched *q = qdisc_priv(sch);
 	struct qfq_class *cl = (struct qfq_class *)arg;
 
-	if (cl->filter_cnt > 0)
+	if (qdisc_class_in_use(&cl->common)) {
+		NL_SET_ERR_MSG_MOD(extack, "QFQ class in use");
 		return -EBUSY;
+	}
 
 	sch_tree_lock(sch);
 
@@ -568,8 +580,8 @@ static unsigned long qfq_bind_tcf(struct Qdisc *sch, unsigned long parent,
 {
 	struct qfq_class *cl = qfq_find_class(sch, classid);
 
-	if (cl != NULL)
-		cl->filter_cnt++;
+	if (cl)
+		qdisc_class_get(&cl->common);
 
 	return (unsigned long)cl;
 }
@@ -578,7 +590,7 @@ static void qfq_unbind_tcf(struct Qdisc *sch, unsigned long arg)
 {
 	struct qfq_class *cl = (struct qfq_class *)arg;
 
-	cl->filter_cnt--;
+	qdisc_class_put(&cl->common);
 }
 
 static int qfq_graft_class(struct Qdisc *sch, unsigned long arg,

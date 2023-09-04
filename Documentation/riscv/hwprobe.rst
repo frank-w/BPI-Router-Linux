@@ -49,7 +49,7 @@ The following keys are defined:
     privileged ISA, with the following known exceptions (more exceptions may be
     added, but only if it can be demonstrated that the user ABI is not broken):
 
-    * The :fence.i: instruction cannot be directly executed by userspace
+    * The ``fence.i`` instruction cannot be directly executed by userspace
       programs (it may still be executed in userspace via a
       kernel-controlled mechanism such as the vDSO).
 
@@ -88,11 +88,11 @@ The following keys are defined:
     always extremely slow.
 
   * :c:macro:`RISCV_HWPROBE_MISALIGNED_SLOW`: Misaligned accesses are supported
-    in hardware, but are slower than the cooresponding aligned accesses
+    in hardware, but are slower than the corresponding aligned accesses
     sequences.
 
   * :c:macro:`RISCV_HWPROBE_MISALIGNED_FAST`: Misaligned accesses are supported
-    in hardware and are faster than the cooresponding aligned accesses
+    in hardware and are faster than the corresponding aligned accesses
     sequences.
 
   * :c:macro:`RISCV_HWPROBE_MISALIGNED_UNSUPPORTED`: Misaligned accesses are

@@ -10,6 +10,11 @@
 
 #include <linux/types.h>
 
+#define PTRACE_GETFDPIC		33
+
+#define PTRACE_GETFDPIC_EXEC	0
+#define PTRACE_GETFDPIC_INTERP	1
+
 /*
  * User-mode register state for core dumps, ptrace, sigcontext
  *
@@ -97,6 +102,7 @@ struct __riscv_v_ext_state {
 	unsigned long vl;
 	unsigned long vtype;
 	unsigned long vcsr;
+	unsigned long vlenb;
 	void *datap;
 	/*
 	 * In signal handler, datap will be set a correct user stack offset

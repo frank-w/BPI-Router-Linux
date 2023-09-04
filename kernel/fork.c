@@ -985,6 +985,14 @@ void __put_task_struct(struct task_struct *tsk)
 }
 EXPORT_SYMBOL_GPL(__put_task_struct);
 
+void __put_task_struct_rcu_cb(struct rcu_head *rhp)
+{
+	struct task_struct *task = container_of(rhp, struct task_struct, rcu);
+
+	__put_task_struct(task);
+}
+EXPORT_SYMBOL_GPL(__put_task_struct_rcu_cb);
+
 void __init __weak arch_task_cache_init(void) { }
 
 /*
@@ -1396,8 +1404,8 @@ EXPORT_SYMBOL_GPL(mmput_async);
  * This changes mm's executable file (shown as symlink /proc/[pid]/exe).
  *
  * Main users are mmput() and sys_execve(). Callers prevent concurrent
- * invocations: in mmput() nobody alive left, in execve task is single
- * threaded.
+ * invocations: in mmput() nobody alive left, in execve it happens before
+ * the new mm is made visible to anyone.
  *
  * Can only fail if new_exe_file != NULL.
  */
@@ -1432,9 +1440,7 @@ int set_mm_exe_file(struct mm_struct *mm, struct file *new_exe_file)
 /**
  * replace_mm_exe_file - replace a reference to the mm's executable file
  *
- * This changes mm's executable file (shown as symlink /proc/[pid]/exe),
- * dealing with concurrent invocation and without grabbing the mmap lock in
- * write mode.
+ * This changes mm's executable file (shown as symlink /proc/[pid]/exe).
  *
  * Main user is sys_prctl(PR_SET_MM_MAP/EXE_FILE).
  */
@@ -1464,22 +1470,20 @@ int replace_mm_exe_file(struct mm_struct *mm, struct file *new_exe_file)
 			return ret;
 	}
 
-	/* set the new file, lockless */
 	ret = deny_write_access(new_exe_file);
 	if (ret)
 		return -EACCES;
 	get_file(new_exe_file);
 
-	old_exe_file = xchg(&mm->exe_file, new_exe_file);
+	/* set the new file */
+	mmap_write_lock(mm);
+	old_exe_file = rcu_dereference_raw(mm->exe_file);
+	rcu_assign_pointer(mm->exe_file, new_exe_file);
+	mmap_write_unlock(mm);
+
 	if (old_exe_file) {
-		/*
-		 * Don't race with dup_mmap() getting the file and disallowing
-		 * write access while someone might open the file writable.
-		 */
-		mmap_read_lock(mm);
 		allow_write_access(old_exe_file);
 		fput(old_exe_file);
-		mmap_read_unlock(mm);
 	}
 	return 0;
 }
