@@ -321,9 +321,9 @@ void panic(const char *fmt, ...)
 	this_cpu = raw_smp_processor_id();
 
 	/* atomic_try_cmpxchg updates old_cpu on failure */
-	if (atomic_try_cmpxchg(&panic_cpu, &old_cpu, this_cpu))
-		;
-	else if (old_cpu != this_cpu)
+	if (atomic_try_cmpxchg(&panic_cpu, &old_cpu, this_cpu)) {
+		/* go ahead */
+	} else if (old_cpu != this_cpu)
 		panic_smp_self_stop();
 
 	console_verbose();
