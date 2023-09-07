@@ -5,8 +5,6 @@
 #ifndef _ASM_IO_H
 #define _ASM_IO_H
 
-#define ARCH_HAS_IOREMAP_WC
-
 #include <linux/kernel.h>
 #include <linux/types.h>
 
@@ -62,7 +60,7 @@ extern pgprot_t pgprot_wc;
 #define ioremap_cache(offset, size)	\
 	ioremap_prot((offset), (size), pgprot_val(PAGE_KERNEL))
 
-#define mmiowb() asm volatile ("dbar 0" ::: "memory")
+#define mmiowb() wmb()
 
 /*
  * String version of I/O memory access operations.

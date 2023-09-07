@@ -12,7 +12,6 @@
 #include <linux/module.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/thermal.h>
@@ -141,7 +140,7 @@ static int imx8mp_tmu_get_temp(void *data, int *temp)
 
 static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 {
-	struct tmu_sensor *sensor = tz->devdata;
+	struct tmu_sensor *sensor = thermal_zone_device_priv(tz);
 	struct imx8mm_tmu *tmu = sensor->priv;
 
 	return tmu->socdata->get_temp(sensor, temp);
@@ -282,7 +281,7 @@ static int imx8mm_tmu_probe_set_calib(struct platform_device *pdev,
 	 * strongly recommended to update such old DTs to get correct
 	 * temperature compensation values for each SoC.
 	 */
-	if (!of_find_property(pdev->dev.of_node, "nvmem-cells", NULL)) {
+	if (!of_property_present(pdev->dev.of_node, "nvmem-cells")) {
 		dev_warn(dev,
 			 "No OCOTP nvmem reference found, SoC-specific calibration not loaded. Please update your DT.\n");
 		return 0;
@@ -343,8 +342,7 @@ static int imx8mm_tmu_probe(struct platform_device *pdev)
 		}
 		tmu->sensors[i].hw_id = i;
 
-		if (devm_thermal_add_hwmon_sysfs(tmu->sensors[i].tzd))
-			dev_warn(&pdev->dev, "failed to add hwmon sysfs attributes\n");
+		devm_thermal_add_hwmon_sysfs(&pdev->dev, tmu->sensors[i].tzd);
 	}
 
 	platform_set_drvdata(pdev, tmu);

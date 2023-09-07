@@ -166,17 +166,15 @@ void dm_error(const char *message);
 struct dm_dev {
 	struct block_device *bdev;
 	struct dax_device *dax_dev;
-	fmode_t mode;
+	blk_mode_t mode;
 	char name[16];
 };
-
-dev_t dm_get_dev_t(const char *path);
 
 /*
  * Constructors should call these functions to ensure destination devices
  * are opened/closed correctly.
  */
-int dm_get_device(struct dm_target *ti, const char *path, fmode_t mode,
+int dm_get_device(struct dm_target *ti, const char *path, blk_mode_t mode,
 		  struct dm_dev **result);
 void dm_put_device(struct dm_target *ti, struct dm_dev *d);
 
@@ -359,6 +357,24 @@ struct dm_target {
 	bool discards_supported:1;
 
 	/*
+	 * Set if this target requires that discards be split on
+	 * 'max_discard_sectors' boundaries.
+	 */
+	bool max_discard_granularity:1;
+
+	/*
+	 * Set if this target requires that secure_erases be split on
+	 * 'max_secure_erase_sectors' boundaries.
+	 */
+	bool max_secure_erase_granularity:1;
+
+	/*
+	 * Set if this target requires that write_zeroes be split on
+	 * 'max_write_zeroes_sectors' boundaries.
+	 */
+	bool max_write_zeroes_granularity:1;
+
+	/*
 	 * Set if we need to limit the number of in-flight bios when swapping.
 	 */
 	bool limit_swap_bios:1;
@@ -512,8 +528,6 @@ int __init dm_early_create(struct dm_ioctl *dmi,
 			   struct dm_target_spec **spec_array,
 			   char **target_params_array);
 
-struct queue_limits *dm_get_queue_limits(struct mapped_device *md);
-
 /*
  * Geometry functions.
  */
@@ -529,7 +543,7 @@ int dm_set_geometry(struct mapped_device *md, struct hd_geometry *geo);
 /*
  * First create an empty table.
  */
-int dm_table_create(struct dm_table **result, fmode_t mode,
+int dm_table_create(struct dm_table **result, blk_mode_t mode,
 		    unsigned int num_targets, struct mapped_device *md);
 
 /*
@@ -572,7 +586,7 @@ void dm_sync_table(struct mapped_device *md);
  * Queries
  */
 sector_t dm_table_get_size(struct dm_table *t);
-fmode_t dm_table_get_mode(struct dm_table *t);
+blk_mode_t dm_table_get_mode(struct dm_table *t);
 struct mapped_device *dm_table_get_md(struct dm_table *t);
 const char *dm_table_device_name(struct dm_table *t);
 
@@ -624,6 +638,26 @@ void dm_destroy_crypto_profile(struct blk_crypto_profile *profile);
 #define DMEMIT_TARGET_NAME_VERSION(y) \
 		DMEMIT("target_name=%s,target_version=%u.%u.%u", \
 		       (y)->name, (y)->version[0], (y)->version[1], (y)->version[2])
+
+/**
+ * module_dm() - Helper macro for DM targets that don't do anything
+ * special in their module_init and module_exit.
+ * Each module may only use this macro once, and calling it replaces
+ * module_init() and module_exit().
+ *
+ * @name: DM target's name
+ */
+#define module_dm(name) \
+static int __init dm_##name##_init(void) \
+{ \
+	return dm_register_target(&(name##_target)); \
+} \
+module_init(dm_##name##_init) \
+static void __exit dm_##name##_exit(void) \
+{ \
+	dm_unregister_target(&(name##_target)); \
+} \
+module_exit(dm_##name##_exit)
 
 /*
  * Definitions of return values from target end_io function.

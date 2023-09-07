@@ -512,7 +512,7 @@ static int dlpar_parse_id_type(char **cmd, struct pseries_hp_errorlog *hp_elog)
 	return 0;
 }
 
-static ssize_t dlpar_store(struct class *class, struct class_attribute *attr,
+static ssize_t dlpar_store(const struct class *class, const struct class_attribute *attr,
 			   const char *buf, size_t count)
 {
 	struct pseries_hp_errorlog hp_elog;
@@ -551,7 +551,7 @@ dlpar_store_out:
 	return rc ? rc : count;
 }
 
-static ssize_t dlpar_show(struct class *class, struct class_attribute *attr,
+static ssize_t dlpar_show(const struct class *class, const struct class_attribute *attr,
 			  char *buf)
 {
 	return sprintf(buf, "%s\n", "memory,cpu");
@@ -564,8 +564,7 @@ int __init dlpar_workqueue_init(void)
 	if (pseries_hp_wq)
 		return 0;
 
-	pseries_hp_wq = alloc_workqueue("pseries hotplug workqueue",
-			WQ_UNBOUND, 1);
+	pseries_hp_wq = alloc_ordered_workqueue("pseries hotplug workqueue", 0);
 
 	return pseries_hp_wq ? 0 : -ENOMEM;
 }

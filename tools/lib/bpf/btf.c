@@ -1000,8 +1000,6 @@ static struct btf *btf_parse_elf(const char *path, struct btf *base_btf,
 		}
 	}
 
-	err = 0;
-
 	if (!btf_data) {
 		pr_warn("failed to find '%s' ELF section in %s\n", BTF_ELF_SEC, path);
 		err = -ENODATA;
@@ -1066,7 +1064,7 @@ static struct btf *btf_parse_raw(const char *path, struct btf *base_btf)
 	int err = 0;
 	long sz;
 
-	f = fopen(path, "rb");
+	f = fopen(path, "rbe");
 	if (!f) {
 		err = -errno;
 		goto err_out;

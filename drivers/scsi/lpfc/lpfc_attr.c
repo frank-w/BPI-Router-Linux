@@ -1644,6 +1644,12 @@ lpfc_sli4_pdev_status_reg_wait(struct lpfc_hba *phba)
 	    !bf_get(lpfc_sliport_status_err, &portstat_reg))
 		return -EPERM;
 
+	/* There is no point to wait if the port is in an unrecoverable
+	 * state.
+	 */
+	if (lpfc_sli4_unrecoverable_port(&portstat_reg))
+		return -EIO;
+
 	/* wait for the SLI port firmware ready after firmware reset */
 	for (i = 0; i < LPFC_FW_RESET_MAXIMUM_WAIT_10MS_CNT; i++) {
 		msleep(10);
@@ -2121,11 +2127,12 @@ lpfc_get_hba_info(struct lpfc_hba *phba,
 		  uint32_t *mrpi, uint32_t *arpi,
 		  uint32_t *mvpi, uint32_t *avpi)
 {
-	struct lpfc_mbx_read_config *rd_config;
 	LPFC_MBOXQ_t *pmboxq;
 	MAILBOX_t *pmb;
 	int rc = 0;
-	uint32_t max_vpi;
+	struct lpfc_sli4_hba *sli4_hba;
+	struct lpfc_max_cfg_param *max_cfg_param;
+	u16 rsrc_ext_cnt, rsrc_ext_size, max_vpi;
 
 	/*
 	 * prevent udev from issuing mailbox commands until the port is
@@ -2161,31 +2168,65 @@ lpfc_get_hba_info(struct lpfc_hba *phba,
 	}
 
 	if (phba->sli_rev == LPFC_SLI_REV4) {
-		rd_config = &pmboxq->u.mqe.un.rd_config;
-		if (mrpi)
-			*mrpi = bf_get(lpfc_mbx_rd_conf_rpi_count, rd_config);
-		if (arpi)
-			*arpi = bf_get(lpfc_mbx_rd_conf_rpi_count, rd_config) -
-					phba->sli4_hba.max_cfg_param.rpi_used;
-		if (mxri)
-			*mxri = bf_get(lpfc_mbx_rd_conf_xri_count, rd_config);
-		if (axri)
-			*axri = bf_get(lpfc_mbx_rd_conf_xri_count, rd_config) -
-					phba->sli4_hba.max_cfg_param.xri_used;
+		sli4_hba = &phba->sli4_hba;
+		max_cfg_param = &sli4_hba->max_cfg_param;
 
-		/* Account for differences with SLI-3.  Get vpi count from
-		 * mailbox data and subtract one for max vpi value.
-		 */
-		max_vpi = (bf_get(lpfc_mbx_rd_conf_vpi_count, rd_config) > 0) ?
-			(bf_get(lpfc_mbx_rd_conf_vpi_count, rd_config) - 1) : 0;
+		/* Normally, extents are not used */
+		if (!phba->sli4_hba.extents_in_use) {
+			if (mrpi)
+				*mrpi = max_cfg_param->max_rpi;
+			if (mxri)
+				*mxri = max_cfg_param->max_xri;
+			if (mvpi) {
+				max_vpi = max_cfg_param->max_vpi;
 
-		/* Limit the max we support */
-		if (max_vpi > LPFC_MAX_VPI)
-			max_vpi = LPFC_MAX_VPI;
-		if (mvpi)
-			*mvpi = max_vpi;
-		if (avpi)
-			*avpi = max_vpi - phba->sli4_hba.max_cfg_param.vpi_used;
+				/* Limit the max we support */
+				if (max_vpi > LPFC_MAX_VPI)
+					max_vpi = LPFC_MAX_VPI;
+				*mvpi = max_vpi;
+			}
+		} else { /* Extents in use */
+			if (mrpi) {
+				if (lpfc_sli4_get_avail_extnt_rsrc(phba,
+								   LPFC_RSC_TYPE_FCOE_RPI,
+								   &rsrc_ext_cnt,
+								   &rsrc_ext_size)) {
+					rc = 0;
+					goto free_pmboxq;
+				}
+
+				*mrpi = rsrc_ext_cnt * rsrc_ext_size;
+			}
+
+			if (mxri) {
+				if (lpfc_sli4_get_avail_extnt_rsrc(phba,
+								   LPFC_RSC_TYPE_FCOE_XRI,
+								   &rsrc_ext_cnt,
+								   &rsrc_ext_size)) {
+					rc = 0;
+					goto free_pmboxq;
+				}
+
+				*mxri = rsrc_ext_cnt * rsrc_ext_size;
+			}
+
+			if (mvpi) {
+				if (lpfc_sli4_get_avail_extnt_rsrc(phba,
+								   LPFC_RSC_TYPE_FCOE_VPI,
+								   &rsrc_ext_cnt,
+								   &rsrc_ext_size)) {
+					rc = 0;
+					goto free_pmboxq;
+				}
+
+				max_vpi = rsrc_ext_cnt * rsrc_ext_size;
+
+				/* Limit the max we support */
+				if (max_vpi > LPFC_MAX_VPI)
+					max_vpi = LPFC_MAX_VPI;
+				*mvpi = max_vpi;
+			}
+		}
 	} else {
 		if (mrpi)
 			*mrpi = pmb->un.varRdConfig.max_rpi;
@@ -2206,8 +2247,12 @@ lpfc_get_hba_info(struct lpfc_hba *phba,
 		}
 	}
 
+	/* Success */
+	rc = 1;
+
+free_pmboxq:
 	mempool_free(pmboxq, phba->mbox_mem_pool);
-	return 1;
+	return rc;
 }
 
 /**
@@ -2259,10 +2304,19 @@ lpfc_used_rpi_show(struct device *dev, struct device_attribute *attr,
 	struct Scsi_Host  *shost = class_to_shost(dev);
 	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
 	struct lpfc_hba   *phba = vport->phba;
-	uint32_t cnt, acnt;
+	struct lpfc_sli4_hba *sli4_hba;
+	struct lpfc_max_cfg_param *max_cfg_param;
+	u32 cnt = 0, acnt = 0;
 
-	if (lpfc_get_hba_info(phba, NULL, NULL, &cnt, &acnt, NULL, NULL))
-		return scnprintf(buf, PAGE_SIZE, "%d\n", (cnt - acnt));
+	if (phba->sli_rev == LPFC_SLI_REV4) {
+		sli4_hba = &phba->sli4_hba;
+		max_cfg_param = &sli4_hba->max_cfg_param;
+		return scnprintf(buf, PAGE_SIZE, "%d\n",
+				 max_cfg_param->rpi_used);
+	} else {
+		if (lpfc_get_hba_info(phba, NULL, NULL, &cnt, &acnt, NULL, NULL))
+			return scnprintf(buf, PAGE_SIZE, "%d\n", (cnt - acnt));
+	}
 	return scnprintf(buf, PAGE_SIZE, "Unknown\n");
 }
 
@@ -2315,10 +2369,19 @@ lpfc_used_xri_show(struct device *dev, struct device_attribute *attr,
 	struct Scsi_Host  *shost = class_to_shost(dev);
 	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
 	struct lpfc_hba   *phba = vport->phba;
-	uint32_t cnt, acnt;
+	struct lpfc_sli4_hba *sli4_hba;
+	struct lpfc_max_cfg_param *max_cfg_param;
+	u32 cnt = 0, acnt = 0;
 
-	if (lpfc_get_hba_info(phba, &cnt, &acnt, NULL, NULL, NULL, NULL))
-		return scnprintf(buf, PAGE_SIZE, "%d\n", (cnt - acnt));
+	if (phba->sli_rev == LPFC_SLI_REV4) {
+		sli4_hba = &phba->sli4_hba;
+		max_cfg_param = &sli4_hba->max_cfg_param;
+		return scnprintf(buf, PAGE_SIZE, "%d\n",
+				 max_cfg_param->xri_used);
+	} else {
+		if (lpfc_get_hba_info(phba, &cnt, &acnt, NULL, NULL, NULL, NULL))
+			return scnprintf(buf, PAGE_SIZE, "%d\n", (cnt - acnt));
+	}
 	return scnprintf(buf, PAGE_SIZE, "Unknown\n");
 }
 
@@ -2371,10 +2434,19 @@ lpfc_used_vpi_show(struct device *dev, struct device_attribute *attr,
 	struct Scsi_Host  *shost = class_to_shost(dev);
 	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
 	struct lpfc_hba   *phba = vport->phba;
-	uint32_t cnt, acnt;
+	struct lpfc_sli4_hba *sli4_hba;
+	struct lpfc_max_cfg_param *max_cfg_param;
+	u32 cnt = 0, acnt = 0;
 
-	if (lpfc_get_hba_info(phba, NULL, NULL, NULL, NULL, &cnt, &acnt))
-		return scnprintf(buf, PAGE_SIZE, "%d\n", (cnt - acnt));
+	if (phba->sli_rev == LPFC_SLI_REV4) {
+		sli4_hba = &phba->sli4_hba;
+		max_cfg_param = &sli4_hba->max_cfg_param;
+		return scnprintf(buf, PAGE_SIZE, "%d\n",
+				 max_cfg_param->vpi_used);
+	} else {
+		if (lpfc_get_hba_info(phba, NULL, NULL, NULL, NULL, &cnt, &acnt))
+			return scnprintf(buf, PAGE_SIZE, "%d\n", (cnt - acnt));
+	}
 	return scnprintf(buf, PAGE_SIZE, "Unknown\n");
 }
 
@@ -4365,13 +4437,22 @@ static DEVICE_ATTR_RW(lpfc_link_speed);
 
 /*
 # lpfc_aer_support: Support PCIe device Advanced Error Reporting (AER)
-#       0  = aer disabled or not supported
 #       1  = aer supported and enabled (default)
-# Value range is [0,1]. Default value is 1.
+# PCIe error reporting is always enabled by the PCI core, so this always
+# shows 1.
+#
+# N.B. Parts of LPFC_ATTR open-coded since some of the underlying
+# infrastructure (phba->cfg_aer_support) is gone.
 */
-LPFC_ATTR(aer_support, 1, 0, 1,
-	"Enable PCIe device AER support");
-lpfc_param_show(aer_support)
+static uint lpfc_aer_support = 1;
+module_param(lpfc_aer_support, uint, S_IRUGO);
+MODULE_PARM_DESC(lpfc_aer_support, "Enable PCIe device AER support");
+static ssize_t
+lpfc_aer_support_show(struct device *dev, struct device_attribute *attr,
+		      char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", lpfc_aer_support);
+}
 
 /**
  * lpfc_aer_support_store - Set the adapter for aer support
@@ -4382,76 +4463,27 @@ lpfc_param_show(aer_support)
  * @count: unused variable.
  *
  * Description:
- * If the val is 1 and currently the device's AER capability was not
- * enabled, invoke the kernel's enable AER helper routine, trying to
- * enable the device's AER capability. If the helper routine enabling
- * AER returns success, update the device's cfg_aer_support flag to
- * indicate AER is supported by the device; otherwise, if the device
- * AER capability is already enabled to support AER, then do nothing.
- *
- * If the val is 0 and currently the device's AER support was enabled,
- * invoke the kernel's disable AER helper routine. After that, update
- * the device's cfg_aer_support flag to indicate AER is not supported
- * by the device; otherwise, if the device AER capability is already
- * disabled from supporting AER, then do nothing.
+ * PCIe error reporting is enabled by the PCI core, so drivers don't need
+ * to do anything.  Retain this interface for backwards compatibility,
+ * but do nothing.
  *
  * Returns:
- * length of the buf on success if val is in range the intended mode
- * is supported.
- * -EINVAL if val out of range or intended mode is not supported.
+ * length of the buf on success
+ * -EINVAL if val out of range
  **/
 static ssize_t
 lpfc_aer_support_store(struct device *dev, struct device_attribute *attr,
 		       const char *buf, size_t count)
 {
-	struct Scsi_Host *shost = class_to_shost(dev);
-	struct lpfc_vport *vport = (struct lpfc_vport *)shost->hostdata;
-	struct lpfc_hba *phba = vport->phba;
-	int val = 0, rc = -EINVAL;
+	int val = 0;
 
 	if (!isdigit(buf[0]))
 		return -EINVAL;
 	if (sscanf(buf, "%i", &val) != 1)
 		return -EINVAL;
 
-	switch (val) {
-	case 0:
-		if (phba->hba_flag & HBA_AER_ENABLED) {
-			rc = pci_disable_pcie_error_reporting(phba->pcidev);
-			if (!rc) {
-				spin_lock_irq(&phba->hbalock);
-				phba->hba_flag &= ~HBA_AER_ENABLED;
-				spin_unlock_irq(&phba->hbalock);
-				phba->cfg_aer_support = 0;
-				rc = strlen(buf);
-			} else
-				rc = -EPERM;
-		} else {
-			phba->cfg_aer_support = 0;
-			rc = strlen(buf);
-		}
-		break;
-	case 1:
-		if (!(phba->hba_flag & HBA_AER_ENABLED)) {
-			rc = pci_enable_pcie_error_reporting(phba->pcidev);
-			if (!rc) {
-				spin_lock_irq(&phba->hbalock);
-				phba->hba_flag |= HBA_AER_ENABLED;
-				spin_unlock_irq(&phba->hbalock);
-				phba->cfg_aer_support = 1;
-				rc = strlen(buf);
-			} else
-				 rc = -EPERM;
-		} else {
-			phba->cfg_aer_support = 1;
-			rc = strlen(buf);
-		}
-		break;
-	default:
-		rc = -EINVAL;
-		break;
-	}
-	return rc;
+	dev_info_once(dev, "PCIe error reporting automatically enabled by the PCI core; sysfs write ignored\n");
+	return strlen(buf);
 }
 
 static DEVICE_ATTR_RW(lpfc_aer_support);
@@ -4464,16 +4496,16 @@ static DEVICE_ATTR_RW(lpfc_aer_support);
  * @count: unused variable.
  *
  * Description:
- * If the @buf contains 1 and the device currently has the AER support
- * enabled, then invokes the kernel AER helper routine
+ * If the @buf contains 1, invokes the kernel AER helper routine
  * pci_aer_clear_nonfatal_status() to clean up the uncorrectable
  * error status register.
  *
  * Notes:
  *
  * Returns:
- * -EINVAL if the buf does not contain the 1 or the device is not currently
- * enabled with the AER support.
+ * -EINVAL if the buf does not contain 1
+ * -EPERM if the OS cannot clear AER error status, i.e., when platform
+ * firmware owns the AER Capability
  **/
 static ssize_t
 lpfc_aer_cleanup_state(struct device *dev, struct device_attribute *attr,
@@ -4491,8 +4523,7 @@ lpfc_aer_cleanup_state(struct device *dev, struct device_attribute *attr,
 	if (val != 1)
 		return -EINVAL;
 
-	if (phba->hba_flag & HBA_AER_ENABLED)
-		rc = pci_aer_clear_nonfatal_status(phba->pcidev);
+	rc = pci_aer_clear_nonfatal_status(phba->pcidev);
 
 	if (rc == 0)
 		return strlen(buf);
@@ -5893,8 +5924,8 @@ int lpfc_fabric_cgn_frequency = 100; /* 100 ms default */
 module_param(lpfc_fabric_cgn_frequency, int, 0444);
 MODULE_PARM_DESC(lpfc_fabric_cgn_frequency, "Congestion signaling fabric freq");
 
-int lpfc_acqe_cgn_frequency = 10; /* 10 sec default */
-module_param(lpfc_acqe_cgn_frequency, int, 0444);
+unsigned char lpfc_acqe_cgn_frequency = 10; /* 10 sec default */
+module_param(lpfc_acqe_cgn_frequency, byte, 0444);
 MODULE_PARM_DESC(lpfc_acqe_cgn_frequency, "Congestion signaling ACQE freq");
 
 int lpfc_use_cgn_signal = 1; /* 0 - only use FPINs, 1 - Use signals if avail  */
@@ -7277,7 +7308,6 @@ lpfc_get_cfgparam(struct lpfc_hba *phba)
 
 	lpfc_sg_seg_cnt_init(phba, lpfc_sg_seg_cnt);
 	lpfc_hba_queue_depth_init(phba, lpfc_hba_queue_depth);
-	lpfc_aer_support_init(phba, lpfc_aer_support);
 	lpfc_sriov_nr_virtfn_init(phba, lpfc_sriov_nr_virtfn);
 	lpfc_request_firmware_upgrade_init(phba, lpfc_req_fw_upgrade);
 	lpfc_suppress_link_up_init(phba, lpfc_suppress_link_up);

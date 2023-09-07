@@ -112,6 +112,7 @@ static const struct of_device_id arizona_i2c_of_match[] = {
 	{ .compatible = "wlf,wm1814", .data = (void *)WM1814 },
 	{},
 };
+MODULE_DEVICE_TABLE(of, arizona_i2c_of_match);
 #endif
 
 static struct i2c_driver arizona_i2c_driver = {
@@ -120,7 +121,7 @@ static struct i2c_driver arizona_i2c_driver = {
 		.pm	= pm_ptr(&arizona_pm_ops),
 		.of_match_table	= of_match_ptr(arizona_i2c_of_match),
 	},
-	.probe_new	= arizona_i2c_probe,
+	.probe		= arizona_i2c_probe,
 	.remove		= arizona_i2c_remove,
 	.id_table	= arizona_i2c_id,
 };

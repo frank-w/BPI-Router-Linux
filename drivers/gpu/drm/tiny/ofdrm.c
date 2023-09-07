@@ -162,13 +162,9 @@ static bool display_get_big_endian_of(struct drm_device *dev, struct device_node
 	bool big_endian;
 
 #ifdef __BIG_ENDIAN
-	big_endian = true;
-	if (of_get_property(of_node, "little-endian", NULL))
-		big_endian = false;
+	big_endian = !of_property_read_bool(of_node, "little-endian");
 #else
-	big_endian = false;
-	if (of_get_property(of_node, "big-endian", NULL))
-		big_endian = true;
+	big_endian = of_property_read_bool(of_node, "big-endian");
 #endif
 
 	return big_endian;
@@ -1373,13 +1369,11 @@ static int ofdrm_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int ofdrm_remove(struct platform_device *pdev)
+static void ofdrm_remove(struct platform_device *pdev)
 {
 	struct drm_device *dev = platform_get_drvdata(pdev);
 
 	drm_dev_unplug(dev);
-
-	return 0;
 }
 
 static const struct of_device_id ofdrm_of_match_display[] = {
@@ -1394,7 +1388,7 @@ static struct platform_driver ofdrm_platform_driver = {
 		.of_match_table = ofdrm_of_match_display,
 	},
 	.probe = ofdrm_probe,
-	.remove = ofdrm_remove,
+	.remove_new = ofdrm_remove,
 };
 
 module_platform_driver(ofdrm_platform_driver);

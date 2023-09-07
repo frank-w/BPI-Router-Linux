@@ -58,14 +58,14 @@
 #define VENDOR_ID_MCHP 0x1055
 
 #define SPI_SUSPEND_CONFIG 0x101
-#define SPI_RESUME_CONFIG 0x303
+#define SPI_RESUME_CONFIG 0x203
 
 struct pci1xxxx_spi_internal {
 	u8 hw_inst;
 	bool spi_xfer_in_progress;
 	int irq;
 	struct completion spi_xfer_done;
-	struct spi_master *spi_host;
+	struct spi_controller *spi_host;
 	struct pci1xxxx_spi *parent;
 	struct {
 		unsigned int dev_sel : 3;
@@ -114,17 +114,14 @@ static void pci1xxxx_spi_set_cs(struct spi_device *spi, bool enable)
 
 	/* Set the DEV_SEL bits of the SPI_MST_CTL_REG */
 	regval = readl(par->reg_base + SPI_MST_CTL_REG_OFFSET(p->hw_inst));
-	if (enable) {
+	if (!enable) {
+		regval |= SPI_FORCE_CE;
 		regval &= ~SPI_MST_CTL_DEVSEL_MASK;
-		regval |= (spi->chip_select << 25);
-		writel(regval,
-		       par->reg_base + SPI_MST_CTL_REG_OFFSET(p->hw_inst));
+		regval |= (spi_get_chipselect(spi, 0) << 25);
 	} else {
-		regval &= ~(spi->chip_select << 25);
-		writel(regval,
-		       par->reg_base + SPI_MST_CTL_REG_OFFSET(p->hw_inst));
-
+		regval &= ~SPI_FORCE_CE;
 	}
+	writel(regval, par->reg_base + SPI_MST_CTL_REG_OFFSET(p->hw_inst));
 }
 
 static u8 pci1xxxx_get_clock_div(u32 hz)
@@ -199,8 +196,9 @@ static int pci1xxxx_spi_transfer_one(struct spi_controller *spi_ctlr,
 			else
 				regval &= ~SPI_MST_CTL_MODE_SEL;
 
-			regval |= ((clkdiv << 5) | SPI_FORCE_CE | (len << 8));
+			regval |= (clkdiv << 5);
 			regval &= ~SPI_MST_CTL_CMD_LEN_MASK;
+			regval |= (len << 8);
 			writel(regval, par->reg_base +
 			       SPI_MST_CTL_REG_OFFSET(p->hw_inst));
 			regval = readl(par->reg_base +
@@ -222,10 +220,6 @@ static int pci1xxxx_spi_transfer_one(struct spi_controller *spi_ctlr,
 			}
 		}
 	}
-
-	regval = readl(par->reg_base + SPI_MST_CTL_REG_OFFSET(p->hw_inst));
-	regval &= ~SPI_FORCE_CE;
-	writel(regval, par->reg_base + SPI_MST_CTL_REG_OFFSET(p->hw_inst));
 	p->spi_xfer_in_progress = false;
 
 	return 0;
@@ -256,7 +250,7 @@ static int pci1xxxx_spi_probe(struct pci_dev *pdev, const struct pci_device_id *
 	struct pci1xxxx_spi_internal *spi_sub_ptr;
 	struct device *dev = &pdev->dev;
 	struct pci1xxxx_spi *spi_bus;
-	struct spi_master *spi_host;
+	struct spi_controller *spi_host;
 	u32 regval;
 	int ret;
 
@@ -282,7 +276,7 @@ static int pci1xxxx_spi_probe(struct pci_dev *pdev, const struct pci_device_id *
 						      sizeof(struct pci1xxxx_spi_internal),
 						      GFP_KERNEL);
 		spi_sub_ptr = spi_bus->spi_int[iter];
-		spi_sub_ptr->spi_host = devm_spi_alloc_master(dev, sizeof(struct spi_master));
+		spi_sub_ptr->spi_host = devm_spi_alloc_host(dev, sizeof(struct spi_controller));
 		if (!spi_sub_ptr->spi_host)
 			return -ENOMEM;
 
@@ -371,9 +365,9 @@ static int pci1xxxx_spi_probe(struct pci_dev *pdev, const struct pci_device_id *
 		spi_host->bits_per_word_mask = SPI_BPW_MASK(8);
 		spi_host->max_speed_hz = PCI1XXXX_SPI_MAX_CLOCK_HZ;
 		spi_host->min_speed_hz = PCI1XXXX_SPI_MIN_CLOCK_HZ;
-		spi_host->flags = SPI_MASTER_MUST_TX;
-		spi_master_set_devdata(spi_host, spi_sub_ptr);
-		ret = devm_spi_register_master(dev, spi_host);
+		spi_host->flags = SPI_CONTROLLER_MUST_TX;
+		spi_controller_set_devdata(spi_host, spi_sub_ptr);
+		ret = devm_spi_register_controller(dev, spi_host);
 		if (ret)
 			goto error;
 	}
@@ -421,7 +415,7 @@ static int pci1xxxx_spi_resume(struct device *dev)
 
 	for (iter = 0; iter < spi_ptr->total_hw_instances; iter++) {
 		spi_sub_ptr = spi_ptr->spi_int[iter];
-		spi_master_resume(spi_sub_ptr->spi_host);
+		spi_controller_resume(spi_sub_ptr->spi_host);
 		writel(regval, spi_ptr->reg_base +
 		       SPI_MST_EVENT_MASK_REG_OFFSET(iter));
 
@@ -447,7 +441,7 @@ static int pci1xxxx_spi_suspend(struct device *dev)
 
 		/* Store existing config before suspend */
 		store_restore_config(spi_ptr, spi_sub_ptr, iter, 1);
-		spi_master_suspend(spi_sub_ptr->spi_host);
+		spi_controller_suspend(spi_sub_ptr->spi_host);
 		writel(reg1, spi_ptr->reg_base +
 		       SPI_MST_EVENT_MASK_REG_OFFSET(iter));
 	}

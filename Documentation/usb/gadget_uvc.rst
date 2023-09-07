@@ -168,7 +168,7 @@ Header linking
 
 The UVC specification requires that Format and Frame descriptors be preceded by
 Headers detailing things such as the number and cumulative size of the different
-Format descriptors that follow. This and similar operations are acheived in
+Format descriptors that follow. This and similar operations are achieved in
 configfs by linking between the configfs item representing the header and the
 config items representing those other descriptors, in this manner:
 
@@ -274,6 +274,34 @@ out with 0x00, for example:
 	0x00
 
 bNrInPins and baSourceID function in the same way.
+
+Configuring Supported Controls for Camera Terminal and Processing Unit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Camera Terminal and Processing Units in the UVC chain also have bmControls
+attributes which function similarly to the same field in an Extension Unit.
+Unlike XUs however, the meaning of the bitflag for these units is defined in
+the UVC specification; you should consult the "Camera Terminal Descriptor" and
+"Processing Unit Descriptor" sections for an enumeration of the flags.
+
+.. code-block:: bash
+
+        # Set the Processing Unit's bmControls, flagging Brightness, Contrast
+        # and Hue as available controls:
+        echo 0x05 > $FUNCTION/control/processing/default/bmControls
+
+        # Set the Camera Terminal's bmControls, flagging Focus Absolute and
+        # Focus Relative as available controls:
+        echo 0x60 > $FUNCTION/control/terminal/camera/default/bmControls
+
+If you do not set these fields then by default the Auto-Exposure Mode control
+for the Camera Terminal and the Brightness control for the Processing Unit will
+be flagged as available; if they are not supported you should set the field to
+0x00.
+
+Note that the size of the bmControls field for a Camera Terminal or Processing
+Unit is fixed by the UVC specification, and so the bControlSize attribute is
+read-only here.
 
 Custom Strings Support
 ~~~~~~~~~~~~~~~~~~~~~~

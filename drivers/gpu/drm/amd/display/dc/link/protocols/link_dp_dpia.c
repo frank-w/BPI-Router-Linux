@@ -26,7 +26,6 @@
 
 #include "dc.h"
 #include "inc/core_status.h"
-#include "dc_link.h"
 #include "dpcd_defs.h"
 
 #include "link_dp_dpia.h"
@@ -79,7 +78,7 @@ enum dc_status dpcd_get_tunneling_device_data(struct dc_link *link)
 	return status;
 }
 
-bool dc_link_dpia_query_hpd_status(struct dc_link *link)
+bool dpia_query_hpd_status(struct dc_link *link)
 {
 	union dmub_rb_cmd cmd = {0};
 	struct dc_dmub_srv *dmub_srv = link->ctx->dmub_srv;
@@ -91,7 +90,7 @@ bool dc_link_dpia_query_hpd_status(struct dc_link *link)
 	cmd.query_hpd.data.ch_type = AUX_CHANNEL_DPIA;
 
 	/* Return HPD status reported by DMUB if query successfully executed. */
-	if (dc_dmub_srv_cmd_with_reply_data(dmub_srv, &cmd) && cmd.query_hpd.data.status == AUX_RET_SUCCESS)
+	if (dm_execute_dmub_cmd(dmub_srv->ctx, &cmd, DM_DMUB_WAIT_TYPE_WAIT_WITH_REPLY) && cmd.query_hpd.data.status == AUX_RET_SUCCESS)
 		is_hpd_high = cmd.query_hpd.data.result;
 
 	DC_LOG_DEBUG("%s: link(%d) dpia(%d) cmd_status(%d) result(%d)\n",

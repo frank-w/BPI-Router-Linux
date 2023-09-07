@@ -18,22 +18,6 @@
 #include "acp-dsp-offset.h"
 #include <sound/sof/xtensa.h>
 
-int acp_dai_probe(struct snd_soc_dai *dai)
-{
-	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(dai->component);
-	const struct sof_amd_acp_desc *desc = get_chip_info(sdev->pdata);
-	unsigned int val;
-
-	val = snd_sof_dsp_read(sdev, ACP_DSP_BAR, desc->i2s_pin_config_offset);
-	if (val != desc->i2s_mode) {
-		dev_err(sdev->dev, "I2S Mode is not supported (I2S_PIN_CONFIG: %#x)\n", val);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL_NS(acp_dai_probe, SND_SOC_SOF_AMD_COMMON);
-
 /**
  * amd_sof_ipc_dump() - This function is called when IPC tx times out.
  * @sdev: SOF device.
@@ -187,6 +171,7 @@ struct snd_sof_dsp_ops sof_acp_common_ops = {
 	.pcm_open		= acp_pcm_open,
 	.pcm_close		= acp_pcm_close,
 	.pcm_hw_params		= acp_pcm_hw_params,
+	.pcm_pointer		= acp_pcm_pointer,
 
 	.hw_info		= SNDRV_PCM_INFO_MMAP |
 				  SNDRV_PCM_INFO_MMAP_VALID |
@@ -211,6 +196,10 @@ struct snd_sof_dsp_ops sof_acp_common_ops = {
 	.dbg_dump		= amd_sof_dump,
 	.debugfs_add_region_item = snd_sof_debugfs_add_region_item_iomem,
 	.dsp_arch_ops = &sof_xtensa_arch_ops,
+
+	/* probe client device registation */
+	.register_ipc_clients = acp_probes_register,
+	.unregister_ipc_clients = acp_probes_unregister,
 };
 EXPORT_SYMBOL_NS(sof_acp_common_ops, SND_SOC_SOF_AMD_COMMON);
 

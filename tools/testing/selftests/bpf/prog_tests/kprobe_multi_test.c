@@ -304,14 +304,6 @@ cleanup:
 	kprobe_multi__destroy(skel);
 }
 
-static inline __u64 get_time_ns(void)
-{
-	struct timespec t;
-
-	clock_gettime(CLOCK_MONOTONIC, &t);
-	return (__u64) t.tv_sec * 1000000000 + t.tv_nsec;
-}
-
 static size_t symbol_hash(long key, void *ctx __maybe_unused)
 {
 	return str_hash((const char *) key);
@@ -338,7 +330,12 @@ static int get_syms(char ***symsp, size_t *cntp, bool kernel)
 	 * Filtering out duplicates by using hashmap__add, which won't
 	 * add existing entry.
 	 */
-	f = fopen("/sys/kernel/debug/tracing/available_filter_functions", "r");
+
+	if (access("/sys/kernel/tracing/trace", F_OK) == 0)
+		f = fopen("/sys/kernel/tracing/available_filter_functions", "r");
+	else
+		f = fopen("/sys/kernel/debug/tracing/available_filter_functions", "r");
+
 	if (!f)
 		return -EINVAL;
 
@@ -376,8 +373,10 @@ static int get_syms(char ***symsp, size_t *cntp, bool kernel)
 			continue;
 
 		err = hashmap__add(map, name, 0);
-		if (err == -EEXIST)
+		if (err == -EEXIST) {
+			err = 0;
 			continue;
+		}
 		if (err)
 			goto error;
 

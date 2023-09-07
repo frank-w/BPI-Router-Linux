@@ -66,6 +66,11 @@ enum btc_rssi_st {
 	BTC_RSSI_ST_MAX
 };
 
+enum btc_fddt_en {
+	BTC_FDDT_DISABLE,
+	BTC_FDDT_ENABLE,
+};
+
 #define	BTC_RSSI_HIGH(_rssi_) \
 	({typeof(_rssi_) __rssi = (_rssi_); \
 	  ((__rssi == BTC_RSSI_ST_HIGH || \
@@ -126,6 +131,7 @@ enum btc_role_state {
 enum btc_rfctrl {
 	BTC_RFCTRL_WL_OFF,
 	BTC_RFCTRL_WL_ON,
+	BTC_RFCTRL_LPS_WL_ON,
 	BTC_RFCTRL_FW_CTRL,
 	BTC_RFCTRL_MAX
 };
@@ -185,6 +191,15 @@ static inline u8 rtw89_btc_path_phymap(struct rtw89_dev *rtwdev,
 				       enum rtw89_rf_path path)
 {
 	return rtw89_btc_phymap(rtwdev, phy_idx, BIT(path));
+}
+
+/* return bt req len in TU */
+static inline u16 rtw89_coex_query_bt_req_len(struct rtw89_dev *rtwdev,
+					      enum rtw89_phy_idx phy_idx)
+{
+	struct rtw89_btc *btc = &rtwdev->btc;
+
+	return btc->bt_req_len;
 }
 
 #endif

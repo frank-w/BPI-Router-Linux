@@ -112,7 +112,7 @@ static int zpci_reset_aipb(u8 nisc)
 		return -EINVAL;
 
 	aift->sbv = zpci_aif_sbv;
-	aift->gait = (struct zpci_gaite *)zpci_aipb->aipb.gait;
+	aift->gait = phys_to_virt(zpci_aipb->aipb.gait);
 
 	return 0;
 }
@@ -427,7 +427,7 @@ static void kvm_s390_pci_dev_release(struct zpci_dev *zdev)
 
 
 /*
- * Register device with the specified KVM. If interpetation facilities are
+ * Register device with the specified KVM. If interpretation facilities are
  * available, enable them and let userspace indicate whether or not they will
  * be used (specify SHM bit to disable).
  */

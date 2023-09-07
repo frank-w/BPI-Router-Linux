@@ -12,15 +12,15 @@
 #include <linux/module.h>
 #include <linux/net_tstamp.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/of_irq.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
 #include <linux/phy/phy.h>
+#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/sys_soc.h>
 
 #include "rswitch.h"
 
@@ -90,6 +90,11 @@ static int rswitch_bpool_config(struct rswitch_private *priv)
 	return rswitch_reg_wait(priv->addr, CABPIRM, CABPIRM_BPR, CABPIRM_BPR);
 }
 
+static void rswitch_coma_init(struct rswitch_private *priv)
+{
+	iowrite32(CABPPFLC_INIT_VALUE, priv->addr + CABPPFLC0);
+}
+
 /* R-Switch-2 block (TOP) */
 static void rswitch_top_init(struct rswitch_private *priv)
 {
@@ -154,24 +159,6 @@ static int rswitch_gwca_axi_ram_reset(struct rswitch_private *priv)
 	iowrite32(GWARIRM_ARIOG, priv->addr + GWARIRM);
 
 	return rswitch_reg_wait(priv->addr, GWARIRM, GWARIRM_ARR, GWARIRM_ARR);
-}
-
-static void rswitch_gwca_set_rate_limit(struct rswitch_private *priv, int rate)
-{
-	u32 gwgrlulc, gwgrlc;
-
-	switch (rate) {
-	case 1000:
-		gwgrlulc = 0x0000005f;
-		gwgrlc = 0x00010260;
-		break;
-	default:
-		dev_err(&priv->pdev->dev, "%s: This rate is not supported (%d)\n", __func__, rate);
-		return;
-	}
-
-	iowrite32(gwgrlulc, priv->addr + GWGRLULC);
-	iowrite32(gwgrlc, priv->addr + GWGRLC);
 }
 
 static bool rswitch_is_any_data_irq(struct rswitch_private *priv, u32 *dis, bool tx)
@@ -347,17 +334,6 @@ out:
 	return -ENOMEM;
 }
 
-static int rswitch_gwca_ts_queue_alloc(struct rswitch_private *priv)
-{
-	struct rswitch_gwca_queue *gq = &priv->gwca.ts_queue;
-
-	gq->ring_size = TS_RING_SIZE;
-	gq->ts_ring = dma_alloc_coherent(&priv->pdev->dev,
-					 sizeof(struct rswitch_ts_desc) *
-					 (gq->ring_size + 1), &gq->ring_dma, GFP_KERNEL);
-	return !gq->ts_ring ? -ENOMEM : 0;
-}
-
 static void rswitch_desc_set_dptr(struct rswitch_desc *desc, dma_addr_t addr)
 {
 	desc->dptrl = cpu_to_le32(lower_32_bits(addr));
@@ -402,7 +378,7 @@ static int rswitch_gwca_queue_format(struct net_device *ndev,
 	linkfix->die_dt = DT_LINKFIX;
 	rswitch_desc_set_dptr(linkfix, gq->ring_dma);
 
-	iowrite32(GWDCC_BALR | (gq->dir_tx ? GWDCC_DQT : 0) | GWDCC_EDE,
+	iowrite32(GWDCC_BALR | (gq->dir_tx ? GWDCC_DCP(GWCA_IPV_NUM) | GWDCC_DQT : 0) | GWDCC_EDE,
 		  priv->addr + GWDCC_OFFS(gq->index));
 
 	return 0;
@@ -500,7 +476,8 @@ static int rswitch_gwca_queue_ext_ts_format(struct net_device *ndev,
 	linkfix->die_dt = DT_LINKFIX;
 	rswitch_desc_set_dptr(linkfix, gq->ring_dma);
 
-	iowrite32(GWDCC_BALR | (gq->dir_tx ? GWDCC_DQT : 0) | GWDCC_ETS | GWDCC_EDE,
+	iowrite32(GWDCC_BALR | (gq->dir_tx ? GWDCC_DCP(GWCA_IPV_NUM) | GWDCC_DQT : 0) |
+		  GWDCC_ETS | GWDCC_EDE,
 		  priv->addr + GWDCC_OFFS(gq->index));
 
 	return 0;
@@ -531,6 +508,28 @@ static void rswitch_gwca_linkfix_free(struct rswitch_private *priv)
 		dma_free_coherent(&priv->pdev->dev, gwca->linkfix_table_size,
 				  gwca->linkfix_table, gwca->linkfix_table_dma);
 	gwca->linkfix_table = NULL;
+}
+
+static int rswitch_gwca_ts_queue_alloc(struct rswitch_private *priv)
+{
+	struct rswitch_gwca_queue *gq = &priv->gwca.ts_queue;
+	struct rswitch_ts_desc *desc;
+
+	gq->ring_size = TS_RING_SIZE;
+	gq->ts_ring = dma_alloc_coherent(&priv->pdev->dev,
+					 sizeof(struct rswitch_ts_desc) *
+					 (gq->ring_size + 1), &gq->ring_dma, GFP_KERNEL);
+
+	if (!gq->ts_ring)
+		return -ENOMEM;
+
+	rswitch_gwca_ts_queue_fill(priv, 0, TS_RING_SIZE);
+	desc = &gq->ts_ring[gq->ring_size];
+	desc->desc.die_dt = DT_LINKFIX;
+	rswitch_desc_set_dptr(&desc->desc, gq->ring_dma);
+	INIT_LIST_HEAD(&priv->gwca.ts_info_list);
+
+	return 0;
 }
 
 static struct rswitch_gwca_queue *rswitch_gwca_get(struct rswitch_private *priv)
@@ -649,7 +648,8 @@ static int rswitch_gwca_hw_init(struct rswitch_private *priv)
 	iowrite32(lower_32_bits(priv->gwca.ts_queue.ring_dma), priv->addr + GWTDCAC10);
 	iowrite32(upper_32_bits(priv->gwca.ts_queue.ring_dma), priv->addr + GWTDCAC00);
 	iowrite32(GWCA_TS_IRQ_BIT, priv->addr + GWTSDCC0);
-	rswitch_gwca_set_rate_limit(priv, priv->gwca.speed);
+
+	iowrite32(GWTPC_PPPL(GWCA_IPV_NUM), priv->addr + GWTPC0);
 
 	for (i = 0; i < RSWITCH_NUM_PORTS; i++) {
 		err = rswitch_rxdmac_init(priv, i);
@@ -729,7 +729,7 @@ static bool rswitch_rx(struct net_device *ndev, int *quota)
 		}
 		skb_put(skb, pkt_len);
 		skb->protocol = eth_type_trans(skb, ndev);
-		netif_receive_skb(skb);
+		napi_gro_receive(&rdev->napi, skb);
 		rdev->ndev->stats.rx_packets++;
 		rdev->ndev->stats.rx_bytes += pkt_len;
 
@@ -1244,7 +1244,6 @@ static void rswitch_adjust_link(struct net_device *ndev)
 	struct rswitch_device *rdev = netdev_priv(ndev);
 	struct phy_device *phydev = ndev->phydev;
 
-	/* Current hardware has a restriction not to change speed at runtime */
 	if (phydev->link != rdev->etha->link) {
 		phy_print_status(phydev);
 		if (phydev->link)
@@ -1253,13 +1252,23 @@ static void rswitch_adjust_link(struct net_device *ndev)
 			phy_power_off(rdev->serdes);
 
 		rdev->etha->link = phydev->link;
+
+		if (!rdev->priv->etha_no_runtime_change &&
+		    phydev->speed != rdev->etha->speed) {
+			rdev->etha->speed = phydev->speed;
+
+			rswitch_etha_hw_init(rdev->etha, rdev->ndev->dev_addr);
+			phy_set_speed(rdev->serdes, rdev->etha->speed);
+		}
 	}
 }
 
 static void rswitch_phy_remove_link_mode(struct rswitch_device *rdev,
 					 struct phy_device *phydev)
 {
-	/* Current hardware has a restriction not to change speed at runtime */
+	if (!rdev->priv->etha_no_runtime_change)
+		return;
+
 	switch (rdev->etha->speed) {
 	case SPEED_2500:
 		phy_remove_link_mode(phydev, ETHTOOL_LINK_MODE_1000baseT_Full_BIT);
@@ -1324,10 +1333,8 @@ out:
 
 static void rswitch_phy_device_deinit(struct rswitch_device *rdev)
 {
-	if (rdev->ndev->phydev) {
+	if (rdev->ndev->phydev)
 		phy_disconnect(rdev->ndev->phydev);
-		rdev->ndev->phydev = NULL;
-	}
 }
 
 static int rswitch_serdes_set_params(struct rswitch_device *rdev)
@@ -1350,7 +1357,8 @@ static int rswitch_ether_port_init_one(struct rswitch_device *rdev)
 		err = rswitch_etha_hw_init(rdev->etha, rdev->ndev->dev_addr);
 		if (err < 0)
 			return err;
-		rdev->etha->operated = true;
+		if (rdev->priv->etha_no_runtime_change)
+			rdev->etha->operated = true;
 	}
 
 	err = rswitch_mii_register(rdev);
@@ -1487,7 +1495,7 @@ static netdev_tx_t rswitch_start_xmit(struct sk_buff *skb, struct net_device *nd
 
 	if (rswitch_get_num_cur_queues(gq) >= gq->ring_size - 1) {
 		netif_stop_subqueue(ndev, 0);
-		return ret;
+		return NETDEV_TX_BUSY;
 	}
 
 	if (skb_put_padto(skb, ETH_ZLEN))
@@ -1504,7 +1512,8 @@ static netdev_tx_t rswitch_start_xmit(struct sk_buff *skb, struct net_device *nd
 	rswitch_desc_set_dptr(&desc->desc, dma_addr);
 	desc->desc.info_ds = cpu_to_le16(skb->len);
 
-	desc->info1 = cpu_to_le64(INFO1_DV(BIT(rdev->etha->index)) | INFO1_FMT);
+	desc->info1 = cpu_to_le64(INFO1_DV(BIT(rdev->etha->index)) |
+				  INFO1_IPV(GWCA_IPV_NUM) | INFO1_FMT);
 	if (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) {
 		struct rswitch_gwca_ts_info *ts_info;
 
@@ -1655,6 +1664,8 @@ static int rswitch_get_ts_info(struct net_device *ndev, struct ethtool_ts_info *
 
 static const struct ethtool_ops rswitch_ethtool_ops = {
 	.get_ts_info = rswitch_get_ts_info,
+	.get_link_ksettings = phy_ethtool_get_link_ksettings,
+	.set_link_ksettings = phy_ethtool_set_link_ksettings,
 };
 
 static const struct of_device_id renesas_eth_sw_of_table[] = {
@@ -1774,6 +1785,8 @@ static int rswitch_init(struct rswitch_private *priv)
 	if (err < 0)
 		return err;
 
+	rswitch_coma_init(priv);
+
 	err = rswitch_gwca_linkfix_alloc(priv);
 	if (err < 0)
 		return -ENOMEM;
@@ -1781,9 +1794,6 @@ static int rswitch_init(struct rswitch_private *priv)
 	err = rswitch_gwca_ts_queue_alloc(priv);
 	if (err < 0)
 		goto err_ts_queue_alloc;
-
-	rswitch_gwca_ts_queue_fill(priv, 0, TS_RING_SIZE);
-	INIT_LIST_HEAD(&priv->gwca.ts_info_list);
 
 	for (i = 0; i < RSWITCH_NUM_PORTS; i++) {
 		err = rswitch_device_alloc(priv, i);
@@ -1856,8 +1866,14 @@ err_ts_queue_alloc:
 	return err;
 }
 
+static const struct soc_device_attribute rswitch_soc_no_speed_change[]  = {
+	{ .soc_id = "r8a779f0", .revision = "ES1.0" },
+	{ /* Sentinel */ }
+};
+
 static int renesas_eth_sw_probe(struct platform_device *pdev)
 {
+	const struct soc_device_attribute *attr;
 	struct rswitch_private *priv;
 	struct resource *res;
 	int ret;
@@ -1871,6 +1887,10 @@ static int renesas_eth_sw_probe(struct platform_device *pdev)
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
+
+	attr = soc_device_match(rswitch_soc_no_speed_change);
+	if (attr)
+		priv->etha_no_runtime_change = true;
 
 	priv->ptp_priv = rcar_gen4_ptp_alloc(pdev);
 	if (!priv->ptp_priv)

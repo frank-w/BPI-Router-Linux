@@ -19,8 +19,10 @@
 #include "mmap.h"
 #include "stat.h"
 #include "metricgroup.h"
+#include "util/bpf-filter.h"
 #include "util/env.h"
 #include "util/pmu.h"
+#include "util/pmus.h"
 #include <internal/lib.h>
 #include "util.h"
 
@@ -47,6 +49,14 @@
 #ifndef Py_TYPE
 #define Py_TYPE(ob) (((PyObject*)(ob))->ob_type)
 #endif
+
+/*
+ * Avoid bringing in event parsing.
+ */
+int parse_event(struct evlist *evlist __maybe_unused, const char *str __maybe_unused)
+{
+	return 0;
+}
 
 /*
  * Provide these two so that we don't have to link against callchain.c and
@@ -83,7 +93,7 @@ const char *perf_env__arch(struct perf_env *env __maybe_unused)
  * far, for the perf python binding known usecases, revisit if this become
  * necessary.
  */
-struct perf_pmu *evsel__find_pmu(struct evsel *evsel __maybe_unused)
+struct perf_pmu *evsel__find_pmu(const struct evsel *evsel __maybe_unused)
 {
 	return NULL;
 }
@@ -91,6 +101,16 @@ struct perf_pmu *evsel__find_pmu(struct evsel *evsel __maybe_unused)
 int perf_pmu__scan_file(struct perf_pmu *pmu, const char *name, const char *fmt, ...)
 {
 	return EOF;
+}
+
+int perf_pmus__num_core_pmus(void)
+{
+	return 1;
+}
+
+bool evsel__is_aux_event(const struct evsel *evsel __maybe_unused)
+{
+	return false;
 }
 
 /*
@@ -101,6 +121,14 @@ int metricgroup__copy_metric_events(struct evlist *evlist, struct cgroup *cgrp,
 				    struct rblist *old_metric_events)
 {
 	return 0;
+}
+
+/*
+ * Add this one here not to drag util/trace-event-info.c
+ */
+char *tracepoint_id_to_name(u64 config)
+{
+	return NULL;
 }
 
 /*
@@ -129,6 +157,19 @@ int bpf_counter__disable(struct evsel *evsel __maybe_unused)
 {
 	return 0;
 }
+
+// not to drag util/bpf-filter.c
+#ifdef HAVE_BPF_SKEL
+int perf_bpf_filter__prepare(struct evsel *evsel __maybe_unused)
+{
+	return 0;
+}
+
+int perf_bpf_filter__destroy(struct evsel *evsel __maybe_unused)
+{
+	return 0;
+}
+#endif
 
 /*
  * Support debug printing even though util/debug.c is not linked.  That means
@@ -1459,5 +1500,9 @@ error:
  */
 void test_attr__open(struct perf_event_attr *attr, pid_t pid, struct perf_cpu cpu,
                      int fd, int group_fd, unsigned long flags)
+{
+}
+
+void evlist__free_stats(struct evlist *evlist)
 {
 }

@@ -56,10 +56,7 @@ __asm__(".macro	parse_r var r\n\t"
 #undef _IFC_REG
 
 /* CPUCFG */
-static inline u32 read_cpucfg(u32 reg)
-{
-	return __cpucfg(reg);
-}
+#define read_cpucfg(reg) __cpucfg(reg)
 
 #endif /* !__ASSEMBLY__ */
 
@@ -138,6 +135,7 @@ static inline u32 read_cpucfg(u32 reg)
 #define  CPUCFG2_MIPSBT			BIT(20)
 #define  CPUCFG2_LSPW			BIT(21)
 #define  CPUCFG2_LAM			BIT(22)
+#define  CPUCFG2_PTW			BIT(24)
 
 #define LOONGARCH_CPUCFG3		0x3
 #define  CPUCFG3_CCDMA			BIT(0)
@@ -206,56 +204,18 @@ static inline u32 read_cpucfg(u32 reg)
 #ifndef __ASSEMBLY__
 
 /* CSR */
-static __always_inline u32 csr_read32(u32 reg)
-{
-	return __csrrd_w(reg);
-}
-
-static __always_inline u64 csr_read64(u32 reg)
-{
-	return __csrrd_d(reg);
-}
-
-static __always_inline void csr_write32(u32 val, u32 reg)
-{
-	__csrwr_w(val, reg);
-}
-
-static __always_inline void csr_write64(u64 val, u32 reg)
-{
-	__csrwr_d(val, reg);
-}
-
-static __always_inline u32 csr_xchg32(u32 val, u32 mask, u32 reg)
-{
-	return __csrxchg_w(val, mask, reg);
-}
-
-static __always_inline u64 csr_xchg64(u64 val, u64 mask, u32 reg)
-{
-	return __csrxchg_d(val, mask, reg);
-}
+#define csr_read32(reg) __csrrd_w(reg)
+#define csr_read64(reg) __csrrd_d(reg)
+#define csr_write32(val, reg) __csrwr_w(val, reg)
+#define csr_write64(val, reg) __csrwr_d(val, reg)
+#define csr_xchg32(val, mask, reg) __csrxchg_w(val, mask, reg)
+#define csr_xchg64(val, mask, reg) __csrxchg_d(val, mask, reg)
 
 /* IOCSR */
-static __always_inline u32 iocsr_read32(u32 reg)
-{
-	return __iocsrrd_w(reg);
-}
-
-static __always_inline u64 iocsr_read64(u32 reg)
-{
-	return __iocsrrd_d(reg);
-}
-
-static __always_inline void iocsr_write32(u32 val, u32 reg)
-{
-	__iocsrwr_w(val, reg);
-}
-
-static __always_inline void iocsr_write64(u64 val, u32 reg)
-{
-	__iocsrwr_d(val, reg);
-}
+#define iocsr_read32(reg) __iocsrrd_w(reg)
+#define iocsr_read64(reg) __iocsrrd_d(reg)
+#define iocsr_write32(val, reg) __iocsrwr_w(val, reg)
+#define iocsr_write64(val, reg) __iocsrwr_d(val, reg)
 
 #endif /* !__ASSEMBLY__ */
 
@@ -311,8 +271,8 @@ static __always_inline void iocsr_write64(u64 val, u32 reg)
 #define  CSR_ECFG_VS_WIDTH		3
 #define  CSR_ECFG_VS			(_ULCAST_(0x7) << CSR_ECFG_VS_SHIFT)
 #define  CSR_ECFG_IM_SHIFT		0
-#define  CSR_ECFG_IM_WIDTH		13
-#define  CSR_ECFG_IM			(_ULCAST_(0x1fff) << CSR_ECFG_IM_SHIFT)
+#define  CSR_ECFG_IM_WIDTH		14
+#define  CSR_ECFG_IM			(_ULCAST_(0x3fff) << CSR_ECFG_IM_SHIFT)
 
 #define LOONGARCH_CSR_ESTAT		0x5	/* Exception status */
 #define  CSR_ESTAT_ESUBCODE_SHIFT	22
@@ -322,8 +282,8 @@ static __always_inline void iocsr_write64(u64 val, u32 reg)
 #define  CSR_ESTAT_EXC_WIDTH		6
 #define  CSR_ESTAT_EXC			(_ULCAST_(0x3f) << CSR_ESTAT_EXC_SHIFT)
 #define  CSR_ESTAT_IS_SHIFT		0
-#define  CSR_ESTAT_IS_WIDTH		15
-#define  CSR_ESTAT_IS			(_ULCAST_(0x7fff) << CSR_ESTAT_IS_SHIFT)
+#define  CSR_ESTAT_IS_WIDTH		14
+#define  CSR_ESTAT_IS			(_ULCAST_(0x3fff) << CSR_ESTAT_IS_SHIFT)
 
 #define LOONGARCH_CSR_ERA		0x6	/* ERA */
 
@@ -453,6 +413,9 @@ static __always_inline void iocsr_write64(u64 val, u32 reg)
 #define  CSR_PWCTL0_PTBASE		(_ULCAST_(0x1f) << CSR_PWCTL0_PTBASE_SHIFT)
 
 #define LOONGARCH_CSR_PWCTL1		0x1d	/* PWCtl1 */
+#define  CSR_PWCTL1_PTW_SHIFT		24
+#define  CSR_PWCTL1_PTW_WIDTH		1
+#define  CSR_PWCTL1_PTW			(_ULCAST_(0x1) << CSR_PWCTL1_PTW_SHIFT)
 #define  CSR_PWCTL1_DIR3WIDTH_SHIFT	18
 #define  CSR_PWCTL1_DIR3WIDTH_WIDTH	5
 #define  CSR_PWCTL1_DIR3WIDTH		(_ULCAST_(0x1f) << CSR_PWCTL1_DIR3WIDTH_SHIFT)
@@ -1090,7 +1053,7 @@ static __always_inline void iocsr_write64(u64 val, u32 reg)
 #define ECFGF_IPI		(_ULCAST_(1) << ECFGB_IPI)
 #define ECFGF(hwirq)		(_ULCAST_(1) << hwirq)
 
-#define ESTATF_IP		0x00001fff
+#define ESTATF_IP		0x00003fff
 
 #define LOONGARCH_IOCSR_FEATURES	0x8
 #define  IOCSRF_TEMP			BIT_ULL(0)
@@ -1167,7 +1130,7 @@ static __always_inline void iocsr_write64(u64 val, u32 reg)
 
 #ifndef __ASSEMBLY__
 
-static inline u64 drdtime(void)
+static __always_inline u64 drdtime(void)
 {
 	int rID = 0;
 	u64 val = 0;
@@ -1397,7 +1360,7 @@ __BUILD_CSR_OP(tlbidx)
 	#define EXSUBCODE_ADEF		0	/* Fetch Instruction */
 	#define EXSUBCODE_ADEM		1	/* Access Memory*/
 #define EXCCODE_ALE		9	/* Unalign Access */
-#define EXCCODE_OOB		10	/* Out of bounds */
+#define EXCCODE_BCE		10	/* Bounds Check Error */
 #define EXCCODE_SYS		11	/* System call */
 #define EXCCODE_BP		12	/* Breakpoint */
 #define EXCCODE_INE		13	/* Inst. Not Exist */
@@ -1408,39 +1371,51 @@ __BUILD_CSR_OP(tlbidx)
 #define EXCCODE_FPE		18	/* Floating Point Exception */
 	#define EXCSUBCODE_FPE		0	/* Floating Point Exception */
 	#define EXCSUBCODE_VFPE		1	/* Vector Exception */
-#define EXCCODE_WATCH		19	/* Watch address reference */
+#define EXCCODE_WATCH		19	/* WatchPoint Exception */
+	#define EXCSUBCODE_WPEF		0	/* ... on Instruction Fetch */
+	#define EXCSUBCODE_WPEM		1	/* ... on Memory Accesses */
 #define EXCCODE_BTDIS		20	/* Binary Trans. Disabled */
 #define EXCCODE_BTE		21	/* Binary Trans. Exception */
-#define EXCCODE_PSI		22	/* Guest Privileged Error */
-#define EXCCODE_HYP		23	/* Hypercall */
+#define EXCCODE_GSPR		22	/* Guest Privileged Error */
+#define EXCCODE_HVC		23	/* Hypercall */
 #define EXCCODE_GCM		24	/* Guest CSR modified */
 	#define EXCSUBCODE_GCSC		0	/* Software caused */
 	#define EXCSUBCODE_GCHC		1	/* Hardware caused */
 #define EXCCODE_SE		25	/* Security */
 
-#define EXCCODE_INT_START   64
-#define EXCCODE_SIP0        64
-#define EXCCODE_SIP1        65
-#define EXCCODE_IP0         66
-#define EXCCODE_IP1         67
-#define EXCCODE_IP2         68
-#define EXCCODE_IP3         69
-#define EXCCODE_IP4         70
-#define EXCCODE_IP5         71
-#define EXCCODE_IP6         72
-#define EXCCODE_IP7         73
-#define EXCCODE_PMC         74 /* Performance Counter */
-#define EXCCODE_TIMER       75
-#define EXCCODE_IPI         76
-#define EXCCODE_NMI         77
-#define EXCCODE_INT_END     78
-#define EXCCODE_INT_NUM	    (EXCCODE_INT_END - EXCCODE_INT_START)
+/* Interrupt numbers */
+#define INT_SWI0	0	/* Software Interrupts */
+#define INT_SWI1	1
+#define INT_HWI0	2	/* Hardware Interrupts */
+#define INT_HWI1	3
+#define INT_HWI2	4
+#define INT_HWI3	5
+#define INT_HWI4	6
+#define INT_HWI5	7
+#define INT_HWI6	8
+#define INT_HWI7	9
+#define INT_PCOV	10	/* Performance Counter Overflow */
+#define INT_TI		11	/* Timer */
+#define INT_IPI		12
+#define INT_NMI		13
 
-/* FPU register names */
+/* ExcCodes corresponding to interrupts */
+#define EXCCODE_INT_NUM		(INT_NMI + 1)
+#define EXCCODE_INT_START	64
+#define EXCCODE_INT_END		(EXCCODE_INT_START + EXCCODE_INT_NUM - 1)
+
+/* FPU Status Register Names */
+#ifndef CONFIG_AS_HAS_FCSR_CLASS
 #define LOONGARCH_FCSR0	$r0
 #define LOONGARCH_FCSR1	$r1
 #define LOONGARCH_FCSR2	$r2
 #define LOONGARCH_FCSR3	$r3
+#else
+#define LOONGARCH_FCSR0	$fcsr0
+#define LOONGARCH_FCSR1	$fcsr1
+#define LOONGARCH_FCSR2	$fcsr2
+#define LOONGARCH_FCSR3	$fcsr3
+#endif
 
 /* FPU Status Register Values */
 #define FPU_CSR_RSVD	0xe0e0fce0
@@ -1491,7 +1466,7 @@ __BUILD_CSR_OP(tlbidx)
 #define write_fcsr(dest, val) \
 do {	\
 	__asm__ __volatile__(	\
-	"	movgr2fcsr	%0, "__stringify(dest)"	\n"	\
+	"	movgr2fcsr	"__stringify(dest)", %0	\n"	\
 	: : "r" (val));	\
 } while (0)
 

@@ -140,7 +140,7 @@ struct lpfc_rqb {
 
 enum lpfc_poll_mode {
 	LPFC_QUEUE_WORK,
-	LPFC_IRQ_POLL
+	LPFC_THREADED_IRQ,
 };
 
 struct lpfc_idle_stat {
@@ -279,8 +279,6 @@ struct lpfc_queue {
 	struct list_head _poll_list;
 	void **q_pgs;	/* array to index entries per page */
 
-#define LPFC_IRQ_POLL_WEIGHT 256
-	struct irq_poll iop;
 	enum lpfc_poll_mode poll_mode;
 };
 
@@ -1179,4 +1177,23 @@ static inline void *lpfc_sli4_qe(struct lpfc_queue *q, uint16_t idx)
 {
 	return q->q_pgs[idx / q->entry_cnt_per_pg] +
 		(q->entry_size * (idx % q->entry_cnt_per_pg));
+}
+
+/**
+ * lpfc_sli4_unrecoverable_port - Check ERR and RN bits in portstat_reg
+ * @portstat_reg: portstat_reg pointer containing portstat_reg contents
+ *
+ * Description:
+ * Use only for SLI4 interface type-2 or later.  If ERR is set && RN is 0, then
+ * port is deemed unrecoverable.
+ *
+ * Returns:
+ * true		- ERR && !RN
+ * false	- otherwise
+ */
+static inline bool
+lpfc_sli4_unrecoverable_port(struct lpfc_register *portstat_reg)
+{
+	return bf_get(lpfc_sliport_status_err, portstat_reg) &&
+	       !bf_get(lpfc_sliport_status_rn, portstat_reg);
 }

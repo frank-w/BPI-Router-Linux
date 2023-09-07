@@ -27,6 +27,7 @@
 #include "dcn32_resource.h"
 #include "dcn20/dcn20_resource.h"
 #include "dml/dcn32/display_mode_vba_util_32.h"
+#include "dml/dcn32/dcn32_fpu.h"
 
 static bool is_dual_plane(enum surface_pixel_format format)
 {
@@ -59,25 +60,21 @@ uint32_t dcn32_helper_calculate_mall_bytes_for_cursor(
 {
 	struct hubp *hubp = pipe_ctx->plane_res.hubp;
 	uint32_t cursor_size = hubp->curs_attr.pitch * hubp->curs_attr.height;
-	uint32_t cursor_bpp = 4;
 	uint32_t cursor_mall_size_bytes = 0;
 
 	switch (pipe_ctx->stream->cursor_attributes.color_format) {
 	case CURSOR_MODE_MONO:
 		cursor_size /= 2;
-		cursor_bpp = 4;
 		break;
 	case CURSOR_MODE_COLOR_1BIT_AND:
 	case CURSOR_MODE_COLOR_PRE_MULTIPLIED_ALPHA:
 	case CURSOR_MODE_COLOR_UN_PRE_MULTIPLIED_ALPHA:
 		cursor_size *= 4;
-		cursor_bpp = 4;
 		break;
 
 	case CURSOR_MODE_COLOR_64BIT_FP_PRE_MULTIPLIED:
 	case CURSOR_MODE_COLOR_64BIT_FP_UN_PRE_MULTIPLIED:
 		cursor_size *= 8;
-		cursor_bpp = 8;
 		break;
 	}
 
@@ -97,18 +94,15 @@ uint32_t dcn32_helper_calculate_mall_bytes_for_cursor(
 }
 
 /**
- * ********************************************************************************************
- * dcn32_helper_calculate_num_ways_for_subvp: Calculate number of ways needed for SubVP
+ * dcn32_helper_calculate_num_ways_for_subvp(): Calculate number of ways needed for SubVP
  *
  * Gets total allocation required for the phantom viewport calculated by DML in bytes and
  * converts to number of cache ways.
  *
- * @param [in] dc: current dc state
- * @param [in] context: new dc state
+ * @dc: current dc state
+ * @context: new dc state
  *
- * @return: number of ways required for SubVP
- *
- * ********************************************************************************************
+ * Return: number of ways required for SubVP
  */
 uint32_t dcn32_helper_calculate_num_ways_for_subvp(
 		struct dc *dc,
@@ -262,8 +256,7 @@ bool dcn32_is_psr_capable(struct pipe_ctx *pipe)
 }
 
 /**
- * *******************************************************************************************
- * dcn32_determine_det_override: Determine DET allocation for each pipe
+ * dcn32_determine_det_override(): Determine DET allocation for each pipe
  *
  * This function determines how much DET to allocate for each pipe. The total number of
  * DET segments will be split equally among each of the streams, and after that the DET
@@ -280,13 +273,11 @@ bool dcn32_is_psr_capable(struct pipe_ctx *pipe)
  *    among those pipes.
  * 4. Assign the DET override to the DML pipes.
  *
- * @param [in]: dc: Current DC state
- * @param [in]: context: New DC state to be programmed
- * @param [in]: pipes: Array of DML pipes
+ * @dc: Current DC state
+ * @context: New DC state to be programmed
+ * @pipes: Array of DML pipes
  *
- * @return: void
- *
- * *******************************************************************************************
+ * Return: void
  */
 void dcn32_determine_det_override(struct dc *dc,
 		struct dc_state *context,
@@ -301,9 +292,8 @@ void dcn32_determine_det_override(struct dc *dc,
 
 	for (i = 0; i < context->stream_count; i++) {
 		/* Don't count SubVP streams for DET allocation */
-		if (context->streams[i]->mall_stream_config.type != SUBVP_PHANTOM) {
+		if (context->streams[i]->mall_stream_config.type != SUBVP_PHANTOM)
 			stream_count++;
-		}
 	}
 
 	if (stream_count > 0) {
@@ -311,6 +301,7 @@ void dcn32_determine_det_override(struct dc *dc,
 		for (i = 0; i < context->stream_count; i++) {
 			if (context->streams[i]->mall_stream_config.type == SUBVP_PHANTOM)
 				continue;
+
 			if (context->stream_status[i].plane_count > 0)
 				plane_segments = stream_segments / context->stream_status[i].plane_count;
 			else
@@ -394,8 +385,7 @@ void dcn32_set_det_allocations(struct dc *dc, struct dc_state *context,
 }
 
 /**
- * *******************************************************************************************
- * dcn32_save_mall_state: Save MALL (SubVP) state for fast validation cases
+ * dcn32_save_mall_state(): Save MALL (SubVP) state for fast validation cases
  *
  * This function saves the MALL (SubVP) case for fast validation cases. For fast validation,
  * there are situations where a shallow copy of the dc->current_state is created for the
@@ -408,13 +398,11 @@ void dcn32_set_det_allocations(struct dc *dc, struct dc_state *context,
  * NOTE: This function ONLY works if the streams are not moved to a different pipe in the
  *       validation. We don't expect this to happen in fast_validation=1 cases.
  *
- * @param [in]: dc: Current DC state
- * @param [in]: context: New DC state to be programmed
- * @param [out]: temp_config: struct used to cache the existing MALL state
+ * @dc: Current DC state
+ * @context: New DC state to be programmed
+ * @temp_config: struct used to cache the existing MALL state
  *
- * @return: void
- *
- * *******************************************************************************************
+ * Return: void
  */
 void dcn32_save_mall_state(struct dc *dc,
 		struct dc_state *context,
@@ -434,18 +422,15 @@ void dcn32_save_mall_state(struct dc *dc,
 }
 
 /**
- * *******************************************************************************************
- * dcn32_restore_mall_state: Restore MALL (SubVP) state for fast validation cases
+ * dcn32_restore_mall_state(): Restore MALL (SubVP) state for fast validation cases
  *
  * Restore the MALL state based on the previously saved state from dcn32_save_mall_state
  *
- * @param [in]: dc: Current DC state
- * @param [in/out]: context: New DC state to be programmed, restore MALL state into here
- * @param [in]: temp_config: struct that has the cached MALL state
+ * @dc: Current DC state
+ * @context: New DC state to be programmed, restore MALL state into here
+ * @temp_config: struct that has the cached MALL state
  *
- * @return: void
- *
- * *******************************************************************************************
+ * Return: void
  */
 void dcn32_restore_mall_state(struct dc *dc,
 		struct dc_state *context,
@@ -462,4 +447,288 @@ void dcn32_restore_mall_state(struct dc *dc,
 		if (pipe->plane_state)
 			pipe->plane_state->is_phantom = temp_config->is_phantom_plane[i];
 	}
+}
+
+#define MAX_STRETCHED_V_BLANK 1000 // in micro-seconds (must ensure to match value in FW)
+/*
+ * Scaling factor for v_blank stretch calculations considering timing in
+ * micro-seconds and pixel clock in 100hz.
+ * Note: the parenthesis are necessary to ensure the correct order of
+ * operation where V_SCALE is used.
+ */
+#define V_SCALE (10000 / MAX_STRETCHED_V_BLANK)
+
+static int get_frame_rate_at_max_stretch_100hz(
+		struct dc_stream_state *fpo_candidate_stream,
+		uint32_t fpo_vactive_margin_us)
+{
+	struct dc_crtc_timing *timing = NULL;
+	uint32_t sec_per_100_lines;
+	uint32_t max_v_blank;
+	uint32_t curr_v_blank;
+	uint32_t v_stretch_max;
+	uint32_t stretched_frame_pix_cnt;
+	uint32_t scaled_stretched_frame_pix_cnt;
+	uint32_t scaled_refresh_rate;
+	uint32_t v_scale;
+
+	if (fpo_candidate_stream == NULL)
+		return 0;
+
+	/* check if refresh rate at least 120hz */
+	timing = &fpo_candidate_stream->timing;
+	if (timing == NULL)
+		return 0;
+
+	v_scale = 10000 / (MAX_STRETCHED_V_BLANK + fpo_vactive_margin_us);
+
+	sec_per_100_lines = timing->pix_clk_100hz / timing->h_total + 1;
+	max_v_blank = sec_per_100_lines / v_scale + 1;
+	curr_v_blank = timing->v_total - timing->v_addressable;
+	v_stretch_max = (max_v_blank > curr_v_blank) ? (max_v_blank - curr_v_blank) : (0);
+	stretched_frame_pix_cnt = (v_stretch_max + timing->v_total) * timing->h_total;
+	scaled_stretched_frame_pix_cnt = stretched_frame_pix_cnt / 10000;
+	scaled_refresh_rate = (timing->pix_clk_100hz) / scaled_stretched_frame_pix_cnt + 1;
+
+	return scaled_refresh_rate;
+
+}
+
+static bool is_refresh_rate_support_mclk_switch_using_fw_based_vblank_stretch(
+		struct dc_stream_state *fpo_candidate_stream, uint32_t fpo_vactive_margin_us)
+{
+	int refresh_rate_max_stretch_100hz;
+	int min_refresh_100hz;
+
+	if (fpo_candidate_stream == NULL)
+		return false;
+
+	refresh_rate_max_stretch_100hz = get_frame_rate_at_max_stretch_100hz(fpo_candidate_stream, fpo_vactive_margin_us);
+	min_refresh_100hz = fpo_candidate_stream->timing.min_refresh_in_uhz / 10000;
+
+	if (refresh_rate_max_stretch_100hz < min_refresh_100hz)
+		return false;
+
+	return true;
+}
+
+static int get_refresh_rate(struct dc_stream_state *fpo_candidate_stream)
+{
+	int refresh_rate = 0;
+	int h_v_total = 0;
+	struct dc_crtc_timing *timing = NULL;
+
+	if (fpo_candidate_stream == NULL)
+		return 0;
+
+	/* check if refresh rate at least 120hz */
+	timing = &fpo_candidate_stream->timing;
+	if (timing == NULL)
+		return 0;
+
+	h_v_total = timing->h_total * timing->v_total;
+	if (h_v_total == 0)
+		return 0;
+
+	refresh_rate = ((timing->pix_clk_100hz * 100) / (h_v_total)) + 1;
+	return refresh_rate;
+}
+
+/**
+ * dcn32_can_support_mclk_switch_using_fw_based_vblank_stretch() - Determines if config can
+ *								    support FPO
+ *
+ * @dc: current dc state
+ * @context: new dc state
+ *
+ * Return: Pointer to FPO stream candidate if config can support FPO, otherwise NULL
+ */
+struct dc_stream_state *dcn32_can_support_mclk_switch_using_fw_based_vblank_stretch(struct dc *dc, const struct dc_state *context)
+{
+	int refresh_rate = 0;
+	const int minimum_refreshrate_supported = 120;
+	struct dc_stream_state *fpo_candidate_stream = NULL;
+	bool is_fpo_vactive = false;
+	uint32_t fpo_vactive_margin_us = 0;
+
+	if (context == NULL)
+		return NULL;
+
+	if (dc->debug.disable_fams)
+		return NULL;
+
+	if (!dc->caps.dmub_caps.mclk_sw)
+		return NULL;
+
+	if (context->bw_ctx.bw.dcn.clk.fw_based_mclk_switching_shut_down)
+		return NULL;
+
+	/* For FPO we can support up to 2 display configs if:
+	 * - first display uses FPO
+	 * - Second display switches in VACTIVE */
+	if (context->stream_count > 2)
+		return NULL;
+	else if (context->stream_count == 2) {
+		DC_FP_START();
+		dcn32_assign_fpo_vactive_candidate(dc, context, &fpo_candidate_stream);
+		DC_FP_END();
+
+		DC_FP_START();
+		is_fpo_vactive = dcn32_find_vactive_pipe(dc, context, dc->debug.fpo_vactive_min_active_margin_us);
+		DC_FP_END();
+		if (!is_fpo_vactive || dc->debug.disable_fpo_vactive)
+			return NULL;
+	} else
+		fpo_candidate_stream = context->streams[0];
+
+	if (!fpo_candidate_stream)
+		return NULL;
+
+	if (fpo_candidate_stream->sink->edid_caps.panel_patch.disable_fams)
+		return NULL;
+
+	refresh_rate = get_refresh_rate(fpo_candidate_stream);
+	if (refresh_rate < minimum_refreshrate_supported)
+		return NULL;
+
+	fpo_vactive_margin_us = is_fpo_vactive ? dc->debug.fpo_vactive_margin_us : 0; // For now hardcode the FPO + Vactive stretch margin to be 2000us
+	if (!is_refresh_rate_support_mclk_switch_using_fw_based_vblank_stretch(fpo_candidate_stream, fpo_vactive_margin_us))
+		return NULL;
+
+	if (!fpo_candidate_stream->allow_freesync)
+		return NULL;
+
+	if (fpo_candidate_stream->vrr_active_variable && dc->debug.disable_fams_gaming)
+		return NULL;
+
+	return fpo_candidate_stream;
+}
+
+bool dcn32_check_native_scaling_for_res(struct pipe_ctx *pipe, unsigned int width, unsigned int height)
+{
+	bool is_native_scaling = false;
+
+	if (pipe->stream->timing.h_addressable == width &&
+			pipe->stream->timing.v_addressable == height &&
+			pipe->plane_state->src_rect.width == width &&
+			pipe->plane_state->src_rect.height == height &&
+			pipe->plane_state->dst_rect.width == width &&
+			pipe->plane_state->dst_rect.height == height)
+		is_native_scaling = true;
+
+	return is_native_scaling;
+}
+
+/**
+ * dcn32_subvp_drr_admissable() - Determine if SubVP + DRR config is admissible
+ *
+ * @dc: Current DC state
+ * @context: New DC state to be programmed
+ *
+ * SubVP + DRR is admissible under the following conditions:
+ * - Config must have 2 displays (i.e., 2 non-phantom master pipes)
+ * - One display is SubVP
+ * - Other display must have Freesync enabled
+ * - The potential DRR display must not be PSR capable
+ *
+ * Return: True if admissible, false otherwise
+ */
+bool dcn32_subvp_drr_admissable(struct dc *dc, struct dc_state *context)
+{
+	bool result = false;
+	uint32_t i;
+	uint8_t subvp_count = 0;
+	uint8_t non_subvp_pipes = 0;
+	bool drr_pipe_found = false;
+	bool drr_psr_capable = false;
+	uint64_t refresh_rate = 0;
+
+	for (i = 0; i < dc->res_pool->pipe_count; i++) {
+		struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
+
+		if (resource_is_pipe_type(pipe, OPP_HEAD) &&
+				resource_is_pipe_type(pipe, DPP_PIPE)) {
+			if (pipe->stream->mall_stream_config.type == SUBVP_MAIN) {
+				subvp_count++;
+
+				refresh_rate = (pipe->stream->timing.pix_clk_100hz * (uint64_t)100 +
+					pipe->stream->timing.v_total * pipe->stream->timing.h_total - (uint64_t)1);
+				refresh_rate = div_u64(refresh_rate, pipe->stream->timing.v_total);
+				refresh_rate = div_u64(refresh_rate, pipe->stream->timing.h_total);
+			}
+			if (pipe->stream->mall_stream_config.type == SUBVP_NONE) {
+				non_subvp_pipes++;
+				drr_psr_capable = (drr_psr_capable || dcn32_is_psr_capable(pipe));
+				if (pipe->stream->ignore_msa_timing_param &&
+						(pipe->stream->allow_freesync || pipe->stream->vrr_active_variable)) {
+					drr_pipe_found = true;
+				}
+			}
+		}
+	}
+
+	if (subvp_count == 1 && non_subvp_pipes == 1 && drr_pipe_found && !drr_psr_capable &&
+		((uint32_t)refresh_rate < 120))
+		result = true;
+
+	return result;
+}
+
+/**
+ * dcn32_subvp_vblank_admissable() - Determine if SubVP + Vblank config is admissible
+ *
+ * @dc: Current DC state
+ * @context: New DC state to be programmed
+ * @vlevel: Voltage level calculated by DML
+ *
+ * SubVP + Vblank is admissible under the following conditions:
+ * - Config must have 2 displays (i.e., 2 non-phantom master pipes)
+ * - One display is SubVP
+ * - Other display must not have Freesync capability
+ * - DML must have output DRAM clock change support as SubVP + Vblank
+ * - The potential vblank display must not be PSR capable
+ *
+ * Return: True if admissible, false otherwise
+ */
+bool dcn32_subvp_vblank_admissable(struct dc *dc, struct dc_state *context, int vlevel)
+{
+	bool result = false;
+	uint32_t i;
+	uint8_t subvp_count = 0;
+	uint8_t non_subvp_pipes = 0;
+	bool drr_pipe_found = false;
+	struct vba_vars_st *vba = &context->bw_ctx.dml.vba;
+	bool vblank_psr_capable = false;
+	uint64_t refresh_rate = 0;
+
+	for (i = 0; i < dc->res_pool->pipe_count; i++) {
+		struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
+
+		if (resource_is_pipe_type(pipe, OPP_HEAD) &&
+				resource_is_pipe_type(pipe, DPP_PIPE)) {
+			if (pipe->stream->mall_stream_config.type == SUBVP_MAIN) {
+				subvp_count++;
+
+				refresh_rate = (pipe->stream->timing.pix_clk_100hz * (uint64_t)100 +
+					pipe->stream->timing.v_total * pipe->stream->timing.h_total - (uint64_t)1);
+				refresh_rate = div_u64(refresh_rate, pipe->stream->timing.v_total);
+				refresh_rate = div_u64(refresh_rate, pipe->stream->timing.h_total);
+			}
+			if (pipe->stream->mall_stream_config.type == SUBVP_NONE) {
+				non_subvp_pipes++;
+				vblank_psr_capable = (vblank_psr_capable || dcn32_is_psr_capable(pipe));
+				if (pipe->stream->ignore_msa_timing_param &&
+						(pipe->stream->allow_freesync || pipe->stream->vrr_active_variable)) {
+					drr_pipe_found = true;
+				}
+			}
+		}
+	}
+
+	if (subvp_count == 1 && non_subvp_pipes == 1 && !drr_pipe_found && !vblank_psr_capable &&
+		((uint32_t)refresh_rate < 120) &&
+		vba->DRAMClockChangeSupport[vlevel][vba->maxMpcComb] == dm_dram_clock_change_vblank_w_mall_sub_vp)
+		result = true;
+
+	return result;
 }

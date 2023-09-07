@@ -11,10 +11,11 @@
 #include "builtin.h"
 
 #include "util/print-events.h"
+#include "util/pmus.h"
 #include "util/pmu.h"
-#include "util/pmu-hybrid.h"
 #include "util/debug.h"
 #include "util/metricgroup.h"
+#include "util/pfm.h"
 #include "util/string2.h"
 #include "util/strlist.h"
 #include "util/strbuf.h"
@@ -127,7 +128,7 @@ static void default_print_event(void *ps, const char *pmu_name, const char *topi
 	if (strcmp(print_state->last_topic, topic ?: "")) {
 		if (topic)
 			printf("\n%s:\n", topic);
-		free(print_state->last_topic);
+		zfree(&print_state->last_topic);
 		print_state->last_topic = strdup(topic ?: "");
 	}
 
@@ -168,6 +169,7 @@ static void default_print_metric(void *ps,
 				const char *desc,
 				const char *long_desc,
 				const char *expr,
+				const char *threshold,
 				const char *unit __maybe_unused)
 {
 	struct print_state *print_state = ps;
@@ -191,12 +193,17 @@ static void default_print_metric(void *ps,
 		if (group && print_state->metricgroups) {
 			if (print_state->name_only)
 				printf("%s ", group);
-			else if (print_state->metrics)
-				printf("\n%s:\n", group);
-			else
+			else if (print_state->metrics) {
+				const char *gdesc = describe_metricgroup(group);
+
+				if (gdesc)
+					printf("\n%s: [%s]\n", group, gdesc);
+				else
+					printf("\n%s:\n", group);
+			} else
 				printf("%s\n", group);
 		}
-		free(print_state->last_metricgroups);
+		zfree(&print_state->last_metricgroups);
 		print_state->last_metricgroups = strdup(group ?: "");
 	}
 	if (!print_state->metrics)
@@ -225,6 +232,11 @@ static void default_print_metric(void *ps,
 	if (expr && print_state->detailed) {
 		printf("%*s", 8, "[");
 		wordwrap(expr, 8, pager_get_columns(), 0);
+		printf("]\n");
+	}
+	if (threshold && print_state->detailed) {
+		printf("%*s", 8, "[");
+		wordwrap(threshold, 8, pager_get_columns(), 0);
 		printf("]\n");
 	}
 }
@@ -272,10 +284,10 @@ static void fix_escape_printf(struct strbuf *buf, const char *fmt, ...)
 						strbuf_addstr(buf, "\\n");
 						break;
 					case '\\':
-						__fallthrough;
+						fallthrough;
 					case '\"':
 						strbuf_addch(buf, '\\');
-						__fallthrough;
+						fallthrough;
 					default:
 						strbuf_addch(buf, s[s_pos]);
 						break;
@@ -367,7 +379,7 @@ static void json_print_event(void *ps, const char *pmu_name, const char *topic,
 static void json_print_metric(void *ps __maybe_unused, const char *group,
 			      const char *name, const char *desc,
 			      const char *long_desc, const char *expr,
-			      const char *unit)
+			      const char *threshold, const char *unit)
 {
 	struct json_print_state *print_state = ps;
 	bool need_sep = false;
@@ -386,6 +398,11 @@ static void json_print_metric(void *ps __maybe_unused, const char *group,
 	}
 	if (expr) {
 		fix_escape_printf(&buf, "%s\t\"MetricExpr\": \"%S\"", need_sep ? ",\n" : "", expr);
+		need_sep = true;
+	}
+	if (threshold) {
+		fix_escape_printf(&buf, "%s\t\"MetricThreshold\": \"%S\"", need_sep ? ",\n" : "",
+				  threshold);
 		need_sep = true;
 	}
 	if (unit) {
@@ -418,7 +435,7 @@ int cmd_list(int argc, const char **argv)
 		.print_event = default_print_event,
 		.print_metric = default_print_metric,
 	};
-	const char *hybrid_name = NULL;
+	const char *cputype = NULL;
 	const char *unit_name = NULL;
 	bool json = false;
 	struct option list_options[] = {
@@ -432,8 +449,8 @@ int cmd_list(int argc, const char **argv)
 			    "Print information on the perf event names and expressions used internally by events."),
 		OPT_BOOLEAN(0, "deprecated", &default_ps.deprecated,
 			    "Print deprecated events."),
-		OPT_STRING(0, "cputype", &hybrid_name, "hybrid cpu type",
-			   "Limit PMU or metric printing to the given hybrid PMU (e.g. core or atom)."),
+		OPT_STRING(0, "cputype", &cputype, "cpu type",
+			   "Limit PMU or metric printing to the given PMU (e.g. cpu, core or atom)."),
 		OPT_STRING(0, "unit", &unit_name, "PMU name",
 			   "Limit PMU or metric printing to the specified PMU."),
 		OPT_INCR(0, "debug", &verbose,
@@ -441,7 +458,11 @@ int cmd_list(int argc, const char **argv)
 		OPT_END()
 	};
 	const char * const list_usage[] = {
+#ifdef HAVE_LIBPFM
+		"perf list [<options>] [hw|sw|cache|tracepoint|pmu|sdt|metric|metricgroup|event_glob|pfm]",
+#else
 		"perf list [<options>] [hw|sw|cache|tracepoint|pmu|sdt|metric|metricgroup|event_glob]",
+#endif
 		NULL
 	};
 
@@ -473,10 +494,15 @@ int cmd_list(int argc, const char **argv)
 		assert(default_ps.visited_metrics);
 		if (unit_name)
 			default_ps.pmu_glob = strdup(unit_name);
-		else if (hybrid_name) {
-			default_ps.pmu_glob = perf_pmu__hybrid_type_to_pmu(hybrid_name);
-			if (!default_ps.pmu_glob)
-				pr_warning("WARNING: hybrid cputype is not supported!\n");
+		else if (cputype) {
+			const struct perf_pmu *pmu = perf_pmus__pmu_for_pmu_filter(cputype);
+
+			if (!pmu) {
+				pr_err("ERROR: cputype is not supported!\n");
+				ret = -1;
+				goto out;
+			}
+			default_ps.pmu_glob = pmu->name;
 		}
 	}
 	print_cb.print_start(ps);
@@ -506,7 +532,7 @@ int cmd_list(int argc, const char **argv)
 			 strcmp(argv[i], "hwcache") == 0)
 			print_hwcache_events(&print_cb, ps);
 		else if (strcmp(argv[i], "pmu") == 0)
-			print_pmu_events(&print_cb, ps);
+			perf_pmus__print_pmu_events(&print_cb, ps);
 		else if (strcmp(argv[i], "sdt") == 0)
 			print_sdt_events(&print_cb, ps);
 		else if (strcmp(argv[i], "metric") == 0 || strcmp(argv[i], "metrics") == 0) {
@@ -518,7 +544,12 @@ int cmd_list(int argc, const char **argv)
 			default_ps.metricgroups = true;
 			default_ps.metrics = false;
 			metricgroup__print(&print_cb, ps);
-		} else if ((sep = strchr(argv[i], ':')) != NULL) {
+		}
+#ifdef HAVE_LIBPFM
+		else if (strcmp(argv[i], "pfm") == 0)
+			print_libpfm_events(&print_cb, ps);
+#endif
+		else if ((sep = strchr(argv[i], ':')) != NULL) {
 			char *old_pmu_glob = default_ps.pmu_glob;
 
 			default_ps.event_glob = strdup(argv[i]);
@@ -546,7 +577,7 @@ int cmd_list(int argc, const char **argv)
 					event_symbols_sw, PERF_COUNT_SW_MAX);
 			print_tool_events(&print_cb, ps);
 			print_hwcache_events(&print_cb, ps);
-			print_pmu_events(&print_cb, ps);
+			perf_pmus__print_pmu_events(&print_cb, ps);
 			print_tracepoint_events(&print_cb, ps);
 			print_sdt_events(&print_cb, ps);
 			default_ps.metrics = true;

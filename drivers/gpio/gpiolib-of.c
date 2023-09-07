@@ -10,14 +10,16 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/errno.h>
-#include <linux/module.h>
 #include <linux/io.h>
-#include <linux/gpio/consumer.h>
+#include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_gpio.h>
 #include <linux/pinctrl/pinctrl.h>
 #include <linux/slab.h>
+#include <linux/string.h>
+
+#include <linux/gpio/consumer.h>
 #include <linux/gpio/machine.h>
 
 #include "gpiolib.h"
@@ -207,6 +209,8 @@ static void of_gpio_set_polarity_by_property(const struct device_node *np,
 					     const char *propname,
 					     enum of_gpio_flags *flags)
 {
+	const struct device_node *np_compat = np;
+	const struct device_node *np_propname = np;
 	static const struct {
 		const char *compatible;
 		const char *gpio_propname;
@@ -251,14 +255,28 @@ static void of_gpio_set_polarity_by_property(const struct device_node *np,
 		{ "regulator-gpio",    "enable-gpio",  "enable-active-high" },
 		{ "regulator-gpio",    "enable-gpios", "enable-active-high" },
 #endif
+#if IS_ENABLED(CONFIG_MMC_ATMELMCI)
+		{ "atmel,hsmci",       "cd-gpios",     "cd-inverted" },
+#endif
 	};
 	unsigned int i;
 	bool active_high;
 
+#if IS_ENABLED(CONFIG_MMC_ATMELMCI)
+	/*
+	 * The Atmel HSMCI has compatible property in the parent node and
+	 * gpio property in a child node
+	 */
+	if (of_device_is_compatible(np->parent, "atmel,hsmci")) {
+		np_compat = np->parent;
+		np_propname = np;
+	}
+#endif
+
 	for (i = 0; i < ARRAY_SIZE(gpios); i++) {
-		if (of_device_is_compatible(np, gpios[i].compatible) &&
+		if (of_device_is_compatible(np_compat, gpios[i].compatible) &&
 		    !strcmp(propname, gpios[i].gpio_propname)) {
-			active_high = of_property_read_bool(np,
+			active_high = of_property_read_bool(np_propname,
 						gpios[i].polarity_propname);
 			of_gpio_quirk_polarity(np, active_high, flags);
 			break;
@@ -892,6 +910,8 @@ static int of_gpio_simple_xlate(struct gpio_chip *gc,
 	return gpiospec->args[0];
 }
 
+#if IS_ENABLED(CONFIG_OF_GPIO_MM_GPIOCHIP)
+#include <linux/gpio/legacy-of-mm-gpiochip.h>
 /**
  * of_mm_gpiochip_add_data - Add memory mapped GPIO chip (bank)
  * @np:		device node of the GPIO chip
@@ -964,6 +984,7 @@ void of_mm_gpiochip_remove(struct of_mm_gpio_chip *mm_gc)
 	kfree(gc->label);
 }
 EXPORT_SYMBOL_GPL(of_mm_gpiochip_remove);
+#endif
 
 #ifdef CONFIG_PINCTRL
 static int of_gpiochip_add_pin_range(struct gpio_chip *chip)
@@ -1073,16 +1094,16 @@ int of_gpiochip_add(struct gpio_chip *chip)
 	if (ret)
 		return ret;
 
-	fwnode_handle_get(chip->fwnode);
+	of_node_get(np);
 
 	ret = of_gpiochip_scan_gpios(chip);
 	if (ret)
-		fwnode_handle_put(chip->fwnode);
+		of_node_put(np);
 
 	return ret;
 }
 
 void of_gpiochip_remove(struct gpio_chip *chip)
 {
-	fwnode_handle_put(chip->fwnode);
+	of_node_put(dev_of_node(&chip->gpiodev->dev));
 }

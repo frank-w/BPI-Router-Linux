@@ -478,13 +478,13 @@ static void sdio_uart_check_modem_status(struct sdio_uart_port *port)
 			int cts = (status & UART_MSR_CTS);
 			if (tty->hw_stopped) {
 				if (cts) {
-					tty->hw_stopped = 0;
+					tty->hw_stopped = false;
 					sdio_uart_start_tx(port);
 					tty_wakeup(tty);
 				}
 			} else {
 				if (!cts) {
-					tty->hw_stopped = 1;
+					tty->hw_stopped = true;
 					sdio_uart_stop_tx(port);
 				}
 			}
@@ -633,7 +633,7 @@ static int sdio_uart_activate(struct tty_port *tport, struct tty_struct *tty)
 
 	if (C_CRTSCTS(tty))
 		if (!(sdio_uart_get_mctrl(port) & TIOCM_CTS))
-			tty->hw_stopped = 1;
+			tty->hw_stopped = true;
 
 	clear_bit(TTY_IO_ERROR, &tty->flags);
 
@@ -760,8 +760,8 @@ static void sdio_uart_hangup(struct tty_struct *tty)
 	tty_port_hangup(&port->port);
 }
 
-static int sdio_uart_write(struct tty_struct *tty, const unsigned char *buf,
-			   int count)
+static ssize_t sdio_uart_write(struct tty_struct *tty, const u8 *buf,
+			      size_t count)
 {
 	struct sdio_uart_port *port = tty->driver_data;
 	int ret;
@@ -882,14 +882,14 @@ static void sdio_uart_set_termios(struct tty_struct *tty,
 
 	/* Handle turning off CRTSCTS */
 	if ((old_termios->c_cflag & CRTSCTS) && !(cflag & CRTSCTS)) {
-		tty->hw_stopped = 0;
+		tty->hw_stopped = false;
 		sdio_uart_start_tx(port);
 	}
 
 	/* Handle turning on CRTSCTS */
 	if (!(old_termios->c_cflag & CRTSCTS) && (cflag & CRTSCTS)) {
 		if (!(sdio_uart_get_mctrl(port) & TIOCM_CTS)) {
-			tty->hw_stopped = 1;
+			tty->hw_stopped = true;
 			sdio_uart_stop_tx(port);
 		}
 	}

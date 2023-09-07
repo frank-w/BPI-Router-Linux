@@ -342,35 +342,16 @@ static void da7219_aad_hptest_work(struct work_struct *work)
 static void da7219_aad_jack_det_work(struct work_struct *work)
 {
 	struct da7219_aad_priv *da7219_aad =
-		container_of(work, struct da7219_aad_priv, jack_det_work);
+		container_of(work, struct da7219_aad_priv, jack_det_work.work);
 	struct snd_soc_component *component = da7219_aad->component;
-	u8 srm_st;
 
-	mutex_lock(&da7219_aad->jack_det_mutex);
-
-	srm_st = snd_soc_component_read(component, DA7219_PLL_SRM_STS) & DA7219_PLL_SRM_STS_MCLK;
-	msleep(da7219_aad->gnd_switch_delay * ((srm_st == 0x0) ? 2 : 1) - 4);
 	/* Enable ground switch */
 	snd_soc_component_update_bits(component, 0xFB, 0x01, 0x01);
-
-	mutex_unlock(&da7219_aad->jack_det_mutex);
 }
-
 
 /*
  * IRQ
  */
-
-static irqreturn_t da7219_aad_pre_irq_thread(int irq, void *data)
-{
-
-	struct da7219_aad_priv *da7219_aad = data;
-
-	if (!da7219_aad->jack_inserted)
-		schedule_work(&da7219_aad->jack_det_work);
-
-	return IRQ_WAKE_THREAD;
-}
 
 static irqreturn_t da7219_aad_irq_thread(int irq, void *data)
 {
@@ -380,17 +361,33 @@ static irqreturn_t da7219_aad_irq_thread(int irq, void *data)
 	struct da7219_priv *da7219 = snd_soc_component_get_drvdata(component);
 	u8 events[DA7219_AAD_IRQ_REG_MAX];
 	u8 statusa;
-	int i, report = 0, mask = 0;
+	int i, ret, report = 0, mask = 0;
 
 	/* Read current IRQ events */
-	regmap_bulk_read(da7219->regmap, DA7219_ACCDET_IRQ_EVENT_A,
-			 events, DA7219_AAD_IRQ_REG_MAX);
+	ret = regmap_bulk_read(da7219->regmap, DA7219_ACCDET_IRQ_EVENT_A,
+			       events, DA7219_AAD_IRQ_REG_MAX);
+	if (ret) {
+		dev_warn_ratelimited(component->dev, "Failed to read IRQ events: %d\n", ret);
+		return IRQ_NONE;
+	}
 
 	if (!events[DA7219_AAD_IRQ_REG_A] && !events[DA7219_AAD_IRQ_REG_B])
 		return IRQ_NONE;
 
 	/* Read status register for jack insertion & type status */
 	statusa = snd_soc_component_read(component, DA7219_ACCDET_STATUS_A);
+
+	if (events[DA7219_AAD_IRQ_REG_A] & DA7219_E_JACK_INSERTED_MASK) {
+		u8 srm_st;
+		int delay = 0;
+
+		srm_st = snd_soc_component_read(component,
+					DA7219_PLL_SRM_STS) & DA7219_PLL_SRM_STS_MCLK;
+		delay = (da7219_aad->gnd_switch_delay * ((srm_st == 0x0) ? 2 : 1) - 2);
+		queue_delayed_work(da7219_aad->aad_wq,
+							&da7219_aad->jack_det_work,
+							msecs_to_jiffies(delay));
+	}
 
 	/* Clear events */
 	regmap_bulk_write(da7219->regmap, DA7219_ACCDET_IRQ_EVENT_A,
@@ -399,9 +396,6 @@ static irqreturn_t da7219_aad_irq_thread(int irq, void *data)
 	dev_dbg(component->dev, "IRQ events = 0x%x|0x%x, status = 0x%x\n",
 		events[DA7219_AAD_IRQ_REG_A], events[DA7219_AAD_IRQ_REG_B],
 		statusa);
-
-	if (!da7219_aad->jack_inserted)
-		cancel_work_sync(&da7219_aad->jack_det_work);
 
 	if (statusa & DA7219_JACK_INSERTION_STS_MASK) {
 		/* Jack Insertion */
@@ -430,9 +424,9 @@ static irqreturn_t da7219_aad_irq_thread(int irq, void *data)
 			if (statusa & DA7219_JACK_TYPE_STS_MASK) {
 				report |= SND_JACK_HEADSET;
 				mask |=	SND_JACK_HEADSET | SND_JACK_LINEOUT;
-				schedule_work(&da7219_aad->btn_det_work);
+				queue_work(da7219_aad->aad_wq, &da7219_aad->btn_det_work);
 			} else {
-				schedule_work(&da7219_aad->hptest_work);
+				queue_work(da7219_aad->aad_wq, &da7219_aad->hptest_work);
 			}
 		}
 
@@ -465,6 +459,7 @@ static irqreturn_t da7219_aad_irq_thread(int irq, void *data)
 			da7219_aad->jack_inserted = false;
 
 			/* Cancel any pending work */
+			cancel_delayed_work_sync(&da7219_aad->jack_det_work);
 			cancel_work_sync(&da7219_aad->btn_det_work);
 			cancel_work_sync(&da7219_aad->hptest_work);
 
@@ -580,16 +575,29 @@ static enum da7219_aad_jack_ins_deb
 	}
 }
 
+static enum da7219_aad_jack_ins_det_pty
+	da7219_aad_fw_jack_ins_det_pty(struct device *dev, const char *str)
+{
+	if (!strcmp(str, "low")) {
+		return DA7219_AAD_JACK_INS_DET_PTY_LOW;
+	} else if (!strcmp(str, "high")) {
+		return DA7219_AAD_JACK_INS_DET_PTY_HIGH;
+	} else {
+		dev_warn(dev, "Invalid jack insertion detection polarity");
+		return DA7219_AAD_JACK_INS_DET_PTY_LOW;
+	}
+}
+
 static enum da7219_aad_jack_det_rate
 	da7219_aad_fw_jack_det_rate(struct device *dev, const char *str)
 {
-	if (!strcmp(str, "32ms_64ms")) {
+	if (!strcmp(str, "32_64")) {
 		return DA7219_AAD_JACK_DET_RATE_32_64MS;
-	} else if (!strcmp(str, "64ms_128ms")) {
+	} else if (!strcmp(str, "64_128")) {
 		return DA7219_AAD_JACK_DET_RATE_64_128MS;
-	} else if (!strcmp(str, "128ms_256ms")) {
+	} else if (!strcmp(str, "128_256")) {
 		return DA7219_AAD_JACK_DET_RATE_128_256MS;
-	} else if (!strcmp(str, "256ms_512ms")) {
+	} else if (!strcmp(str, "256_512")) {
 		return DA7219_AAD_JACK_DET_RATE_256_512MS;
 	} else {
 		dev_warn(dev, "Invalid jack detect rate");
@@ -696,6 +704,12 @@ static struct da7219_aad_pdata *da7219_aad_fw_to_pdata(struct device *dev)
 			da7219_aad_fw_jack_ins_deb(dev, fw_val32);
 	else
 		aad_pdata->jack_ins_deb = DA7219_AAD_JACK_INS_DEB_20MS;
+
+	if (!fwnode_property_read_string(aad_np, "dlg,jack-ins-det-pty", &fw_str))
+		aad_pdata->jack_ins_det_pty =
+			da7219_aad_fw_jack_ins_det_pty(dev, fw_str);
+	else
+		aad_pdata->jack_ins_det_pty = DA7219_AAD_JACK_INS_DET_PTY_LOW;
 
 	if (!fwnode_property_read_string(aad_np, "dlg,jack-det-rate", &fw_str))
 		aad_pdata->jack_det_rate =
@@ -858,6 +872,21 @@ static void da7219_aad_handle_pdata(struct snd_soc_component *component)
 			mask |= DA7219_ADC_1_BIT_REPEAT_MASK;
 		}
 		snd_soc_component_update_bits(component, DA7219_ACCDET_CONFIG_7, mask, cfg);
+
+		switch (aad_pdata->jack_ins_det_pty) {
+		case DA7219_AAD_JACK_INS_DET_PTY_LOW:
+			snd_soc_component_write(component, 0xF0, 0x8B);
+			snd_soc_component_write(component, 0x75, 0x80);
+			snd_soc_component_write(component, 0xF0, 0x00);
+			break;
+		case DA7219_AAD_JACK_INS_DET_PTY_HIGH:
+			snd_soc_component_write(component, 0xF0, 0x8B);
+			snd_soc_component_write(component, 0x75, 0x00);
+			snd_soc_component_write(component, 0xF0, 0x00);
+			break;
+		default:
+			break;
+		}
 	}
 }
 
@@ -919,6 +948,8 @@ void da7219_aad_suspend(struct snd_soc_component *component)
 			}
 		}
 	}
+
+	synchronize_irq(da7219_aad->irq);
 }
 
 void da7219_aad_resume(struct snd_soc_component *component)
@@ -964,13 +995,19 @@ int da7219_aad_init(struct snd_soc_component *component)
 	snd_soc_component_update_bits(component, DA7219_ACCDET_CONFIG_1,
 			    DA7219_BUTTON_CONFIG_MASK, 0);
 
+	da7219_aad_handle_gnd_switch_time(component);
+
+	da7219_aad->aad_wq = create_singlethread_workqueue("da7219-aad");
+	if (!da7219_aad->aad_wq) {
+		dev_err(component->dev, "Failed to create aad workqueue\n");
+		return -ENOMEM;
+	}
+
+	INIT_DELAYED_WORK(&da7219_aad->jack_det_work, da7219_aad_jack_det_work);
 	INIT_WORK(&da7219_aad->btn_det_work, da7219_aad_btn_det_work);
 	INIT_WORK(&da7219_aad->hptest_work, da7219_aad_hptest_work);
-	INIT_WORK(&da7219_aad->jack_det_work, da7219_aad_jack_det_work);
 
-	mutex_init(&da7219_aad->jack_det_mutex);
-
-	ret = request_threaded_irq(da7219_aad->irq, da7219_aad_pre_irq_thread,
+	ret = request_threaded_irq(da7219_aad->irq, NULL,
 				   da7219_aad_irq_thread,
 				   IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 				   "da7219-aad", da7219_aad);
@@ -983,8 +1020,6 @@ int da7219_aad_init(struct snd_soc_component *component)
 	memset(mask, 0, DA7219_AAD_IRQ_REG_MAX);
 	regmap_bulk_write(da7219->regmap, DA7219_ACCDET_IRQ_MASK_A,
 			  &mask, DA7219_AAD_IRQ_REG_MAX);
-
-	da7219_aad_handle_gnd_switch_time(component);
 
 	return 0;
 }
@@ -1002,8 +1037,10 @@ void da7219_aad_exit(struct snd_soc_component *component)
 
 	free_irq(da7219_aad->irq, da7219_aad);
 
+	cancel_delayed_work_sync(&da7219_aad->jack_det_work);
 	cancel_work_sync(&da7219_aad->btn_det_work);
 	cancel_work_sync(&da7219_aad->hptest_work);
+	destroy_workqueue(da7219_aad->aad_wq);
 }
 
 /*
@@ -1031,4 +1068,5 @@ int da7219_aad_probe(struct i2c_client *i2c)
 
 MODULE_DESCRIPTION("ASoC DA7219 AAD Driver");
 MODULE_AUTHOR("Adam Thomson <Adam.Thomson.Opensource@diasemi.com>");
+MODULE_AUTHOR("David Rau <David.Rau.opensource@dm.renesas.com>");
 MODULE_LICENSE("GPL");

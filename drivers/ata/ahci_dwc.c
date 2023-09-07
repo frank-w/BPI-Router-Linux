@@ -398,7 +398,7 @@ static const struct ata_port_info ahci_dwc_port_info = {
 	.port_ops	= &ahci_dwc_port_ops,
 };
 
-static struct scsi_host_template ahci_dwc_scsi_info = {
+static const struct scsi_host_template ahci_dwc_scsi_info = {
 	AHCI_SHT(DRV_NAME),
 };
 
@@ -478,7 +478,7 @@ MODULE_DEVICE_TABLE(of, ahci_dwc_of_match);
 
 static struct platform_driver ahci_dwc_driver = {
 	.probe = ahci_dwc_probe,
-	.remove = ata_platform_remove_one,
+	.remove_new = ata_platform_remove_one,
 	.shutdown = ahci_platform_shutdown,
 	.driver = {
 		.name = DRV_NAME,

@@ -135,10 +135,14 @@ static int ptp_clock_adjtime(struct posix_clock *pc, struct __kernel_timex *tx)
 		ptp->dialed_frequency = tx->freq;
 	} else if (tx->modes & ADJ_OFFSET) {
 		if (ops->adjphase) {
+			s32 max_phase_adj = ops->getmaxphase(ops);
 			s32 offset = tx->offset;
 
 			if (!(tx->modes & ADJ_NANO))
 				offset *= NSEC_PER_USEC;
+
+			if (offset > max_phase_adj || offset < -max_phase_adj)
+				return -ERANGE;
 
 			err = ops->adjphase(ops, offset);
 		}
@@ -460,7 +464,7 @@ static int __init ptp_init(void)
 {
 	int err;
 
-	ptp_class = class_create(THIS_MODULE, "ptp");
+	ptp_class = class_create("ptp");
 	if (IS_ERR(ptp_class)) {
 		pr_err("ptp: failed to allocate class\n");
 		return PTR_ERR(ptp_class);

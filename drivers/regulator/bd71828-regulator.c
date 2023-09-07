@@ -5,7 +5,6 @@
 
 #include <linux/delay.h>
 #include <linux/err.h>
-#include <linux/gpio.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/mfd/rohm-bd71828.h>
@@ -771,7 +770,8 @@ static int bd71828_probe(struct platform_device *pdev)
 
 static struct platform_driver bd71828_regulator = {
 	.driver = {
-		.name = "bd71828-pmic"
+		.name = "bd71828-pmic",
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 	.probe = bd71828_probe,
 };

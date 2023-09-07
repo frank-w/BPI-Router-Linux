@@ -13,7 +13,7 @@
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 #include <linux/scatterlist.h>
 
@@ -209,7 +209,7 @@ static int img_hash_xmit_cpu(struct img_hash_dev *hdev, const u8 *buf,
 
 static void img_hash_dma_callback(void *data)
 {
-	struct img_hash_dev *hdev = (struct img_hash_dev *)data;
+	struct img_hash_dev *hdev = data;
 	struct img_hash_request_ctx *ctx = ahash_request_ctx(hdev->req);
 
 	if (ctx->bufcnt) {
@@ -927,7 +927,7 @@ finish:
 	img_hash_finish_req(hdev->req, err);
 }
 
-static const struct of_device_id img_hash_match[] = {
+static const struct of_device_id img_hash_match[] __maybe_unused = {
 	{ .compatible = "img,hash-accelerator" },
 	{}
 };
@@ -966,8 +966,7 @@ static int img_hash_probe(struct platform_device *pdev)
 	}
 
 	/* Write port (DMA or CPU) */
-	hash_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	hdev->cpu_addr = devm_ioremap_resource(dev, hash_res);
+	hdev->cpu_addr = devm_platform_get_and_ioremap_resource(pdev, 1, &hash_res);
 	if (IS_ERR(hdev->cpu_addr)) {
 		err = PTR_ERR(hdev->cpu_addr);
 		goto res_err;
@@ -1106,7 +1105,7 @@ static struct platform_driver img_hash_driver = {
 	.driver		= {
 		.name	= "img-hash-accelerator",
 		.pm	= &img_hash_pm_ops,
-		.of_match_table	= of_match_ptr(img_hash_match),
+		.of_match_table	= img_hash_match,
 	}
 };
 module_platform_driver(img_hash_driver);

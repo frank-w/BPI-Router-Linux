@@ -145,6 +145,24 @@ static void compat_output(struct dlm_lock_result *res,
 }
 #endif
 
+/* should held proc->asts_spin lock */
+void dlm_purge_lkb_callbacks(struct dlm_lkb *lkb)
+{
+	struct dlm_callback *cb, *safe;
+
+	list_for_each_entry_safe(cb, safe, &lkb->lkb_callbacks, list) {
+		list_del(&cb->list);
+		kref_put(&cb->ref, dlm_release_callback);
+	}
+
+	clear_bit(DLM_IFL_CB_PENDING_BIT, &lkb->lkb_iflags);
+
+	/* invalidate */
+	dlm_callback_set_last_ptr(&lkb->lkb_last_cast, NULL);
+	dlm_callback_set_last_ptr(&lkb->lkb_last_cb, NULL);
+	lkb->lkb_last_bast_mode = -1;
+}
+
 /* Figure out if this lock is at the end of its life and no longer
    available for the application to use.  The lkb still exists until
    the final ast is read.  A lock becomes EOL in three situations:
@@ -183,7 +201,8 @@ void dlm_user_add_ast(struct dlm_lkb *lkb, uint32_t flags, int mode,
 	struct dlm_user_proc *proc;
 	int rv;
 
-	if (lkb->lkb_flags & (DLM_IFL_ORPHAN | DLM_IFL_DEAD))
+	if (test_bit(DLM_DFL_ORPHAN_BIT, &lkb->lkb_dflags) ||
+	    test_bit(DLM_IFL_DEAD_BIT, &lkb->lkb_iflags))
 		return;
 
 	ls = lkb->lkb_resource->res_ls;
@@ -195,7 +214,8 @@ void dlm_user_add_ast(struct dlm_lkb *lkb, uint32_t flags, int mode,
 	   for cases where a completion ast is received for an operation that
 	   began before clear_proc_locks did its cancel/unlock. */
 
-	if (lkb->lkb_flags & (DLM_IFL_ORPHAN | DLM_IFL_DEAD))
+	if (test_bit(DLM_DFL_ORPHAN_BIT, &lkb->lkb_dflags) ||
+	    test_bit(DLM_IFL_DEAD_BIT, &lkb->lkb_iflags))
 		goto out;
 
 	DLM_ASSERT(lkb->lkb_ua, dlm_print_lkb(lkb););
@@ -206,7 +226,7 @@ void dlm_user_add_ast(struct dlm_lkb *lkb, uint32_t flags, int mode,
 		goto out;
 
 	if ((flags & DLM_CB_CAST) && lkb_is_endoflife(mode, status))
-		lkb->lkb_flags |= DLM_IFL_ENDOFLIFE;
+		set_bit(DLM_IFL_ENDOFLIFE_BIT, &lkb->lkb_iflags);
 
 	spin_lock(&proc->asts_spin);
 
@@ -229,7 +249,7 @@ void dlm_user_add_ast(struct dlm_lkb *lkb, uint32_t flags, int mode,
 	}
 	spin_unlock(&proc->asts_spin);
 
-	if (lkb->lkb_flags & DLM_IFL_ENDOFLIFE) {
+	if (test_bit(DLM_IFL_ENDOFLIFE_BIT, &lkb->lkb_iflags)) {
 		/* N.B. spin_lock locks_spin, not asts_spin */
 		spin_lock(&proc->locks_spin);
 		if (!list_empty(&lkb->lkb_ownqueue)) {
@@ -259,14 +279,6 @@ static int device_user_lock(struct dlm_user_proc *proc,
 		goto out;
 	}
 
-#ifdef CONFIG_DLM_DEPRECATED_API
-	if (params->timeout)
-		pr_warn_once("========================================================\n"
-			     "WARNING: the lkb timeout feature is being deprecated and\n"
-			     "         will be removed in v6.2!\n"
-			     "========================================================\n");
-#endif
-
 	ua = kzalloc(sizeof(struct dlm_user_args), GFP_NOFS);
 	if (!ua)
 		goto out;
@@ -279,16 +291,9 @@ static int device_user_lock(struct dlm_user_proc *proc,
 	ua->xid = params->xid;
 
 	if (params->flags & DLM_LKF_CONVERT) {
-#ifdef CONFIG_DLM_DEPRECATED_API
-		error = dlm_user_convert(ls, ua,
-				         params->mode, params->flags,
-				         params->lkid, params->lvb,
-					 (unsigned long) params->timeout);
-#else
 		error = dlm_user_convert(ls, ua,
 					 params->mode, params->flags,
 					 params->lkid, params->lvb);
-#endif
 	} else if (params->flags & DLM_LKF_ORPHAN) {
 		error = dlm_user_adopt_orphan(ls, ua,
 					 params->mode, params->flags,
@@ -297,16 +302,9 @@ static int device_user_lock(struct dlm_user_proc *proc,
 		if (!error)
 			error = lkid;
 	} else {
-#ifdef CONFIG_DLM_DEPRECATED_API
-		error = dlm_user_request(ls, ua,
-					 params->mode, params->flags,
-					 params->name, params->namelen,
-					 (unsigned long) params->timeout);
-#else
 		error = dlm_user_request(ls, ua,
 					 params->mode, params->flags,
 					 params->name, params->namelen);
-#endif
 		if (!error)
 			error = ua->lksb.sb_lkid;
 	}
@@ -884,7 +882,7 @@ static ssize_t device_read(struct file *file, char __user *buf, size_t count,
 		goto try_another;
 	case DLM_DEQUEUE_CALLBACK_LAST:
 		list_del_init(&lkb->lkb_cb_list);
-		lkb->lkb_flags &= ~DLM_IFL_CB_PENDING;
+		clear_bit(DLM_IFL_CB_PENDING_BIT, &lkb->lkb_iflags);
 		break;
 	case DLM_DEQUEUE_CALLBACK_SUCCESS:
 		break;

@@ -14,8 +14,8 @@
 #include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/list_sort.h>
+#include <linux/mod_devicetable.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
 #include <linux/printk.h>
 #include <linux/vmalloc.h>
 #include <linux/spi/spi.h>
@@ -52,6 +52,12 @@ static int no_cs;
 module_param(no_cs, int, 0);
 MODULE_PARM_DESC(no_cs,
 		 "if set Chip Select (CS) will not be used");
+
+/* run tests only for a specific length */
+static int run_only_iter_len = -1;
+module_param(run_only_iter_len, int, 0);
+MODULE_PARM_DESC(run_only_iter_len,
+		 "only run tests for a length of this number in iterate_len list");
 
 /* run only a specific test */
 static int run_only_test = -1;
@@ -1033,6 +1039,8 @@ int spi_test_run_test(struct spi_device *spi, const struct spi_test *test,
 
 	for (idx_len = 0; idx_len < SPI_TEST_MAX_ITERATE &&
 	     (len = test->iterate_len[idx_len]) != -1; idx_len++) {
+		if ((run_only_iter_len > -1) && len != run_only_iter_len)
+			continue;
 		FOR_EACH_ALIGNMENT(tx_align) {
 			FOR_EACH_ALIGNMENT(rx_align) {
 				/* and run the iteration */

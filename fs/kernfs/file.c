@@ -922,8 +922,8 @@ repeat:
 
 	root = kernfs_root(kn);
 	/* kick fsnotify */
-	down_write(&root->kernfs_rwsem);
 
+	down_read(&root->kernfs_supers_rwsem);
 	list_for_each_entry(info, &kernfs_root(kn)->supers, node) {
 		struct kernfs_node *parent;
 		struct inode *p_inode = NULL;
@@ -960,7 +960,7 @@ repeat:
 		iput(inode);
 	}
 
-	up_write(&root->kernfs_rwsem);
+	up_read(&root->kernfs_supers_rwsem);
 	kernfs_put(kn);
 	goto repeat;
 }
@@ -1011,7 +1011,7 @@ const struct file_operations kernfs_file_fops = {
 	.release	= kernfs_fop_release,
 	.poll		= kernfs_fop_poll,
 	.fsync		= noop_fsync,
-	.splice_read	= generic_file_splice_read,
+	.splice_read	= copy_splice_read,
 	.splice_write	= iter_file_splice_write,
 };
 

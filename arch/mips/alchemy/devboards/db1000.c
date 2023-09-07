@@ -14,7 +14,6 @@
 #include <linux/interrupt.h>
 #include <linux/leds.h>
 #include <linux/mmc/host.h>
-#include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/spi/spi.h>
@@ -167,12 +166,7 @@ static struct platform_device db1x00_audio_dev = {
 
 static irqreturn_t db1100_mmc_cd(int irq, void *ptr)
 {
-	void (*mmc_cd)(struct mmc_host *, unsigned long);
-	/* link against CONFIG_MMC=m */
-	mmc_cd = symbol_get(mmc_detect_change);
-	mmc_cd(ptr, msecs_to_jiffies(500));
-	symbol_put(mmc_detect_change);
-
+	mmc_detect_change(ptr, msecs_to_jiffies(500));
 	return IRQ_HANDLED;
 }
 
@@ -381,11 +375,19 @@ static struct platform_device db1100_mmc1_dev = {
 static struct ads7846_platform_data db1100_touch_pd = {
 	.model		= 7846,
 	.vref_mv	= 3300,
-	.gpio_pendown	= 21,
 };
 
 static struct spi_gpio_platform_data db1100_spictl_pd = {
 	.num_chipselect = 1,
+};
+
+static struct gpiod_lookup_table db1100_touch_gpio_table = {
+	.dev_id = "spi0.0",
+	.table = {
+		GPIO_LOOKUP("alchemy-gpio2", 21,
+			    "pendown", GPIO_ACTIVE_LOW),
+		{ }
+	},
 };
 
 static struct spi_board_info db1100_spi_info[] __initdata = {
@@ -474,6 +476,7 @@ int __init db1000_dev_setup(void)
 		pfc |= (1 << 0);	/* SSI0 pins as GPIOs */
 		alchemy_wrsys(pfc, AU1000_SYS_PINFUNC);
 
+		gpiod_add_lookup_table(&db1100_touch_gpio_table);
 		spi_register_board_info(db1100_spi_info,
 					ARRAY_SIZE(db1100_spi_info));
 

@@ -68,6 +68,10 @@ The following sections describe the properties of the most modern ``genetlink``
 schema. See the documentation of :doc:`genetlink-c <c-code-gen>`
 for information on how C names are derived from name properties.
 
+See also :ref:`Documentation/core-api/netlink.rst <kernel_netlink>` for
+information on the Netlink specification properties that are only relevant to
+the kernel space and not part of the user space API.
+
 genetlink
 =========
 
@@ -180,6 +184,8 @@ attributes
 
 List of attributes in the set.
 
+.. _attribute_properties:
+
 Attribute properties
 --------------------
 
@@ -253,6 +259,23 @@ rather than depend on what is specified in the spec file.
 
 The validation policy in the kernel is formed by combining the type
 definition (``type`` and ``nested-attributes``) and the ``checks``.
+
+sub-type
+~~~~~~~~
+
+Legacy families have special ways of expressing arrays. ``sub-type`` can be
+used to define the type of array members in case array members are not
+fully defined as attributes (in a bona fide attribute space). For instance
+a C array of u32 values can be specified with ``type: binary`` and
+``sub-type: u32``. Binary types and legacy array formats are described in
+more detail in :doc:`genetlink-legacy`.
+
+display-hint
+~~~~~~~~~~~~
+
+Optional format indicator that is intended only for choosing the right
+formatting mechanism when displaying values of this type. Currently supported
+hints are ``hex``, ``mac``, ``fddi``, ``ipv4``, ``ipv6`` and ``uuid``.
 
 operations
 ----------

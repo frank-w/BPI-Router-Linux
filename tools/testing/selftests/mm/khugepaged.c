@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <linux/mman.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -21,16 +22,6 @@
 #include "linux/magic.h"
 
 #include "vm_util.h"
-
-#ifndef MADV_PAGEOUT
-#define MADV_PAGEOUT 21
-#endif
-#ifndef MADV_POPULATE_READ
-#define MADV_POPULATE_READ 22
-#endif
-#ifndef MADV_COLLAPSE
-#define MADV_COLLAPSE 25
-#endif
 
 #define BASE_ADDR ((void *)(1UL << 30))
 static unsigned long hpage_pmd_size;
@@ -1476,6 +1467,10 @@ int main(int argc, const char **argv)
 
 	page_size = getpagesize();
 	hpage_pmd_size = read_pmd_pagesize();
+	if (!hpage_pmd_size) {
+		printf("Reading PMD pagesize failed");
+		exit(EXIT_FAILURE);
+	}
 	hpage_pmd_nr = hpage_pmd_size / page_size;
 
 	default_settings.khugepaged.max_ptes_none = hpage_pmd_nr - 1;

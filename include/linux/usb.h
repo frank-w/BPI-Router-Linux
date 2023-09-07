@@ -25,7 +25,6 @@
 
 struct usb_device;
 struct usb_driver;
-struct wusb_dev;
 
 /*-------------------------------------------------------------------------*/
 
@@ -170,6 +169,12 @@ usb_find_last_int_out_endpoint(struct usb_host_interface *alt,
 	return usb_find_common_endpoints_reverse(alt, NULL, NULL, NULL, int_out);
 }
 
+enum usb_wireless_status {
+	USB_WIRELESS_STATUS_NA = 0,
+	USB_WIRELESS_STATUS_DISCONNECTED,
+	USB_WIRELESS_STATUS_CONNECTED,
+};
+
 /**
  * struct usb_interface - what usb device drivers talk to
  * @altsetting: array of interface structures, one for each alternate
@@ -197,6 +202,10 @@ usb_find_last_int_out_endpoint(struct usb_host_interface *alt,
  *	following a reset or suspend operation it doesn't support.
  * @authorized: This allows to (de)authorize individual interfaces instead
  *	a whole device in contrast to the device authorization.
+ * @wireless_status: if the USB device uses a receiver/emitter combo, whether
+ *	the emitter is connected.
+ * @wireless_status_work: Used for scheduling wireless status changes
+ *	from atomic context.
  * @dev: driver model's view of this device
  * @usb_dev: if an interface is bound to the USB major, this will point
  *	to the sysfs representation for that device.
@@ -253,6 +262,8 @@ struct usb_interface {
 	unsigned needs_binding:1;	/* needs delayed unbind/rebind */
 	unsigned resetting_device:1;	/* true: bandwidth alloc after reset */
 	unsigned authorized:1;		/* used for interface authorization */
+	enum usb_wireless_status wireless_status;
+	struct work_struct wireless_status_work;
 
 	struct device dev;		/* interface specific device info */
 	struct device *usb_dev;
@@ -290,6 +301,11 @@ void usb_put_intf(struct usb_interface *intf);
 /* this maximum is arbitrary */
 #define USB_MAXINTERFACES	32
 #define USB_MAXIADS		(USB_MAXINTERFACES/2)
+
+bool usb_check_bulk_endpoints(
+		const struct usb_interface *intf, const u8 *ep_addrs);
+bool usb_check_int_endpoints(
+		const struct usb_interface *intf, const u8 *ep_addrs);
 
 /*
  * USB Resume Timer: Every Host controller driver should drive the resume
@@ -408,7 +424,6 @@ struct usb_host_config {
 struct usb_host_bos {
 	struct usb_bos_descriptor	*desc;
 
-	/* wireless cap descriptor is handled by wusb */
 	struct usb_ext_cap_descriptor	*ext_cap;
 	struct usb_ss_cap_descriptor	*ss_cap;
 	struct usb_ssp_cap_descriptor	*ssp_cap;
@@ -595,7 +610,6 @@ struct usb3_lpm_parameters {
  *	WUSB devices are not, until we authorize them from user space.
  *	FIXME -- complete doc
  * @authenticated: Crypto authentication passed
- * @wusb: device is Wireless USB
  * @lpm_capable: device supports LPM
  * @lpm_devinit_allow: Allow USB3 device initiated LPM, exit latency is in range
  * @usb2_hw_lpm_capable: device can perform USB2 hardware LPM
@@ -617,8 +631,6 @@ struct usb3_lpm_parameters {
  * @do_remote_wakeup:  remote wakeup should be enabled
  * @reset_resume: needs reset instead of resume
  * @port_is_suspended: the upstream port is suspended (L2 or U3)
- * @wusb_dev: if this is a Wireless USB device, link to the WUSB
- *	specific data for the device.
  * @slot_id: Slot ID assigned by xHCI
  * @removable: Device can be physically removed from this port
  * @l1_params: best effor service latency for USB2 L1 LPM state, and L1 timeout.
@@ -679,7 +691,6 @@ struct usb_device {
 	unsigned have_langid:1;
 	unsigned authorized:1;
 	unsigned authenticated:1;
-	unsigned wusb:1;
 	unsigned lpm_capable:1;
 	unsigned lpm_devinit_allow:1;
 	unsigned usb2_hw_lpm_capable:1;
@@ -704,14 +715,12 @@ struct usb_device {
 
 	unsigned long active_duration;
 
-#ifdef CONFIG_PM
 	unsigned long connect_time;
 
 	unsigned do_remote_wakeup:1;
 	unsigned reset_resume:1;
 	unsigned port_is_suspended:1;
-#endif
-	struct wusb_dev *wusb_dev;
+
 	int slot_id;
 	struct usb2_lpm_parameters l1_params;
 	struct usb3_lpm_parameters u1_params;
@@ -887,6 +896,10 @@ static inline int usb_interface_claimed(struct usb_interface *iface)
 
 extern void usb_driver_release_interface(struct usb_driver *driver,
 			struct usb_interface *iface);
+
+int usb_set_wireless_status(struct usb_interface *iface,
+			enum usb_wireless_status status);
+
 const struct usb_device_id *usb_match_id(struct usb_interface *interface,
 					 const struct usb_device_id *id);
 extern int usb_match_one_id(struct usb_interface *interface,
@@ -1722,11 +1735,6 @@ static inline void usb_fill_bulk_urb(struct urb *urb,
  * encoding of the endpoint interval, and express polling intervals in
  * microframes (eight per millisecond) rather than in frames (one per
  * millisecond).
- *
- * Wireless USB also uses the logarithmic encoding, but specifies it in units of
- * 128us instead of 125us.  For Wireless USB devices, the interval is passed
- * through to the host controller, rather than being translated into microframe
- * units.
  */
 static inline void usb_fill_int_urb(struct urb *urb,
 				    struct usb_device *dev,

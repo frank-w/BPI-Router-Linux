@@ -43,7 +43,8 @@
 #include "pm8001_chips.h"
 #include "pm80xx_hwi.h"
 
-static ulong logging_level = PM8001_FAIL_LOGGING | PM8001_IOERR_LOGGING;
+static ulong logging_level = PM8001_FAIL_LOGGING | PM8001_IOERR_LOGGING |
+				PM8001_EVENT_LOGGING | PM8001_INIT_LOGGING;
 module_param(logging_level, ulong, 0644);
 MODULE_PARM_DESC(logging_level, " bits for enabling logging info.");
 
@@ -96,7 +97,7 @@ static void pm8001_map_queues(struct Scsi_Host *shost)
 /*
  * The main structure which LLDD must register for scsi core.
  */
-static struct scsi_host_template pm8001_sht = {
+static const struct scsi_host_template pm8001_sht = {
 	.module			= THIS_MODULE,
 	.name			= DRV_NAME,
 	.proc_name		= DRV_NAME,
@@ -161,10 +162,8 @@ static void pm8001_phy_init(struct pm8001_hba_info *pm8001_ha, int phy_id)
 	phy->minimum_linkrate = SAS_LINK_RATE_1_5_GBPS;
 	phy->maximum_linkrate = SAS_LINK_RATE_6_0_GBPS;
 	sas_phy->enabled = (phy_id < pm8001_ha->chip->n_phy) ? 1 : 0;
-	sas_phy->class = SAS;
 	sas_phy->iproto = SAS_PROTOCOL_ALL;
 	sas_phy->tproto = 0;
-	sas_phy->type = PHY_TYPE_PHYSICAL;
 	sas_phy->role = PHY_ROLE_INITIATOR;
 	sas_phy->oob_mode = OOB_NOT_CONNECTED;
 	sas_phy->linkrate = SAS_LINK_RATE_UNKNOWN;
@@ -653,10 +652,9 @@ static void  pm8001_post_sas_ha_init(struct Scsi_Host *shost,
 	sha->sas_ha_name = DRV_NAME;
 	sha->dev = pm8001_ha->dev;
 	sha->strict_wide_ports = 1;
-	sha->lldd_module = THIS_MODULE;
 	sha->sas_addr = &pm8001_ha->sas_addr[0];
 	sha->num_phys = chip_info->n_phy;
-	sha->core.shost = shost;
+	sha->shost = shost;
 }
 
 /**
@@ -666,7 +664,7 @@ static void  pm8001_post_sas_ha_init(struct Scsi_Host *shost,
  * Currently we just set the fixed SAS address to our HBA, for manufacture,
  * it should read from the EEPROM
  */
-static void pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
+static int pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
 {
 	u8 i, j;
 	u8 sas_add[8];
@@ -679,6 +677,12 @@ static void pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
 	struct pm8001_ioctl_payload payload;
 	u16 deviceid;
 	int rc;
+	unsigned long time_remaining;
+
+	if (PM8001_CHIP_DISP->fatal_errors(pm8001_ha)) {
+		pm8001_dbg(pm8001_ha, FAIL, "controller is in fatal error state\n");
+		return -EIO;
+	}
 
 	pci_read_config_word(pm8001_ha->pdev, PCI_DEVICE_ID, &deviceid);
 	pm8001_ha->nvmd_completion = &completion;
@@ -703,16 +707,23 @@ static void pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
 	payload.offset = 0;
 	payload.func_specific = kzalloc(payload.rd_length, GFP_KERNEL);
 	if (!payload.func_specific) {
-		pm8001_dbg(pm8001_ha, INIT, "mem alloc fail\n");
-		return;
+		pm8001_dbg(pm8001_ha, FAIL, "mem alloc fail\n");
+		return -ENOMEM;
 	}
 	rc = PM8001_CHIP_DISP->get_nvmd_req(pm8001_ha, &payload);
 	if (rc) {
 		kfree(payload.func_specific);
-		pm8001_dbg(pm8001_ha, INIT, "nvmd failed\n");
-		return;
+		pm8001_dbg(pm8001_ha, FAIL, "nvmd failed\n");
+		return -EIO;
 	}
-	wait_for_completion(&completion);
+	time_remaining = wait_for_completion_timeout(&completion,
+				msecs_to_jiffies(60*1000)); // 1 min
+	if (!time_remaining) {
+		kfree(payload.func_specific);
+		pm8001_dbg(pm8001_ha, FAIL, "get_nvmd_req timeout\n");
+		return -EIO;
+	}
+
 
 	for (i = 0, j = 0; i <= 7; i++, j++) {
 		if (pm8001_ha->chip_id == chip_8001) {
@@ -751,6 +762,7 @@ static void pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
 	memcpy(pm8001_ha->sas_addr, &pm8001_ha->phy[0].dev_sas_addr,
 		SAS_ADDR_SIZE);
 #endif
+	return 0;
 }
 
 /*
@@ -1166,7 +1178,9 @@ static int pm8001_pci_probe(struct pci_dev *pdev,
 		pm80xx_set_thermal_config(pm8001_ha);
 	}
 
-	pm8001_init_sas_add(pm8001_ha);
+	rc = pm8001_init_sas_add(pm8001_ha);
+	if (rc)
+		goto err_out_shost;
 	/* phy setting support for motherboard controller */
 	rc = pm8001_configure_phy_settings(pm8001_ha);
 	if (rc)

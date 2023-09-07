@@ -231,7 +231,7 @@ static void armada380_init(struct platform_device *pdev,
 	regmap_write(priv->syscon, data->syscon_control0_off, reg);
 }
 
-static void armada_ap806_init(struct platform_device *pdev,
+static void armada_ap80x_init(struct platform_device *pdev,
 			      struct armada_thermal_priv *priv)
 {
 	struct armada_thermal_data *data = priv->data;
@@ -360,11 +360,8 @@ static int armada_select_channel(struct armada_thermal_priv *priv, int channel)
 	 * we must absolutely wait for the sensor validity bit to ensure we read
 	 * actual data.
 	 */
-	if (armada_wait_sensor_validity(priv)) {
-		dev_err(priv->dev,
-			"Temperature sensor reading not valid\n");
+	if (armada_wait_sensor_validity(priv))
 		return -EIO;
-	}
 
 	return 0;
 }
@@ -398,15 +395,12 @@ static int armada_read_sensor(struct armada_thermal_priv *priv, int *temp)
 static int armada_get_temp_legacy(struct thermal_zone_device *thermal,
 				  int *temp)
 {
-	struct armada_thermal_priv *priv = thermal->devdata;
+	struct armada_thermal_priv *priv = thermal_zone_device_priv(thermal);
 	int ret;
 
 	/* Valid check */
-	if (!armada_is_valid(priv)) {
-		dev_err(priv->dev,
-			"Temperature sensor reading not valid\n");
+	if (!armada_is_valid(priv))
 		return -EIO;
-	}
 
 	/* Do the actual reading */
 	ret = armada_read_sensor(priv, temp);
@@ -420,7 +414,7 @@ static struct thermal_zone_device_ops legacy_ops = {
 
 static int armada_get_temp(struct thermal_zone_device *tz, int *temp)
 {
-	struct armada_thermal_sensor *sensor = tz->devdata;
+	struct armada_thermal_sensor *sensor = thermal_zone_device_priv(tz);
 	struct armada_thermal_priv *priv = sensor->priv;
 	int ret;
 
@@ -620,7 +614,7 @@ static const struct armada_thermal_data armada380_data = {
 };
 
 static const struct armada_thermal_data armada_ap806_data = {
-	.init = armada_ap806_init,
+	.init = armada_ap80x_init,
 	.is_valid_bit = BIT(16),
 	.temp_shift = 0,
 	.temp_mask = 0x3ff,
@@ -629,6 +623,30 @@ static const struct armada_thermal_data armada_ap806_data = {
 	.hyst_mask = 0x3,
 	.coef_b = -150000LL,
 	.coef_m = 423ULL,
+	.coef_div = 1,
+	.inverted = true,
+	.signed_sample = true,
+	.syscon_control0_off = 0x84,
+	.syscon_control1_off = 0x88,
+	.syscon_status_off = 0x8C,
+	.dfx_irq_cause_off = 0x108,
+	.dfx_irq_mask_off = 0x10C,
+	.dfx_overheat_irq = BIT(22),
+	.dfx_server_irq_mask_off = 0x104,
+	.dfx_server_irq_en = BIT(1),
+	.cpu_nr = 4,
+};
+
+static const struct armada_thermal_data armada_ap807_data = {
+	.init = armada_ap80x_init,
+	.is_valid_bit = BIT(16),
+	.temp_shift = 0,
+	.temp_mask = 0x3ff,
+	.thresh_shift = 3,
+	.hyst_shift = 19,
+	.hyst_mask = 0x3,
+	.coef_b = -128900LL,
+	.coef_m = 394ULL,
 	.coef_div = 1,
 	.inverted = true,
 	.signed_sample = true,
@@ -685,6 +703,10 @@ static const struct of_device_id armada_thermal_id_table[] = {
 	{
 		.compatible = "marvell,armada-ap806-thermal",
 		.data       = &armada_ap806_data,
+	},
+	{
+		.compatible = "marvell,armada-ap807-thermal",
+		.data       = &armada_ap807_data,
 	},
 	{
 		.compatible = "marvell,armada-cp110-thermal",

@@ -596,6 +596,40 @@ static int bcm_uart_verify_port(struct uart_port *port,
 	return 0;
 }
 
+#ifdef CONFIG_CONSOLE_POLL
+/*
+ * return true when outstanding tx equals fifo size
+ */
+static bool bcm_uart_tx_full(struct uart_port *port)
+{
+	unsigned int val;
+
+	val = bcm_uart_readl(port, UART_MCTL_REG);
+	val = (val & UART_MCTL_TXFIFOFILL_MASK) >> UART_MCTL_TXFIFOFILL_SHIFT;
+	return !(port->fifosize - val);
+}
+
+static int bcm_uart_poll_get_char(struct uart_port *port)
+{
+	unsigned int iestat;
+
+	iestat = bcm_uart_readl(port, UART_IR_REG);
+	if (!(iestat & UART_IR_STAT(UART_IR_RXNOTEMPTY)))
+		return NO_POLL_CHAR;
+
+	return bcm_uart_readl(port, UART_FIFO_REG);
+}
+
+static void bcm_uart_poll_put_char(struct uart_port *port, unsigned char c)
+{
+	while (bcm_uart_tx_full(port)) {
+		cpu_relax();
+	}
+
+	bcm_uart_writel(port, c, UART_FIFO_REG);
+}
+#endif
+
 /* serial core callbacks */
 static const struct uart_ops bcm_uart_ops = {
 	.tx_empty	= bcm_uart_tx_empty,
@@ -614,6 +648,10 @@ static const struct uart_ops bcm_uart_ops = {
 	.request_port	= bcm_uart_request_port,
 	.config_port	= bcm_uart_config_port,
 	.verify_port	= bcm_uart_verify_port,
+#ifdef CONFIG_CONSOLE_POLL
+	.poll_get_char  = bcm_uart_poll_get_char,
+	.poll_put_char  = bcm_uart_poll_put_char,
+#endif
 };
 
 
@@ -794,14 +832,10 @@ static int bcm_uart_probe(struct platform_device *pdev)
 		return -EBUSY;
 	memset(port, 0, sizeof(*port));
 
-	res_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res_mem)
-		return -ENODEV;
-
-	port->mapbase = res_mem->start;
-	port->membase = devm_ioremap_resource(&pdev->dev, res_mem);
+	port->membase = devm_platform_get_and_ioremap_resource(pdev, 0, &res_mem);
 	if (IS_ERR(port->membase))
 		return PTR_ERR(port->membase);
+	port->mapbase = res_mem->start;
 
 	ret = platform_get_irq(pdev, 0);
 	if (ret < 0)

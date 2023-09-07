@@ -65,7 +65,6 @@ struct xdp_dev_bulk_queue {
 struct bpf_dtab_netdev {
 	struct net_device *dev; /* must be first member, due to tracepoint */
 	struct hlist_node index_hlist;
-	struct bpf_dtab *dtab;
 	struct bpf_prog *xdp_prog;
 	struct rcu_head rcu;
 	unsigned int idx;
@@ -159,9 +158,6 @@ static struct bpf_map *dev_map_alloc(union bpf_attr *attr)
 {
 	struct bpf_dtab *dtab;
 	int err;
-
-	if (!capable(CAP_NET_ADMIN))
-		return ERR_PTR(-EPERM);
 
 	dtab = bpf_map_area_alloc(sizeof(*dtab), NUMA_NO_NODE);
 	if (!dtab)
@@ -809,7 +805,7 @@ static void __dev_map_entry_free(struct rcu_head *rcu)
 	kfree(dev);
 }
 
-static int dev_map_delete_elem(struct bpf_map *map, void *key)
+static long dev_map_delete_elem(struct bpf_map *map, void *key)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
 	struct bpf_dtab_netdev *old_dev;
@@ -819,12 +815,14 @@ static int dev_map_delete_elem(struct bpf_map *map, void *key)
 		return -EINVAL;
 
 	old_dev = unrcu_pointer(xchg(&dtab->netdev_map[k], NULL));
-	if (old_dev)
+	if (old_dev) {
 		call_rcu(&old_dev->rcu, __dev_map_entry_free);
+		atomic_dec((atomic_t *)&dtab->items);
+	}
 	return 0;
 }
 
-static int dev_map_hash_delete_elem(struct bpf_map *map, void *key)
+static long dev_map_hash_delete_elem(struct bpf_map *map, void *key)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
 	struct bpf_dtab_netdev *old_dev;
@@ -875,7 +873,6 @@ static struct bpf_dtab_netdev *__dev_map_alloc_node(struct net *net,
 	}
 
 	dev->idx = idx;
-	dev->dtab = dtab;
 	if (prog) {
 		dev->xdp_prog = prog;
 		dev->val.bpf_prog.id = prog->aux->id;
@@ -895,8 +892,8 @@ err_out:
 	return ERR_PTR(-EINVAL);
 }
 
-static int __dev_map_update_elem(struct net *net, struct bpf_map *map,
-				 void *key, void *value, u64 map_flags)
+static long __dev_map_update_elem(struct net *net, struct bpf_map *map,
+				  void *key, void *value, u64 map_flags)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
 	struct bpf_dtab_netdev *dev, *old_dev;
@@ -931,19 +928,21 @@ static int __dev_map_update_elem(struct net *net, struct bpf_map *map,
 	old_dev = unrcu_pointer(xchg(&dtab->netdev_map[i], RCU_INITIALIZER(dev)));
 	if (old_dev)
 		call_rcu(&old_dev->rcu, __dev_map_entry_free);
+	else
+		atomic_inc((atomic_t *)&dtab->items);
 
 	return 0;
 }
 
-static int dev_map_update_elem(struct bpf_map *map, void *key, void *value,
-			       u64 map_flags)
+static long dev_map_update_elem(struct bpf_map *map, void *key, void *value,
+				u64 map_flags)
 {
 	return __dev_map_update_elem(current->nsproxy->net_ns,
 				     map, key, value, map_flags);
 }
 
-static int __dev_map_hash_update_elem(struct net *net, struct bpf_map *map,
-				     void *key, void *value, u64 map_flags)
+static long __dev_map_hash_update_elem(struct net *net, struct bpf_map *map,
+				       void *key, void *value, u64 map_flags)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
 	struct bpf_dtab_netdev *dev, *old_dev;
@@ -995,25 +994,39 @@ out_err:
 	return err;
 }
 
-static int dev_map_hash_update_elem(struct bpf_map *map, void *key, void *value,
-				   u64 map_flags)
+static long dev_map_hash_update_elem(struct bpf_map *map, void *key, void *value,
+				     u64 map_flags)
 {
 	return __dev_map_hash_update_elem(current->nsproxy->net_ns,
 					 map, key, value, map_flags);
 }
 
-static int dev_map_redirect(struct bpf_map *map, u64 ifindex, u64 flags)
+static long dev_map_redirect(struct bpf_map *map, u64 ifindex, u64 flags)
 {
 	return __bpf_xdp_redirect_map(map, ifindex, flags,
 				      BPF_F_BROADCAST | BPF_F_EXCLUDE_INGRESS,
 				      __dev_map_lookup_elem);
 }
 
-static int dev_hash_map_redirect(struct bpf_map *map, u64 ifindex, u64 flags)
+static long dev_hash_map_redirect(struct bpf_map *map, u64 ifindex, u64 flags)
 {
 	return __bpf_xdp_redirect_map(map, ifindex, flags,
 				      BPF_F_BROADCAST | BPF_F_EXCLUDE_INGRESS,
 				      __dev_map_hash_lookup_elem);
+}
+
+static u64 dev_map_mem_usage(const struct bpf_map *map)
+{
+	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
+	u64 usage = sizeof(struct bpf_dtab);
+
+	if (map->map_type == BPF_MAP_TYPE_DEVMAP_HASH)
+		usage += (u64)dtab->n_buckets * sizeof(struct hlist_head);
+	else
+		usage += (u64)map->max_entries * sizeof(struct bpf_dtab_netdev *);
+	usage += atomic_read((atomic_t *)&dtab->items) *
+			 (u64)sizeof(struct bpf_dtab_netdev);
+	return usage;
 }
 
 BTF_ID_LIST_SINGLE(dev_map_btf_ids, struct, bpf_dtab)
@@ -1026,6 +1039,7 @@ const struct bpf_map_ops dev_map_ops = {
 	.map_update_elem = dev_map_update_elem,
 	.map_delete_elem = dev_map_delete_elem,
 	.map_check_btf = map_check_no_btf,
+	.map_mem_usage = dev_map_mem_usage,
 	.map_btf_id = &dev_map_btf_ids[0],
 	.map_redirect = dev_map_redirect,
 };
@@ -1039,6 +1053,7 @@ const struct bpf_map_ops dev_map_hash_ops = {
 	.map_update_elem = dev_map_hash_update_elem,
 	.map_delete_elem = dev_map_hash_delete_elem,
 	.map_check_btf = map_check_no_btf,
+	.map_mem_usage = dev_map_mem_usage,
 	.map_btf_id = &dev_map_btf_ids[0],
 	.map_redirect = dev_hash_map_redirect,
 };
@@ -1109,9 +1124,11 @@ static int dev_map_notification(struct notifier_block *notifier,
 				if (!dev || netdev != dev->dev)
 					continue;
 				odev = unrcu_pointer(cmpxchg(&dtab->netdev_map[i], RCU_INITIALIZER(dev), NULL));
-				if (dev == odev)
+				if (dev == odev) {
 					call_rcu(&dev->rcu,
 						 __dev_map_entry_free);
+					atomic_dec((atomic_t *)&dtab->items);
+				}
 			}
 		}
 		rcu_read_unlock();

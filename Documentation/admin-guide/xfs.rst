@@ -192,7 +192,7 @@ When mounting an XFS filesystem, the following options are accepted.
 	are any integer multiple of a valid ``sunit`` value.
 
 	Typically the only time these mount options are necessary if
-	after an underlying RAID device has had it's geometry
+	after an underlying RAID device has had its geometry
 	modified, such as adding a new disk to a RAID5 lun and
 	reshaping it.
 
@@ -236,13 +236,14 @@ the dates listed above.
 Deprecated Mount Options
 ========================
 
-===========================     ================
+============================    ================
   Name				Removal Schedule
-===========================     ================
+============================    ================
 Mounting with V4 filesystem     September 2030
+Mounting ascii-ci filesystem    September 2030
 ikeep/noikeep			September 2025
 attr2/noattr2			September 2025
-===========================     ================
+============================    ================
 
 
 Removed Mount Options

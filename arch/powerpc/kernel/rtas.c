@@ -16,6 +16,7 @@
 #include <linux/init.h>
 #include <linux/kconfig.h>
 #include <linux/kernel.h>
+#include <linux/lockdep.h>
 #include <linux/memblock.h>
 #include <linux/of.h>
 #include <linux/of_fdt.h>
@@ -68,7 +69,7 @@ struct rtas_filter {
  *                            functions are believed to have no users on
  *                            ppc64le, and we want to keep it that way. It does
  *                            not make sense for this to be set when @filter
- *                            is false.
+ *                            is NULL.
  */
 struct rtas_function {
 	s32 token;
@@ -453,6 +454,16 @@ static struct rtas_function rtas_function_table[] __ro_after_init = {
 	},
 };
 
+/*
+ * Nearly all RTAS calls need to be serialized. All uses of the
+ * default rtas_args block must hold rtas_lock.
+ *
+ * Exceptions to the RTAS serialization requirement (e.g. stop-self)
+ * must use a separate rtas_args structure.
+ */
+static DEFINE_RAW_SPINLOCK(rtas_lock);
+static struct rtas_args rtas_args;
+
 /**
  * rtas_function_token() - RTAS function token lookup.
  * @handle: Function handle, e.g. RTAS_FN_EVENT_SCAN.
@@ -560,6 +571,9 @@ static void __do_enter_rtas(struct rtas_args *args)
 static void __do_enter_rtas_trace(struct rtas_args *args)
 {
 	const char *name = NULL;
+
+	if (args == &rtas_args)
+		lockdep_assert_held(&rtas_lock);
 	/*
 	 * If the tracepoints that consume the function name aren't
 	 * active, avoid the lookup.
@@ -618,16 +632,6 @@ static void do_enter_rtas(struct rtas_args *args)
 }
 
 struct rtas_t rtas;
-
-/*
- * Nearly all RTAS calls need to be serialized. All uses of the
- * default rtas_args block must hold rtas_lock.
- *
- * Exceptions to the RTAS serialization requirement (e.g. stop-self)
- * must use a separate rtas_args structure.
- */
-static DEFINE_RAW_SPINLOCK(rtas_lock);
-static struct rtas_args rtas_args;
 
 DEFINE_SPINLOCK(rtas_data_buf_lock);
 EXPORT_SYMBOL_GPL(rtas_data_buf_lock);
@@ -951,6 +955,8 @@ static char *__fetch_rtas_last_error(char *altbuf)
 	u32 bufsz;
 	char *buf = NULL;
 
+	lockdep_assert_held(&rtas_lock);
+
 	if (token == -1)
 		return NULL;
 
@@ -981,7 +987,7 @@ static char *__fetch_rtas_last_error(char *altbuf)
 				buf = kmalloc(RTAS_ERROR_LOG_MAX, GFP_ATOMIC);
 		}
 		if (buf)
-			memcpy(buf, rtas_err_buf, RTAS_ERROR_LOG_MAX);
+			memmove(buf, rtas_err_buf, RTAS_ERROR_LOG_MAX);
 	}
 
 	return buf;
@@ -1016,6 +1022,23 @@ va_rtas_call_unlocked(struct rtas_args *args, int token, int nargs, int nret,
 	do_enter_rtas(args);
 }
 
+/**
+ * rtas_call_unlocked() - Invoke an RTAS firmware function without synchronization.
+ * @args: RTAS parameter block to be used for the call, must obey RTAS addressing
+ *        constraints.
+ * @token: Identifies the function being invoked.
+ * @nargs: Number of input parameters. Does not include token.
+ * @nret: Number of output parameters, including the call status.
+ * @....: List of @nargs input parameters.
+ *
+ * Invokes the RTAS function indicated by @token, which the caller
+ * should obtain via rtas_function_token().
+ *
+ * This function is similar to rtas_call(), but must be used with a
+ * limited set of RTAS calls specifically exempted from the general
+ * requirement that only one RTAS call may be in progress at any
+ * time. Examples include stop-self and ibm,nmi-interlock.
+ */
 void rtas_call_unlocked(struct rtas_args *args, int token, int nargs, int nret, ...)
 {
 	va_list list;
@@ -1091,6 +1114,7 @@ static bool token_is_restricted_errinjct(s32 token)
  */
 int rtas_call(int token, int nargs, int nret, int *outputs, ...)
 {
+	struct pin_cookie cookie;
 	va_list list;
 	int i;
 	unsigned long flags;
@@ -1117,6 +1141,8 @@ int rtas_call(int token, int nargs, int nret, int *outputs, ...)
 	}
 
 	raw_spin_lock_irqsave(&rtas_lock, flags);
+	cookie = lockdep_pin_lock(&rtas_lock);
+
 	/* We use the global rtas args buffer */
 	args = &rtas_args;
 
@@ -1134,6 +1160,7 @@ int rtas_call(int token, int nargs, int nret, int *outputs, ...)
 			outputs[i] = be32_to_cpu(args->rets[i + 1]);
 	ret = (nret > 0) ? be32_to_cpu(args->rets[0]) : 0;
 
+	lockdep_unpin_lock(&rtas_lock, cookie);
 	raw_spin_unlock_irqrestore(&rtas_lock, flags);
 
 	if (buff_copy) {
@@ -1303,33 +1330,34 @@ bool __ref rtas_busy_delay(int status)
 }
 EXPORT_SYMBOL_GPL(rtas_busy_delay);
 
-static int rtas_error_rc(int rtas_rc)
+int rtas_error_rc(int rtas_rc)
 {
 	int rc;
 
 	switch (rtas_rc) {
-		case -1: 		/* Hardware Error */
-			rc = -EIO;
-			break;
-		case -3:		/* Bad indicator/domain/etc */
-			rc = -EINVAL;
-			break;
-		case -9000:		/* Isolation error */
-			rc = -EFAULT;
-			break;
-		case -9001:		/* Outstanding TCE/PTE */
-			rc = -EEXIST;
-			break;
-		case -9002:		/* No usable slot */
-			rc = -ENODEV;
-			break;
-		default:
-			pr_err("%s: unexpected error %d\n", __func__, rtas_rc);
-			rc = -ERANGE;
-			break;
+	case RTAS_HARDWARE_ERROR:	/* Hardware Error */
+		rc = -EIO;
+		break;
+	case RTAS_INVALID_PARAMETER:	/* Bad indicator/domain/etc */
+		rc = -EINVAL;
+		break;
+	case -9000:			/* Isolation error */
+		rc = -EFAULT;
+		break;
+	case -9001:			/* Outstanding TCE/PTE */
+		rc = -EEXIST;
+		break;
+	case -9002:			/* No usable slot */
+		rc = -ENODEV;
+		break;
+	default:
+		pr_err("%s: unexpected error %d\n", __func__, rtas_rc);
+		rc = -ERANGE;
+		break;
 	}
 	return rc;
 }
+EXPORT_SYMBOL_GPL(rtas_error_rc);
 
 int rtas_get_power_level(int powerdomain, int *level)
 {
@@ -1560,6 +1588,7 @@ static bool ibm_extended_os_term;
 void rtas_os_term(char *str)
 {
 	s32 token = rtas_function_token(RTAS_FN_IBM_OS_TERM);
+	static struct rtas_args args;
 	int status;
 
 	/*
@@ -1580,7 +1609,8 @@ void rtas_os_term(char *str)
 	 * schedules.
 	 */
 	do {
-		status = rtas_call(token, 1, 1, NULL, __pa(rtas_os_term_buf));
+		rtas_call_unlocked(&args, token, 1, 1, NULL, __pa(rtas_os_term_buf));
+		status = be32_to_cpu(args.rets[0]);
 	} while (rtas_busy_delay_time(status));
 
 	if (status != 0)
@@ -1765,6 +1795,7 @@ err:
 /* We assume to be passed big endian arguments */
 SYSCALL_DEFINE1(rtas, struct rtas_args __user *, uargs)
 {
+	struct pin_cookie cookie;
 	struct rtas_args args;
 	unsigned long flags;
 	char *buff_copy, *errbuf = NULL;
@@ -1833,6 +1864,7 @@ SYSCALL_DEFINE1(rtas, struct rtas_args __user *, uargs)
 	buff_copy = get_errorlog_buffer();
 
 	raw_spin_lock_irqsave(&rtas_lock, flags);
+	cookie = lockdep_pin_lock(&rtas_lock);
 
 	rtas_args = args;
 	do_enter_rtas(&rtas_args);
@@ -1843,6 +1875,7 @@ SYSCALL_DEFINE1(rtas, struct rtas_args __user *, uargs)
 	if (be32_to_cpu(args.rets[0]) == -1)
 		errbuf = __fetch_rtas_last_error(buff_copy);
 
+	lockdep_unpin_lock(&rtas_lock, cookie);
 	raw_spin_unlock_irqrestore(&rtas_lock, flags);
 
 	if (buff_copy) {

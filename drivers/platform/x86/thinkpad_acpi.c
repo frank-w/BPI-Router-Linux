@@ -50,6 +50,7 @@
 #include <linux/kthread.h>
 #include <linux/leds.h>
 #include <linux/list.h>
+#include <linux/lockdep.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/nvram.h>
@@ -315,15 +316,10 @@ struct ibm_init_struct {
 /* DMI Quirks */
 struct quirk_entry {
 	bool btusb_bug;
-	u32 s2idle_bug_mmio;
 };
 
 static struct quirk_entry quirk_btusb_bug = {
 	.btusb_bug = true,
-};
-
-static struct quirk_entry quirk_s2idle_bug = {
-	.s2idle_bug_mmio = 0xfed80380,
 };
 
 static struct {
@@ -912,16 +908,9 @@ static ssize_t dispatch_proc_write(struct file *file,
 	if (count > PAGE_SIZE - 1)
 		return -EINVAL;
 
-	kernbuf = kmalloc(count + 1, GFP_KERNEL);
-	if (!kernbuf)
-		return -ENOMEM;
-
-	if (copy_from_user(kernbuf, userbuf, count)) {
-		kfree(kernbuf);
-		return -EFAULT;
-	}
-
-	kernbuf[count] = 0;
+	kernbuf = memdup_user_nul(userbuf, count);
+	if (IS_ERR(kernbuf))
+		return PTR_ERR(kernbuf);
 	ret = ibm->write(kernbuf);
 	if (ret == 0)
 		ret = count;
@@ -2071,11 +2060,11 @@ static int hotkey_get_tablet_mode(int *status)
  * hotkey_acpi_mask accordingly.  Also resets any bits
  * from hotkey_user_mask that are unavailable to be
  * delivered (shadow requirement of the userspace ABI).
- *
- * Call with hotkey_mutex held
  */
 static int hotkey_mask_get(void)
 {
+	lockdep_assert_held(&hotkey_mutex);
+
 	if (tp_features.hotkey_mask) {
 		u32 m = 0;
 
@@ -2111,8 +2100,6 @@ static void hotkey_mask_warn_incomplete_mask(void)
  * Also calls hotkey_mask_get to update hotkey_acpi_mask.
  *
  * NOTE: does not set bits in hotkey_user_mask, but may reset them.
- *
- * Call with hotkey_mutex held
  */
 static int hotkey_mask_set(u32 mask)
 {
@@ -2120,6 +2107,8 @@ static int hotkey_mask_set(u32 mask)
 	int rc = 0;
 
 	const u32 fwmask = mask & ~hotkey_source_mask;
+
+	lockdep_assert_held(&hotkey_mutex);
 
 	if (tp_features.hotkey_mask) {
 		for (i = 0; i < 32; i++) {
@@ -2152,12 +2141,12 @@ static int hotkey_mask_set(u32 mask)
 
 /*
  * Sets hotkey_user_mask and tries to set the firmware mask
- *
- * Call with hotkey_mutex held
  */
 static int hotkey_user_mask_set(const u32 mask)
 {
 	int rc;
+
+	lockdep_assert_held(&hotkey_mutex);
 
 	/* Give people a chance to notice they are doing something that
 	 * is bound to go boom on their users sooner or later */
@@ -2519,20 +2508,22 @@ exit:
 	return 0;
 }
 
-/* call with hotkey_mutex held */
 static void hotkey_poll_stop_sync(void)
 {
+	lockdep_assert_held(&hotkey_mutex);
+
 	if (tpacpi_hotkey_task) {
 		kthread_stop(tpacpi_hotkey_task);
 		tpacpi_hotkey_task = NULL;
 	}
 }
 
-/* call with hotkey_mutex held */
 static void hotkey_poll_setup(const bool may_warn)
 {
 	const u32 poll_driver_mask = hotkey_driver_mask & hotkey_source_mask;
 	const u32 poll_user_mask = hotkey_user_mask & hotkey_source_mask;
+
+	lockdep_assert_held(&hotkey_mutex);
 
 	if (hotkey_poll_freq > 0 &&
 	    (poll_driver_mask ||
@@ -2562,9 +2553,10 @@ static void hotkey_poll_setup_safe(const bool may_warn)
 	mutex_unlock(&hotkey_mutex);
 }
 
-/* call with hotkey_mutex held */
 static void hotkey_poll_set_freq(unsigned int freq)
 {
+	lockdep_assert_held(&hotkey_mutex);
+
 	if (!freq)
 		hotkey_poll_stop_sync();
 
@@ -3478,7 +3470,9 @@ static int __init hotkey_init(struct ibm_init_struct *iibm)
 	if (tp_features.hotkey_mask) {
 		/* hotkey_source_mask *must* be zero for
 		 * the first hotkey_mask_get to return hotkey_orig_mask */
+		mutex_lock(&hotkey_mutex);
 		res = hotkey_mask_get();
+		mutex_unlock(&hotkey_mutex);
 		if (res)
 			return res;
 
@@ -3577,9 +3571,11 @@ static int __init hotkey_init(struct ibm_init_struct *iibm)
 		hotkey_exit();
 		return res;
 	}
+	mutex_lock(&hotkey_mutex);
 	res = hotkey_mask_set(((hotkey_all_mask & ~hotkey_reserved_mask)
 			       | hotkey_driver_mask)
 			      & ~hotkey_source_mask);
+	mutex_unlock(&hotkey_mutex);
 	if (res < 0 && res != -ENXIO) {
 		hotkey_exit();
 		return res;
@@ -4422,135 +4418,8 @@ static const struct dmi_system_id fwbug_list[] __initconst = {
 			DMI_MATCH(DMI_BOARD_NAME, "20MV"),
 		},
 	},
-	{
-		.ident = "L14 Gen2 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20X5"),
-		}
-	},
-	{
-		.ident = "T14s Gen2 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20XF"),
-		}
-	},
-	{
-		.ident = "X13 Gen2 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20XH"),
-		}
-	},
-	{
-		.ident = "T14 Gen2 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20XK"),
-		}
-	},
-	{
-		.ident = "T14 Gen1 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20UD"),
-		}
-	},
-	{
-		.ident = "T14 Gen1 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20UE"),
-		}
-	},
-	{
-		.ident = "T14s Gen1 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20UH"),
-		}
-	},
-	{
-		.ident = "T14s Gen1 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20UJ"),
-		}
-	},
-	{
-		.ident = "P14s Gen1 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "20Y1"),
-		}
-	},
-	{
-		.ident = "P14s Gen2 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "21A0"),
-		}
-	},
-	{
-		.ident = "P14s Gen2 AMD",
-		.driver_data = &quirk_s2idle_bug,
-		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "LENOVO"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "21A1"),
-		}
-	},
 	{}
 };
-
-#ifdef CONFIG_SUSPEND
-/*
- * Lenovo laptops from a variety of generations run a SMI handler during the D3->D0
- * transition that occurs specifically when exiting suspend to idle which can cause
- * large delays during resume when the IOMMU translation layer is enabled (the default
- * behavior) for NVME devices:
- *
- * To avoid this firmware problem, skip the SMI handler on these machines before the
- * D0 transition occurs.
- */
-static void thinkpad_acpi_amd_s2idle_restore(void)
-{
-	struct resource *res;
-	void __iomem *addr;
-	u8 val;
-
-	res = request_mem_region_muxed(tp_features.quirks->s2idle_bug_mmio, 1,
-					"thinkpad_acpi_pm80");
-	if (!res)
-		return;
-
-	addr = ioremap(tp_features.quirks->s2idle_bug_mmio, 1);
-	if (!addr)
-		goto cleanup_resource;
-
-	val = ioread8(addr);
-	iowrite8(val & ~BIT(0), addr);
-
-	iounmap(addr);
-cleanup_resource:
-	release_resource(res);
-	kfree(res);
-}
-
-static struct acpi_s2idle_dev_ops thinkpad_acpi_s2idle_dev_ops = {
-	.restore = thinkpad_acpi_amd_s2idle_restore,
-};
-#endif
 
 static const struct pci_device_id fwbug_cards_ids[] __initconst = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x24F3) },
@@ -6660,11 +6529,12 @@ static unsigned int brightness_enable = 2; /* 2 = auto, 0 = no, 1 = yes */
 
 static struct mutex brightness_mutex;
 
-/* NVRAM brightness access,
- * call with brightness_mutex held! */
+/* NVRAM brightness access */
 static unsigned int tpacpi_brightness_nvram_get(void)
 {
 	u8 lnvram;
+
+	lockdep_assert_held(&brightness_mutex);
 
 	lnvram = (nvram_read_byte(TP_NVRAM_ADDR_BRIGHTNESS)
 		  & TP_NVRAM_MASK_LEVEL_BRIGHTNESS)
@@ -6713,10 +6583,11 @@ unlock:
 }
 
 
-/* call with brightness_mutex held! */
 static int tpacpi_brightness_get_raw(int *status)
 {
 	u8 lec = 0;
+
+	lockdep_assert_held(&brightness_mutex);
 
 	switch (brightness_mode) {
 	case TPACPI_BRGHT_MODE_UCMS_STEP:
@@ -6733,11 +6604,12 @@ static int tpacpi_brightness_get_raw(int *status)
 	}
 }
 
-/* call with brightness_mutex held! */
 /* do NOT call with illegal backlight level value */
 static int tpacpi_brightness_set_ec(unsigned int value)
 {
 	u8 lec = 0;
+
+	lockdep_assert_held(&brightness_mutex);
 
 	if (unlikely(!acpi_ec_read(TP_EC_BACKLIGHT, &lec)))
 		return -EIO;
@@ -6750,11 +6622,12 @@ static int tpacpi_brightness_set_ec(unsigned int value)
 	return 0;
 }
 
-/* call with brightness_mutex held! */
 static int tpacpi_brightness_set_ucmsstep(unsigned int value)
 {
 	int cmos_cmd, inc;
 	unsigned int current_value, i;
+
+	lockdep_assert_held(&brightness_mutex);
 
 	current_value = tpacpi_brightness_nvram_get();
 
@@ -8204,11 +8077,10 @@ static bool fan_select_fan2(void)
 	return true;
 }
 
-/*
- * Call with fan_mutex held
- */
 static void fan_update_desired_level(u8 status)
 {
+	lockdep_assert_held(&fan_mutex);
+
 	if ((status &
 	     (TP_EC_FAN_AUTO | TP_EC_FAN_FULLSPEED)) == 0) {
 		if (status > 7)
@@ -10318,6 +10190,7 @@ static atomic_t dytc_ignore_event = ATOMIC_INIT(0);
 static DEFINE_MUTEX(dytc_mutex);
 static int dytc_capabilities;
 static bool dytc_mmc_get_available;
+static int profile_force;
 
 static int convert_dytc_to_profile(int funcmode, int dytcmode,
 		enum platform_profile_option *profile)
@@ -10523,8 +10396,8 @@ unlock:
 static void dytc_profile_refresh(void)
 {
 	enum platform_profile_option profile;
-	int output, err = 0;
-	int perfmode, funcmode;
+	int output = 0, err = 0;
+	int perfmode, funcmode = 0;
 
 	mutex_lock(&dytc_mutex);
 	if (dytc_capabilities & BIT(DYTC_FC_MMC)) {
@@ -10537,6 +10410,8 @@ static void dytc_profile_refresh(void)
 		err = dytc_command(DYTC_CMD_GET, &output);
 		/* Check if we are PSC mode, or have AMT enabled */
 		funcmode = (output >> DYTC_GET_FUNCTION_BIT) & 0xF;
+	} else { /* Unknown profile mode */
+		err = -ENODEV;
 	}
 	mutex_unlock(&dytc_mutex);
 	if (err)
@@ -10580,6 +10455,21 @@ static int tpacpi_dytc_profile_init(struct ibm_init_struct *iibm)
 	if (err)
 		return err;
 
+	/* Check if user wants to override the profile selection */
+	if (profile_force) {
+		switch (profile_force) {
+		case -1:
+			dytc_capabilities = 0;
+			break;
+		case 1:
+			dytc_capabilities = BIT(DYTC_FC_MMC);
+			break;
+		case 2:
+			dytc_capabilities = BIT(DYTC_FC_PSC);
+			break;
+		}
+		pr_debug("Profile selection forced: 0x%x\n", dytc_capabilities);
+	}
 	if (dytc_capabilities & BIT(DYTC_FC_MMC)) { /* MMC MODE */
 		pr_debug("MMC is supported\n");
 		/*
@@ -10593,11 +10483,6 @@ static int tpacpi_dytc_profile_init(struct ibm_init_struct *iibm)
 				dytc_mmc_get_available = true;
 		}
 	} else if (dytc_capabilities & BIT(DYTC_FC_PSC)) { /* PSC MODE */
-		/* Support for this only works on AMD platforms */
-		if (boot_cpu_data.x86_vendor != X86_VENDOR_AMD) {
-			dbg_printk(TPACPI_DBG_INIT, "PSC not support on Intel platforms\n");
-			return -ENODEV;
-		}
 		pr_debug("PSC is supported\n");
 	} else {
 		dbg_printk(TPACPI_DBG_INIT, "No DYTC support available\n");
@@ -11646,16 +11531,15 @@ MODULE_PARM_DESC(uwb_state,
 		 "Initial state of the emulated UWB switch");
 #endif
 
+module_param(profile_force, int, 0444);
+MODULE_PARM_DESC(profile_force, "Force profile mode. -1=off, 1=MMC, 2=PSC");
+
 static void thinkpad_acpi_module_exit(void)
 {
 	struct ibm_struct *ibm, *itmp;
 
 	tpacpi_lifecycle = TPACPI_LIFE_EXITING;
 
-#ifdef CONFIG_SUSPEND
-	if (tp_features.quirks && tp_features.quirks->s2idle_bug_mmio)
-		acpi_unregister_lps0_dev(&thinkpad_acpi_s2idle_dev_ops);
-#endif
 	if (tpacpi_hwmon)
 		hwmon_device_unregister(tpacpi_hwmon);
 	if (tp_features.sensors_pdrv_registered)
@@ -11699,6 +11583,7 @@ static int __init thinkpad_acpi_module_init(void)
 {
 	const struct dmi_system_id *dmi_id;
 	int ret, i;
+	acpi_object_type obj_type;
 
 	tpacpi_lifecycle = TPACPI_LIFE_INIT;
 
@@ -11723,6 +11608,21 @@ static int __init thinkpad_acpi_module_init(void)
 
 	TPACPI_ACPIHANDLE_INIT(ecrd);
 	TPACPI_ACPIHANDLE_INIT(ecwr);
+
+	/*
+	 * Quirk: in some models (e.g. X380 Yoga), an object named ECRD
+	 * exists, but it is a register, not a method.
+	 */
+	if (ecrd_handle) {
+		acpi_get_type(ecrd_handle, &obj_type);
+		if (obj_type != ACPI_TYPE_METHOD)
+			ecrd_handle = NULL;
+	}
+	if (ecwr_handle) {
+		acpi_get_type(ecwr_handle, &obj_type);
+		if (obj_type != ACPI_TYPE_METHOD)
+			ecwr_handle = NULL;
+	}
 
 	tpacpi_wq = create_singlethread_workqueue(TPACPI_WORKQUEUE_NAME);
 	if (!tpacpi_wq) {
@@ -11829,13 +11729,6 @@ static int __init thinkpad_acpi_module_init(void)
 		tp_features.input_device_registered = 1;
 	}
 
-#ifdef CONFIG_SUSPEND
-	if (tp_features.quirks && tp_features.quirks->s2idle_bug_mmio) {
-		if (!acpi_register_lps0_dev(&thinkpad_acpi_s2idle_dev_ops))
-			pr_info("Using s2idle quirk to avoid %s platform firmware bug\n",
-				(dmi_id && dmi_id->ident) ? dmi_id->ident : "");
-	}
-#endif
 	return 0;
 }
 

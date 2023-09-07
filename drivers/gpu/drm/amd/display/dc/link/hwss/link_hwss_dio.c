@@ -44,8 +44,11 @@ void setup_dio_stream_encoder(struct pipe_ctx *pipe_ctx)
 	link_enc->funcs->connect_dig_be_to_fe(link_enc,
 			pipe_ctx->stream_res.stream_enc->id, true);
 	if (dc_is_dp_signal(pipe_ctx->stream->signal))
-		link_dp_source_sequence_trace(pipe_ctx->stream->link,
+		pipe_ctx->stream->ctx->dc->link_srv->dp_trace_source_sequence(pipe_ctx->stream->link,
 				DPCD_SOURCE_SEQ_AFTER_CONNECT_DIG_FE_BE);
+	if (stream_enc->funcs->map_stream_to_link)
+		stream_enc->funcs->map_stream_to_link(stream_enc,
+				stream_enc->stream_enc_inst, link_enc->transmitter - TRANSMITTER_UNIPHY_A);
 	if (stream_enc->funcs->enable_fifo)
 		stream_enc->funcs->enable_fifo(stream_enc);
 }
@@ -63,7 +66,8 @@ void reset_dio_stream_encoder(struct pipe_ctx *pipe_ctx)
 			pipe_ctx->stream_res.stream_enc->id,
 			false);
 	if (dc_is_dp_signal(pipe_ctx->stream->signal))
-		link_dp_source_sequence_trace(pipe_ctx->stream->link,
+		pipe_ctx->stream->ctx->dc->link_srv->dp_trace_source_sequence(
+				pipe_ctx->stream->link,
 				DPCD_SOURCE_SEQ_AFTER_DISCONNECT_DIG_FE_BE);
 
 }
@@ -105,7 +109,8 @@ void setup_dio_stream_attribute(struct pipe_ctx *pipe_ctx)
 				&stream->timing);
 
 	if (dc_is_dp_signal(stream->signal))
-		link_dp_source_sequence_trace(link, DPCD_SOURCE_SEQ_AFTER_DP_STREAM_ATTR);
+		link->dc->link_srv->dp_trace_source_sequence(link,
+				DPCD_SOURCE_SEQ_AFTER_DP_STREAM_ATTR);
 }
 
 void enable_dio_dp_link_output(struct dc_link *link,
@@ -126,7 +131,8 @@ void enable_dio_dp_link_output(struct dc_link *link,
 				link_enc,
 				link_settings,
 				clock_source);
-	link_dp_source_sequence_trace(link, DPCD_SOURCE_SEQ_AFTER_ENABLE_LINK_PHY);
+	link->dc->link_srv->dp_trace_source_sequence(link,
+			DPCD_SOURCE_SEQ_AFTER_ENABLE_LINK_PHY);
 }
 
 void disable_dio_link_output(struct dc_link *link,
@@ -136,7 +142,8 @@ void disable_dio_link_output(struct dc_link *link,
 	struct link_encoder *link_enc = link_enc_cfg_get_link_enc(link);
 
 	link_enc->funcs->disable_output(link_enc, signal);
-	link_dp_source_sequence_trace(link, DPCD_SOURCE_SEQ_AFTER_DISABLE_LINK_PHY);
+	link->dc->link_srv->dp_trace_source_sequence(link,
+			DPCD_SOURCE_SEQ_AFTER_DISABLE_LINK_PHY);
 }
 
 void set_dio_dp_link_test_pattern(struct dc_link *link,
@@ -146,7 +153,7 @@ void set_dio_dp_link_test_pattern(struct dc_link *link,
 	struct link_encoder *link_enc = link_enc_cfg_get_link_enc(link);
 
 	link_enc->funcs->dp_set_phy_pattern(link_enc, tp_params);
-	link_dp_source_sequence_trace(link, DPCD_SOURCE_SEQ_AFTER_SET_SOURCE_PATTERN);
+	link->dc->link_srv->dp_trace_source_sequence(link, DPCD_SOURCE_SEQ_AFTER_SET_SOURCE_PATTERN);
 }
 
 void set_dio_dp_lane_settings(struct dc_link *link,
@@ -159,7 +166,7 @@ void set_dio_dp_lane_settings(struct dc_link *link,
 	link_enc->funcs->dp_set_lane_settings(link_enc, link_settings, lane_settings);
 }
 
-static void update_dio_stream_allocation_table(struct dc_link *link,
+void update_dio_stream_allocation_table(struct dc_link *link,
 		const struct link_resource *link_res,
 		const struct link_mst_stream_allocation_table *table)
 {
@@ -195,7 +202,8 @@ void enable_dio_audio_packet(struct pipe_ctx *pipe_ctx)
 			pipe_ctx->stream_res.stream_enc, false);
 
 	if (dc_is_dp_signal(pipe_ctx->stream->signal))
-		link_dp_source_sequence_trace(pipe_ctx->stream->link,
+		pipe_ctx->stream->ctx->dc->link_srv->dp_trace_source_sequence(
+				pipe_ctx->stream->link,
 				DPCD_SOURCE_SEQ_AFTER_ENABLE_AUDIO_STREAM);
 }
 
@@ -214,7 +222,8 @@ void disable_dio_audio_packet(struct pipe_ctx *pipe_ctx)
 	}
 
 	if (dc_is_dp_signal(pipe_ctx->stream->signal))
-		link_dp_source_sequence_trace(pipe_ctx->stream->link,
+		pipe_ctx->stream->ctx->dc->link_srv->dp_trace_source_sequence(
+				pipe_ctx->stream->link,
 				DPCD_SOURCE_SEQ_AFTER_DISABLE_AUDIO_STREAM);
 }
 

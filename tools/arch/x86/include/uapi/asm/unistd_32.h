@@ -1,4 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#ifndef __NR_fork
+#define __NR_fork 2
+#endif
 #ifndef __NR_execve
 #define __NR_execve 11
 #endif
@@ -22,4 +25,7 @@
 #endif
 #ifndef __NR_setns
 #define __NR_setns 346
+#endif
+#ifdef __NR_seccomp
+#define __NR_seccomp 354
 #endif

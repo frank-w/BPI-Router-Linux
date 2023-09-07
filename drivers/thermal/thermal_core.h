@@ -23,6 +23,8 @@
 #define DEFAULT_THERMAL_GOVERNOR       "user_space"
 #elif defined(CONFIG_THERMAL_DEFAULT_GOV_POWER_ALLOCATOR)
 #define DEFAULT_THERMAL_GOVERNOR       "power_allocator"
+#elif defined(CONFIG_THERMAL_DEFAULT_GOV_BANG_BANG)
+#define DEFAULT_THERMAL_GOVERNOR       "bang_bang"
 #endif
 
 /* Initial state of a cooling device during binding */
@@ -51,10 +53,6 @@ int for_each_thermal_cooling_device(int (*cb)(struct thermal_cooling_device *,
 
 int for_each_thermal_governor(int (*cb)(struct thermal_governor *, void *),
 			      void *thermal_governor);
-
-int __for_each_thermal_trip(struct thermal_zone_device *,
-			    int (*cb)(struct thermal_trip *, void *),
-			    void *);
 
 struct thermal_zone_device *thermal_zone_get_by_id(int id);
 

@@ -74,10 +74,7 @@ extern unsigned int zlib_dfltcc_support;
 
 extern int noexec_disabled;
 extern unsigned long ident_map_size;
-extern unsigned long pgalloc_pos;
-extern unsigned long pgalloc_end;
-extern unsigned long pgalloc_low;
-extern unsigned long __amode31_base;
+extern unsigned long max_mappable;
 
 /* The Write Back bit position in the physaddr is given by the SLPC PCI */
 extern unsigned long mio_wb_bit_mask;
@@ -121,14 +118,6 @@ extern unsigned int console_irq;
 #define SET_CONSOLE_VT220	do { console_mode = 4; } while (0)
 #define SET_CONSOLE_HVC		do { console_mode = 5; } while (0)
 
-#ifdef CONFIG_PFAULT
-extern int pfault_init(void);
-extern void pfault_fini(void);
-#else /* CONFIG_PFAULT */
-#define pfault_init()		({-1;})
-#define pfault_fini()		do { } while (0)
-#endif /* CONFIG_PFAULT */
-
 #ifdef CONFIG_VMCP
 void vmcp_cma_reserve(void);
 #else
@@ -150,13 +139,13 @@ static inline unsigned long kaslr_offset(void)
 	return __kaslr_offset;
 }
 
-extern int is_full_image;
-
-struct initrd_data {
-	unsigned long start;
-	unsigned long size;
-};
-extern struct initrd_data initrd_data;
+extern int __kaslr_enabled;
+static inline int kaslr_enabled(void)
+{
+	if (IS_ENABLED(CONFIG_RANDOMIZE_BASE))
+		return __kaslr_enabled;
+	return 0;
+}
 
 struct oldmem_data {
 	unsigned long start;
@@ -164,7 +153,7 @@ struct oldmem_data {
 };
 extern struct oldmem_data oldmem_data;
 
-static inline u32 gen_lpswe(unsigned long addr)
+static __always_inline u32 gen_lpswe(unsigned long addr)
 {
 	BUILD_BUG_ON(addr > 0xfff);
 	return 0xb2b20000 | addr;

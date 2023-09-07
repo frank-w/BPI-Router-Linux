@@ -868,8 +868,7 @@ static int bma400_init(struct bma400_data *data)
 					     ARRAY_SIZE(regulator_names),
 					     regulator_names);
 	if (ret)
-		return dev_err_probe(data->dev, ret, "Failed to get regulators: %d\n",
-				     ret);
+		return dev_err_probe(data->dev, ret, "Failed to get regulators\n");
 
 	/* Try to read chip_id register. It must return 0x90. */
 	ret = regmap_read(data->regmap, BMA400_CHIP_ID_REG, &val);
@@ -1688,7 +1687,7 @@ static irqreturn_t bma400_interrupt(int irq, void *private)
 
 	if (FIELD_GET(BMA400_INT_DRDY_MSK, le16_to_cpu(data->status))) {
 		mutex_unlock(&data->mutex);
-		iio_trigger_poll_chained(data->trig);
+		iio_trigger_poll_nested(data->trig);
 		return IRQ_HANDLED;
 	}
 

@@ -14,8 +14,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <dirent.h>
 #include <assert.h>
+#include <linux/mman.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
@@ -30,13 +30,6 @@
 #include "../kselftest.h"
 #include "vm_util.h"
 
-#ifndef MADV_PAGEOUT
-#define MADV_PAGEOUT 21
-#endif
-#ifndef MADV_COLLAPSE
-#define MADV_COLLAPSE 25
-#endif
-
 static size_t pagesize;
 static int pagemap_fd;
 static size_t thpsize;
@@ -44,34 +37,6 @@ static int nr_hugetlbsizes;
 static size_t hugetlbsizes[10];
 static int gup_fd;
 static bool has_huge_zeropage;
-
-static void detect_thpsize(void)
-{
-	int fd = open("/sys/kernel/mm/transparent_hugepage/hpage_pmd_size",
-		      O_RDONLY);
-	size_t size = 0;
-	char buf[15];
-	int ret;
-
-	if (fd < 0)
-		return;
-
-	ret = pread(fd, buf, sizeof(buf), 0);
-	if (ret > 0 && ret < sizeof(buf)) {
-		buf[ret] = 0;
-
-		size = strtoul(buf, NULL, 10);
-		if (size < pagesize)
-			size = 0;
-		if (size > 0) {
-			thpsize = size;
-			ksft_print_msg("[INFO] detected THP size: %zu KiB\n",
-				       thpsize / 1024);
-		}
-	}
-
-	close(fd);
-}
 
 static void detect_huge_zeropage(void)
 {
@@ -96,31 +61,6 @@ static void detect_huge_zeropage(void)
 	}
 
 	close(fd);
-}
-
-static void detect_hugetlbsizes(void)
-{
-	DIR *dir = opendir("/sys/kernel/mm/hugepages/");
-
-	if (!dir)
-		return;
-
-	while (nr_hugetlbsizes < ARRAY_SIZE(hugetlbsizes)) {
-		struct dirent *entry = readdir(dir);
-		size_t kb;
-
-		if (!entry)
-			break;
-		if (entry->d_type != DT_DIR)
-			continue;
-		if (sscanf(entry->d_name, "hugepages-%zukB", &kb) != 1)
-			continue;
-		hugetlbsizes[nr_hugetlbsizes] = kb * 1024;
-		nr_hugetlbsizes++;
-		ksft_print_msg("[INFO] detected hugetlb size: %zu KiB\n",
-			       kb);
-	}
-	closedir(dir);
 }
 
 static bool range_is_swapped(void *addr, size_t size)
@@ -1741,8 +1681,12 @@ int main(int argc, char **argv)
 	int err;
 
 	pagesize = getpagesize();
-	detect_thpsize();
-	detect_hugetlbsizes();
+	thpsize = read_pmd_pagesize();
+	if (thpsize)
+		ksft_print_msg("[INFO] detected THP size: %zu KiB\n",
+			       thpsize / 1024);
+	nr_hugetlbsizes = detect_hugetlb_page_sizes(hugetlbsizes,
+						    ARRAY_SIZE(hugetlbsizes));
 	detect_huge_zeropage();
 
 	ksft_print_header();

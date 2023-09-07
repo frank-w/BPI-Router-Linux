@@ -818,10 +818,13 @@ static ssize_t scmi_dbg_raw_mode_common_write(struct file *filp,
 	 * before sending it with a single RAW xfer.
 	 */
 	if (rd->tx_size < rd->tx_req_size) {
-		size_t cnt;
+		ssize_t cnt;
 
 		cnt = simple_write_to_buffer(rd->tx.buf, rd->tx.len, ppos,
 					     buf, count);
+		if (cnt < 0)
+			return cnt;
+
 		rd->tx_size += cnt;
 		if (cnt < count)
 			return cnt;
@@ -1066,7 +1069,7 @@ static int scmi_xfer_raw_worker_init(struct scmi_raw_mode_info *raw)
 
 	raw->wait_wq = alloc_workqueue("scmi-raw-wait-wq-%d",
 				       WQ_UNBOUND | WQ_FREEZABLE |
-				       WQ_HIGHPRI, WQ_SYSFS, raw->id);
+				       WQ_HIGHPRI | WQ_SYSFS, 0, raw->id);
 	if (!raw->wait_wq)
 		return -ENOMEM;
 

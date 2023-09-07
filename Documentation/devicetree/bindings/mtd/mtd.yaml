@@ -12,7 +12,7 @@ maintainers:
 
 properties:
   $nodename:
-    pattern: "^(flash|.*sram)(@.*)?$"
+    pattern: "^(flash|.*sram|nand)(@.*)?$"
 
   label:
     description:
@@ -44,6 +44,7 @@ patternProperties:
 
   "^otp(-[0-9]+)?$":
     $ref: ../nvmem/nvmem.yaml#
+    unevaluatedProperties: false
 
     description: |
       An OTP memory region. Some flashes provide a one-time-programmable

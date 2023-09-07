@@ -30,6 +30,7 @@
  * SOFTWARE.
  */
 
+#include <linux/debugfs.h>
 #include <linux/mlx5/fs.h>
 #include <net/switchdev.h>
 #include <net/pkt_cls.h>
@@ -53,6 +54,7 @@
 #include "lib/vxlan.h"
 #define CREATE_TRACE_POINTS
 #include "diag/en_rep_tracepoint.h"
+#include "diag/reporter_vnic.h"
 #include "en_accel/ipsec.h"
 #include "en/tc/int_port.h"
 #include "en/ptp.h"
@@ -372,7 +374,9 @@ static void mlx5e_sqs2vport_stop(struct mlx5_eswitch *esw,
 				 struct mlx5_eswitch_rep *rep)
 {
 	struct mlx5e_rep_sq *rep_sq, *tmp;
+	struct mlx5e_rep_sq_peer *sq_peer;
 	struct mlx5e_rep_priv *rpriv;
+	unsigned long i;
 
 	if (esw->mode != MLX5_ESWITCH_OFFLOADS)
 		return;
@@ -380,21 +384,64 @@ static void mlx5e_sqs2vport_stop(struct mlx5_eswitch *esw,
 	rpriv = mlx5e_rep_to_rep_priv(rep);
 	list_for_each_entry_safe(rep_sq, tmp, &rpriv->vport_sqs_list, list) {
 		mlx5_eswitch_del_send_to_vport_rule(rep_sq->send_to_vport_rule);
-		if (rep_sq->send_to_vport_rule_peer)
-			mlx5_eswitch_del_send_to_vport_rule(rep_sq->send_to_vport_rule_peer);
+		xa_for_each(&rep_sq->sq_peer, i, sq_peer) {
+			if (sq_peer->rule)
+				mlx5_eswitch_del_send_to_vport_rule(sq_peer->rule);
+
+			xa_erase(&rep_sq->sq_peer, i);
+			kfree(sq_peer);
+		}
+
+		xa_destroy(&rep_sq->sq_peer);
 		list_del(&rep_sq->list);
 		kfree(rep_sq);
 	}
+}
+
+static int mlx5e_sqs2vport_add_peers_rules(struct mlx5_eswitch *esw, struct mlx5_eswitch_rep *rep,
+					   struct mlx5e_rep_sq *rep_sq, int i)
+{
+	struct mlx5_flow_handle *flow_rule;
+	struct mlx5_devcom_comp_dev *tmp;
+	struct mlx5_eswitch *peer_esw;
+
+	mlx5_devcom_for_each_peer_entry(esw->devcom, peer_esw, tmp) {
+		u16 peer_rule_idx = MLX5_CAP_GEN(peer_esw->dev, vhca_id);
+		struct mlx5e_rep_sq_peer *sq_peer;
+		int err;
+
+		sq_peer = kzalloc(sizeof(*sq_peer), GFP_KERNEL);
+		if (!sq_peer)
+			return -ENOMEM;
+
+		flow_rule = mlx5_eswitch_add_send_to_vport_rule(peer_esw, esw,
+								rep, rep_sq->sqn);
+		if (IS_ERR(flow_rule)) {
+			kfree(sq_peer);
+			return PTR_ERR(flow_rule);
+		}
+
+		sq_peer->rule = flow_rule;
+		sq_peer->peer = peer_esw;
+		err = xa_insert(&rep_sq->sq_peer, peer_rule_idx, sq_peer, GFP_KERNEL);
+		if (err) {
+			kfree(sq_peer);
+			mlx5_eswitch_del_send_to_vport_rule(flow_rule);
+			return err;
+		}
+	}
+
+	return 0;
 }
 
 static int mlx5e_sqs2vport_start(struct mlx5_eswitch *esw,
 				 struct mlx5_eswitch_rep *rep,
 				 u32 *sqns_array, int sqns_num)
 {
-	struct mlx5_eswitch *peer_esw = NULL;
 	struct mlx5_flow_handle *flow_rule;
 	struct mlx5e_rep_priv *rpriv;
 	struct mlx5e_rep_sq *rep_sq;
+	bool devcom_locked = false;
 	int err;
 	int i;
 
@@ -402,9 +449,10 @@ static int mlx5e_sqs2vport_start(struct mlx5_eswitch *esw,
 		return 0;
 
 	rpriv = mlx5e_rep_to_rep_priv(rep);
-	if (mlx5_devcom_is_paired(esw->dev->priv.devcom, MLX5_DEVCOM_ESW_OFFLOADS))
-		peer_esw = mlx5_devcom_get_peer_data(esw->dev->priv.devcom,
-						     MLX5_DEVCOM_ESW_OFFLOADS);
+
+	if (mlx5_devcom_comp_is_ready(esw->devcom) &&
+	    mlx5_devcom_for_each_peer_begin(esw->devcom))
+		devcom_locked = true;
 
 	for (i = 0; i < sqns_num; i++) {
 		rep_sq = kzalloc(sizeof(*rep_sq), GFP_KERNEL);
@@ -424,31 +472,30 @@ static int mlx5e_sqs2vport_start(struct mlx5_eswitch *esw,
 		rep_sq->send_to_vport_rule = flow_rule;
 		rep_sq->sqn = sqns_array[i];
 
-		if (peer_esw) {
-			flow_rule = mlx5_eswitch_add_send_to_vport_rule(peer_esw, esw,
-									rep, sqns_array[i]);
-			if (IS_ERR(flow_rule)) {
-				err = PTR_ERR(flow_rule);
+		xa_init(&rep_sq->sq_peer);
+		if (devcom_locked) {
+			err = mlx5e_sqs2vport_add_peers_rules(esw, rep, rep_sq, i);
+			if (err) {
 				mlx5_eswitch_del_send_to_vport_rule(rep_sq->send_to_vport_rule);
+				xa_destroy(&rep_sq->sq_peer);
 				kfree(rep_sq);
 				goto out_err;
 			}
-			rep_sq->send_to_vport_rule_peer = flow_rule;
 		}
 
 		list_add(&rep_sq->list, &rpriv->vport_sqs_list);
 	}
 
-	if (peer_esw)
-		mlx5_devcom_release_peer_data(esw->dev->priv.devcom, MLX5_DEVCOM_ESW_OFFLOADS);
+	if (devcom_locked)
+		mlx5_devcom_for_each_peer_end(esw->devcom);
 
 	return 0;
 
 out_err:
 	mlx5e_sqs2vport_stop(esw, rep);
 
-	if (peer_esw)
-		mlx5_devcom_release_peer_data(esw->dev->priv.devcom, MLX5_DEVCOM_ESW_OFFLOADS);
+	if (devcom_locked)
+		mlx5_devcom_for_each_peer_end(esw->devcom);
 
 	return err;
 }
@@ -811,11 +858,15 @@ static int mlx5e_init_ul_rep(struct mlx5_core_dev *mdev,
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 
+	priv->dfs_root = debugfs_create_dir("nic",
+					    mlx5_debugfs_get_dev_root(mdev));
+
 	priv->fs = mlx5e_fs_init(priv->profile, mdev,
 				 !test_bit(MLX5E_STATE_DESTROYING, &priv->state),
 				 priv->dfs_root);
 	if (!priv->fs) {
 		netdev_err(priv->netdev, "FS allocation failed\n");
+		debugfs_remove_recursive(priv->dfs_root);
 		return -ENOMEM;
 	}
 
@@ -828,6 +879,8 @@ static int mlx5e_init_ul_rep(struct mlx5_core_dev *mdev,
 static void mlx5e_cleanup_rep(struct mlx5e_priv *priv)
 {
 	mlx5e_fs_cleanup(priv->fs);
+	debugfs_remove_recursive(priv->dfs_root);
+	priv->fs = NULL;
 }
 
 static int mlx5e_create_rep_ttc_table(struct mlx5e_priv *priv)
@@ -956,7 +1009,7 @@ static int mlx5e_init_rep_rx(struct mlx5e_priv *priv)
 	err = mlx5e_open_drop_rq(priv, &priv->drop_rq);
 	if (err) {
 		mlx5_core_err(mdev, "open drop rq failed, %d\n", err);
-		return err;
+		goto err_rx_res_free;
 	}
 
 	err = mlx5e_rx_res_init(priv->rx_res, priv->mdev, 0,
@@ -990,10 +1043,12 @@ err_destroy_rx_res:
 	mlx5e_rx_res_destroy(priv->rx_res);
 err_close_drop_rq:
 	mlx5e_close_drop_rq(&priv->drop_rq);
+err_rx_res_free:
 	mlx5e_rx_res_free(priv->rx_res);
 	priv->rx_res = NULL;
 err_free_fs:
 	mlx5e_fs_cleanup(priv->fs);
+	priv->fs = NULL;
 	return err;
 }
 
@@ -1102,6 +1157,10 @@ static int mlx5e_init_rep_tx(struct mlx5e_priv *priv)
 		return err;
 	}
 
+	err = mlx5e_rep_neigh_init(rpriv);
+	if (err)
+		goto err_neigh_init;
+
 	if (rpriv->rep->vport == MLX5_VPORT_UPLINK) {
 		err = mlx5e_init_uplink_rep_tx(rpriv);
 		if (err)
@@ -1118,6 +1177,8 @@ err_ht_init:
 	if (rpriv->rep->vport == MLX5_VPORT_UPLINK)
 		mlx5e_cleanup_uplink_rep_tx(rpriv);
 err_init_tx:
+	mlx5e_rep_neigh_cleanup(rpriv);
+err_neigh_init:
 	mlx5e_destroy_tises(priv);
 	return err;
 }
@@ -1131,22 +1192,17 @@ static void mlx5e_cleanup_rep_tx(struct mlx5e_priv *priv)
 	if (rpriv->rep->vport == MLX5_VPORT_UPLINK)
 		mlx5e_cleanup_uplink_rep_tx(rpriv);
 
+	mlx5e_rep_neigh_cleanup(rpriv);
 	mlx5e_destroy_tises(priv);
 }
 
 static void mlx5e_rep_enable(struct mlx5e_priv *priv)
 {
-	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-
 	mlx5e_set_netdev_mtu_boundaries(priv);
-	mlx5e_rep_neigh_init(rpriv);
 }
 
 static void mlx5e_rep_disable(struct mlx5e_priv *priv)
 {
-	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-
-	mlx5e_rep_neigh_cleanup(rpriv);
 }
 
 static int mlx5e_update_rep_rx(struct mlx5e_priv *priv)
@@ -1196,7 +1252,6 @@ static int uplink_rep_async_event(struct notifier_block *nb, unsigned long event
 
 static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 {
-	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct net_device *netdev = priv->netdev;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	u16 max_mtu;
@@ -1218,7 +1273,6 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 	mlx5_notifier_register(mdev, &priv->events_nb);
 	mlx5e_dcbnl_initialize(priv);
 	mlx5e_dcbnl_init_app(priv);
-	mlx5e_rep_neigh_init(rpriv);
 	mlx5e_rep_bridge_init(priv);
 
 	netdev->wanted_features |= NETIF_F_HW_TC;
@@ -1233,7 +1287,6 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 
 static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 {
-	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_core_dev *mdev = priv->mdev;
 
 	rtnl_lock();
@@ -1243,7 +1296,6 @@ static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 	rtnl_unlock();
 
 	mlx5e_rep_bridge_cleanup(priv);
-	mlx5e_rep_neigh_cleanup(rpriv);
 	mlx5e_dcbnl_delete_app(priv);
 	mlx5_notifier_unregister(mdev, &priv->events_nb);
 	mlx5e_rep_tc_disable(priv);
@@ -1284,6 +1336,7 @@ static mlx5e_stats_grp_t mlx5e_ul_rep_stats_grps[] = {
 	&MLX5E_STATS_GRP(channels),
 	&MLX5E_STATS_GRP(per_port_buff_congest),
 #ifdef CONFIG_MLX5_EN_IPSEC
+	&MLX5E_STATS_GRP(ipsec_hw),
 	&MLX5E_STATS_GRP(ipsec_sw),
 #endif
 	&MLX5E_STATS_GRP(ptp),
@@ -1292,6 +1345,50 @@ static mlx5e_stats_grp_t mlx5e_ul_rep_stats_grps[] = {
 static unsigned int mlx5e_ul_rep_stats_grps_num(struct mlx5e_priv *priv)
 {
 	return ARRAY_SIZE(mlx5e_ul_rep_stats_grps);
+}
+
+static int
+mlx5e_rep_vnic_reporter_diagnose(struct devlink_health_reporter *reporter,
+				 struct devlink_fmsg *fmsg,
+				 struct netlink_ext_ack *extack)
+{
+	struct mlx5e_rep_priv *rpriv = devlink_health_reporter_priv(reporter);
+	struct mlx5_eswitch_rep *rep = rpriv->rep;
+
+	return mlx5_reporter_vnic_diagnose_counters(rep->esw->dev, fmsg,
+						    rep->vport, true);
+}
+
+static const struct devlink_health_reporter_ops mlx5_rep_vnic_reporter_ops = {
+	.name = "vnic",
+	.diagnose = mlx5e_rep_vnic_reporter_diagnose,
+};
+
+static void mlx5e_rep_vnic_reporter_create(struct mlx5e_priv *priv,
+					   struct devlink_port *dl_port)
+{
+	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+	struct devlink_health_reporter *reporter;
+
+	reporter = devl_port_health_reporter_create(dl_port,
+						    &mlx5_rep_vnic_reporter_ops,
+						    0, rpriv);
+	if (IS_ERR(reporter)) {
+		mlx5_core_err(priv->mdev,
+			      "Failed to create representor vnic reporter, err = %ld\n",
+			      PTR_ERR(reporter));
+		return;
+	}
+
+	rpriv->rep_vnic_reporter = reporter;
+}
+
+static void mlx5e_rep_vnic_reporter_destroy(struct mlx5e_priv *priv)
+{
+	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+
+	if (!IS_ERR_OR_NULL(rpriv->rep_vnic_reporter))
+		devl_health_reporter_destroy(rpriv->rep_vnic_reporter);
 }
 
 static const struct mlx5e_profile mlx5e_rep_profile = {
@@ -1394,8 +1491,10 @@ mlx5e_vport_vf_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 
 	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch,
 						 rpriv->rep->vport);
-	if (dl_port)
+	if (dl_port) {
 		SET_NETDEV_DEVLINK_PORT(netdev, dl_port);
+		mlx5e_rep_vnic_reporter_create(priv, dl_port);
+	}
 
 	err = register_netdev(netdev);
 	if (err) {
@@ -1408,8 +1507,8 @@ mlx5e_vport_vf_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 	return 0;
 
 err_detach_netdev:
+	mlx5e_rep_vnic_reporter_destroy(priv);
 	mlx5e_detach_netdev(netdev_priv(netdev));
-
 err_cleanup_profile:
 	priv->profile->cleanup(priv);
 
@@ -1458,6 +1557,7 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	}
 
 	unregister_netdev(netdev);
+	mlx5e_rep_vnic_reporter_destroy(priv);
 	mlx5e_detach_netdev(priv);
 	priv->profile->cleanup(priv);
 	mlx5e_destroy_netdev(priv);
@@ -1474,17 +1574,24 @@ static void *mlx5e_vport_rep_get_proto_dev(struct mlx5_eswitch_rep *rep)
 	return rpriv->netdev;
 }
 
-static void mlx5e_vport_rep_event_unpair(struct mlx5_eswitch_rep *rep)
+static void mlx5e_vport_rep_event_unpair(struct mlx5_eswitch_rep *rep,
+					 struct mlx5_eswitch *peer_esw)
 {
+	u16 i = MLX5_CAP_GEN(peer_esw->dev, vhca_id);
 	struct mlx5e_rep_priv *rpriv;
 	struct mlx5e_rep_sq *rep_sq;
 
+	WARN_ON_ONCE(!peer_esw);
 	rpriv = mlx5e_rep_to_rep_priv(rep);
 	list_for_each_entry(rep_sq, &rpriv->vport_sqs_list, list) {
-		if (!rep_sq->send_to_vport_rule_peer)
+		struct mlx5e_rep_sq_peer *sq_peer = xa_load(&rep_sq->sq_peer, i);
+
+		if (!sq_peer || sq_peer->peer != peer_esw)
 			continue;
-		mlx5_eswitch_del_send_to_vport_rule(rep_sq->send_to_vport_rule_peer);
-		rep_sq->send_to_vport_rule_peer = NULL;
+
+		mlx5_eswitch_del_send_to_vport_rule(sq_peer->rule);
+		xa_erase(&rep_sq->sq_peer, i);
+		kfree(sq_peer);
 	}
 }
 
@@ -1492,24 +1599,52 @@ static int mlx5e_vport_rep_event_pair(struct mlx5_eswitch *esw,
 				      struct mlx5_eswitch_rep *rep,
 				      struct mlx5_eswitch *peer_esw)
 {
+	u16 i = MLX5_CAP_GEN(peer_esw->dev, vhca_id);
 	struct mlx5_flow_handle *flow_rule;
+	struct mlx5e_rep_sq_peer *sq_peer;
 	struct mlx5e_rep_priv *rpriv;
 	struct mlx5e_rep_sq *rep_sq;
+	int err;
 
 	rpriv = mlx5e_rep_to_rep_priv(rep);
 	list_for_each_entry(rep_sq, &rpriv->vport_sqs_list, list) {
-		if (rep_sq->send_to_vport_rule_peer)
+		sq_peer = xa_load(&rep_sq->sq_peer, i);
+
+		if (sq_peer && sq_peer->peer)
 			continue;
-		flow_rule = mlx5_eswitch_add_send_to_vport_rule(peer_esw, esw, rep, rep_sq->sqn);
-		if (IS_ERR(flow_rule))
+
+		flow_rule = mlx5_eswitch_add_send_to_vport_rule(peer_esw, esw, rep,
+								rep_sq->sqn);
+		if (IS_ERR(flow_rule)) {
+			err = PTR_ERR(flow_rule);
 			goto err_out;
-		rep_sq->send_to_vport_rule_peer = flow_rule;
+		}
+
+		if (sq_peer) {
+			sq_peer->rule = flow_rule;
+			sq_peer->peer = peer_esw;
+			continue;
+		}
+		sq_peer = kzalloc(sizeof(*sq_peer), GFP_KERNEL);
+		if (!sq_peer) {
+			err = -ENOMEM;
+			goto err_sq_alloc;
+		}
+		err = xa_insert(&rep_sq->sq_peer, i, sq_peer, GFP_KERNEL);
+		if (err)
+			goto err_xa;
+		sq_peer->rule = flow_rule;
+		sq_peer->peer = peer_esw;
 	}
 
 	return 0;
+err_xa:
+	kfree(sq_peer);
+err_sq_alloc:
+	mlx5_eswitch_del_send_to_vport_rule(flow_rule);
 err_out:
-	mlx5e_vport_rep_event_unpair(rep);
-	return PTR_ERR(flow_rule);
+	mlx5e_vport_rep_event_unpair(rep, peer_esw);
+	return err;
 }
 
 static int mlx5e_vport_rep_event(struct mlx5_eswitch *esw,
@@ -1522,7 +1657,7 @@ static int mlx5e_vport_rep_event(struct mlx5_eswitch *esw,
 	if (event == MLX5_SWITCHDEV_EVENT_PAIR)
 		err = mlx5e_vport_rep_event_pair(esw, rep, data);
 	else if (event == MLX5_SWITCHDEV_EVENT_UNPAIR)
-		mlx5e_vport_rep_event_unpair(rep);
+		mlx5e_vport_rep_event_unpair(rep, data);
 
 	return err;
 }

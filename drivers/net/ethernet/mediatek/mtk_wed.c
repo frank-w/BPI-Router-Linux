@@ -2,6 +2,7 @@
 /* Copyright (C) 2021 Felix Fietkau <nbd@nbd.name> */
 
 #include <linux/kernel.h>
+#include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/bitfield.h>
@@ -13,6 +14,8 @@
 #include <linux/mfd/syscon.h>
 #include <linux/debugfs.h>
 #include <linux/soc/mediatek/mtk_wed.h>
+#include <net/flow_offload.h>
+#include <net/pkt_cls.h>
 #include "mtk_eth_soc.h"
 #include "mtk_wed_regs.h"
 #include "mtk_wed.h"
@@ -40,6 +43,11 @@
 
 static struct mtk_wed_hw *hw_list[2];
 static DEFINE_MUTEX(hw_lock);
+
+struct mtk_wed_flow_block_priv {
+	struct mtk_wed_hw *hw;
+	struct net_device *dev;
+};
 
 static void
 wed_m32(struct mtk_wed_device *dev, u32 reg, u32 mask, u32 val)
@@ -214,9 +222,13 @@ void mtk_wed_fe_reset(void)
 
 	for (i = 0; i < ARRAY_SIZE(hw_list); i++) {
 		struct mtk_wed_hw *hw = hw_list[i];
-		struct mtk_wed_device *dev = hw->wed_dev;
+		struct mtk_wed_device *dev;
 		int err;
 
+		if (!hw)
+			break;
+
+		dev = hw->wed_dev;
 		if (!dev || !dev->wlan.reset)
 			continue;
 
@@ -237,8 +249,12 @@ void mtk_wed_fe_reset_complete(void)
 
 	for (i = 0; i < ARRAY_SIZE(hw_list); i++) {
 		struct mtk_wed_hw *hw = hw_list[i];
-		struct mtk_wed_device *dev = hw->wed_dev;
+		struct mtk_wed_device *dev;
 
+		if (!hw)
+			break;
+
+		dev = hw->wed_dev;
 		if (!dev || !dev->wlan.reset_complete)
 			continue;
 
@@ -647,7 +663,7 @@ __mtk_wed_detach(struct mtk_wed_device *dev)
 					   BIT(hw->index), BIT(hw->index));
 	}
 
-	if (!hw_list[!hw->index]->wed_dev &&
+	if ((!hw_list[!hw->index] || !hw_list[!hw->index]->wed_dev) &&
 	    hw->eth->dma_dev != hw->eth->dev)
 		mtk_eth_set_dma_device(hw->eth, hw->eth->dev);
 
@@ -1084,7 +1100,7 @@ mtk_wed_rx_reset(struct mtk_wed_device *dev)
 	} else {
 		struct mtk_eth *eth = dev->hw->eth;
 
-		if (MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_V2))
+		if (mtk_is_netsys_v2_or_greater(eth))
 			wed_set(dev, MTK_WED_RESET_IDX,
 				MTK_WED_RESET_IDX_RX_V2);
 		else
@@ -1745,6 +1761,99 @@ out:
 	mutex_unlock(&hw_lock);
 }
 
+static int
+mtk_wed_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
+{
+	struct mtk_wed_flow_block_priv *priv = cb_priv;
+	struct flow_cls_offload *cls = type_data;
+	struct mtk_wed_hw *hw = priv->hw;
+
+	if (!tc_can_offload(priv->dev))
+		return -EOPNOTSUPP;
+
+	if (type != TC_SETUP_CLSFLOWER)
+		return -EOPNOTSUPP;
+
+	return mtk_flow_offload_cmd(hw->eth, cls, hw->index);
+}
+
+static int
+mtk_wed_setup_tc_block(struct mtk_wed_hw *hw, struct net_device *dev,
+		       struct flow_block_offload *f)
+{
+	struct mtk_wed_flow_block_priv *priv;
+	static LIST_HEAD(block_cb_list);
+	struct flow_block_cb *block_cb;
+	struct mtk_eth *eth = hw->eth;
+	flow_setup_cb_t *cb;
+
+	if (!eth->soc->offload_version)
+		return -EOPNOTSUPP;
+
+	if (f->binder_type != FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS)
+		return -EOPNOTSUPP;
+
+	cb = mtk_wed_setup_tc_block_cb;
+	f->driver_block_list = &block_cb_list;
+
+	switch (f->command) {
+	case FLOW_BLOCK_BIND:
+		block_cb = flow_block_cb_lookup(f->block, cb, dev);
+		if (block_cb) {
+			flow_block_cb_incref(block_cb);
+			return 0;
+		}
+
+		priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+		if (!priv)
+			return -ENOMEM;
+
+		priv->hw = hw;
+		priv->dev = dev;
+		block_cb = flow_block_cb_alloc(cb, dev, priv, NULL);
+		if (IS_ERR(block_cb)) {
+			kfree(priv);
+			return PTR_ERR(block_cb);
+		}
+
+		flow_block_cb_incref(block_cb);
+		flow_block_cb_add(block_cb, f);
+		list_add_tail(&block_cb->driver_list, &block_cb_list);
+		return 0;
+	case FLOW_BLOCK_UNBIND:
+		block_cb = flow_block_cb_lookup(f->block, cb, dev);
+		if (!block_cb)
+			return -ENOENT;
+
+		if (!flow_block_cb_decref(block_cb)) {
+			flow_block_cb_remove(block_cb, f);
+			list_del(&block_cb->driver_list);
+			kfree(block_cb->cb_priv);
+		}
+		return 0;
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
+static int
+mtk_wed_setup_tc(struct mtk_wed_device *wed, struct net_device *dev,
+		 enum tc_setup_type type, void *type_data)
+{
+	struct mtk_wed_hw *hw = wed->hw;
+
+	if (hw->version < 2)
+		return -EOPNOTSUPP;
+
+	switch (type) {
+	case TC_SETUP_BLOCK:
+	case TC_SETUP_FT:
+		return mtk_wed_setup_tc_block(hw, dev, type_data);
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
 void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
 		    void __iomem *wdma, phys_addr_t wdma_phy,
 		    int index)
@@ -1764,6 +1873,7 @@ void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
 		.irq_set_mask = mtk_wed_irq_set_mask,
 		.detach = mtk_wed_detach,
 		.ppe_check = mtk_wed_ppe_check,
+		.setup_tc = mtk_wed_setup_tc,
 	};
 	struct device_node *eth_np = eth->dev->of_node;
 	struct platform_device *pdev;
@@ -1806,7 +1916,7 @@ void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
 	hw->wdma = wdma;
 	hw->index = index;
 	hw->irq = irq;
-	hw->version = MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_V2) ? 2 : 1;
+	hw->version = mtk_is_netsys_v1(eth) ? 1 : 2;
 
 	if (hw->version == 1) {
 		hw->mirror = syscon_regmap_lookup_by_phandle(eth_np,

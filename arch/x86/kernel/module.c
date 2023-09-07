@@ -358,12 +358,12 @@ int module_finalize(const Elf_Ehdr *hdr,
 	}
 	if (ibt_endbr) {
 		void *iseg = (void *)ibt_endbr->sh_addr;
-		apply_ibt_endbr(iseg, iseg + ibt_endbr->sh_size);
+		apply_seal_endbr(iseg, iseg + ibt_endbr->sh_size);
 	}
 	if (locks) {
 		void *lseg = (void *)locks->sh_addr;
-		void *text = me->core_layout.base;
-		void *text_end = text + me->core_layout.text_size;
+		void *text = me->mem[MOD_TEXT].base;
+		void *text_end = text + me->mem[MOD_TEXT].size;
 		alternatives_smp_module_add(me, me->name,
 					    lseg, lseg + locks->sh_size,
 					    text, text_end);

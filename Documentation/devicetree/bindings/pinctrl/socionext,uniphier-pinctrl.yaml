@@ -32,7 +32,6 @@ additionalProperties:
     - $ref: pinmux-node.yaml#
 
   properties:
-    phandle: true
     function: true
     groups: true
     pins: true
@@ -49,7 +48,6 @@ additionalProperties:
       - $ref: pinmux-node.yaml#
 
     properties:
-      phandle: true
       function: true
       groups: true
       pins: true
@@ -61,7 +59,7 @@ additionalProperties:
     unevaluatedProperties: false
 
 allOf:
-  - $ref: "pinctrl.yaml#"
+  - $ref: pinctrl.yaml#
 
 required:
   - compatible

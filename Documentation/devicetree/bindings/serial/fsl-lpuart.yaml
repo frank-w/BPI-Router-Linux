@@ -25,8 +25,12 @@ properties:
           - fsl,imxrt1050-lpuart
       - items:
           - enum:
-              - fsl,imx93-lpuart
               - fsl,imx8ulp-lpuart
+          - const: fsl,imx7ulp-lpuart
+      - items:
+          - enum:
+              - fsl,imx93-lpuart
+          - const: fsl,imx8ulp-lpuart
           - const: fsl,imx7ulp-lpuart
       - items:
           - enum:
@@ -64,6 +68,9 @@ properties:
     items:
       - const: rx
       - const: tx
+
+  power-domains:
+    maxItems: 1
 
 required:
   - compatible

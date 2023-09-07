@@ -28,6 +28,7 @@
 #include "dcn30_dio_stream_encoder.h"
 #include "reg_helper.h"
 #include "hw_shared.h"
+#include "dc.h"
 #include "core_types.h"
 #include <linux/delay.h>
 
@@ -432,6 +433,21 @@ void enc3_stream_encoder_update_dp_info_packets(
 		enc->vpg->funcs->update_generic_info_packet(
 				enc->vpg,
 				0,  /* packetIndex */
+				&info_frame->vsc,
+				true);
+	}
+	/* TODO: VSC SDP at packetIndex 1 should be retricted only if PSR-SU on.
+	 * There should have another Infopacket type (e.g. vsc_psrsu) for PSR_SU.
+	 * In addition, currently the driver check the valid bit then update and
+	 * send the corresponding Infopacket. For PSR-SU, the SDP only be sent
+	 * while entering PSR-SU mode. So we need another parameter(e.g. send)
+	 * in dc_info_packet to indicate which infopacket should be enabled by
+	 * default here.
+	 */
+	if (info_frame->vsc.valid) {
+		enc->vpg->funcs->update_generic_info_packet(
+				enc->vpg,
+				1,  /* packetIndex */
 				&info_frame->vsc,
 				true);
 	}

@@ -25,7 +25,7 @@
 
 int nvdimm_major;
 static int nvdimm_bus_major;
-struct class *nd_class;
+static struct class *nd_class;
 static DEFINE_IDA(nd_ida);
 
 static int to_nd_device_type(const struct device *dev)
@@ -1320,7 +1320,7 @@ int __init nvdimm_bus_init(void)
 		goto err_dimm_chrdev;
 	nvdimm_major = rc;
 
-	nd_class = class_create(THIS_MODULE, "nd");
+	nd_class = class_create("nd");
 	if (IS_ERR(nd_class)) {
 		rc = PTR_ERR(nd_class);
 		goto err_class;

@@ -58,13 +58,7 @@ int riscv_hartid_to_cpuid(unsigned long hartid)
 		if (cpuid_to_hartid_map(i) == hartid)
 			return i;
 
-	pr_err("Couldn't find cpu id for hartid [%lu]\n", hartid);
 	return -ENOENT;
-}
-
-bool arch_match_cpu_phys_id(int cpu, u64 phys_id)
-{
-	return phys_id == cpuid_to_hartid_map(cpu);
 }
 
 static void ipi_stop(void)
@@ -333,8 +327,8 @@ bool smp_crash_stop_failed(void)
 }
 #endif
 
-void smp_send_reschedule(int cpu)
+void arch_smp_send_reschedule(int cpu)
 {
 	send_ipi_single(cpu, IPI_RESCHEDULE);
 }
-EXPORT_SYMBOL_GPL(smp_send_reschedule);
+EXPORT_SYMBOL_GPL(arch_smp_send_reschedule);

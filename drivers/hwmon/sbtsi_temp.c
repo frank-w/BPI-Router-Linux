@@ -13,7 +13,6 @@
 #include <linux/hwmon.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/of_device.h>
 #include <linux/of.h>
 
 /*
@@ -182,7 +181,7 @@ static umode_t sbtsi_is_visible(const void *data,
 	return 0;
 }
 
-static const struct hwmon_channel_info *sbtsi_info[] = {
+static const struct hwmon_channel_info * const sbtsi_info[] = {
 	HWMON_CHANNEL_INFO(chip, HWMON_C_REGISTER_TZ),
 	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT | HWMON_T_MIN | HWMON_T_MAX),
 	NULL
@@ -238,7 +237,7 @@ static struct i2c_driver sbtsi_driver = {
 		.name = "sbtsi",
 		.of_match_table = of_match_ptr(sbtsi_of_match),
 	},
-	.probe_new = sbtsi_probe,
+	.probe = sbtsi_probe,
 	.id_table = sbtsi_id,
 };
 

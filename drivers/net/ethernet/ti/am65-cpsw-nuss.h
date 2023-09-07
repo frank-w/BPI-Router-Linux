@@ -79,6 +79,7 @@ struct am65_cpsw_tx_chn {
 	u32 id;
 	u32 descs_num;
 	char tx_chn_name[128];
+	u32 rate_mbps;
 };
 
 struct am65_cpsw_rx_chn {
@@ -126,6 +127,7 @@ struct am65_cpsw_common {
 	int			usage_count; /* number of opened ports */
 	struct cpsw_ale		*ale;
 	int			tx_ch_num;
+	u32			tx_ch_rate_msk;
 	u32			rx_flow_id_base;
 
 	struct am65_cpsw_tx_chn	tx_chns[AM65_CPSW_MAX_TX_QUEUES];
@@ -190,7 +192,6 @@ struct am65_cpsw_ndev_priv {
 
 extern const struct ethtool_ops am65_cpsw_ethtool_ops_slave;
 
-void am65_cpsw_nuss_adjust_link(struct net_device *ndev);
 void am65_cpsw_nuss_set_p0_ptype(struct am65_cpsw_common *common);
 void am65_cpsw_nuss_remove_tx_chns(struct am65_cpsw_common *common);
 int am65_cpsw_nuss_update_tx_chns(struct am65_cpsw_common *common, int num_tx);

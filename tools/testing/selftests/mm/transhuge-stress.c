@@ -15,7 +15,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/mman.h>
-#include "util.h"
+#include "vm_util.h"
 
 int backing_fd = -1;
 int mmap_flags = MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE;
@@ -25,26 +25,29 @@ int main(int argc, char **argv)
 {
 	size_t ram, len;
 	void *ptr, *p;
-	struct timespec a, b;
+	struct timespec start, a, b;
 	int i = 0;
 	char *name = NULL;
 	double s;
 	uint8_t *map;
 	size_t map_len;
 	int pagemap_fd;
+	int duration = 0;
 
 	ram = sysconf(_SC_PHYS_PAGES);
-	if (ram > SIZE_MAX / sysconf(_SC_PAGESIZE) / 4)
+	if (ram > SIZE_MAX / psize() / 4)
 		ram = SIZE_MAX / 4;
 	else
-		ram *= sysconf(_SC_PAGESIZE);
+		ram *= psize();
 	len = ram;
 
 	while (++i < argc) {
 		if (!strcmp(argv[i], "-h"))
-			errx(1, "usage: %s [size in MiB]", argv[0]);
+			errx(1, "usage: %s [-f <filename>] [-d <duration>] [size in MiB]", argv[0]);
 		else if (!strcmp(argv[i], "-f"))
 			name = argv[++i];
+		else if (!strcmp(argv[i], "-d"))
+			duration = atoi(argv[++i]);
 		else
 			len = atoll(argv[i]) << 20;
 	}
@@ -58,7 +61,7 @@ int main(int argc, char **argv)
 
 	warnx("allocate %zd transhuge pages, using %zd MiB virtual memory"
 	      " and %zd MiB of ram", len >> HPAGE_SHIFT, len >> 20,
-	      ram >> (20 + HPAGE_SHIFT - PAGE_SHIFT - 1));
+	      ram >> (20 + HPAGE_SHIFT - pshift() - 1));
 
 	pagemap_fd = open("/proc/self/pagemap", O_RDONLY);
 	if (pagemap_fd < 0)
@@ -78,6 +81,8 @@ int main(int argc, char **argv)
 	if (!map)
 		errx(2, "map malloc");
 
+	clock_gettime(CLOCK_MONOTONIC, &start);
+
 	while (1) {
 		int nr_succeed = 0, nr_failed = 0, nr_pages = 0;
 
@@ -92,7 +97,7 @@ int main(int argc, char **argv)
 			if (pfn < 0) {
 				nr_failed++;
 			} else {
-				size_t idx = pfn >> (HPAGE_SHIFT - PAGE_SHIFT);
+				size_t idx = pfn >> (HPAGE_SHIFT - pshift());
 
 				nr_succeed++;
 				if (idx >= map_len) {
@@ -108,7 +113,7 @@ int main(int argc, char **argv)
 			}
 
 			/* split transhuge page, keep last page */
-			if (madvise(p, HPAGE_SIZE - PAGE_SIZE, MADV_DONTNEED))
+			if (madvise(p, HPAGE_SIZE - psize(), MADV_DONTNEED))
 				err(2, "MADV_DONTNEED");
 		}
 		clock_gettime(CLOCK_MONOTONIC, &b);
@@ -118,5 +123,8 @@ int main(int argc, char **argv)
 		      "%4d succeed, %4d failed, %4d different pages",
 		      s, s * 1000 / (len >> HPAGE_SHIFT), len / s / (1 << 20),
 		      nr_succeed, nr_failed, nr_pages);
+
+		if (duration > 0 && b.tv_sec - start.tv_sec >= duration)
+			return 0;
 	}
 }

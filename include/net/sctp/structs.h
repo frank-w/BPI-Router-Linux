@@ -332,7 +332,7 @@ struct sctp_cookie {
 	 * the association TCB is re-constructed from the cookie.
 	 */
 	__u32 raw_addr_list_len;
-	struct sctp_init_chunk peer_init[];
+	/* struct sctp_init_chunk peer_init[]; */
 };
 
 
@@ -1122,8 +1122,6 @@ void sctp_outq_free(struct sctp_outq*);
 void sctp_outq_tail(struct sctp_outq *, struct sctp_chunk *chunk, gfp_t);
 int sctp_outq_sack(struct sctp_outq *, struct sctp_chunk *);
 int sctp_outq_is_empty(const struct sctp_outq *);
-void sctp_outq_restart(struct sctp_outq *);
-
 void sctp_retransmit(struct sctp_outq *q, struct sctp_transport *transport,
 		     enum sctp_retransmit_reason reason);
 void sctp_retransmit_mark(struct sctp_outq *, struct sctp_transport *, __u8);
@@ -1429,6 +1427,11 @@ struct sctp_stream_out_ext {
 		struct {
 			struct list_head rr_list;
 		};
+		struct {
+			struct list_head fc_list;
+			__u32 fc_length;
+			__u16 fc_weight;
+		};
 	};
 };
 
@@ -1474,6 +1477,9 @@ struct sctp_stream {
 			struct list_head rr_list;
 			/* The next stream in line */
 			struct sctp_stream_out_ext *rr_next;
+		};
+		struct {
+			struct list_head fc_list;
 		};
 	};
 	struct sctp_stream_interleave *si;
@@ -1703,7 +1709,6 @@ struct sctp_association {
 		__u16	ecn_capable:1,      /* Can peer do ECN? */
 			ipv4_address:1,     /* Peer understands IPv4 addresses? */
 			ipv6_address:1,     /* Peer understands IPv6 addresses? */
-			hostname_address:1, /* Peer understands DNS addresses? */
 			asconf_capable:1,   /* Does peer support ADDIP? */
 			prsctp_capable:1,   /* Can peer do PR-SCTP? */
 			reconf_capable:1,   /* Can peer do RE-CONFIG? */

@@ -70,10 +70,9 @@ config ZCRYPT
 	select HW_RANDOM
 	help
 	  Select this option if you want to enable support for
-	  s390 cryptographic adapters like:
-	  + Crypto Express 2 up to 7 Coprocessor (CEXxC)
-	  + Crypto Express 2 up to 7 Accelerator (CEXxA)
-	  + Crypto Express 4 up to 7 EP11 Coprocessor (CEXxP)
+	  s390 cryptographic adapters like Crypto Express 4 up
+	  to 8 in Coprocessor (CEXxC), EP11 Coprocessor (CEXxP)
+	  or Accelerator (CEXxA) mode.
 
 config ZCRYPT_DEBUG
 	bool "Enable debug features for s390 cryptographic adapters"
@@ -91,17 +90,6 @@ config ZCRYPT_DEBUG
 	  Do not enable on production level kernel build.
 
 	  If unsure, say N.
-
-config ZCRYPT_MULTIDEVNODES
-	bool "Support for multiple zcrypt device nodes"
-	default y
-	depends on S390
-	depends on ZCRYPT
-	help
-	  With this option enabled the zcrypt device driver can
-	  provide multiple devices nodes in /dev. Each device
-	  node can get customized to limit access and narrow
-	  down the use of the available crypto hardware.
 
 config PKEY
 	tristate "Kernel API for protected key handling"
@@ -239,21 +227,6 @@ config CRYPTO_DEV_TALITOS2
 	help
 	  Say 'Y' here to use the Freescale Security Engine (SEC)
 	  version 2 and following as found on MPC83xx, MPC85xx, etc ...
-
-config CRYPTO_DEV_IXP4XX
-	tristate "Driver for IXP4xx crypto hardware acceleration"
-	depends on ARCH_IXP4XX && IXP4XX_QMGR && IXP4XX_NPE
-	select CRYPTO_AES
-	select CRYPTO_DES
-	select CRYPTO_ECB
-	select CRYPTO_CBC
-	select CRYPTO_CTR
-	select CRYPTO_LIB_DES
-	select CRYPTO_AEAD
-	select CRYPTO_AUTHENC
-	select CRYPTO_SKCIPHER
-	help
-	  Driver for the IXP4xx NPE crypto engine.
 
 config CRYPTO_DEV_PPC4XX
 	tristate "Driver AMCC PPC4xx crypto accelerator"
@@ -502,10 +475,10 @@ config CRYPTO_DEV_MXS_DCP
 	  To compile this driver as a module, choose M here: the module
 	  will be called mxs-dcp.
 
-source "drivers/crypto/qat/Kconfig"
 source "drivers/crypto/cavium/cpt/Kconfig"
 source "drivers/crypto/cavium/nitrox/Kconfig"
 source "drivers/crypto/marvell/Kconfig"
+source "drivers/crypto/intel/Kconfig"
 
 config CRYPTO_DEV_CAVIUM_ZIP
 	tristate "Cavium ZIP driver"
@@ -774,7 +747,7 @@ config CRYPTO_DEV_ARTPEC6
 config CRYPTO_DEV_CCREE
 	tristate "Support for ARM TrustZone CryptoCell family of security processors"
 	depends on CRYPTO && CRYPTO_HW && OF && HAS_DMA
-	default n
+	depends on HAS_IOMEM
 	select CRYPTO_HASH
 	select CRYPTO_SKCIPHER
 	select CRYPTO_LIB_DES
@@ -810,6 +783,7 @@ config CRYPTO_DEV_SA2UL
 	select CRYPTO_AES
 	select CRYPTO_ALGAPI
 	select CRYPTO_AUTHENC
+	select CRYPTO_DES
 	select CRYPTO_SHA1
 	select CRYPTO_SHA256
 	select CRYPTO_SHA512
@@ -820,7 +794,7 @@ config CRYPTO_DEV_SA2UL
 	  used for crypto offload.  Select this if you want to use hardware
 	  acceleration for cryptographic algorithms on these devices.
 
-source "drivers/crypto/keembay/Kconfig"
 source "drivers/crypto/aspeed/Kconfig"
+source "drivers/crypto/starfive/Kconfig"
 
 endif # CRYPTO_HW

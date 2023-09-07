@@ -108,8 +108,7 @@ static int st_thermal_calibration(struct st_thermal_sensor *sensor)
 /* Callback to get temperature from HW*/
 static int st_thermal_get_temp(struct thermal_zone_device *th, int *temperature)
 {
-	struct st_thermal_sensor *sensor = th->devdata;
-	struct device *dev = sensor->dev;
+	struct st_thermal_sensor *sensor = thermal_zone_device_priv(th);
 	unsigned int temp;
 	unsigned int overflow;
 	int ret;
@@ -126,8 +125,6 @@ static int st_thermal_get_temp(struct thermal_zone_device *th, int *temperature)
 
 	temp += sensor->cdata->temp_adjust_val;
 	temp = mcelsius(temp);
-
-	dev_dbg(dev, "temperature: %d\n", temp);
 
 	*temperature = temp;
 
@@ -230,14 +227,12 @@ sensor_off:
 }
 EXPORT_SYMBOL_GPL(st_thermal_register);
 
-int st_thermal_unregister(struct platform_device *pdev)
+void st_thermal_unregister(struct platform_device *pdev)
 {
 	struct st_thermal_sensor *sensor = platform_get_drvdata(pdev);
 
 	st_thermal_sensor_off(sensor);
 	thermal_zone_device_unregister(sensor->thermal_dev);
-
-	return 0;
 }
 EXPORT_SYMBOL_GPL(st_thermal_unregister);
 

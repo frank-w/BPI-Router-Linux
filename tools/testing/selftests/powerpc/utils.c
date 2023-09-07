@@ -452,6 +452,29 @@ done:
 	return cpu;
 }
 
+int bind_to_cpu(int cpu)
+{
+	cpu_set_t mask;
+	int err;
+
+	if (cpu == BIND_CPU_ANY) {
+		cpu = pick_online_cpu();
+		if (cpu < 0)
+			return cpu;
+	}
+
+	printf("Binding to cpu %d\n", cpu);
+
+	CPU_ZERO(&mask);
+	CPU_SET(cpu, &mask);
+
+	err = sched_setaffinity(0, sizeof(mask), &mask);
+	if (err)
+		return err;
+
+	return cpu;
+}
+
 bool is_ppc64le(void)
 {
 	struct utsname uts;
@@ -594,4 +617,28 @@ int using_hash_mmu(bool *using_hash)
 out:
 	fclose(f);
 	return rc;
+}
+
+struct sigaction push_signal_handler(int sig, void (*fn)(int, siginfo_t *, void *))
+{
+	struct sigaction sa;
+	struct sigaction old_handler;
+
+	sa.sa_sigaction = fn;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_SIGINFO;
+	FAIL_IF_EXIT_MSG(sigaction(sig, &sa, &old_handler),
+			 "failed to push signal handler");
+
+	return old_handler;
+}
+
+struct sigaction pop_signal_handler(int sig, struct sigaction old_handler)
+{
+	struct sigaction popped;
+
+	FAIL_IF_EXIT_MSG(sigaction(sig, &old_handler, &popped),
+			 "failed to pop signal handler");
+
+	return popped;
 }

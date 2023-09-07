@@ -34,6 +34,7 @@ properties:
               - mediatek,mt8188-mmc
               - mediatek,mt8192-mmc
               - mediatek,mt8195-mmc
+              - mediatek,mt8365-mmc
           - const: mediatek,mt8183-mmc
 
   reg:
@@ -88,16 +89,6 @@ properties:
   pinctrl-2:
     description:
       should switch dat1 pin to GPIO mode.
-    maxItems: 1
-
-  assigned-clocks:
-    description:
-      PLL of the source clock.
-    maxItems: 1
-
-  assigned-clock-parents:
-    description:
-      parent of source clock, used for HS400 mode to get 400Mhz source clock.
     maxItems: 1
 
   hs400-ds-delay:

@@ -98,7 +98,7 @@ int tracing_root_ok(void)
 void tracing_on(void)
 {
 #if CONTROL_TRACING > 0
-#define TRACEDIR "/sys/kernel/debug/tracing"
+#define TRACEDIR "/sys/kernel/tracing"
 	char pidstr[32];
 
 	if (!tracing_root_ok())
@@ -124,7 +124,7 @@ void tracing_off(void)
 #if CONTROL_TRACING > 0
 	if (!tracing_root_ok())
 		return;
-	cat_into_file("0", "/sys/kernel/debug/tracing/tracing_on");
+	cat_into_file("0", "/sys/kernel/tracing/tracing_on");
 #endif
 }
 
@@ -293,15 +293,6 @@ void pkey_access_deny(int pkey)
 {
 	pkey_disable_set(pkey, PKEY_DISABLE_ACCESS);
 }
-
-/* Failed address bound checks: */
-#ifndef SEGV_BNDERR
-# define SEGV_BNDERR		3
-#endif
-
-#ifndef SEGV_PKUERR
-# define SEGV_PKUERR		4
-#endif
 
 static char *si_code_str(int si_code)
 {
@@ -476,7 +467,7 @@ int sys_mprotect_pkey(void *ptr, size_t size, unsigned long orig_prot,
 			ptr, size, orig_prot, pkey);
 
 	errno = 0;
-	sret = syscall(SYS_mprotect_key, ptr, size, orig_prot, pkey);
+	sret = syscall(__NR_pkey_mprotect, ptr, size, orig_prot, pkey);
 	if (errno) {
 		dprintf2("SYS_mprotect_key sret: %d\n", sret);
 		dprintf2("SYS_mprotect_key prot: 0x%lx\n", orig_prot);
@@ -1684,7 +1675,7 @@ void test_mprotect_pkey_on_unsupported_cpu(int *ptr, u16 pkey)
 		return;
 	}
 
-	sret = syscall(SYS_mprotect_key, ptr, size, PROT_READ, pkey);
+	sret = syscall(__NR_pkey_mprotect, ptr, size, PROT_READ, pkey);
 	pkey_assert(sret < 0);
 }
 

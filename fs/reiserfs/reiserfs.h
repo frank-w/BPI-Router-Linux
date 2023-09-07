@@ -300,7 +300,6 @@ struct reiserfs_journal {
 	struct reiserfs_journal_cnode *j_first;
 
 	struct block_device *j_dev_bd;
-	fmode_t j_dev_mode;
 
 	/* first block on s_dev of reserved area journal */
 	int j_1st_reserved_block;
@@ -2374,7 +2373,7 @@ struct virtual_node {
 struct direntry_uarea {
 	int flags;
 	__u16 entry_count;
-	__u16 entry_sizes[1];
+	__u16 entry_sizes[];
 } __attribute__ ((__packed__));
 
 /***************************************************************************

@@ -63,6 +63,7 @@ typedef __u32			xfs_nlink_t;
 #include <linux/rhashtable.h>
 #include <linux/xattr.h>
 #include <linux/mnt_idmapping.h>
+#include <linux/debugfs.h>
 
 #include <asm/page.h>
 #include <asm/div64.h>
@@ -80,6 +81,7 @@ typedef __u32			xfs_nlink_t;
 #include "xfs_cksum.h"
 #include "xfs_buf.h"
 #include "xfs_message.h"
+#include "xfs_drain.h"
 
 #ifdef __BIG_ENDIAN
 #define XFS_NATIVE_HOST 1

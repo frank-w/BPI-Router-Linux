@@ -176,7 +176,7 @@ static void da9052_i2c_remove(struct i2c_client *client)
 }
 
 static struct i2c_driver da9052_i2c_driver = {
-	.probe_new = da9052_i2c_probe,
+	.probe = da9052_i2c_probe,
 	.remove = da9052_i2c_remove,
 	.id_table = da9052_i2c_id,
 	.driver = {
@@ -209,4 +209,3 @@ module_exit(da9052_i2c_exit);
 
 MODULE_AUTHOR("David Dajun Chen <dchen@diasemi.com>");
 MODULE_DESCRIPTION("I2C driver for Dialog DA9052 PMIC");
-MODULE_LICENSE("GPL");

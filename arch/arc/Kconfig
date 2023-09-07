@@ -26,6 +26,7 @@ config ARC
 	select GENERIC_PENDING_IRQ if SMP
 	select GENERIC_SCHED_CLOCK
 	select GENERIC_SMP_IDLE_THREAD
+	select GENERIC_IOREMAP
 	select HAVE_ARCH_KGDB
 	select HAVE_ARCH_TRACEHOOK
 	select HAVE_ARCH_TRANSPARENT_HUGEPAGE if ARC_MMU_V4
@@ -41,6 +42,7 @@ config ARC
 	select HAVE_PERF_EVENTS
 	select HAVE_SYSCALL_TRACEPOINTS
 	select IRQ_DOMAIN
+	select LOCK_MM_AND_FIND_VMA
 	select MODULES_USE_ELF_RELA
 	select OF
 	select OF_EARLY_FLATTREE
@@ -556,7 +558,7 @@ endmenu	 # "ARC Architecture Configuration"
 
 config ARCH_FORCE_MAX_ORDER
 	int "Maximum zone order"
-	default "12" if ARC_HUGEPAGE_16M
-	default "11"
+	default "11" if ARC_HUGEPAGE_16M
+	default "10"
 
 source "kernel/power/Kconfig"

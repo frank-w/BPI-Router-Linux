@@ -41,7 +41,7 @@
 #include <asm/sibyte/swarm.h>
 
 
-#if defined(CONFIG_SIBYTE_BCM1x55) || defined(CONFIG_SIBYTE_BCM1x80)
+#if defined(CONFIG_SIBYTE_BCM1x80)
 #include <asm/sibyte/bcm1480_regs.h>
 #include <asm/sibyte/bcm1480_int.h>
 
@@ -331,8 +331,9 @@ static void sbd_receive_chars(struct sbd_port *sport)
 {
 	struct uart_port *uport = &sport->port;
 	struct uart_icount *icount;
-	unsigned int status, ch, flag;
+	unsigned int status;
 	int count;
+	u8 ch, flag;
 
 	for (count = 16; count; count--) {
 		status = read_sbdchn(sport, R_DUART_STATUS);

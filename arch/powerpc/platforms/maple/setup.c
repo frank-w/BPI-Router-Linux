@@ -36,8 +36,9 @@
 #include <linux/serial.h>
 #include <linux/smp.h>
 #include <linux/bitops.h>
+#include <linux/of.h>
 #include <linux/of_address.h>
-#include <linux/of_device.h>
+#include <linux/platform_device.h>
 #include <linux/memblock.h>
 
 #include <asm/processor.h>
@@ -235,7 +236,7 @@ static void __init maple_init_IRQ(void)
 	BUG_ON(openpic_addr == 0);
 
 	/* Check for a big endian MPIC */
-	if (of_get_property(np, "big-endian", NULL) != NULL)
+	if (of_property_read_bool(np, "big-endian"))
 		flags |= MPIC_BIG_ENDIAN;
 
 	/* XXX Maple specific bits */
@@ -357,7 +358,6 @@ define_machine(maple) {
 	.get_boot_time		= maple_get_boot_time,
 	.set_rtc_time		= maple_set_rtc_time,
 	.get_rtc_time		= maple_get_rtc_time,
-	.calibrate_decr		= generic_calibrate_decr,
 	.progress		= maple_progress,
 	.power_save		= power4_idle,
 };

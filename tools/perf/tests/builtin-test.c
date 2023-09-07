@@ -88,15 +88,13 @@ static struct test_suite *generic_tests[] = {
 	&suite__bpf,
 	&suite__thread_map_synthesize,
 	&suite__thread_map_remove,
-	&suite__cpu_map_synthesize,
+	&suite__cpu_map,
 	&suite__synthesize_stat_config,
 	&suite__synthesize_stat,
 	&suite__synthesize_stat_round,
 	&suite__event_update,
 	&suite__event_times,
 	&suite__backward_ring_buffer,
-	&suite__cpu_map_print,
-	&suite__cpu_map_merge,
 	&suite__sdt_event,
 	&suite__is_printable_array,
 	&suite__bitmap_print,
@@ -256,8 +254,8 @@ static int run_test(struct test_suite *test, int subtest)
 }
 
 #define for_each_test(j, k, t)			\
-	for (j = 0; j < ARRAY_SIZE(tests); j++)	\
-		for (k = 0, t = tests[j][k]; tests[j][k]; k++, t = tests[j][k])
+	for (j = 0, k = 0; j < ARRAY_SIZE(tests); j++, k = 0)	\
+		while ((t = tests[j][k++]) != NULL)
 
 static int test_and_print(struct test_suite *t, int subtest)
 {
@@ -544,7 +542,6 @@ int cmd_test(int argc, const char **argv)
 		return run_workload(workload, argc, argv);
 
 	symbol_conf.priv_size = sizeof(int);
-	symbol_conf.sort_by_name = true;
 	symbol_conf.try_vmlinux_path = true;
 
 	if (symbol__init(NULL) < 0)

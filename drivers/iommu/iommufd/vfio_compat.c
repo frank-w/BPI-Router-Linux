@@ -137,7 +137,7 @@ int iommufd_vfio_ioas(struct iommufd_ucmd *ucmd)
 		return iommufd_ucmd_respond(ucmd, sizeof(*cmd));
 
 	case IOMMU_VFIO_IOAS_SET:
-		ioas = iommufd_get_ioas(ucmd, cmd->ioas_id);
+		ioas = iommufd_get_ioas(ucmd->ictx, cmd->ioas_id);
 		if (IS_ERR(ioas))
 			return PTR_ERR(ioas);
 		xa_lock(&ucmd->ictx->objects);
@@ -483,6 +483,8 @@ static int iommufd_vfio_iommu_get_info(struct iommufd_ctx *ictx,
 			rc = cap_size;
 			goto out_put;
 		}
+		cap_size = ALIGN(cap_size, sizeof(u64));
+
 		if (last_cap && info.argsz >= total_cap_size &&
 		    put_user(total_cap_size, &last_cap->next)) {
 			rc = -EFAULT;

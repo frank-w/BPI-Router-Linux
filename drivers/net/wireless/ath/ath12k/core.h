@@ -238,6 +238,7 @@ struct ath12k_vif {
 	u32 key_cipher;
 	u8 tx_encap_type;
 	u8 vdev_stats_id;
+	u32 punct_bitmap;
 };
 
 struct ath12k_vif_iter {
@@ -395,6 +396,7 @@ struct ath12k_sta {
 	u8 rssi_comb;
 	struct ath12k_rx_peer_stats *rx_stats;
 	struct ath12k_wbm_tx_stats *wbm_tx_stats;
+	u32 bw_prev;
 };
 
 #define ATH12K_MIN_5G_FREQ 4150
@@ -532,6 +534,7 @@ struct ath12k {
 	/* protects txmgmt_idr data */
 	spinlock_t txmgmt_idr_lock;
 	atomic_t num_pending_mgmt_tx;
+	wait_queue_head_t txmgmt_empty_waitq;
 
 	/* cycle count is reported twice for each visited channel during scan.
 	 * access protected by data_lock
@@ -578,6 +581,14 @@ struct ath12k_band_cap {
 	u32 he_cap_phy_info[PSOC_HOST_MAX_PHY_SIZE];
 	struct ath12k_wmi_ppe_threshold_arg he_ppet;
 	u16 he_6ghz_capa;
+	u32 eht_cap_mac_info[WMI_MAX_EHTCAP_MAC_SIZE];
+	u32 eht_cap_phy_info[WMI_MAX_EHTCAP_PHY_SIZE];
+	u32 eht_mcs_20_only;
+	u32 eht_mcs_80;
+	u32 eht_mcs_160;
+	u32 eht_mcs_320;
+	struct ath12k_wmi_ppe_threshold_arg eht_ppet;
+	u32 eht_cap_info_internal;
 };
 
 struct ath12k_pdev_cap {
@@ -610,6 +621,12 @@ struct ath12k_pdev {
 	struct ath12k_pdev_cap cap;
 	u8 mac_addr[ETH_ALEN];
 	struct mlo_timestamp timestamp;
+};
+
+struct ath12k_fw_pdev {
+	u32 pdev_id;
+	u32 phy_id;
+	u32 supported_bands;
 };
 
 struct ath12k_board_data {
@@ -667,7 +684,26 @@ struct ath12k_base {
 	struct mutex core_lock;
 	/* Protects data like peers */
 	spinlock_t base_lock;
+
+	/* Single pdev device (struct ath12k_hw_params::single_pdev_only):
+	 *
+	 * Firmware maintains data for all bands but advertises a single
+	 * phy to the host which is stored as a single element in this
+	 * array.
+	 *
+	 * Other devices:
+	 *
+	 * This array will contain as many elements as the number of
+	 * radios.
+	 */
 	struct ath12k_pdev pdevs[MAX_RADIOS];
+
+	/* struct ath12k_hw_params::single_pdev_only devices use this to
+	 * store phy specific data
+	 */
+	struct ath12k_fw_pdev fw_pdev[MAX_RADIOS];
+	u8 fw_pdev_count;
+
 	struct ath12k_pdev __rcu *pdevs_active[MAX_RADIOS];
 	struct ath12k_wmi_hal_reg_capabilities_ext_arg hal_reg_cap[MAX_RADIOS];
 	unsigned long long free_vdev_map;
@@ -691,7 +727,7 @@ struct ath12k_base {
 
 	/* Below regd's are protected by ab->data_lock */
 	/* This is the regd set for every radio
-	 * by the firmware during initializatin
+	 * by the firmware during initialization
 	 */
 	struct ieee80211_regdomain *default_regd[MAX_RADIOS];
 	/* This regd is set during dynamic country setting
@@ -752,7 +788,6 @@ int ath12k_core_fetch_board_data_api_1(struct ath12k_base *ab,
 int ath12k_core_fetch_bdf(struct ath12k_base *ath12k,
 			  struct ath12k_board_data *bd);
 void ath12k_core_free_bdf(struct ath12k_base *ab, struct ath12k_board_data *bd);
-int ath12k_core_check_dt(struct ath12k_base *ath12k);
 
 void ath12k_core_halt(struct ath12k *ar);
 int ath12k_core_resume(struct ath12k_base *ab);

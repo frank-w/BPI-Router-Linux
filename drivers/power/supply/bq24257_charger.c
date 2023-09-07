@@ -1140,7 +1140,7 @@ static const struct i2c_device_id bq24257_i2c_ids[] = {
 };
 MODULE_DEVICE_TABLE(i2c, bq24257_i2c_ids);
 
-static const struct of_device_id bq24257_of_match[] = {
+static const struct of_device_id bq24257_of_match[] __maybe_unused = {
 	{ .compatible = "ti,bq24250", },
 	{ .compatible = "ti,bq24251", },
 	{ .compatible = "ti,bq24257", },
@@ -1165,7 +1165,7 @@ static struct i2c_driver bq24257_driver = {
 		.acpi_match_table = ACPI_PTR(bq24257_acpi_match),
 		.pm = &bq24257_pm,
 	},
-	.probe_new = bq24257_probe,
+	.probe = bq24257_probe,
 	.remove = bq24257_remove,
 	.id_table = bq24257_i2c_ids,
 };

@@ -46,6 +46,9 @@ properties:
       - items:
           - const: st,ism330is
           - const: st,lsm6dso16is
+      - items:
+          - const: st,asm330lhb
+          - const: st,asm330lhh
 
   reg:
     maxItems: 1
@@ -95,6 +98,7 @@ required:
   - reg
 
 allOf:
+  - $ref: /schemas/iio/iio.yaml#
   - $ref: /schemas/spi/spi-peripheral-props.yaml#
 
 unevaluatedProperties: false

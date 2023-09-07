@@ -26,14 +26,14 @@
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/of_platform.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 
 #include <drm/drm_aperture.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_drv.h>
-#include <drm/drm_fbdev_generic.h>
+#include <drm/drm_fbdev_dma.h>
 #include <drm/drm_vblank.h>
 
 #include <soc/bcm2835/raspberrypi-firmware.h>
@@ -350,7 +350,7 @@ static int vc4_drm_bind(struct device *dev)
 			return -EPROBE_DEFER;
 	}
 
-	ret = drm_aperture_remove_framebuffers(false, driver);
+	ret = drm_aperture_remove_framebuffers(driver);
 	if (ret)
 		return ret;
 
@@ -387,7 +387,7 @@ static int vc4_drm_bind(struct device *dev)
 	if (ret < 0)
 		goto unbind_all;
 
-	drm_fbdev_generic_setup(drm, 16);
+	drm_fbdev_dma_setup(drm, 16);
 
 	return 0;
 
@@ -439,11 +439,9 @@ static int vc4_platform_drm_probe(struct platform_device *pdev)
 	return component_master_add_with_match(dev, &vc4_drm_ops, match);
 }
 
-static int vc4_platform_drm_remove(struct platform_device *pdev)
+static void vc4_platform_drm_remove(struct platform_device *pdev)
 {
 	component_master_del(&pdev->dev, &vc4_drm_ops);
-
-	return 0;
 }
 
 static const struct of_device_id vc4_of_match[] = {
@@ -456,7 +454,7 @@ MODULE_DEVICE_TABLE(of, vc4_of_match);
 
 static struct platform_driver vc4_platform_driver = {
 	.probe		= vc4_platform_drm_probe,
-	.remove		= vc4_platform_drm_remove,
+	.remove_new	= vc4_platform_drm_remove,
 	.driver		= {
 		.name	= "vc4-drm",
 		.of_match_table = vc4_of_match,

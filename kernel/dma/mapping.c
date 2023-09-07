@@ -17,7 +17,11 @@
 #include "debug.h"
 #include "direct.h"
 
-bool dma_default_coherent;
+#if defined(CONFIG_ARCH_HAS_SYNC_DMA_FOR_DEVICE) || \
+	defined(CONFIG_ARCH_HAS_SYNC_DMA_FOR_CPU) || \
+	defined(CONFIG_ARCH_HAS_SYNC_DMA_FOR_CPU_ALL)
+bool dma_default_coherent = IS_ENABLED(CONFIG_ARCH_DMA_DEFAULT_COHERENT);
+#endif
 
 /*
  * Managed DMA API
@@ -755,12 +759,6 @@ bool dma_pci_p2pdma_supported(struct device *dev)
 	return ops->flags & DMA_F_PCI_P2PDMA_SUPPORTED;
 }
 EXPORT_SYMBOL_GPL(dma_pci_p2pdma_supported);
-
-#ifdef CONFIG_ARCH_HAS_DMA_SET_MASK
-void arch_dma_set_mask(struct device *dev, u64 mask);
-#else
-#define arch_dma_set_mask(dev, mask)	do { } while (0)
-#endif
 
 int dma_set_mask(struct device *dev, u64 mask)
 {

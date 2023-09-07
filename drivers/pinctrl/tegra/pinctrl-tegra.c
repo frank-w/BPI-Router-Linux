@@ -96,6 +96,7 @@ static const struct cfg_param {
 	{"nvidia,slew-rate-falling",	TEGRA_PINCONF_PARAM_SLEW_RATE_FALLING},
 	{"nvidia,slew-rate-rising",	TEGRA_PINCONF_PARAM_SLEW_RATE_RISING},
 	{"nvidia,drive-type",		TEGRA_PINCONF_PARAM_DRIVE_TYPE},
+	{"nvidia,function",		TEGRA_PINCONF_PARAM_FUNCTION},
 };
 
 static int tegra_pinctrl_dt_subnode_to_map(struct pinctrl_dev *pctldev,
@@ -232,7 +233,7 @@ static const char *tegra_pinctrl_get_func_name(struct pinctrl_dev *pctldev,
 {
 	struct tegra_pmx *pmx = pinctrl_dev_get_drvdata(pctldev);
 
-	return pmx->soc->functions[function].name;
+	return pmx->functions[function].name;
 }
 
 static int tegra_pinctrl_get_func_groups(struct pinctrl_dev *pctldev,
@@ -242,8 +243,8 @@ static int tegra_pinctrl_get_func_groups(struct pinctrl_dev *pctldev,
 {
 	struct tegra_pmx *pmx = pinctrl_dev_get_drvdata(pctldev);
 
-	*groups = pmx->soc->functions[function].groups;
-	*num_groups = pmx->soc->functions[function].ngroups;
+	*groups = pmx->functions[function].groups;
+	*num_groups = pmx->functions[function].ngroups;
 
 	return 0;
 }
@@ -470,6 +471,12 @@ static int tegra_pinconf_reg(struct tegra_pmx *pmx,
 		*bit = g->drvtype_bit;
 		*width = 2;
 		break;
+	case TEGRA_PINCONF_PARAM_FUNCTION:
+		*bank = g->mux_bank;
+		*reg = g->mux_reg;
+		*bit = g->mux_bit;
+		*width = 2;
+		break;
 	default:
 		dev_err(pmx->dev, "Invalid config param %04x\n", param);
 		return -ENOTSUPP;
@@ -633,8 +640,16 @@ static void tegra_pinconf_group_dbg_show(struct pinctrl_dev *pctldev,
 		val >>= bit;
 		val &= (1 << width) - 1;
 
-		seq_printf(s, "\n\t%s=%u",
-			   strip_prefix(cfg_params[i].property), val);
+		if (cfg_params[i].param == TEGRA_PINCONF_PARAM_FUNCTION) {
+			u8 idx = pmx->soc->groups[group].funcs[val];
+
+			seq_printf(s, "\n\t%s=%s",
+				   strip_prefix(cfg_params[i].property),
+					 pmx->functions[idx].name);
+		} else {
+			seq_printf(s, "\n\t%s=%u",
+				   strip_prefix(cfg_params[i].property), val);
+		}
 	}
 }
 
@@ -747,10 +762,7 @@ static int tegra_pinctrl_resume(struct device *dev)
 	return 0;
 }
 
-const struct dev_pm_ops tegra_pinctrl_pm = {
-	.suspend_noirq = &tegra_pinctrl_suspend,
-	.resume_noirq = &tegra_pinctrl_resume
-};
+DEFINE_NOIRQ_DEV_PM_OPS(tegra_pinctrl_pm, tegra_pinctrl_suspend, tegra_pinctrl_resume);
 
 static bool tegra_pinctrl_gpio_node_has_range(struct tegra_pmx *pmx)
 {
@@ -789,20 +801,26 @@ int tegra_pinctrl_probe(struct platform_device *pdev,
 	 * Each mux group will appear in 4 functions' list of groups.
 	 * This over-allocates slightly, since not all groups are mux groups.
 	 */
-	pmx->group_pins = devm_kcalloc(&pdev->dev,
-		soc_data->ngroups * 4, sizeof(*pmx->group_pins),
-		GFP_KERNEL);
+	pmx->group_pins = devm_kcalloc(&pdev->dev, pmx->soc->ngroups * 4,
+				       sizeof(*pmx->group_pins), GFP_KERNEL);
 	if (!pmx->group_pins)
 		return -ENOMEM;
 
-	group_pins = pmx->group_pins;
-	for (fn = 0; fn < soc_data->nfunctions; fn++) {
-		struct tegra_function *func = &soc_data->functions[fn];
+	pmx->functions = devm_kcalloc(&pdev->dev, pmx->soc->nfunctions,
+				      sizeof(*pmx->functions), GFP_KERNEL);
+	if (!pmx->functions)
+		return -ENOMEM;
 
+	group_pins = pmx->group_pins;
+
+	for (fn = 0; fn < pmx->soc->nfunctions; fn++) {
+		struct tegra_function *func = &pmx->functions[fn];
+
+		func->name = pmx->soc->functions[fn];
 		func->groups = group_pins;
 
-		for (gn = 0; gn < soc_data->ngroups; gn++) {
-			const struct tegra_pingroup *g = &soc_data->groups[gn];
+		for (gn = 0; gn < pmx->soc->ngroups; gn++) {
+			const struct tegra_pingroup *g = &pmx->soc->groups[gn];
 
 			if (g->mux_reg == -1)
 				continue;
@@ -814,7 +832,7 @@ int tegra_pinctrl_probe(struct platform_device *pdev,
 				continue;
 
 			BUG_ON(group_pins - pmx->group_pins >=
-				soc_data->ngroups * 4);
+				pmx->soc->ngroups * 4);
 			*group_pins++ = g->name;
 			func->ngroups++;
 		}

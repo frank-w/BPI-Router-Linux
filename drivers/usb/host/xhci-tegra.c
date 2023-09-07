@@ -14,7 +14,7 @@
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/of_irq.h>
 #include <linux/phy/phy.h>
 #include <linux/phy/tegra/xusb.h>
@@ -1145,15 +1145,15 @@ static int tegra_xusb_powerdomain_init(struct device *dev,
 	int err;
 
 	tegra->genpd_dev_host = dev_pm_domain_attach_by_name(dev, "xusb_host");
-	if (IS_ERR_OR_NULL(tegra->genpd_dev_host)) {
-		err = PTR_ERR(tegra->genpd_dev_host) ? : -ENODATA;
+	if (IS_ERR(tegra->genpd_dev_host)) {
+		err = PTR_ERR(tegra->genpd_dev_host);
 		dev_err(dev, "failed to get host pm-domain: %d\n", err);
 		return err;
 	}
 
 	tegra->genpd_dev_ss = dev_pm_domain_attach_by_name(dev, "xusb_ss");
-	if (IS_ERR_OR_NULL(tegra->genpd_dev_ss)) {
-		err = PTR_ERR(tegra->genpd_dev_ss) ? : -ENODATA;
+	if (IS_ERR(tegra->genpd_dev_ss)) {
+		err = PTR_ERR(tegra->genpd_dev_ss);
 		dev_err(dev, "failed to get superspeed pm-domain: %d\n", err);
 		return err;
 	}
@@ -1535,7 +1535,6 @@ static void tegra_xusb_deinit_usb_phy(struct tegra_xusb *tegra)
 
 static int tegra_xusb_probe(struct platform_device *pdev)
 {
-	struct of_phandle_args args;
 	struct tegra_xusb *tegra;
 	struct device_node *np;
 	struct resource *regs;
@@ -1594,15 +1593,13 @@ static int tegra_xusb_probe(struct platform_device *pdev)
 		goto put_padctl;
 	}
 
-	/* Older device-trees don't have padctrl interrupt */
-	err = of_irq_parse_one(np, 0, &args);
-	if (!err) {
-		tegra->padctl_irq = of_irq_get(np, 0);
-		if (tegra->padctl_irq <= 0) {
-			err = (tegra->padctl_irq == 0) ? -ENODEV : tegra->padctl_irq;
-			goto put_padctl;
-		}
-	} else {
+	tegra->padctl_irq = of_irq_get(np, 0);
+	if (tegra->padctl_irq == -EPROBE_DEFER) {
+		err = tegra->padctl_irq;
+		goto put_padctl;
+	} else if (tegra->padctl_irq <= 0) {
+		/* Older device-trees don't have padctrl interrupt */
+		tegra->padctl_irq = 0;
 		dev_dbg(&pdev->dev,
 			"%pOF is missing an interrupt, disabling PM support\n", np);
 	}
@@ -1831,6 +1828,9 @@ static int tegra_xusb_probe(struct platform_device *pdev)
 		goto remove_usb2;
 	}
 
+	if (HCC_MAX_PSA(xhci->hcc_params) >= 4)
+		xhci->shared_hcd->can_do_streams = 1;
+
 	err = usb_add_hcd(xhci->shared_hcd, tegra->xhci_irq, IRQF_SHARED);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to add shared HCD: %d\n", err);
@@ -1912,7 +1912,16 @@ put_padctl:
 	return err;
 }
 
-static int tegra_xusb_remove(struct platform_device *pdev)
+static void tegra_xusb_disable(struct tegra_xusb *tegra)
+{
+	tegra_xusb_powergate_partitions(tegra);
+	tegra_xusb_powerdomain_remove(tegra->dev, tegra);
+	tegra_xusb_phy_disable(tegra);
+	tegra_xusb_clk_disable(tegra);
+	regulator_bulk_disable(tegra->soc->num_supplies, tegra->supplies);
+}
+
+static void tegra_xusb_remove(struct platform_device *pdev)
 {
 	struct tegra_xusb *tegra = platform_get_drvdata(pdev);
 	struct xhci_hcd *xhci = hcd_to_xhci(tegra->hcd);
@@ -1934,16 +1943,18 @@ static int tegra_xusb_remove(struct platform_device *pdev)
 
 	pm_runtime_put(&pdev->dev);
 
-	tegra_xusb_powergate_partitions(tegra);
-
-	tegra_xusb_powerdomain_remove(&pdev->dev, tegra);
-
-	tegra_xusb_phy_disable(tegra);
-	tegra_xusb_clk_disable(tegra);
-	regulator_bulk_disable(tegra->soc->num_supplies, tegra->supplies);
+	tegra_xusb_disable(tegra);
 	tegra_xusb_padctl_put(tegra->padctl);
+}
 
-	return 0;
+static void tegra_xusb_shutdown(struct platform_device *pdev)
+{
+	struct tegra_xusb *tegra = platform_get_drvdata(pdev);
+
+	pm_runtime_get_sync(&pdev->dev);
+	disable_irq(tegra->xhci_irq);
+	xhci_shutdown(tegra->hcd);
+	tegra_xusb_disable(tegra);
 }
 
 static bool xhci_hub_ports_suspended(struct xhci_hub *hub)
@@ -2275,7 +2286,7 @@ static int tegra_xusb_exit_elpg(struct tegra_xusb *tegra, bool runtime)
 	if (wakeup)
 		tegra_xhci_disable_phy_sleepwalk(tegra);
 
-	err = xhci_resume(xhci, 0);
+	err = xhci_resume(xhci, runtime ? PMSG_AUTO_RESUME : PMSG_RESUME);
 	if (err < 0) {
 		dev_err(tegra->dev, "failed to resume XHCI: %d\n", err);
 		goto disable_phy;
@@ -2653,7 +2664,8 @@ MODULE_DEVICE_TABLE(of, tegra_xusb_of_match);
 
 static struct platform_driver tegra_xusb_driver = {
 	.probe = tegra_xusb_probe,
-	.remove = tegra_xusb_remove,
+	.remove_new = tegra_xusb_remove,
+	.shutdown = tegra_xusb_shutdown,
 	.driver = {
 		.name = "tegra-xusb",
 		.pm = &tegra_xusb_pm_ops,
@@ -2665,7 +2677,6 @@ static void tegra_xhci_quirks(struct device *dev, struct xhci_hcd *xhci)
 {
 	struct tegra_xusb *tegra = dev_get_drvdata(dev);
 
-	xhci->quirks |= XHCI_PLAT;
 	if (tegra && tegra->soc->lpm_support)
 		xhci->quirks |= XHCI_LPM_SUPPORT;
 }

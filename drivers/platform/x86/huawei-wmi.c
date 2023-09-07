@@ -85,6 +85,8 @@ static const struct key_entry huawei_wmi_keymap[] = {
 	{ KE_IGNORE, 0x293, { KEY_KBDILLUMTOGGLE } },
 	{ KE_IGNORE, 0x294, { KEY_KBDILLUMUP } },
 	{ KE_IGNORE, 0x295, { KEY_KBDILLUMUP } },
+	// Ignore Ambient Light Sensoring
+	{ KE_KEY,    0x2c1, { KEY_RESERVED } },
 	{ KE_END,	 0 }
 };
 
@@ -830,7 +832,7 @@ static int huawei_wmi_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int huawei_wmi_remove(struct platform_device *pdev)
+static void huawei_wmi_remove(struct platform_device *pdev)
 {
 	const struct wmi_device_id *guid = huawei_wmi_events_id_table;
 
@@ -846,8 +848,6 @@ static int huawei_wmi_remove(struct platform_device *pdev)
 		huawei_wmi_battery_exit(&pdev->dev);
 		huawei_wmi_fn_lock_exit(&pdev->dev);
 	}
-
-	return 0;
 }
 
 static struct platform_driver huawei_wmi_driver = {
@@ -855,7 +855,7 @@ static struct platform_driver huawei_wmi_driver = {
 		.name = "huawei-wmi",
 	},
 	.probe = huawei_wmi_probe,
-	.remove = huawei_wmi_remove,
+	.remove_new = huawei_wmi_remove,
 };
 
 static __init int huawei_wmi_init(void)

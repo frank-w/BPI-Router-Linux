@@ -107,9 +107,7 @@ SECTIONS
 #endif
 		/* careful! __ftr_alt_* sections need to be close to .text */
 		*(.text.hot .text.hot.* TEXT_MAIN .text.fixup .text.unlikely .text.unlikely.* .fixup __ftr_alt_* .ref.text);
-#ifdef CONFIG_PPC64
 		*(.tramp.ftrace.text);
-#endif
 		NOINSTR_TEXT
 		SCHED_TEXT
 		LOCK_TEXT
@@ -169,12 +167,18 @@ SECTIONS
 	}
 
 #else /* CONFIG_PPC32 */
+#ifndef CONFIG_PPC_KERNEL_PCREL
 	.toc1 : AT(ADDR(.toc1) - LOAD_OFFSET) {
 		*(.toc1)
 	}
+#endif
 
 	.got : AT(ADDR(.got) - LOAD_OFFSET) ALIGN(256) {
+#ifdef CONFIG_PPC_KERNEL_PCREL
+		*(.got)
+#else
 		*(.got .toc)
+#endif
 	}
 
 	SOFT_MASK_TABLE(8)
@@ -270,9 +274,7 @@ SECTIONS
 		 */
 		. = ALIGN(PAGE_SIZE);
 		_einittext = .;
-#ifdef CONFIG_PPC64
 		*(.tramp.ftrace.init);
-#endif
 	} :text
 
 	/* .exit.text is discarded at runtime, not link time,

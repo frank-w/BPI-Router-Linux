@@ -28,6 +28,7 @@
 #include "link/protocols/link_dp_training.h"
 #include "link/protocols/link_dp_phy.h"
 #include "link/protocols/link_dp_training_fixed_vs_pe_retimer.h"
+#include "link/protocols/link_dp_capability.h"
 #include "link/link_dpms.h"
 #include "resource.h"
 #include "dm_helpers.h"
@@ -75,7 +76,7 @@ static bool is_dp_phy_pattern(enum dp_test_pattern test_pattern)
 		return false;
 }
 
-void dp_retrain_link_dp_test(struct dc_link *link,
+static void dp_retrain_link_dp_test(struct dc_link *link,
 			struct dc_link_settings *link_setting,
 			bool skip_video_pattern)
 {
@@ -250,7 +251,7 @@ static void dp_test_send_phy_test_pattern(struct dc_link *link)
 	/* prepare link training settings */
 	link_training_settings.link_settings = link->cur_link_settings;
 
-	link_training_settings.lttpr_mode = dc_link_decide_lttpr_mode(link, &link->cur_link_settings);
+	link_training_settings.lttpr_mode = dp_decide_lttpr_mode(link, &link->cur_link_settings);
 
 	if ((link->chip_caps & EXT_DISPLAY_PATH_CAPS__DP_FIXED_VS_EN) &&
 			link_training_settings.lttpr_mode == LTTPR_MODE_TRANSPARENT)
@@ -408,7 +409,7 @@ static void dp_test_send_phy_test_pattern(struct dc_link *link)
 	 * all the time. Do not touch it.
 	 * forward request to DS
 	 */
-	dc_link_dp_set_test_pattern(
+	dp_set_test_pattern(
 		link,
 		test_pattern,
 		DP_TEST_PATTERN_COLOR_SPACE_UNDEFINED,
@@ -427,14 +428,23 @@ static void set_crtc_test_pattern(struct dc_link *link,
 		stream->timing.display_color_depth;
 	struct bit_depth_reduction_params params;
 	struct output_pixel_processor *opp = pipe_ctx->stream_res.opp;
-	int width = pipe_ctx->stream->timing.h_addressable +
+	struct pipe_ctx *odm_pipe;
+	int odm_cnt = 1;
+	int h_active = pipe_ctx->stream->timing.h_addressable +
 		pipe_ctx->stream->timing.h_border_left +
 		pipe_ctx->stream->timing.h_border_right;
-	int height = pipe_ctx->stream->timing.v_addressable +
+	int v_active = pipe_ctx->stream->timing.v_addressable +
 		pipe_ctx->stream->timing.v_border_bottom +
 		pipe_ctx->stream->timing.v_border_top;
+	int odm_slice_width, last_odm_slice_width, offset = 0;
 
 	memset(&params, 0, sizeof(params));
+
+	for (odm_pipe = pipe_ctx->next_odm_pipe; odm_pipe; odm_pipe = odm_pipe->next_odm_pipe)
+		odm_cnt++;
+
+	odm_slice_width = h_active / odm_cnt;
+	last_odm_slice_width = h_active - odm_slice_width * (odm_cnt - 1);
 
 	switch (test_pattern) {
 	case DP_TEST_PATTERN_COLOR_SQUARES:
@@ -472,16 +482,13 @@ static void set_crtc_test_pattern(struct dc_link *link,
 	{
 		/* disable bit depth reduction */
 		pipe_ctx->stream->bit_depth_params = params;
-		opp->funcs->opp_program_bit_depth_reduction(opp, &params);
-		if (pipe_ctx->stream_res.tg->funcs->set_test_pattern)
+		if (pipe_ctx->stream_res.tg->funcs->set_test_pattern) {
+			opp->funcs->opp_program_bit_depth_reduction(opp, &params);
 			pipe_ctx->stream_res.tg->funcs->set_test_pattern(pipe_ctx->stream_res.tg,
 				controller_test_pattern, color_depth);
-		else if (link->dc->hwss.set_disp_pattern_generator) {
-			struct pipe_ctx *odm_pipe;
+		} else if (link->dc->hwss.set_disp_pattern_generator) {
 			enum controller_dp_color_space controller_color_space;
-			int opp_cnt = 1;
-			int offset = 0;
-			int dpg_width = width;
+			struct output_pixel_processor *odm_opp;
 
 			switch (test_pattern_color_space) {
 			case DP_TEST_PATTERN_COLOR_SPACE_RGB:
@@ -501,24 +508,9 @@ static void set_crtc_test_pattern(struct dc_link *link,
 				break;
 			}
 
-			for (odm_pipe = pipe_ctx->next_odm_pipe; odm_pipe; odm_pipe = odm_pipe->next_odm_pipe)
-				opp_cnt++;
-			dpg_width = width / opp_cnt;
-			offset = dpg_width;
-
-			link->dc->hwss.set_disp_pattern_generator(link->dc,
-					pipe_ctx,
-					controller_test_pattern,
-					controller_color_space,
-					color_depth,
-					NULL,
-					dpg_width,
-					height,
-					0);
-
-			for (odm_pipe = pipe_ctx->next_odm_pipe; odm_pipe; odm_pipe = odm_pipe->next_odm_pipe) {
-				struct output_pixel_processor *odm_opp = odm_pipe->stream_res.opp;
-
+			odm_pipe = pipe_ctx;
+			while (odm_pipe->next_odm_pipe) {
+				odm_opp = odm_pipe->stream_res.opp;
 				odm_opp->funcs->opp_program_bit_depth_reduction(odm_opp, &params);
 				link->dc->hwss.set_disp_pattern_generator(link->dc,
 						odm_pipe,
@@ -526,11 +518,23 @@ static void set_crtc_test_pattern(struct dc_link *link,
 						controller_color_space,
 						color_depth,
 						NULL,
-						dpg_width,
-						height,
+						odm_slice_width,
+						v_active,
 						offset);
-				offset += offset;
+				offset += odm_slice_width;
+				odm_pipe = odm_pipe->next_odm_pipe;
 			}
+			odm_opp = odm_pipe->stream_res.opp;
+			odm_opp->funcs->opp_program_bit_depth_reduction(odm_opp, &params);
+			link->dc->hwss.set_disp_pattern_generator(link->dc,
+					odm_pipe,
+					controller_test_pattern,
+					controller_color_space,
+					color_depth,
+					NULL,
+					last_odm_slice_width,
+					v_active,
+					offset);
 		}
 	}
 	break;
@@ -539,23 +543,17 @@ static void set_crtc_test_pattern(struct dc_link *link,
 		/* restore bitdepth reduction */
 		resource_build_bit_depth_reduction_params(pipe_ctx->stream, &params);
 		pipe_ctx->stream->bit_depth_params = params;
-		opp->funcs->opp_program_bit_depth_reduction(opp, &params);
-		if (pipe_ctx->stream_res.tg->funcs->set_test_pattern)
+		if (pipe_ctx->stream_res.tg->funcs->set_test_pattern) {
+			opp->funcs->opp_program_bit_depth_reduction(opp, &params);
 			pipe_ctx->stream_res.tg->funcs->set_test_pattern(pipe_ctx->stream_res.tg,
-				CONTROLLER_DP_TEST_PATTERN_VIDEOMODE,
-				color_depth);
-		else if (link->dc->hwss.set_disp_pattern_generator) {
-			struct pipe_ctx *odm_pipe;
-			int opp_cnt = 1;
-			int dpg_width;
+					CONTROLLER_DP_TEST_PATTERN_VIDEOMODE,
+					color_depth);
+		} else if (link->dc->hwss.set_disp_pattern_generator) {
+			struct output_pixel_processor *odm_opp;
 
-			for (odm_pipe = pipe_ctx->next_odm_pipe; odm_pipe; odm_pipe = odm_pipe->next_odm_pipe)
-				opp_cnt++;
-
-			dpg_width = width / opp_cnt;
-			for (odm_pipe = pipe_ctx->next_odm_pipe; odm_pipe; odm_pipe = odm_pipe->next_odm_pipe) {
-				struct output_pixel_processor *odm_opp = odm_pipe->stream_res.opp;
-
+			odm_pipe = pipe_ctx;
+			while (odm_pipe->next_odm_pipe) {
+				odm_opp = odm_pipe->stream_res.opp;
 				odm_opp->funcs->opp_program_bit_depth_reduction(odm_opp, &params);
 				link->dc->hwss.set_disp_pattern_generator(link->dc,
 						odm_pipe,
@@ -563,19 +561,23 @@ static void set_crtc_test_pattern(struct dc_link *link,
 						CONTROLLER_DP_COLOR_SPACE_UDEFINED,
 						color_depth,
 						NULL,
-						dpg_width,
-						height,
-						0);
+						odm_slice_width,
+						v_active,
+						offset);
+				offset += odm_slice_width;
+				odm_pipe = odm_pipe->next_odm_pipe;
 			}
+			odm_opp = odm_pipe->stream_res.opp;
+			odm_opp->funcs->opp_program_bit_depth_reduction(odm_opp, &params);
 			link->dc->hwss.set_disp_pattern_generator(link->dc,
-					pipe_ctx,
+					odm_pipe,
 					CONTROLLER_DP_TEST_PATTERN_VIDEOMODE,
 					CONTROLLER_DP_COLOR_SPACE_UDEFINED,
 					color_depth,
 					NULL,
-					dpg_width,
-					height,
-					0);
+					last_odm_slice_width,
+					v_active,
+					offset);
 		}
 	}
 	break;
@@ -585,7 +587,7 @@ static void set_crtc_test_pattern(struct dc_link *link,
 	}
 }
 
-void dc_link_dp_handle_automated_test(struct dc_link *link)
+void dp_handle_automated_test(struct dc_link *link)
 {
 	union test_request test_request;
 	union test_response test_response;
@@ -651,7 +653,7 @@ void dc_link_dp_handle_automated_test(struct dc_link *link)
 			sizeof(test_response));
 }
 
-bool dc_link_dp_set_test_pattern(
+bool dp_set_test_pattern(
 	struct dc_link *link,
 	enum dp_test_pattern test_pattern,
 	enum dp_test_pattern_color_space test_pattern_color_space,
@@ -673,7 +675,8 @@ bool dc_link_dp_set_test_pattern(
 		if (pipes[i].stream == NULL)
 			continue;
 
-		if (pipes[i].stream->link == link && !pipes[i].top_pipe && !pipes[i].prev_odm_pipe) {
+		if (resource_is_pipe_type(&pipes[i], OTG_MASTER) &&
+				pipes[i].stream->link == link) {
 			pipe_ctx = &pipes[i];
 			break;
 		}
@@ -701,6 +704,7 @@ bool dc_link_dp_set_test_pattern(
 
 		/* Reset Test Pattern state */
 		link->test_pattern_enabled = false;
+		link->current_test_pattern = test_pattern;
 
 		return true;
 	}
@@ -738,6 +742,7 @@ bool dc_link_dp_set_test_pattern(
 		if (test_pattern != DP_TEST_PATTERN_VIDEO_MODE) {
 			/* Set Test Pattern state */
 			link->test_pattern_enabled = true;
+			link->current_test_pattern = test_pattern;
 			if (p_link_settings != NULL)
 				dpcd_set_link_settings(link,
 						p_link_settings);
@@ -936,33 +941,15 @@ bool dc_link_dp_set_test_pattern(
 
 		/* Set Test Pattern state */
 		link->test_pattern_enabled = true;
+		link->current_test_pattern = test_pattern;
 	}
 
 	return true;
 }
 
-void dc_link_set_drive_settings(struct dc *dc,
-				struct link_training_settings *lt_settings,
-				const struct dc_link *link)
-{
-
-	int i;
-	struct link_resource link_res;
-
-	for (i = 0; i < dc->link_count; i++)
-		if (dc->links[i] == link)
-			break;
-
-	if (i >= dc->link_count)
-		ASSERT_CRITICAL(false);
-
-	link_get_cur_link_res(link, &link_res);
-	dp_set_drive_settings(dc->links[i], &link_res, lt_settings);
-}
-
-void dc_link_set_preferred_link_settings(struct dc *dc,
-					 struct dc_link_settings *link_setting,
-					 struct dc_link *link)
+void dp_set_preferred_link_settings(struct dc *dc,
+		struct dc_link_settings *link_setting,
+		struct dc_link *link)
 {
 	int i;
 	struct pipe_ctx *pipe;
@@ -1001,11 +988,11 @@ void dc_link_set_preferred_link_settings(struct dc *dc,
 		dp_retrain_link_dp_test(link, &store_settings, false);
 }
 
-void dc_link_set_preferred_training_settings(struct dc *dc,
-						 struct dc_link_settings *link_setting,
-						 struct dc_link_training_overrides *lt_overrides,
-						 struct dc_link *link,
-						 bool skip_immediate_retrain)
+void dp_set_preferred_training_settings(struct dc *dc,
+		struct dc_link_settings *link_setting,
+		struct dc_link_training_overrides *lt_overrides,
+		struct dc_link *link,
+		bool skip_immediate_retrain)
 {
 	if (lt_overrides != NULL)
 		link->preferred_training_settings = *lt_overrides;
@@ -1025,22 +1012,5 @@ void dc_link_set_preferred_training_settings(struct dc *dc,
 
 	/* Retrain now, or wait until next stream update to apply */
 	if (skip_immediate_retrain == false)
-		dc_link_set_preferred_link_settings(dc, &link->preferred_link_setting, link);
-}
-
-void dc_link_set_test_pattern(struct dc_link *link,
-		enum dp_test_pattern test_pattern,
-		enum dp_test_pattern_color_space test_pattern_color_space,
-		const struct link_training_settings *p_link_settings,
-		const unsigned char *p_custom_pattern,
-		unsigned int cust_pattern_size)
-{
-	if (link != NULL)
-		dc_link_dp_set_test_pattern(
-			link,
-			test_pattern,
-			test_pattern_color_space,
-			p_link_settings,
-			p_custom_pattern,
-			cust_pattern_size);
+		dp_set_preferred_link_settings(dc, &link->preferred_link_setting, link);
 }

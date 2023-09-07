@@ -53,6 +53,8 @@ enum utf16_endian;
 #define E_NTFS_NONRESIDENT		556
 /* NTFS specific error code about punch hole. */
 #define E_NTFS_NOTALIGNED		557
+/* NTFS specific error code when on-disk struct is corrupted. */
+#define E_NTFS_CORRUPT			558
 
 
 /* sbi->flags */
@@ -100,7 +102,6 @@ struct ntfs_mount_options {
 	unsigned hide_dot_files : 1; /* Set hidden flag on dot files. */
 	unsigned windows_names : 1; /* Disallow names forbidden by Windows. */
 	unsigned force : 1; /* RW mount dirty volume. */
-	unsigned noacsrules : 1; /* Exclude acs rules. */
 	unsigned prealloc : 1; /* Preallocate space when file is growing. */
 	unsigned nocase : 1; /* case insensitive. */
 };
@@ -164,7 +165,6 @@ struct wnd_bitmap {
 	size_t zone_bit;
 	size_t zone_end;
 
-	bool set_tail; // Not necessary in driver.
 	bool inited;
 };
 
@@ -276,7 +276,7 @@ struct ntfs_sb_info {
 		__le16 flags; // Cached current VOLUME_INFO::flags, VOLUME_FLAG_DIRTY.
 		u8 major_ver;
 		u8 minor_ver;
-		char label[65];
+		char label[256];
 		bool real_dirty; // Real fs state.
 	} volume;
 
@@ -286,7 +286,6 @@ struct ntfs_sb_info {
 		struct ntfs_inode *ni;
 		u32 next_id;
 		u64 next_off;
-
 		__le32 def_security_id;
 	} security;
 
@@ -314,6 +313,7 @@ struct ntfs_sb_info {
 
 	struct ntfs_mount_options *options;
 	struct ratelimit_state msg_ratelimit;
+	struct proc_dir_entry *procdir;
 };
 
 /* One MFT record(usually 1024 bytes), consists of attributes. */
@@ -340,7 +340,7 @@ enum ntfs_inode_mutex_lock_class {
 };
 
 /*
- * sturct ntfs_inode
+ * struct ntfs_inode
  *
  * Ntfs inode - extends linux inode. consists of one or more MFT inodes.
  */
@@ -467,8 +467,7 @@ int al_add_le(struct ntfs_inode *ni, enum ATTR_TYPE type, const __le16 *name,
 	      struct ATTR_LIST_ENTRY **new_le);
 bool al_remove_le(struct ntfs_inode *ni, struct ATTR_LIST_ENTRY *le);
 bool al_delete_le(struct ntfs_inode *ni, enum ATTR_TYPE type, CLST vcn,
-		  const __le16 *name, size_t name_len,
-		  const struct MFT_REF *ref);
+		  const __le16 *name, u8 name_len, const struct MFT_REF *ref);
 int al_update(struct ntfs_inode *ni, int sync);
 static inline size_t al_aligned(size_t size)
 {
@@ -527,7 +526,7 @@ struct ATTRIB *ni_load_attr(struct ntfs_inode *ni, enum ATTR_TYPE type,
 int ni_load_all_mi(struct ntfs_inode *ni);
 bool ni_add_subrecord(struct ntfs_inode *ni, CLST rno, struct mft_inode **mi);
 int ni_remove_attr(struct ntfs_inode *ni, enum ATTR_TYPE type,
-		   const __le16 *name, size_t name_len, bool base_only,
+		   const __le16 *name, u8 name_len, bool base_only,
 		   const __le16 *id);
 int ni_create_attr_list(struct ntfs_inode *ni);
 int ni_expand_list(struct ntfs_inode *ni);
@@ -544,7 +543,7 @@ void ni_remove_attr_le(struct ntfs_inode *ni, struct ATTRIB *attr,
 		       struct mft_inode *mi, struct ATTR_LIST_ENTRY *le);
 int ni_delete_all(struct ntfs_inode *ni);
 struct ATTR_FILE_NAME *ni_fname_name(struct ntfs_inode *ni,
-				     const struct cpu_str *uni,
+				     const struct le_str *uni,
 				     const struct MFT_REF *home,
 				     struct mft_inode **mi,
 				     struct ATTR_LIST_ENTRY **entry);
@@ -581,6 +580,7 @@ int ni_rename(struct ntfs_inode *dir_ni, struct ntfs_inode *new_dir_ni,
 bool ni_is_dirty(struct inode *inode);
 
 /* Globals from fslog.c */
+bool check_index_header(const struct INDEX_HDR *hdr, size_t bytes);
 int log_replay(struct ntfs_inode *ni, bool *initialized);
 
 /* Globals from fsntfs.c */
@@ -630,7 +630,7 @@ int ntfs_bio_fill_1(struct ntfs_sb_info *sbi, const struct runs_tree *run);
 int ntfs_vbo_to_lbo(struct ntfs_sb_info *sbi, const struct runs_tree *run,
 		    u64 vbo, u64 *lbo, u64 *bytes);
 struct ntfs_inode *ntfs_new_inode(struct ntfs_sb_info *sbi, CLST nRec,
-				  bool dir);
+				  enum RECORD_FLAG flag);
 extern const u8 s_default_security[0x50];
 bool is_sd_valid(const struct SECURITY_DESCRIPTOR_RELATIVE *sd, u32 len);
 int ntfs_security_init(struct ntfs_sb_info *sbi);
@@ -648,8 +648,10 @@ int ntfs_insert_reparse(struct ntfs_sb_info *sbi, __le32 rtag,
 int ntfs_remove_reparse(struct ntfs_sb_info *sbi, __le32 rtag,
 			const struct MFT_REF *ref);
 void mark_as_free_ex(struct ntfs_sb_info *sbi, CLST lcn, CLST len, bool trim);
-int run_deallocate(struct ntfs_sb_info *sbi, struct runs_tree *run, bool trim);
+int run_deallocate(struct ntfs_sb_info *sbi, const struct runs_tree *run,
+		   bool trim);
 bool valid_windows_name(struct ntfs_sb_info *sbi, const struct le_str *name);
+int ntfs_set_label(struct ntfs_sb_info *sbi, u8 *label, int len);
 
 /* Globals from index.c */
 int indx_used_bit(struct ntfs_index *indx, struct ntfs_inode *ni, size_t *bit);
@@ -700,16 +702,15 @@ int ntfs_get_block(struct inode *inode, sector_t vbn,
 		   struct buffer_head *bh_result, int create);
 int ntfs_write_begin(struct file *file, struct address_space *mapping,
 		     loff_t pos, u32 len, struct page **pagep, void **fsdata);
-int ntfs_write_end(struct file *file, struct address_space *mapping,
-		   loff_t pos, u32 len, u32 copied, struct page *page,
-		   void *fsdata);
+int ntfs_write_end(struct file *file, struct address_space *mapping, loff_t pos,
+		   u32 len, u32 copied, struct page *page, void *fsdata);
 int ntfs3_write_inode(struct inode *inode, struct writeback_control *wbc);
 int ntfs_sync_inode(struct inode *inode);
 int ntfs_flush_inodes(struct super_block *sb, struct inode *i1,
 		      struct inode *i2);
 int inode_write_data(struct inode *inode, const void *data, size_t bytes);
-struct inode *ntfs_create_inode(struct mnt_idmap *idmap,
-				struct inode *dir, struct dentry *dentry,
+struct inode *ntfs_create_inode(struct mnt_idmap *idmap, struct inode *dir,
+				struct dentry *dentry,
 				const struct cpu_str *uni, umode_t mode,
 				dev_t dev, const char *symname, u32 size,
 				struct ntfs_fnd *fnd);
@@ -738,7 +739,7 @@ struct ATTRIB *mi_enum_attr(struct mft_inode *mi, struct ATTRIB *attr);
 // TODO: id?
 struct ATTRIB *mi_find_attr(struct mft_inode *mi, struct ATTRIB *attr,
 			    enum ATTR_TYPE type, const __le16 *name,
-			    size_t name_len, const __le16 *id);
+			    u8 name_len, const __le16 *id);
 static inline struct ATTRIB *rec_find_attr_le(struct mft_inode *rec,
 					      struct ATTR_LIST_ENTRY *le)
 {
@@ -858,7 +859,8 @@ unsigned long ntfs_names_hash(const u16 *name, size_t len, const u16 *upcase,
 
 /* globals from xattr.c */
 #ifdef CONFIG_NTFS3_FS_POSIX_ACL
-struct posix_acl *ntfs_get_acl(struct inode *inode, int type, bool rcu);
+struct posix_acl *ntfs_get_acl(struct mnt_idmap *idmap, struct dentry *dentry,
+			       int type);
 int ntfs_set_acl(struct mnt_idmap *idmap, struct dentry *dentry,
 		 struct posix_acl *acl, int type);
 int ntfs_init_acl(struct mnt_idmap *idmap, struct inode *inode,
@@ -869,12 +871,10 @@ int ntfs_init_acl(struct mnt_idmap *idmap, struct inode *inode,
 #endif
 
 int ntfs_acl_chmod(struct mnt_idmap *idmap, struct dentry *dentry);
-int ntfs_permission(struct mnt_idmap *idmap, struct inode *inode,
-		    int mask);
 ssize_t ntfs_listxattr(struct dentry *dentry, char *buffer, size_t size);
 extern const struct xattr_handler *ntfs_xattr_handlers[];
 
-int ntfs_save_wsl_perm(struct inode *inode);
+int ntfs_save_wsl_perm(struct inode *inode, __le16 *ea_size);
 void ntfs_get_wsl_perm(struct inode *inode);
 
 /* globals from lznt.c */

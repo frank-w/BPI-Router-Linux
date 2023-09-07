@@ -39,11 +39,16 @@ static inline void contextidr_thread_switch(struct task_struct *next)
 /*
  * Set TTBR0 to reserved_pg_dir. No translations will be possible via TTBR0.
  */
-static inline void cpu_set_reserved_ttbr0(void)
+static inline void cpu_set_reserved_ttbr0_nosync(void)
 {
 	unsigned long ttbr = phys_to_ttbr(__pa_symbol(reserved_pg_dir));
 
 	write_sysreg(ttbr, ttbr0_el1);
+}
+
+static inline void cpu_set_reserved_ttbr0(void)
+{
+	cpu_set_reserved_ttbr0_nosync();
 	isb();
 }
 
@@ -52,7 +57,6 @@ void cpu_do_switch_mm(phys_addr_t pgd_phys, struct mm_struct *mm);
 static inline void cpu_switch_mm(pgd_t *pgd, struct mm_struct *mm)
 {
 	BUG_ON(pgd == swapper_pg_dir);
-	cpu_set_reserved_ttbr0();
 	cpu_do_switch_mm(virt_to_phys(pgd),mm);
 }
 
@@ -164,7 +168,7 @@ static inline void cpu_replace_ttbr1(pgd_t *pgdp, pgd_t *idmap)
 		 * up (i.e. cpufeature framework is not up yet) and
 		 * latter only when we enable CNP via cpufeature's
 		 * enable() callback.
-		 * Also we rely on the cpu_hwcap bit being set before
+		 * Also we rely on the system_cpucaps bit being set before
 		 * calling the enable() function.
 		 */
 		ttbr1 |= TTBR_CNP_BIT;
@@ -287,6 +291,12 @@ void post_ttbr_update_workaround(void);
 
 unsigned long arm64_mm_context_get(struct mm_struct *mm);
 void arm64_mm_context_put(struct mm_struct *mm);
+
+#define mm_untag_mask mm_untag_mask
+static inline unsigned long mm_untag_mask(struct mm_struct *mm)
+{
+	return -1UL >> 8;
+}
 
 #include <asm-generic/mmu_context.h>
 

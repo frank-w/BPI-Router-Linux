@@ -356,7 +356,7 @@ struct list_head *zstd_alloc_workspace(unsigned int level)
 	workspace->level = level;
 	workspace->req_level = level;
 	workspace->last_used = jiffies;
-	workspace->mem = kvmalloc(workspace->size, GFP_KERNEL);
+	workspace->mem = kvmalloc(workspace->size, GFP_KERNEL | __GFP_NOWARN);
 	workspace->buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!workspace->mem || !workspace->buf)
 		goto fail;
@@ -609,7 +609,6 @@ int zstd_decompress_bio(struct list_head *ws, struct compressed_bio *cb)
 		}
 	}
 	ret = 0;
-	zero_fill_bio(cb->orig_bio);
 done:
 	if (workspace->in_buf.src)
 		kunmap_local(workspace->in_buf.src);

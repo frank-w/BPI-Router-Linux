@@ -260,7 +260,7 @@ static int zinitix_init_regulators(struct bt541_ts_data *bt541)
 	 * so check if "vddo" is present and in that case use these names.
 	 * Else use the proper supply names on the component.
 	 */
-	if (of_find_property(dev->of_node, "vddo-supply", NULL)) {
+	if (of_property_present(dev->of_node, "vddo-supply")) {
 		bt541->supplies[0].supply = "vdd";
 		bt541->supplies[1].supply = "vddo";
 	} else {
@@ -617,7 +617,7 @@ MODULE_DEVICE_TABLE(of, zinitix_of_match);
 #endif
 
 static struct i2c_driver zinitix_ts_driver = {
-	.probe_new = zinitix_ts_probe,
+	.probe = zinitix_ts_probe,
 	.driver = {
 		.name = "Zinitix-TS",
 		.pm = pm_sleep_ptr(&zinitix_pm_ops),

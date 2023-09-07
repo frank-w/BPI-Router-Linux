@@ -35,6 +35,8 @@
 #include <linux/mlx5/mlx5_ifc_vdpa.h>
 #include <linux/mlx5/vport.h>
 #include "mlx5_core.h"
+#include "devlink.h"
+#include "lag/lag.h"
 
 /* intf dev list mutex */
 static DEFINE_MUTEX(mlx5_intf_mutex);
@@ -106,17 +108,6 @@ bool mlx5_eth_supported(struct mlx5_core_dev *dev)
 	return true;
 }
 
-static bool is_eth_enabled(struct mlx5_core_dev *dev)
-{
-	union devlink_param_value val;
-	int err;
-
-	err = devl_param_driverinit_value_get(priv_to_devlink(dev),
-					      DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH,
-					      &val);
-	return err ? false : val.vbool;
-}
-
 bool mlx5_vnet_supported(struct mlx5_core_dev *dev)
 {
 	if (!IS_ENABLED(CONFIG_MLX5_VDPA_NET))
@@ -159,12 +150,6 @@ static bool is_ib_rep_supported(struct mlx5_core_dev *dev)
 		return false;
 
 	if (!is_eth_rep_supported(dev))
-		return false;
-
-	if (!MLX5_ESWITCH_MANAGER(dev))
-		return false;
-
-	if (!is_mdev_switchdev_mode(dev))
 		return false;
 
 	if (mlx5_core_mp_enabled(dev))
@@ -245,7 +230,7 @@ static const struct mlx5_adev_device {
 					 .is_enabled = &is_ib_enabled },
 	[MLX5_INTERFACE_PROTOCOL_ETH] = { .suffix = "eth",
 					  .is_supported = &mlx5_eth_supported,
-					  .is_enabled = &is_eth_enabled },
+					  .is_enabled = &mlx5_core_is_eth_enabled },
 	[MLX5_INTERFACE_PROTOCOL_ETH_REP] = { .suffix = "eth-rep",
 					   .is_supported = &is_eth_rep_supported },
 	[MLX5_INTERFACE_PROTOCOL_IB_REP] = { .suffix = "rdma-rep",
@@ -331,6 +316,18 @@ static void del_adev(struct auxiliary_device *adev)
 {
 	auxiliary_device_delete(adev);
 	auxiliary_device_uninit(adev);
+}
+
+void mlx5_dev_set_lightweight(struct mlx5_core_dev *dev)
+{
+	mutex_lock(&mlx5_intf_mutex);
+	dev->priv.flags |= MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV;
+	mutex_unlock(&mlx5_intf_mutex);
+}
+
+bool mlx5_dev_is_lightweight(struct mlx5_core_dev *dev)
+{
+	return dev->priv.flags & MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV;
 }
 
 int mlx5_attach_device(struct mlx5_core_dev *dev)
@@ -467,6 +464,10 @@ static int add_drivers(struct mlx5_core_dev *dev)
 		if (priv->adev[i])
 			continue;
 
+		if (mlx5_adev_devices[i].is_enabled &&
+		    !(mlx5_adev_devices[i].is_enabled(dev)))
+			continue;
+
 		if (mlx5_adev_devices[i].is_supported)
 			is_supported = mlx5_adev_devices[i].is_supported(dev);
 
@@ -587,10 +588,7 @@ static int next_phys_dev_lag(struct device *dev, const void *data)
 	if (!mdev)
 		return 0;
 
-	if (!MLX5_CAP_GEN(mdev, vport_group_manager) ||
-	    !MLX5_CAP_GEN(mdev, lag_master) ||
-	    (MLX5_CAP_GEN(mdev, num_lag_ports) > MLX5_MAX_PORTS ||
-	     MLX5_CAP_GEN(mdev, num_lag_ports) <= 1))
+	if (!mlx5_lag_is_supported(mdev))
 		return 0;
 
 	return _next_phys_dev(mdev, data);

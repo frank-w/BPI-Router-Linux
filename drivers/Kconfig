@@ -129,8 +129,6 @@ source "drivers/dma-buf/Kconfig"
 
 source "drivers/dca/Kconfig"
 
-source "drivers/auxdisplay/Kconfig"
-
 source "drivers/uio/Kconfig"
 
 source "drivers/vfio/Kconfig"
@@ -240,5 +238,7 @@ source "drivers/most/Kconfig"
 source "drivers/peci/Kconfig"
 
 source "drivers/hte/Kconfig"
+
+source "drivers/cdx/Kconfig"
 
 endmenu

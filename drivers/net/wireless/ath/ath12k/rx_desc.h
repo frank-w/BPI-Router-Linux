@@ -221,7 +221,7 @@ struct rx_mpdu_start_qcn9274 {
  *		PPE routing even if RXOLE CCE or flow search indicate 'Use_PPE'
  *		This is set by SW for peers which are being handled by a
  *		host SW/accelerator subsystem that also handles packet
- *		uffer management for WiFi-to-PPE routing.
+ *		buffer management for WiFi-to-PPE routing.
  *
  *		This is cleared by SW for peers which are being handled
  *		by a different subsystem, completely disabling WiFi-to-PPE
@@ -1072,7 +1072,7 @@ struct rx_msdu_end_qcn9274 {
  *
  * l4_offset
  *		Depending upon mode bit, this field either indicates the
- *		L4 offset nin bytes from the start of RX_HEADER (only valid
+ *		L4 offset in bytes from the start of RX_HEADER (only valid
  *		if either ipv4_proto or ipv6_proto is set to 1) or indicates
  *		the offset in bytes to the start of TCP or UDP header from
  *		the start of the IP header after decapsulation (Only valid if

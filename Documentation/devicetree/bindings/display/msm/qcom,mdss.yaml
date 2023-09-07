@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-only or BSD-2-Clause
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/display/msm/qcom,mdss.yaml#
@@ -11,7 +11,7 @@ maintainers:
   - Rob Clark <robdclark@gmail.com>
 
 description:
-  This is the bindings documentation for the Mobile Display Subsytem(MDSS) that
+  This is the bindings documentation for the Mobile Display Subsystem(MDSS) that
   encapsulates sub-blocks like MDP5, DSI, HDMI, eDP, etc.
 
 properties:
@@ -101,6 +101,7 @@ required:
 patternProperties:
   "^display-controller@[1-9a-f][0-9a-f]*$":
     type: object
+    additionalProperties: true
     properties:
       compatible:
         contains:
@@ -108,6 +109,7 @@ patternProperties:
 
   "^dsi@[1-9a-f][0-9a-f]*$":
     type: object
+    additionalProperties: true
     properties:
       compatible:
         contains:
@@ -115,6 +117,7 @@ patternProperties:
 
   "^phy@[1-9a-f][0-9a-f]*$":
     type: object
+    additionalProperties: true
     properties:
       compatible:
         enum:
@@ -122,6 +125,7 @@ patternProperties:
           - qcom,dsi-phy-14nm-660
           - qcom,dsi-phy-14nm-8953
           - qcom,dsi-phy-20nm
+          - qcom,dsi-phy-28nm-8226
           - qcom,dsi-phy-28nm-hpm
           - qcom,dsi-phy-28nm-lp
           - qcom,hdmi-phy-8084
@@ -132,6 +136,7 @@ patternProperties:
 
   "^hdmi-tx@[1-9a-f][0-9a-f]*$":
     type: object
+    additionalProperties: true
     properties:
       compatible:
         enum:

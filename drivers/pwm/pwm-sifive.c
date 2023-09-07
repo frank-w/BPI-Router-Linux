@@ -244,12 +244,12 @@ static int pwm_sifive_probe(struct platform_device *pdev)
 	if (IS_ERR(ddata->regs))
 		return PTR_ERR(ddata->regs);
 
-	ddata->clk = devm_clk_get(dev, NULL);
+	ddata->clk = devm_clk_get_prepared(dev, NULL);
 	if (IS_ERR(ddata->clk))
 		return dev_err_probe(dev, PTR_ERR(ddata->clk),
 				     "Unable to find controller clock\n");
 
-	ret = clk_prepare_enable(ddata->clk);
+	ret = clk_enable(ddata->clk);
 	if (ret) {
 		dev_err(dev, "failed to enable clock for pwm: %d\n", ret);
 		return ret;
@@ -308,12 +308,11 @@ disable_clk:
 		clk_disable(ddata->clk);
 		--enabled_clks;
 	}
-	clk_unprepare(ddata->clk);
 
 	return ret;
 }
 
-static int pwm_sifive_remove(struct platform_device *dev)
+static void pwm_sifive_remove(struct platform_device *dev)
 {
 	struct pwm_sifive_ddata *ddata = platform_get_drvdata(dev);
 	struct pwm_device *pwm;
@@ -327,10 +326,6 @@ static int pwm_sifive_remove(struct platform_device *dev)
 		if (pwm->state.enabled)
 			clk_disable(ddata->clk);
 	}
-
-	clk_unprepare(ddata->clk);
-
-	return 0;
 }
 
 static const struct of_device_id pwm_sifive_of_match[] = {
@@ -341,7 +336,7 @@ MODULE_DEVICE_TABLE(of, pwm_sifive_of_match);
 
 static struct platform_driver pwm_sifive_driver = {
 	.probe = pwm_sifive_probe,
-	.remove = pwm_sifive_remove,
+	.remove_new = pwm_sifive_remove,
 	.driver = {
 		.name = "pwm-sifive",
 		.of_match_table = pwm_sifive_of_match,

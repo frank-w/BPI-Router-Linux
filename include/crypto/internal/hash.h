@@ -133,8 +133,6 @@ int shash_ahash_update(struct ahash_request *req, struct shash_desc *desc);
 int shash_ahash_finup(struct ahash_request *req, struct shash_desc *desc);
 int shash_ahash_digest(struct ahash_request *req, struct shash_desc *desc);
 
-int crypto_init_shash_ops_async(struct crypto_tfm *tfm);
-
 static inline void *crypto_ahash_ctx(struct crypto_ahash *tfm)
 {
 	return crypto_tfm_ctx(crypto_ahash_tfm(tfm));
@@ -149,6 +147,18 @@ static inline struct ahash_alg *__crypto_ahash_alg(struct crypto_alg *alg)
 {
 	return container_of(__crypto_hash_alg_common(alg), struct ahash_alg,
 			    halg);
+}
+
+static inline struct ahash_alg *crypto_ahash_alg(struct crypto_ahash *hash)
+{
+	return container_of(crypto_hash_alg_common(hash), struct ahash_alg,
+			    halg);
+}
+
+static inline void crypto_ahash_set_statesize(struct crypto_ahash *tfm,
+					      unsigned int size)
+{
+	tfm->statesize = size;
 }
 
 static inline void crypto_ahash_set_reqsize(struct crypto_ahash *tfm,

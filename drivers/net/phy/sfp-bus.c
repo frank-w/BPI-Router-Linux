@@ -151,6 +151,10 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 	unsigned int br_min, br_nom, br_max;
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(modes) = { 0, };
 
+	phylink_set(modes, Autoneg);
+	phylink_set(modes, Pause);
+	phylink_set(modes, Asym_Pause);
+
 	/* Decode the bitrate information to MBd */
 	br_min = br_nom = br_max = 0;
 	if (id->base.br_nominal) {
@@ -254,6 +258,16 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 	switch (id->base.extended_cc) {
 	case SFF8024_ECC_UNSPEC:
 		break;
+	case SFF8024_ECC_100G_25GAUI_C2M_AOC:
+		if (br_min <= 28000 && br_max >= 25000) {
+			/* 25GBASE-R, possibly with FEC */
+			__set_bit(PHY_INTERFACE_MODE_25GBASER, interfaces);
+			/* There is currently no link mode for 25000base
+			 * with unspecified range, reuse SR.
+			 */
+			phylink_set(modes, 25000baseSR_Full);
+		}
+		break;
 	case SFF8024_ECC_100GBASE_SR4_25GBASE_SR:
 		phylink_set(modes, 100000baseSR4_Full);
 		phylink_set(modes, 25000baseSR_Full);
@@ -329,10 +343,6 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 		bus->sfp_quirk->modes(id, modes, interfaces);
 
 	linkmode_or(support, support, modes);
-
-	phylink_set(support, Autoneg);
-	phylink_set(support, Pause);
-	phylink_set(support, Asym_Pause);
 }
 EXPORT_SYMBOL_GPL(sfp_parse_support);
 
@@ -574,6 +584,26 @@ static void sfp_upstream_clear(struct sfp_bus *bus)
 	bus->upstream_ops = NULL;
 	bus->upstream = NULL;
 }
+
+/**
+ * sfp_upstream_set_signal_rate() - set data signalling rate
+ * @bus: a pointer to the &struct sfp_bus structure for the sfp module
+ * @rate_kbd: signalling rate in units of 1000 baud
+ *
+ * Configure the rate select settings on the SFP module for the signalling
+ * rate (not the same as the data rate).
+ *
+ * Locks that may be held:
+ *  Phylink's state_mutex
+ *  rtnl lock
+ *  SFP's sm_mutex
+ */
+void sfp_upstream_set_signal_rate(struct sfp_bus *bus, unsigned int rate_kbd)
+{
+	if (bus->registered)
+		bus->socket_ops->set_signal_rate(bus->sfp, rate_kbd);
+}
+EXPORT_SYMBOL_GPL(sfp_upstream_set_signal_rate);
 
 /**
  * sfp_bus_find_fwnode() - parse and locate the SFP bus from fwnode

@@ -227,7 +227,7 @@ static const struct pmu_events_map pmu_events_map[] = {
 	},
 };
 
-static const struct pmu_event pme_test_soc_sys[] = {
+static const struct pmu_event pmu_events__test_soc_sys[] = {
 	{
 		.name = "sys_ddr_pmu.write_cycles",
 		.event = "event=0x2b",
@@ -258,8 +258,8 @@ struct pmu_sys_events {
 
 static const struct pmu_sys_events pmu_sys_event_tables[] = {
 	{
-		.table = { pme_test_soc_sys },
-		.name = "pme_test_soc_sys",
+		.table = { pmu_events__test_soc_sys },
+		.name = "pmu_events__test_soc_sys",
 	},
 	{
 		.table = { 0 }
@@ -419,4 +419,9 @@ int pmu_for_each_sys_event(pmu_event_iter_fn fn, void *data)
 int pmu_for_each_sys_metric(pmu_metric_iter_fn fn __maybe_unused, void *data __maybe_unused)
 {
 	return 0;
+}
+
+const char *describe_metricgroup(const char *group __maybe_unused)
+{
+	return NULL;
 }

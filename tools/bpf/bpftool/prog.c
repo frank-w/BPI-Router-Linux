@@ -840,11 +840,6 @@ prog_dump(struct bpf_prog_info *info, enum dump_mode mode,
 					      false))
 				goto exit_free;
 		}
-	} else if (visual) {
-		if (json_output)
-			jsonw_null(json_wtr);
-		else
-			dump_xlated_cfg(buf, member_len);
 	} else {
 		kernel_syms_load(&dd);
 		dd.nr_jited_ksyms = info->nr_jited_ksyms;
@@ -855,11 +850,11 @@ prog_dump(struct bpf_prog_info *info, enum dump_mode mode,
 		dd.prog_linfo = prog_linfo;
 
 		if (json_output)
-			dump_xlated_json(&dd, buf, member_len, opcodes,
-					 linum);
+			dump_xlated_json(&dd, buf, member_len, opcodes, linum);
+		else if (visual)
+			dump_xlated_cfg(&dd, buf, member_len, opcodes, linum);
 		else
-			dump_xlated_plain(&dd, buf, member_len, opcodes,
-					  linum);
+			dump_xlated_plain(&dd, buf, member_len, opcodes, linum);
 		kernel_syms_destroy(&dd);
 	}
 
@@ -910,37 +905,46 @@ static int do_dump(int argc, char **argv)
 	if (nb_fds < 1)
 		goto exit_free;
 
-	if (is_prefix(*argv, "file")) {
-		NEXT_ARG();
-		if (!argc) {
-			p_err("expected file path");
-			goto exit_close;
-		}
-		if (nb_fds > 1) {
-			p_err("several programs matched");
-			goto exit_close;
-		}
+	while (argc) {
+		if (is_prefix(*argv, "file")) {
+			NEXT_ARG();
+			if (!argc) {
+				p_err("expected file path");
+				goto exit_close;
+			}
+			if (nb_fds > 1) {
+				p_err("several programs matched");
+				goto exit_close;
+			}
 
-		filepath = *argv;
-		NEXT_ARG();
-	} else if (is_prefix(*argv, "opcodes")) {
-		opcodes = true;
-		NEXT_ARG();
-	} else if (is_prefix(*argv, "visual")) {
-		if (nb_fds > 1) {
-			p_err("several programs matched");
+			filepath = *argv;
+			NEXT_ARG();
+		} else if (is_prefix(*argv, "opcodes")) {
+			opcodes = true;
+			NEXT_ARG();
+		} else if (is_prefix(*argv, "visual")) {
+			if (nb_fds > 1) {
+				p_err("several programs matched");
+				goto exit_close;
+			}
+
+			visual = true;
+			NEXT_ARG();
+		} else if (is_prefix(*argv, "linum")) {
+			linum = true;
+			NEXT_ARG();
+		} else {
+			usage();
 			goto exit_close;
 		}
-
-		visual = true;
-		NEXT_ARG();
-	} else if (is_prefix(*argv, "linum")) {
-		linum = true;
-		NEXT_ARG();
 	}
 
-	if (argc) {
-		usage();
+	if (filepath && (opcodes || visual || linum)) {
+		p_err("'file' is not compatible with 'opcodes', 'visual', or 'linum'");
+		goto exit_close;
+	}
+	if (json_output && visual) {
+		p_err("'visual' is not compatible with JSON output");
 		goto exit_close;
 	}
 
@@ -1472,19 +1476,6 @@ auto_attach_program(struct bpf_program *prog, const char *path)
 	return err;
 }
 
-static int pathname_concat(char *buf, size_t buf_sz, const char *path, const char *name)
-{
-	int len;
-
-	len = snprintf(buf, buf_sz, "%s/%s", path, name);
-	if (len < 0)
-		return -EINVAL;
-	if ((size_t)len >= buf_sz)
-		return -ENAMETOOLONG;
-
-	return 0;
-}
-
 static int
 auto_attach_programs(struct bpf_object *obj, const char *path)
 {
@@ -1526,12 +1517,13 @@ static int load_with_options(int argc, char **argv, bool first_prog_only)
 	struct bpf_program *prog = NULL, *pos;
 	unsigned int old_map_fds = 0;
 	const char *pinmaps = NULL;
+	__u32 xdpmeta_ifindex = 0;
+	__u32 offload_ifindex = 0;
 	bool auto_attach = false;
 	struct bpf_object *obj;
 	struct bpf_map *map;
 	const char *pinfile;
 	unsigned int i, j;
-	__u32 ifindex = 0;
 	const char *file;
 	int idx, err;
 
@@ -1623,17 +1615,46 @@ static int load_with_options(int argc, char **argv, bool first_prog_only)
 			map_replace[old_map_fds].fd = fd;
 			old_map_fds++;
 		} else if (is_prefix(*argv, "dev")) {
+			p_info("Warning: 'bpftool prog load [...] dev <ifname>' syntax is deprecated.\n"
+			       "Going further, please use 'offload_dev <ifname>' to offload program to device.\n"
+			       "For applications using XDP hints only, use 'xdpmeta_dev <ifname>'.");
+			goto offload_dev;
+		} else if (is_prefix(*argv, "offload_dev")) {
+offload_dev:
 			NEXT_ARG();
 
-			if (ifindex) {
-				p_err("offload device already specified");
+			if (offload_ifindex) {
+				p_err("offload_dev already specified");
+				goto err_free_reuse_maps;
+			} else if (xdpmeta_ifindex) {
+				p_err("xdpmeta_dev and offload_dev are mutually exclusive");
 				goto err_free_reuse_maps;
 			}
 			if (!REQ_ARGS(1))
 				goto err_free_reuse_maps;
 
-			ifindex = if_nametoindex(*argv);
-			if (!ifindex) {
+			offload_ifindex = if_nametoindex(*argv);
+			if (!offload_ifindex) {
+				p_err("unrecognized netdevice '%s': %s",
+				      *argv, strerror(errno));
+				goto err_free_reuse_maps;
+			}
+			NEXT_ARG();
+		} else if (is_prefix(*argv, "xdpmeta_dev")) {
+			NEXT_ARG();
+
+			if (xdpmeta_ifindex) {
+				p_err("xdpmeta_dev already specified");
+				goto err_free_reuse_maps;
+			} else if (offload_ifindex) {
+				p_err("xdpmeta_dev and offload_dev are mutually exclusive");
+				goto err_free_reuse_maps;
+			}
+			if (!REQ_ARGS(1))
+				goto err_free_reuse_maps;
+
+			xdpmeta_ifindex = if_nametoindex(*argv);
+			if (!xdpmeta_ifindex) {
 				p_err("unrecognized netdevice '%s': %s",
 				      *argv, strerror(errno));
 				goto err_free_reuse_maps;
@@ -1680,8 +1701,14 @@ static int load_with_options(int argc, char **argv, bool first_prog_only)
 				goto err_close_obj;
 		}
 
-		bpf_program__set_ifindex(pos, ifindex);
-		bpf_program__set_type(pos, prog_type);
+		if (prog_type == BPF_PROG_TYPE_XDP && xdpmeta_ifindex) {
+			bpf_program__set_flags(pos, BPF_F_XDP_DEV_BOUND_ONLY);
+			bpf_program__set_ifindex(pos, xdpmeta_ifindex);
+		} else {
+			bpf_program__set_ifindex(pos, offload_ifindex);
+		}
+		if (bpf_program__type(pos) != prog_type)
+			bpf_program__set_type(pos, prog_type);
 		bpf_program__set_expected_attach_type(pos, expected_attach_type);
 	}
 
@@ -1717,7 +1744,7 @@ static int load_with_options(int argc, char **argv, bool first_prog_only)
 	idx = 0;
 	bpf_object__for_each_map(map, obj) {
 		if (bpf_map__type(map) != BPF_MAP_TYPE_PERF_EVENT_ARRAY)
-			bpf_map__set_ifindex(map, ifindex);
+			bpf_map__set_ifindex(map, offload_ifindex);
 
 		if (j < old_map_fds && idx == map_replace[j].idx) {
 			err = bpf_map__reuse_fd(map, map_replace[j++].fd);
@@ -1747,7 +1774,7 @@ static int load_with_options(int argc, char **argv, bool first_prog_only)
 		goto err_close_obj;
 	}
 
-	err = mount_bpffs_for_pin(pinfile);
+	err = mount_bpffs_for_pin(pinfile, !first_prog_only);
 	if (err)
 		goto err_close_obj;
 
@@ -2420,11 +2447,11 @@ static int do_help(int argc, char **argv)
 
 	fprintf(stderr,
 		"Usage: %1$s %2$s { show | list } [PROG]\n"
-		"       %1$s %2$s dump xlated PROG [{ file FILE | opcodes | visual | linum }]\n"
-		"       %1$s %2$s dump jited  PROG [{ file FILE | opcodes | linum }]\n"
+		"       %1$s %2$s dump xlated PROG [{ file FILE | [opcodes] [linum] [visual] }]\n"
+		"       %1$s %2$s dump jited  PROG [{ file FILE | [opcodes] [linum] }]\n"
 		"       %1$s %2$s pin   PROG FILE\n"
 		"       %1$s %2$s { load | loadall } OBJ  PATH \\\n"
-		"                         [type TYPE] [dev NAME] \\\n"
+		"                         [type TYPE] [{ offload_dev | xdpmeta_dev } NAME] \\\n"
 		"                         [map { idx IDX | name NAME } MAP]\\\n"
 		"                         [pinmaps MAP_DIR]\n"
 		"                         [autoattach]\n"

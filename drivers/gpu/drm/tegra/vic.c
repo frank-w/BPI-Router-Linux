@@ -10,8 +10,6 @@
 #include <linux/iommu.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
@@ -143,13 +141,9 @@ static int vic_init(struct host1x_client *client)
 		goto free_channel;
 	}
 
-	pm_runtime_enable(client->dev);
-	pm_runtime_use_autosuspend(client->dev);
-	pm_runtime_set_autosuspend_delay(client->dev, 500);
-
 	err = tegra_drm_register_client(tegra, drm);
 	if (err < 0)
-		goto disable_rpm;
+		goto free_syncpt;
 
 	/*
 	 * Inherit the DMA parameters (such as maximum segment size) from the
@@ -159,10 +153,7 @@ static int vic_init(struct host1x_client *client)
 
 	return 0;
 
-disable_rpm:
-	pm_runtime_dont_use_autosuspend(client->dev);
-	pm_runtime_force_suspend(client->dev);
-
+free_syncpt:
 	host1x_syncpt_put(client->syncpts[0]);
 free_channel:
 	host1x_channel_put(vic->channel);
@@ -529,6 +520,10 @@ static int vic_probe(struct platform_device *pdev)
 		goto exit_falcon;
 	}
 
+	pm_runtime_enable(dev);
+	pm_runtime_use_autosuspend(dev);
+	pm_runtime_set_autosuspend_delay(dev, 500);
+
 	return 0;
 
 exit_falcon:
@@ -537,21 +532,13 @@ exit_falcon:
 	return err;
 }
 
-static int vic_remove(struct platform_device *pdev)
+static void vic_remove(struct platform_device *pdev)
 {
 	struct vic *vic = platform_get_drvdata(pdev);
-	int err;
 
-	err = host1x_client_unregister(&vic->client.base);
-	if (err < 0) {
-		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
-			err);
-		return err;
-	}
-
+	pm_runtime_disable(&pdev->dev);
+	host1x_client_unregister(&vic->client.base);
 	falcon_exit(&vic->falcon);
-
-	return 0;
 }
 
 static const struct dev_pm_ops vic_pm_ops = {
@@ -566,7 +553,7 @@ struct platform_driver tegra_vic_driver = {
 		.pm = &vic_pm_ops
 	},
 	.probe = vic_probe,
-	.remove = vic_remove,
+	.remove_new = vic_remove,
 };
 
 #if IS_ENABLED(CONFIG_ARCH_TEGRA_124_SOC)

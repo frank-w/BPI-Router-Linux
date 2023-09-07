@@ -25,6 +25,9 @@ static const char *const snor_f_names[] = {
 	SNOR_F_NAME(IO_MODE_EN_VOLATILE),
 	SNOR_F_NAME(SOFT_RESET),
 	SNOR_F_NAME(SWP_IS_VOLATILE),
+	SNOR_F_NAME(RWW),
+	SNOR_F_NAME(ECC),
+	SNOR_F_NAME(NO_WP),
 };
 #undef SNOR_F_NAME
 

@@ -601,16 +601,6 @@ static void davinci_i2s_shutdown(struct snd_pcm_substream *substream,
 #define DAVINCI_I2S_FORMATS	(SNDRV_PCM_FMTBIT_S16_LE | \
 				 SNDRV_PCM_FMTBIT_S32_LE)
 
-static const struct snd_soc_dai_ops davinci_i2s_dai_ops = {
-	.shutdown	= davinci_i2s_shutdown,
-	.prepare	= davinci_i2s_prepare,
-	.trigger	= davinci_i2s_trigger,
-	.hw_params	= davinci_i2s_hw_params,
-	.set_fmt	= davinci_i2s_set_dai_fmt,
-	.set_clkdiv	= davinci_i2s_dai_set_clkdiv,
-
-};
-
 static int davinci_i2s_dai_probe(struct snd_soc_dai *dai)
 {
 	struct davinci_mcbsp_dev *dev = snd_soc_dai_get_drvdata(dai);
@@ -622,8 +612,18 @@ static int davinci_i2s_dai_probe(struct snd_soc_dai *dai)
 	return 0;
 }
 
+static const struct snd_soc_dai_ops davinci_i2s_dai_ops = {
+	.probe		= davinci_i2s_dai_probe,
+	.shutdown	= davinci_i2s_shutdown,
+	.prepare	= davinci_i2s_prepare,
+	.trigger	= davinci_i2s_trigger,
+	.hw_params	= davinci_i2s_hw_params,
+	.set_fmt	= davinci_i2s_set_dai_fmt,
+	.set_clkdiv	= davinci_i2s_dai_set_clkdiv,
+
+};
+
 static struct snd_soc_dai_driver davinci_i2s_dai = {
-	.probe = davinci_i2s_dai_probe,
 	.playback = {
 		.channels_min = 2,
 		.channels_max = 2,
@@ -739,7 +739,7 @@ err_put_clk:
 	return ret;
 }
 
-static int davinci_i2s_remove(struct platform_device *pdev)
+static void davinci_i2s_remove(struct platform_device *pdev)
 {
 	struct davinci_mcbsp_dev *dev = dev_get_drvdata(&pdev->dev);
 
@@ -748,8 +748,6 @@ static int davinci_i2s_remove(struct platform_device *pdev)
 	clk_disable(dev->clk);
 	clk_put(dev->clk);
 	dev->clk = NULL;
-
-	return 0;
 }
 
 static const struct of_device_id davinci_i2s_match[] __maybe_unused = {
@@ -760,7 +758,7 @@ MODULE_DEVICE_TABLE(of, davinci_i2s_match);
 
 static struct platform_driver davinci_mcbsp_driver = {
 	.probe		= davinci_i2s_probe,
-	.remove		= davinci_i2s_remove,
+	.remove_new	= davinci_i2s_remove,
 	.driver		= {
 		.name	= "davinci-mcbsp",
 		.of_match_table = of_match_ptr(davinci_i2s_match),

@@ -23,7 +23,8 @@ static int sof_ipc4_set_multi_pipeline_state(struct snd_sof_dev *sdev, u32 state
 
 	/* trigger a single pipeline */
 	if (trigger_list->count == 1)
-		return sof_ipc4_set_pipeline_state(sdev, trigger_list->pipeline_ids[0], state);
+		return sof_ipc4_set_pipeline_state(sdev, trigger_list->pipeline_instance_ids[0],
+						   state);
 
 	primary = state;
 	primary |= SOF_IPC4_MSG_TYPE_SET(SOF_IPC4_GLB_SET_PIPELINE_STATE);
@@ -39,25 +40,25 @@ static int sof_ipc4_set_multi_pipeline_state(struct snd_sof_dev *sdev, u32 state
 	msg.data_size = ipc_size;
 	msg.data_ptr = trigger_list;
 
-	return sof_ipc_tx_message(sdev->ipc, &msg, ipc_size, NULL, 0);
+	return sof_ipc_tx_message_no_reply(sdev->ipc, &msg, ipc_size);
 }
 
-int sof_ipc4_set_pipeline_state(struct snd_sof_dev *sdev, u32 id, u32 state)
+int sof_ipc4_set_pipeline_state(struct snd_sof_dev *sdev, u32 instance_id, u32 state)
 {
 	struct sof_ipc4_msg msg = {{ 0 }};
 	u32 primary;
 
-	dev_dbg(sdev->dev, "ipc4 set pipeline %d state %d", id, state);
+	dev_dbg(sdev->dev, "ipc4 set pipeline instance %d state %d", instance_id, state);
 
 	primary = state;
-	primary |= SOF_IPC4_GLB_PIPE_STATE_ID(id);
+	primary |= SOF_IPC4_GLB_PIPE_STATE_ID(instance_id);
 	primary |= SOF_IPC4_MSG_TYPE_SET(SOF_IPC4_GLB_SET_PIPELINE_STATE);
 	primary |= SOF_IPC4_MSG_DIR(SOF_IPC4_MSG_REQUEST);
 	primary |= SOF_IPC4_MSG_TARGET(SOF_IPC4_FW_GEN_MSG);
 
 	msg.primary = primary;
 
-	return sof_ipc_tx_message(sdev->ipc, &msg, 0, NULL, 0);
+	return sof_ipc_tx_message_no_reply(sdev->ipc, &msg, 0);
 }
 EXPORT_SYMBOL(sof_ipc4_set_pipeline_state);
 
@@ -69,7 +70,7 @@ sof_ipc4_add_pipeline_to_trigger_list(struct snd_sof_dev *sdev, int state,
 	struct snd_sof_widget *pipe_widget = spipe->pipe_widget;
 	struct sof_ipc4_pipeline *pipeline = pipe_widget->private;
 
-	if (pipeline->skip_during_fe_trigger)
+	if (pipeline->skip_during_fe_trigger && state != SOF_IPC4_PIPE_RESET)
 		return;
 
 	switch (state) {
@@ -79,19 +80,19 @@ sof_ipc4_add_pipeline_to_trigger_list(struct snd_sof_dev *sdev, int state,
 		 * for the first time
 		 */
 		if (spipe->started_count == spipe->paused_count)
-			trigger_list->pipeline_ids[trigger_list->count++] =
+			trigger_list->pipeline_instance_ids[trigger_list->count++] =
 				pipe_widget->instance_id;
 		break;
 	case SOF_IPC4_PIPE_RESET:
 		/* RESET if the pipeline is neither running nor paused */
 		if (!spipe->started_count && !spipe->paused_count)
-			trigger_list->pipeline_ids[trigger_list->count++] =
+			trigger_list->pipeline_instance_ids[trigger_list->count++] =
 				pipe_widget->instance_id;
 		break;
 	case SOF_IPC4_PIPE_PAUSED:
 		/* Pause the pipeline only when its started_count is 1 more than paused_count */
 		if (spipe->paused_count == (spipe->started_count - 1))
-			trigger_list->pipeline_ids[trigger_list->count++] =
+			trigger_list->pipeline_instance_ids[trigger_list->count++] =
 				pipe_widget->instance_id;
 		break;
 	default:
@@ -108,12 +109,12 @@ sof_ipc4_update_pipeline_state(struct snd_sof_dev *sdev, int state, int cmd,
 	struct sof_ipc4_pipeline *pipeline = pipe_widget->private;
 	int i;
 
-	if (pipeline->skip_during_fe_trigger)
+	if (pipeline->skip_during_fe_trigger && state != SOF_IPC4_PIPE_RESET)
 		return;
 
 	/* set state for pipeline if it was just triggered */
 	for (i = 0; i < trigger_list->count; i++) {
-		if (trigger_list->pipeline_ids[i] == pipe_widget->instance_id) {
+		if (trigger_list->pipeline_instance_ids[i] == pipe_widget->instance_id) {
 			pipeline->state = state;
 			break;
 		}
@@ -193,6 +194,88 @@ sof_ipc4_update_pipeline_state(struct snd_sof_dev *sdev, int state, int cmd,
  * prepare ioctl before the START trigger.
  */
 
+/*
+ * Chained DMA is a special case where there is no processing on
+ * DSP. The samples are just moved over by host side DMA to a single
+ * buffer on DSP and directly from there to link DMA. However, the
+ * model on SOF driver has two notional pipelines, one at host DAI,
+ * and another at link DAI. They both shall have the use_chain_dma
+ * attribute.
+ */
+
+static int sof_ipc4_chain_dma_trigger(struct snd_sof_dev *sdev,
+				      struct snd_sof_pcm_stream_pipeline_list *pipeline_list,
+				      int state, int cmd)
+{
+	bool allocate, enable, set_fifo_size;
+	struct sof_ipc4_msg msg = {{ 0 }};
+	int i;
+
+	switch (state) {
+	case SOF_IPC4_PIPE_RUNNING: /* Allocate and start chained dma */
+		allocate = true;
+		enable = true;
+		/*
+		 * SOF assumes creation of a new stream from the presence of fifo_size
+		 * in the message, so we must leave it out in pause release case.
+		 */
+		if (cmd == SNDRV_PCM_TRIGGER_PAUSE_RELEASE)
+			set_fifo_size = false;
+		else
+			set_fifo_size = true;
+		break;
+	case SOF_IPC4_PIPE_PAUSED: /* Disable chained DMA. */
+		allocate = true;
+		enable = false;
+		set_fifo_size = false;
+		break;
+	case SOF_IPC4_PIPE_RESET: /* Disable and free chained DMA. */
+		allocate = false;
+		enable = false;
+		set_fifo_size = false;
+		break;
+	default:
+		dev_err(sdev->dev, "Unexpected state %d", state);
+		return -EINVAL;
+	}
+
+	msg.primary = SOF_IPC4_MSG_TYPE_SET(SOF_IPC4_GLB_CHAIN_DMA);
+	msg.primary |= SOF_IPC4_MSG_DIR(SOF_IPC4_MSG_REQUEST);
+	msg.primary |= SOF_IPC4_MSG_TARGET(SOF_IPC4_FW_GEN_MSG);
+
+	/*
+	 * To set-up the DMA chain, the host DMA ID and SCS setting
+	 * are retrieved from the host pipeline configuration. Likewise
+	 * the link DMA ID and fifo_size are retrieved from the link
+	 * pipeline configuration.
+	 */
+	for (i = 0; i < pipeline_list->count; i++) {
+		struct snd_sof_pipeline *spipe = pipeline_list->pipelines[i];
+		struct snd_sof_widget *pipe_widget = spipe->pipe_widget;
+		struct sof_ipc4_pipeline *pipeline = pipe_widget->private;
+
+		if (!pipeline->use_chain_dma) {
+			dev_err(sdev->dev,
+				"All pipelines in chained DMA stream should have use_chain_dma attribute set.");
+			return -EINVAL;
+		}
+
+		msg.primary |= pipeline->msg.primary;
+
+		/* Add fifo_size (actually DMA buffer size) field to the message */
+		if (set_fifo_size)
+			msg.extension |= pipeline->msg.extension;
+	}
+
+	if (allocate)
+		msg.primary |= SOF_IPC4_GLB_CHAIN_DMA_ALLOCATE_MASK;
+
+	if (enable)
+		msg.primary |= SOF_IPC4_GLB_CHAIN_DMA_ENABLE_MASK;
+
+	return sof_ipc_tx_message_no_reply(sdev->ipc, &msg, 0);
+}
+
 static int sof_ipc4_trigger_pipelines(struct snd_soc_component *component,
 				      struct snd_pcm_substream *substream, int state, int cmd)
 {
@@ -201,6 +284,8 @@ static int sof_ipc4_trigger_pipelines(struct snd_soc_component *component,
 	struct snd_sof_pcm_stream_pipeline_list *pipeline_list;
 	struct sof_ipc4_fw_data *ipc4_data = sdev->private;
 	struct ipc4_pipeline_set_state_data *trigger_list;
+	struct snd_sof_widget *pipe_widget;
+	struct sof_ipc4_pipeline *pipeline;
 	struct snd_sof_pipeline *spipe;
 	struct snd_sof_pcm *spcm;
 	int ret;
@@ -218,9 +303,20 @@ static int sof_ipc4_trigger_pipelines(struct snd_soc_component *component,
 	if (!pipeline_list->pipelines || !pipeline_list->count)
 		return 0;
 
+	spipe = pipeline_list->pipelines[0];
+	pipe_widget = spipe->pipe_widget;
+	pipeline = pipe_widget->private;
+
+	/*
+	 * If use_chain_dma attribute is set we proceed to chained DMA
+	 * trigger function that handles the rest for the substream.
+	 */
+	if (pipeline->use_chain_dma)
+		return sof_ipc4_chain_dma_trigger(sdev, pipeline_list, state, cmd);
+
 	/* allocate memory for the pipeline data */
-	trigger_list = kzalloc(struct_size(trigger_list, pipeline_ids, pipeline_list->count),
-			       GFP_KERNEL);
+	trigger_list = kzalloc(struct_size(trigger_list, pipeline_instance_ids,
+					   pipeline_list->count), GFP_KERNEL);
 	if (!trigger_list)
 		return -ENOMEM;
 
@@ -362,15 +458,70 @@ static void ipc4_ssp_dai_config_pcm_params_match(struct snd_sof_dev *sdev, const
 	}
 }
 
+/*
+ * Fixup DAI link parameters for sampling rate based on
+ * DAI copier configuration.
+ */
+static int sof_ipc4_pcm_dai_link_fixup_rate(struct snd_sof_dev *sdev,
+					    struct snd_pcm_hw_params *params,
+					    struct sof_ipc4_copier *ipc4_copier)
+{
+	struct sof_ipc4_pin_format *pin_fmts = ipc4_copier->available_fmt.input_pin_fmts;
+	struct snd_interval *rate = hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
+	int num_input_formats = ipc4_copier->available_fmt.num_input_formats;
+	unsigned int fe_rate = params_rate(params);
+	bool fe_be_rate_match = false;
+	bool single_be_rate = true;
+	unsigned int be_rate;
+	int i;
+
+	/*
+	 * Copier does not change sampling rate, so we
+	 * need to only consider the input pin information.
+	 */
+	for (i = 0; i < num_input_formats; i++) {
+		unsigned int val = pin_fmts[i].audio_fmt.sampling_frequency;
+
+		if (i == 0)
+			be_rate = val;
+		else if (val != be_rate)
+			single_be_rate = false;
+
+		if (val == fe_rate) {
+			fe_be_rate_match = true;
+			break;
+		}
+	}
+
+	/*
+	 * If rate is different than FE rate, topology must
+	 * contain an SRC. But we do require topology to
+	 * define a single rate in the DAI copier config in
+	 * this case (FE rate may be variable).
+	 */
+	if (!fe_be_rate_match) {
+		if (!single_be_rate) {
+			dev_err(sdev->dev, "Unable to select sampling rate for DAI link\n");
+			return -EINVAL;
+		}
+
+		rate->min = be_rate;
+		rate->max = rate->min;
+	}
+
+	return 0;
+}
+
 static int sof_ipc4_pcm_dai_link_fixup(struct snd_soc_pcm_runtime *rtd,
 				       struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, SOF_AUDIO_PCM_DRV_NAME);
 	struct snd_sof_dai *dai = snd_sof_find_dai(component, rtd->dai_link->name);
-	struct snd_interval *rate = hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
-	struct snd_mask *fmt = hw_param_mask(params, SNDRV_PCM_HW_PARAM_FORMAT);
 	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(component);
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct sof_ipc4_copier *ipc4_copier;
+	bool use_chain_dma = false;
+	int dir;
 
 	if (!dai) {
 		dev_err(component->dev, "%s: No DAI found with name %s\n", __func__,
@@ -385,12 +536,26 @@ static int sof_ipc4_pcm_dai_link_fixup(struct snd_soc_pcm_runtime *rtd,
 		return -EINVAL;
 	}
 
-	/* always set BE format to 32-bits for both playback and capture */
-	snd_mask_none(fmt);
-	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S32_LE);
+	for_each_pcm_streams(dir) {
+		struct snd_soc_dapm_widget *w = snd_soc_dai_get_widget(cpu_dai, dir);
 
-	rate->min = ipc4_copier->available_fmt.base_config->audio_fmt.sampling_frequency;
-	rate->max = rate->min;
+		if (w) {
+			struct snd_sof_widget *swidget = w->dobj.private;
+			struct snd_sof_widget *pipe_widget = swidget->spipe->pipe_widget;
+			struct sof_ipc4_pipeline *pipeline = pipe_widget->private;
+
+			if (pipeline->use_chain_dma)
+				use_chain_dma = true;
+		}
+	}
+
+	/* Chain DMA does not use copiers, so no fixup needed */
+	if (!use_chain_dma) {
+		int ret = sof_ipc4_pcm_dai_link_fixup_rate(sdev, params, ipc4_copier);
+
+		if (ret)
+			return ret;
+	}
 
 	switch (ipc4_copier->dai_type) {
 	case SOF_DAI_INTEL_SSP:
@@ -544,6 +709,9 @@ static int sof_ipc4_pcm_hw_params(struct snd_soc_component *component,
 	struct snd_sof_pcm *spcm;
 
 	spcm = snd_sof_find_spcm_dai(component, rtd);
+	if (!spcm)
+		return -EINVAL;
+
 	time_info = spcm->stream[substream->stream].private;
 	/* delay calculation is not supported by current fw_reg ABI */
 	if (!time_info)
@@ -671,5 +839,7 @@ const struct sof_ipc_pcm_ops ipc4_pcm_ops = {
 	.dai_link_fixup = sof_ipc4_pcm_dai_link_fixup,
 	.pcm_setup = sof_ipc4_pcm_setup,
 	.pcm_free = sof_ipc4_pcm_free,
-	.delay = sof_ipc4_pcm_delay
+	.delay = sof_ipc4_pcm_delay,
+	.ipc_first_on_start = true,
+	.platform_stop_during_hw_free = true,
 };

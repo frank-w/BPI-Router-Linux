@@ -1079,8 +1079,7 @@ static int jz4740_mmc_probe(struct platform_device* pdev)
 		goto err_free_host;
 	}
 
-	host->mem_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	host->base = devm_ioremap_resource(&pdev->dev, host->mem_res);
+	host->base = devm_platform_get_and_ioremap_resource(pdev, 0, &host->mem_res);
 	if (IS_ERR(host->base)) {
 		ret = PTR_ERR(host->base);
 		goto err_free_host;
@@ -1164,7 +1163,7 @@ err_free_host:
 	return ret;
 }
 
-static int jz4740_mmc_remove(struct platform_device *pdev)
+static void jz4740_mmc_remove(struct platform_device *pdev)
 {
 	struct jz4740_mmc_host *host = platform_get_drvdata(pdev);
 
@@ -1180,8 +1179,6 @@ static int jz4740_mmc_remove(struct platform_device *pdev)
 		jz4740_mmc_release_dma_channels(host);
 
 	mmc_free_host(host->mmc);
-
-	return 0;
 }
 
 static int jz4740_mmc_suspend(struct device *dev)
@@ -1199,7 +1196,7 @@ static DEFINE_SIMPLE_DEV_PM_OPS(jz4740_mmc_pm_ops, jz4740_mmc_suspend,
 
 static struct platform_driver jz4740_mmc_driver = {
 	.probe = jz4740_mmc_probe,
-	.remove = jz4740_mmc_remove,
+	.remove_new = jz4740_mmc_remove,
 	.driver = {
 		.name = "jz4740-mmc",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,

@@ -1457,15 +1457,15 @@ static int va_macro_probe(struct platform_device *pdev)
 
 	va->macro = devm_clk_get_optional(dev, "macro");
 	if (IS_ERR(va->macro))
-		return PTR_ERR(va->macro);
+		return dev_err_probe(dev, PTR_ERR(va->macro), "unable to get macro clock\n");
 
 	va->dcodec = devm_clk_get_optional(dev, "dcodec");
 	if (IS_ERR(va->dcodec))
-		return PTR_ERR(va->dcodec);
+		return dev_err_probe(dev, PTR_ERR(va->dcodec), "unable to get dcodec clock\n");
 
 	va->mclk = devm_clk_get(dev, "mclk");
 	if (IS_ERR(va->mclk))
-		return PTR_ERR(va->mclk);
+		return dev_err_probe(dev, PTR_ERR(va->mclk), "unable to get mclk clock\n");
 
 	va->pds = lpass_macro_pds_init(dev);
 	if (IS_ERR(va->pds))
@@ -1575,7 +1575,7 @@ err:
 	return ret;
 }
 
-static int va_macro_remove(struct platform_device *pdev)
+static void va_macro_remove(struct platform_device *pdev)
 {
 	struct va_macro *va = dev_get_drvdata(&pdev->dev);
 
@@ -1584,8 +1584,6 @@ static int va_macro_remove(struct platform_device *pdev)
 	clk_disable_unprepare(va->macro);
 
 	lpass_macro_pds_exit(va->pds);
-
-	return 0;
 }
 
 static int __maybe_unused va_macro_runtime_suspend(struct device *dev)
@@ -1639,7 +1637,7 @@ static struct platform_driver va_macro_driver = {
 		.pm = &va_macro_pm_ops,
 	},
 	.probe = va_macro_probe,
-	.remove = va_macro_remove,
+	.remove_new = va_macro_remove,
 };
 
 module_platform_driver(va_macro_driver);

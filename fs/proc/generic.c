@@ -127,7 +127,6 @@ static int proc_notify_change(struct mnt_idmap *idmap,
 		return error;
 
 	setattr_copy(&nop_mnt_idmap, inode, iattr);
-	mark_inode_dirty(inode);
 
 	proc_set_user(de, inode->i_uid, inode->i_gid);
 	de->mode = inode->i_mode;
@@ -147,7 +146,7 @@ static int proc_getattr(struct mnt_idmap *idmap,
 		}
 	}
 
-	generic_fillattr(&nop_mnt_idmap, inode, stat);
+	generic_fillattr(&nop_mnt_idmap, request_mask, inode, stat);
 	return 0;
 }
 

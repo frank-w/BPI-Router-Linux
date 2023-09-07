@@ -13,6 +13,7 @@
 #include <linux/dma-buf.h>
 #include <linux/iommu.h>
 #include <linux/module.h>
+#include <linux/vmalloc.h>
 
 #include <drm/drm_drv.h>
 #include <drm/drm_prime.h>
@@ -692,8 +693,6 @@ static int tegra_gem_prime_mmap(struct dma_buf *buf, struct vm_area_struct *vma)
 {
 	struct drm_gem_object *gem = buf->priv;
 	int err;
-
-	dma_resv_assert_held(buf->resv);
 
 	err = drm_gem_mmap_obj(gem, gem->size, vma);
 	if (err < 0)

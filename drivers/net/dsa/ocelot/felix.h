@@ -15,6 +15,8 @@
 #define OCELOT_PORT_MODE_USXGMII	BIT(4)
 #define OCELOT_PORT_MODE_1000BASEX	BIT(5)
 
+struct device_node;
+
 /* Platform-specific information */
 struct felix_info {
 	/* Hardcoded resources provided by the hardware instantiation. */
@@ -55,9 +57,13 @@ struct felix_info {
 	void	(*mdio_bus_free)(struct ocelot *ocelot);
 	int	(*port_setup_tc)(struct dsa_switch *ds, int port,
 				 enum tc_setup_type type, void *type_data);
-	void	(*tas_guard_bands_update)(struct ocelot *ocelot, int port);
 	void	(*port_sched_speed_set)(struct ocelot *ocelot, int port,
 					u32 speed);
+	void	(*phylink_mac_config)(struct ocelot *ocelot, int port,
+				      unsigned int mode,
+				      const struct phylink_link_state *state);
+	int	(*configure_serdes)(struct ocelot *ocelot, int port,
+				    struct device_node *portnp);
 };
 
 /* Methods for initializing the hardware resources specific to a tagging

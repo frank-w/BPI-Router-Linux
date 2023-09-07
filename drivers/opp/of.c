@@ -13,13 +13,16 @@
 #include <linux/cpu.h>
 #include <linux/errno.h>
 #include <linux/device.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/pm_domain.h>
 #include <linux/slab.h>
 #include <linux/export.h>
 #include <linux/energy_model.h>
 
 #include "opp.h"
+
+/* OPP tables with uninitialized required OPPs, protected by opp_table_lock */
+static LIST_HEAD(lazy_opp_tables);
 
 /*
  * Returns opp descriptor node for a device node, caller must
@@ -145,7 +148,10 @@ static void _opp_table_free_required_tables(struct opp_table *opp_table)
 
 	opp_table->required_opp_count = 0;
 	opp_table->required_opp_tables = NULL;
+
+	mutex_lock(&opp_table_lock);
 	list_del(&opp_table->lazy);
+	mutex_unlock(&opp_table_lock);
 }
 
 /*
@@ -194,8 +200,17 @@ static void _opp_table_alloc_required_tables(struct opp_table *opp_table,
 	}
 
 	/* Let's do the linking later on */
-	if (lazy)
+	if (lazy) {
+		/*
+		 * The OPP table is not held while allocating the table, take it
+		 * now to avoid corruption to the lazy_opp_tables list.
+		 */
+		mutex_lock(&opp_table_lock);
 		list_add(&opp_table->lazy, &lazy_opp_tables);
+		mutex_unlock(&opp_table_lock);
+	}
+	else
+		_update_set_required_opps(opp_table);
 
 	goto put_np;
 
@@ -224,7 +239,7 @@ void _of_init_opp_table(struct opp_table *opp_table, struct device *dev,
 	of_property_read_u32(np, "voltage-tolerance",
 			     &opp_table->voltage_tolerance_v1);
 
-	if (of_find_property(np, "#power-domain-cells", NULL))
+	if (of_property_present(np, "#power-domain-cells"))
 		opp_table->is_genpd = true;
 
 	/* Get OPP table node */
@@ -411,6 +426,7 @@ static void lazy_link_required_opp_table(struct opp_table *new_table)
 
 		/* All required opp-tables found, remove from lazy list */
 		if (!lazy) {
+			_update_set_required_opps(opp_table);
 			list_del_init(&opp_table->lazy);
 
 			list_for_each_entry(opp, &opp_table->opp_list, node)
@@ -497,11 +513,7 @@ int dev_pm_opp_of_find_icc_paths(struct device *dev,
 	for (i = 0; i < num_paths; i++) {
 		paths[i] = of_icc_get_by_index(dev, i);
 		if (IS_ERR(paths[i])) {
-			ret = PTR_ERR(paths[i]);
-			if (ret != -EPROBE_DEFER) {
-				dev_err(dev, "%s: Unable to get path%d: %d\n",
-					__func__, i, ret);
-			}
+			ret = dev_err_probe(dev, PTR_ERR(paths[i]), "%s: Unable to get path%d\n", __func__, i);
 			goto err;
 		}
 	}
@@ -536,7 +548,7 @@ static bool _opp_is_supported(struct device *dev, struct opp_table *opp_table,
 		 * an OPP then the OPP should not be enabled as there is
 		 * no way to see if the hardware supports it.
 		 */
-		if (of_find_property(np, "opp-supported-hw", NULL))
+		if (of_property_present(np, "opp-supported-hw"))
 			return false;
 		else
 			return true;
@@ -929,9 +941,6 @@ static struct dev_pm_opp *_opp_add_static_v2(struct opp_table *opp_table,
 	if (ret)
 		goto free_required_opps;
 
-	if (opp_table->is_genpd)
-		new_opp->pstate = pm_genpd_opp_to_performance_state(dev, new_opp);
-
 	ret = _opp_add(dev, new_opp, opp_table);
 	if (ret) {
 		/* Don't return error for duplicate OPPs */
@@ -1016,14 +1025,6 @@ static int _of_add_opp_table_v2(struct device *dev, struct opp_table *opp_table)
 		dev_err(dev, "%s: no supported OPPs", __func__);
 		ret = -ENOENT;
 		goto remove_static_opp;
-	}
-
-	list_for_each_entry(opp, &opp_table->opp_list, node) {
-		/* Any non-zero performance state would enable the feature */
-		if (opp->pstate) {
-			opp_table->genpd_performance_state = true;
-			break;
-		}
 	}
 
 	lazy_link_required_opp_table(opp_table);
@@ -1384,9 +1385,15 @@ int of_get_required_opp_performance_state(struct device_node *np, int index)
 		goto put_required_np;
 	}
 
+	/* The OPP tables must belong to a genpd */
+	if (unlikely(!opp_table->is_genpd)) {
+		pr_err("%s: Performance state is only valid for genpds.\n", __func__);
+		goto put_required_np;
+	}
+
 	opp = _find_opp_of_np(opp_table, required_np);
 	if (opp) {
-		pstate = opp->pstate;
+		pstate = opp->level;
 		dev_pm_opp_put(opp);
 	}
 

@@ -20,6 +20,7 @@
 #include <linux/completion.h>
 #include <linux/kobject.h>
 #include <linux/refcount.h>
+#include <linux/log2.h>
 
 #include "dm-stats.h"
 
@@ -202,15 +203,12 @@ int dm_open_count(struct mapped_device *md);
 int dm_lock_for_deletion(struct mapped_device *md, bool mark_deferred, bool only_deferred);
 int dm_cancel_deferred_remove(struct mapped_device *md);
 int dm_request_based(struct mapped_device *md);
-int dm_get_table_device(struct mapped_device *md, dev_t dev, fmode_t mode,
+int dm_get_table_device(struct mapped_device *md, dev_t dev, blk_mode_t mode,
 			struct dm_dev **result);
 void dm_put_table_device(struct mapped_device *md, struct dm_dev *d);
 
 int dm_kobject_uevent(struct mapped_device *md, enum kobject_action action,
 		      unsigned int cookie, bool need_resize_uevent);
-
-void dm_internal_suspend(struct mapped_device *md);
-void dm_internal_resume(struct mapped_device *md);
 
 int dm_io_init(void);
 void dm_io_exit(void);
@@ -227,5 +225,26 @@ void dm_free_md_mempools(struct dm_md_mempools *pools);
  * Various helpers
  */
 unsigned int dm_get_reserved_bio_based_ios(void);
+
+#define DM_HASH_LOCKS_MAX 64
+
+static inline unsigned int dm_num_hash_locks(void)
+{
+	unsigned int num_locks = roundup_pow_of_two(num_online_cpus()) << 1;
+
+	return min_t(unsigned int, num_locks, DM_HASH_LOCKS_MAX);
+}
+
+#define DM_HASH_LOCKS_MULT  4294967291ULL
+#define DM_HASH_LOCKS_SHIFT 6
+
+static inline unsigned int dm_hash_locks_index(sector_t block,
+					       unsigned int num_locks)
+{
+	sector_t h1 = (block * DM_HASH_LOCKS_MULT) >> DM_HASH_LOCKS_SHIFT;
+	sector_t h2 = h1 >> DM_HASH_LOCKS_SHIFT;
+
+	return (h1 ^ h2) & (num_locks - 1);
+}
 
 #endif

@@ -20,16 +20,16 @@
 #include <linux/pfn_t.h>
 #include <linux/uio.h>
 #include <linux/dax.h>
+#include <linux/io.h>
 #include <asm/extmem.h>
-#include <asm/io.h>
 
 #define DCSSBLK_NAME "dcssblk"
 #define DCSSBLK_MINORS_PER_DISK 1
 #define DCSSBLK_PARM_LEN 400
 #define DCSS_BUS_ID_SIZE 20
 
-static int dcssblk_open(struct block_device *bdev, fmode_t mode);
-static void dcssblk_release(struct gendisk *disk, fmode_t mode);
+static int dcssblk_open(struct gendisk *disk, blk_mode_t mode);
+static void dcssblk_release(struct gendisk *disk);
 static void dcssblk_submit_bio(struct bio *bio);
 static long dcssblk_dax_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
 		long nr_pages, enum dax_access_mode mode, void **kaddr,
@@ -54,7 +54,8 @@ static int dcssblk_dax_zero_page_range(struct dax_device *dax_dev,
 	rc = dax_direct_access(dax_dev, pgoff, nr_pages, DAX_ACCESS,
 			&kaddr, NULL);
 	if (rc < 0)
-		return rc;
+		return dax_mem2blk_err(rc);
+
 	memset(kaddr, 0, nr_pages << PAGE_SHIFT);
 	dax_flush(dax_dev, kaddr, nr_pages << PAGE_SHIFT);
 	return 0;
@@ -411,6 +412,7 @@ removeseg:
 	}
 	list_del(&dev_info->lh);
 
+	dax_remove_host(dev_info->gd);
 	kill_dax(dev_info->dax_dev);
 	put_dax(dev_info->dax_dev);
 	del_gendisk(dev_info->gd);
@@ -706,9 +708,9 @@ dcssblk_add_store(struct device *dev, struct device_attribute *attr, const char 
 	goto out;
 
 out_dax_host:
+	put_device(&dev_info->dev);
 	dax_remove_host(dev_info->gd);
 out_dax:
-	put_device(&dev_info->dev);
 	kill_dax(dev_info->dax_dev);
 	put_dax(dev_info->dax_dev);
 put_dev:
@@ -788,6 +790,7 @@ dcssblk_remove_store(struct device *dev, struct device_attribute *attr, const ch
 	}
 
 	list_del(&dev_info->lh);
+	dax_remove_host(dev_info->gd);
 	kill_dax(dev_info->dax_dev);
 	put_dax(dev_info->dax_dev);
 	del_gendisk(dev_info->gd);
@@ -809,12 +812,11 @@ out_buf:
 }
 
 static int
-dcssblk_open(struct block_device *bdev, fmode_t mode)
+dcssblk_open(struct gendisk *disk, blk_mode_t mode)
 {
-	struct dcssblk_dev_info *dev_info;
+	struct dcssblk_dev_info *dev_info = disk->private_data;
 	int rc;
 
-	dev_info = bdev->bd_disk->private_data;
 	if (NULL == dev_info) {
 		rc = -ENODEV;
 		goto out;
@@ -826,7 +828,7 @@ out:
 }
 
 static void
-dcssblk_release(struct gendisk *disk, fmode_t mode)
+dcssblk_release(struct gendisk *disk)
 {
 	struct dcssblk_dev_info *dev_info = disk->private_data;
 	struct segment_info *entry;
@@ -860,7 +862,7 @@ dcssblk_submit_bio(struct bio *bio)
 	struct bio_vec bvec;
 	struct bvec_iter iter;
 	unsigned long index;
-	unsigned long page_addr;
+	void *page_addr;
 	unsigned long source_addr;
 	unsigned long bytes_done;
 
@@ -868,8 +870,8 @@ dcssblk_submit_bio(struct bio *bio)
 	dev_info = bio->bi_bdev->bd_disk->private_data;
 	if (dev_info == NULL)
 		goto fail;
-	if ((bio->bi_iter.bi_sector & 7) != 0 ||
-	    (bio->bi_iter.bi_size & 4095) != 0)
+	if (!IS_ALIGNED(bio->bi_iter.bi_sector, 8) ||
+	    !IS_ALIGNED(bio->bi_iter.bi_size, PAGE_SIZE))
 		/* Request is not page-aligned. */
 		goto fail;
 	/* verify data transfer direction */
@@ -889,18 +891,16 @@ dcssblk_submit_bio(struct bio *bio)
 
 	index = (bio->bi_iter.bi_sector >> 3);
 	bio_for_each_segment(bvec, bio, iter) {
-		page_addr = (unsigned long)bvec_virt(&bvec);
+		page_addr = bvec_virt(&bvec);
 		source_addr = dev_info->start + (index<<12) + bytes_done;
-		if (unlikely((page_addr & 4095) != 0) || (bvec.bv_len & 4095) != 0)
+		if (unlikely(!IS_ALIGNED((unsigned long)page_addr, PAGE_SIZE) ||
+			     !IS_ALIGNED(bvec.bv_len, PAGE_SIZE)))
 			// More paranoia.
 			goto fail;
-		if (bio_data_dir(bio) == READ) {
-			memcpy((void*)page_addr, (void*)source_addr,
-				bvec.bv_len);
-		} else {
-			memcpy((void*)source_addr, (void*)page_addr,
-				bvec.bv_len);
-		}
+		if (bio_data_dir(bio) == READ)
+			memcpy(page_addr, __va(source_addr), bvec.bv_len);
+		else
+			memcpy(__va(source_addr), page_addr, bvec.bv_len);
 		bytes_done += bvec.bv_len;
 	}
 	bio_endio(bio);

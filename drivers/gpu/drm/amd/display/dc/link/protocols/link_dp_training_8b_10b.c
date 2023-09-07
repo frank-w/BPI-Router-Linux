@@ -225,8 +225,10 @@ enum link_training_result perform_8b_10b_clock_recovery_sequence(
 				offset);
 
 		/* 5. check CR done*/
-		if (dp_is_cr_done(lane_count, dpcd_lane_status))
+		if (dp_is_cr_done(lane_count, dpcd_lane_status)) {
+			DC_LOG_HW_LINK_TRAINING("%s: Clock recovery OK\n", __func__);
 			return LINK_TRAINING_SUCCESS;
+		}
 
 		/* 6. max VS reached*/
 		if ((link_dp_get_encoding_format(&lt_settings->link_settings) ==
@@ -386,6 +388,8 @@ enum link_training_result dp_perform_8b_10b_link_training(
 					link_res,
 					lt_settings,
 					repeater_id);
+			if (status == LINK_TRAINING_SUCCESS)
+				DC_LOG_HW_LINK_TRAINING("%s: Channel EQ done.\n", __func__);
 
 			repeater_training_done(link, repeater_id);
 
@@ -407,6 +411,8 @@ enum link_training_result dp_perform_8b_10b_link_training(
 					link_res,
 					lt_settings,
 					DPRX);
+			if (status == LINK_TRAINING_SUCCESS)
+				DC_LOG_HW_LINK_TRAINING("%s: Channel EQ done.\n", __func__);
 		}
 	}
 

@@ -976,6 +976,25 @@ int vcap_lookup_rule_by_cookie(struct vcap_control *vctrl, u64 cookie)
 }
 EXPORT_SYMBOL_GPL(vcap_lookup_rule_by_cookie);
 
+/* Get number of rules in a vcap instance lookup chain id range */
+int vcap_admin_rule_count(struct vcap_admin *admin, int cid)
+{
+	int max_cid = roundup(cid + 1, VCAP_CID_LOOKUP_SIZE);
+	int min_cid = rounddown(cid, VCAP_CID_LOOKUP_SIZE);
+	struct vcap_rule_internal *elem;
+	int count = 0;
+
+	list_for_each_entry(elem, &admin->rules, list) {
+		mutex_lock(&admin->lock);
+		if (elem->data.vcap_chain_id >= min_cid &&
+		    elem->data.vcap_chain_id < max_cid)
+			++count;
+		mutex_unlock(&admin->lock);
+	}
+	return count;
+}
+EXPORT_SYMBOL_GPL(vcap_admin_rule_count);
+
 /* Make a copy of the rule, shallow or full */
 static struct vcap_rule_internal *vcap_dup_rule(struct vcap_rule_internal *ri,
 						bool full)
@@ -1102,7 +1121,7 @@ static void vcap_copy_to_client_actionfield(struct vcap_rule_internal *ri,
 			vcap_copy_from_w32be(field->data.u128.value, value,
 					     field_size, width);
 			break;
-		};
+		}
 	} else {
 		switch (field->ctrl.type) {
 		case VCAP_FIELD_BIT:
@@ -1143,7 +1162,7 @@ static void vcap_copy_to_client_actionfield(struct vcap_rule_internal *ri,
 						      value,
 						      width, field_size);
 			break;
-		};
+		}
 	}
 }
 
@@ -1217,7 +1236,7 @@ static void vcap_copy_to_client_keyfield(struct vcap_rule_internal *ri,
 			vcap_copy_from_w32be(field->data.u128.mask,  mask,
 					     field_size, width);
 			break;
-		};
+		}
 	} else {
 		switch (field->ctrl.type) {
 		case VCAP_FIELD_BIT:
@@ -1265,7 +1284,7 @@ static void vcap_copy_to_client_keyfield(struct vcap_rule_internal *ri,
 						   value, mask,
 						   width, field_size);
 			break;
-		};
+		}
 	}
 }
 
@@ -2377,7 +2396,7 @@ struct vcap_rule *vcap_decode_rule(struct vcap_rule_internal *elem)
 
 	ri = vcap_dup_rule(elem, elem->state == VCAP_RS_DISABLED);
 	if (IS_ERR(ri))
-		return ERR_PTR(PTR_ERR(ri));
+		return ERR_CAST(ri);
 
 	if (ri->state == VCAP_RS_DISABLED)
 		goto out;
@@ -2410,7 +2429,7 @@ struct vcap_rule *vcap_get_rule(struct vcap_control *vctrl, u32 id)
 
 	elem = vcap_get_locked_rule(vctrl, id);
 	if (!elem)
-		return NULL;
+		return ERR_PTR(-ENOENT);
 
 	rule = vcap_decode_rule(elem);
 	mutex_unlock(&elem->admin->lock);
@@ -3403,6 +3422,25 @@ int vcap_rule_mod_key_u32(struct vcap_rule *rule, enum vcap_key_field key,
 }
 EXPORT_SYMBOL_GPL(vcap_rule_mod_key_u32);
 
+/* Remove a key field with value and mask in the rule */
+int vcap_rule_rem_key(struct vcap_rule *rule, enum vcap_key_field key)
+{
+	struct vcap_rule_internal *ri = to_intrule(rule);
+	struct vcap_client_keyfield *field;
+
+	field = vcap_find_keyfield(rule, key);
+	if (!field) {
+		pr_err("%s:%d: key %s is not in the rule\n",
+		       __func__, __LINE__, vcap_keyfield_name(ri->vctrl, key));
+		return -EINVAL;
+	}
+	/* Deallocate the key field */
+	list_del(&field->ctrl.list);
+	kfree(field);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(vcap_rule_rem_key);
+
 static int vcap_rule_mod_action(struct vcap_rule *rule,
 				enum vcap_action_field action,
 				enum vcap_field_type ftype,
@@ -3474,6 +3512,29 @@ int vcap_filter_rule_keys(struct vcap_rule *rule,
 	return err;
 }
 EXPORT_SYMBOL_GPL(vcap_filter_rule_keys);
+
+/* Select the keyset from the list that results in the smallest rule size */
+enum vcap_keyfield_set
+vcap_select_min_rule_keyset(struct vcap_control *vctrl,
+			    enum vcap_type vtype,
+			    struct vcap_keyset_list *kslist)
+{
+	enum vcap_keyfield_set ret = VCAP_KFS_NO_VALUE;
+	const struct vcap_set *kset;
+	int max = 100, idx;
+
+	for (idx = 0; idx < kslist->cnt; ++idx) {
+		kset = vcap_keyfieldset(vctrl, vtype, kslist->keysets[idx]);
+		if (!kset)
+			continue;
+		if (kset->sw_per_item >= max)
+			continue;
+		max = kset->sw_per_item;
+		ret = kslist->keysets[idx];
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(vcap_select_min_rule_keyset);
 
 /* Make a full copy of an existing rule with a new rule id */
 struct vcap_rule *vcap_copy_rule(struct vcap_rule *erule)

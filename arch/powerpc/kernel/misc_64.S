@@ -9,6 +9,7 @@
  * PPC64 updates by Dave Engebretsen (engebret@us.ibm.com)
  */
 
+#include <linux/export.h>
 #include <linux/linkage.h>
 #include <linux/sys.h>
 #include <asm/unistd.h>
@@ -23,7 +24,6 @@
 #include <asm/kexec.h>
 #include <asm/ptrace.h>
 #include <asm/mmu.h>
-#include <asm/export.h>
 #include <asm/feature-fixups.h>
 
 	.text
@@ -432,7 +432,7 @@ _GLOBAL(kexec_sequence)
 1:
 	/* copy dest pages, flush whole dest image */
 	mr	r3,r29
-	bl	kexec_copy_flush	/* (image) */
+	bl	CFUNC(kexec_copy_flush)	/* (image) */
 
 	/* turn off mmu now if not done earlier */
 	cmpdi	r26,0

@@ -19,3 +19,6 @@
    magic-number
    programming-language
    deprecated
+   adding-syscalls
+   researcher-guidelines
+   contribution-maturity-model

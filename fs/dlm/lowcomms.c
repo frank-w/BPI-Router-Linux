@@ -546,9 +546,6 @@ int dlm_lowcomms_connect_node(int nodeid)
 	struct connection *con;
 	int idx;
 
-	if (nodeid == dlm_our_nodeid())
-		return 0;
-
 	idx = srcu_read_lock(&connections_srcu);
 	con = nodeid2con(nodeid, 0);
 	if (WARN_ON_ONCE(!con)) {
@@ -601,7 +598,7 @@ static void lowcomms_error_report(struct sock *sk)
 				   "sk_err=%d/%d\n", dlm_our_nodeid(),
 				   con->nodeid, &inet->inet_daddr,
 				   ntohs(inet->inet_dport), sk->sk_err,
-				   sk->sk_err_soft);
+				   READ_ONCE(sk->sk_err_soft));
 		break;
 #if IS_ENABLED(CONFIG_IPV6)
 	case AF_INET6:
@@ -610,14 +607,15 @@ static void lowcomms_error_report(struct sock *sk)
 				   "dport %d, sk_err=%d/%d\n", dlm_our_nodeid(),
 				   con->nodeid, &sk->sk_v6_daddr,
 				   ntohs(inet->inet_dport), sk->sk_err,
-				   sk->sk_err_soft);
+				   READ_ONCE(sk->sk_err_soft));
 		break;
 #endif
 	default:
 		printk_ratelimited(KERN_ERR "dlm: node %d: socket error "
 				   "invalid socket family %d set, "
 				   "sk_err=%d/%d\n", dlm_our_nodeid(),
-				   sk->sk_family, sk->sk_err, sk->sk_err_soft);
+				   sk->sk_family, sk->sk_err,
+				   READ_ONCE(sk->sk_err_soft));
 		break;
 	}
 
@@ -734,19 +732,15 @@ static void stop_connection_io(struct connection *con)
 	if (con->othercon)
 		stop_connection_io(con->othercon);
 
+	spin_lock_bh(&con->writequeue_lock);
+	set_bit(CF_IO_STOP, &con->flags);
+	spin_unlock_bh(&con->writequeue_lock);
+
 	down_write(&con->sock_lock);
 	if (con->sock) {
 		lock_sock(con->sock->sk);
 		restore_callbacks(con->sock->sk);
-
-		spin_lock_bh(&con->writequeue_lock);
-		set_bit(CF_IO_STOP, &con->flags);
-		spin_unlock_bh(&con->writequeue_lock);
 		release_sock(con->sock->sk);
-	} else {
-		spin_lock_bh(&con->writequeue_lock);
-		set_bit(CF_IO_STOP, &con->flags);
-		spin_unlock_bh(&con->writequeue_lock);
 	}
 	up_write(&con->sock_lock);
 
@@ -866,37 +860,15 @@ struct dlm_processed_nodes {
 	struct list_head list;
 };
 
-static void add_processed_node(int nodeid, struct list_head *processed_nodes)
-{
-	struct dlm_processed_nodes *n;
-
-	list_for_each_entry(n, processed_nodes, list) {
-		/* we already remembered this node */
-		if (n->nodeid == nodeid)
-			return;
-	}
-
-	/* if it's fails in worst case we simple don't send an ack back.
-	 * We try it next time.
-	 */
-	n = kmalloc(sizeof(*n), GFP_NOFS);
-	if (!n)
-		return;
-
-	n->nodeid = nodeid;
-	list_add(&n->list, processed_nodes);
-}
-
 static void process_dlm_messages(struct work_struct *work)
 {
-	struct dlm_processed_nodes *n, *n_tmp;
 	struct processqueue_entry *pentry;
-	LIST_HEAD(processed_nodes);
 
 	spin_lock(&processqueue_lock);
 	pentry = list_first_entry_or_null(&processqueue,
 					  struct processqueue_entry, list);
 	if (WARN_ON_ONCE(!pentry)) {
+		process_dlm_messages_pending = false;
 		spin_unlock(&processqueue_lock);
 		return;
 	}
@@ -907,7 +879,6 @@ static void process_dlm_messages(struct work_struct *work)
 	for (;;) {
 		dlm_process_incoming_buffer(pentry->nodeid, pentry->buf,
 					    pentry->buflen);
-		add_processed_node(pentry->nodeid, &processed_nodes);
 		free_processqueue_entry(pentry);
 
 		spin_lock(&processqueue_lock);
@@ -921,13 +892,6 @@ static void process_dlm_messages(struct work_struct *work)
 
 		list_del(&pentry->list);
 		spin_unlock(&processqueue_lock);
-	}
-
-	/* send ack back after we processed couple of messages */
-	list_for_each_entry_safe(n, n_tmp, &processed_nodes, list) {
-		list_del(&n->list);
-		dlm_midcomms_receive_done(n->nodeid);
-		kfree(n);
 	}
 }
 
@@ -1394,8 +1358,11 @@ int dlm_lowcomms_resend_msg(struct dlm_msg *msg)
 /* Send a message */
 static int send_to_sock(struct connection *con)
 {
-	const int msg_flags = MSG_DONTWAIT | MSG_NOSIGNAL;
 	struct writequeue_entry *e;
+	struct bio_vec bvec;
+	struct msghdr msg = {
+		.msg_flags = MSG_SPLICE_PAGES | MSG_DONTWAIT | MSG_NOSIGNAL,
+	};
 	int len, offset, ret;
 
 	spin_lock_bh(&con->writequeue_lock);
@@ -1411,8 +1378,9 @@ static int send_to_sock(struct connection *con)
 	WARN_ON_ONCE(len == 0 && e->users == 0);
 	spin_unlock_bh(&con->writequeue_lock);
 
-	ret = kernel_sendpage(con->sock, e->page, offset, len,
-			      msg_flags);
+	bvec_set_page(&bvec, e->page, len, offset);
+	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, len);
+	ret = sock_sendmsg(con->sock, &msg);
 	trace_dlm_send(con->nodeid, ret);
 	if (ret == -EAGAIN || ret == 0) {
 		lock_sock(con->sock->sk);
@@ -1495,8 +1463,7 @@ int dlm_lowcomms_close(int nodeid)
 	call_srcu(&connections_srcu, &con->rcu, connection_release);
 	if (con->othercon) {
 		clean_one_writequeue(con->othercon);
-		if (con->othercon)
-			call_srcu(&connections_srcu, &con->othercon->rcu, connection_release);
+		call_srcu(&connections_srcu, &con->othercon->rcu, connection_release);
 	}
 	srcu_read_unlock(&connections_srcu, idx);
 
@@ -1717,8 +1684,8 @@ static void work_stop(void)
 
 static int work_start(void)
 {
-	io_workqueue = alloc_workqueue("dlm_io", WQ_HIGHPRI | WQ_MEM_RECLAIM,
-				       0);
+	io_workqueue = alloc_workqueue("dlm_io", WQ_HIGHPRI | WQ_MEM_RECLAIM |
+				       WQ_UNBOUND, 0);
 	if (!io_workqueue) {
 		log_print("can't start dlm_io");
 		return -ENOMEM;
@@ -1814,7 +1781,7 @@ static int dlm_listen_for_all(void)
 	sock->sk->sk_data_ready = lowcomms_listen_data_ready;
 	release_sock(sock->sk);
 
-	result = sock->ops->listen(sock, 5);
+	result = sock->ops->listen(sock, 128);
 	if (result < 0) {
 		dlm_close_sock(&listen_con.sock);
 		return result;

@@ -154,23 +154,6 @@ static inline struct ps8640 *aux_to_ps8640(struct drm_dp_aux *aux)
 	return container_of(aux, struct ps8640, aux);
 }
 
-static bool ps8640_of_panel_on_aux_bus(struct device *dev)
-{
-	struct device_node *bus, *panel;
-
-	bus = of_get_child_by_name(dev->of_node, "aux-bus");
-	if (!bus)
-		return false;
-
-	panel = of_get_child_by_name(bus, "panel");
-	of_node_put(bus);
-	if (!panel)
-		return false;
-	of_node_put(panel);
-
-	return true;
-}
-
 static int _ps8640_wait_hpd_asserted(struct ps8640 *ps_bridge, unsigned long wait_us)
 {
 	struct regmap *map = ps_bridge->regmap[PAGE2_TOP_CNTL];
@@ -183,7 +166,7 @@ static int _ps8640_wait_hpd_asserted(struct ps8640 *ps_bridge, unsigned long wai
 	 * actually connected to GPIO9).
 	 */
 	ret = regmap_read_poll_timeout(map, PAGE2_GPIO_H, status,
-				       status & PS_GPIO9, wait_us / 10, wait_us);
+				       status & PS_GPIO9, 20000, wait_us);
 
 	/*
 	 * The first time we see HPD go high after a reset we delay an extra
@@ -538,40 +521,6 @@ static void ps8640_bridge_detach(struct drm_bridge *bridge)
 		device_link_del(ps_bridge->link);
 }
 
-static struct edid *ps8640_bridge_get_edid(struct drm_bridge *bridge,
-					   struct drm_connector *connector)
-{
-	struct ps8640 *ps_bridge = bridge_to_ps8640(bridge);
-	bool poweroff = !ps_bridge->pre_enabled;
-	struct edid *edid;
-
-	/*
-	 * When we end calling get_edid() triggered by an ioctl, i.e
-	 *
-	 *   drm_mode_getconnector (ioctl)
-	 *     -> drm_helper_probe_single_connector_modes
-	 *        -> drm_bridge_connector_get_modes
-	 *           -> ps8640_bridge_get_edid
-	 *
-	 * We need to make sure that what we need is enabled before reading
-	 * EDID, for this chip, we need to do a full poweron, otherwise it will
-	 * fail.
-	 */
-	drm_atomic_bridge_chain_pre_enable(bridge, connector->state->state);
-
-	edid = drm_get_edid(connector,
-			    ps_bridge->page[PAGE0_DP_CNTL]->adapter);
-
-	/*
-	 * If we call the get_edid() function without having enabled the chip
-	 * before, return the chip to its original power state.
-	 */
-	if (poweroff)
-		drm_atomic_bridge_chain_post_disable(bridge, connector->state->state);
-
-	return edid;
-}
-
 static void ps8640_runtime_disable(void *data)
 {
 	pm_runtime_dont_use_autosuspend(data);
@@ -581,7 +530,6 @@ static void ps8640_runtime_disable(void *data)
 static const struct drm_bridge_funcs ps8640_bridge_funcs = {
 	.attach = ps8640_bridge_attach,
 	.detach = ps8640_bridge_detach,
-	.get_edid = ps8640_bridge_get_edid,
 	.atomic_post_disable = ps8640_atomic_post_disable,
 	.atomic_pre_enable = ps8640_atomic_pre_enable,
 	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
@@ -695,14 +643,6 @@ static int ps8640_probe(struct i2c_client *client)
 	ps_bridge->bridge.type = DRM_MODE_CONNECTOR_eDP;
 
 	/*
-	 * In the device tree, if panel is listed under aux-bus of the bridge
-	 * node, panel driver should be able to retrieve EDID by itself using
-	 * aux-bus. So let's not set DRM_BRIDGE_OP_EDID here.
-	 */
-	if (!ps8640_of_panel_on_aux_bus(&client->dev))
-		ps_bridge->bridge.ops = DRM_BRIDGE_OP_EDID;
-
-	/*
 	 * Get MIPI DSI resources early. These can return -EPROBE_DEFER so
 	 * we want to get them out of the way sooner.
 	 */
@@ -773,7 +713,7 @@ static const struct of_device_id ps8640_match[] = {
 MODULE_DEVICE_TABLE(of, ps8640_match);
 
 static struct i2c_driver ps8640_driver = {
-	.probe_new = ps8640_probe,
+	.probe = ps8640_probe,
 	.driver = {
 		.name = "ps8640",
 		.of_match_table = ps8640_match,

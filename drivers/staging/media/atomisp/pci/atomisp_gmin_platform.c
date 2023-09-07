@@ -189,6 +189,7 @@ int atomisp_register_i2c_module(struct v4l2_subdev *subdev,
 
 	pdata.subdevs[i].type = type;
 	pdata.subdevs[i].port = gs->csi_port;
+	pdata.subdevs[i].lanes = gs->csi_lanes;
 	pdata.subdevs[i].subdev = subdev;
 	return 0;
 }
@@ -304,7 +305,17 @@ static struct gmin_cfg_var surface3_vars[] = {
 	{},
 };
 
+static struct gmin_cfg_var lenovo_ideapad_miix_310_vars[] = {
+	/* _DSM contains the wrong CsiPort! */
+	{ "OVTI2680:01_CsiPort", "0" },
+	{}
+};
+
 static const struct dmi_system_id gmin_vars[] = {
+	/*
+	 * These DMI IDs were present when the atomisp driver was merged into
+	 * drivers/staging and it is unclear if they are really necessary.
+	 */
 	{
 		.ident = "BYT-T FFD8",
 		.matches = {
@@ -341,12 +352,21 @@ static const struct dmi_system_id gmin_vars[] = {
 		},
 		.driver_data = i8880_vars,
 	},
+	/* Later added DMI ids, these are confirmed to really be necessary! */
 	{
 		.ident = "Surface 3",
 		.matches = {
 			DMI_MATCH(DMI_BOARD_NAME, "Surface 3"),
 		},
 		.driver_data = surface3_vars,
+	},
+	{
+		.ident = "Lenovo Ideapad Miix 310",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "MIIX 310-10"),
+		},
+		.driver_data = lenovo_ideapad_miix_310_vars,
 	},
 	{}
 };
@@ -1131,6 +1151,7 @@ int atomisp_register_sensor_no_gmin(struct v4l2_subdev *subdev, u32 lanes,
 
 	pdata.subdevs[i].type = RAW_CAMERA;
 	pdata.subdevs[i].port = port;
+	pdata.subdevs[i].lanes = lanes;
 	pdata.subdevs[i].subdev = subdev;
 	return 0;
 }
@@ -1338,7 +1359,7 @@ static int gmin_get_config_dsm_var(struct device *dev,
 	dev_info(dev, "found _DSM entry for '%s': %s\n", var,
 		 cur->string.pointer);
 	strscpy(out, cur->string.pointer, *out_len);
-	*out_len = strlen(cur->string.pointer);
+	*out_len = strlen(out);
 
 	ACPI_FREE(obj);
 	return 0;
@@ -1353,41 +1374,33 @@ static int gmin_get_config_var(struct device *maindev,
 			       const char *var,
 			       char *out, size_t *out_len)
 {
+	struct acpi_device *adev = ACPI_COMPANION(maindev);
 	efi_char16_t var16[CFG_VAR_NAME_MAX];
 	const struct dmi_system_id *id;
-	struct device *dev = maindev;
 	char var8[CFG_VAR_NAME_MAX];
 	efi_status_t status;
 	int i, ret;
 
-	/* For sensors, try first to use the _DSM table */
-	if (!is_gmin) {
-		ret = gmin_get_config_dsm_var(maindev, var, out, out_len);
-		if (!ret)
-			return 0;
-	}
-
-	/* Fall-back to other approaches */
-
-	if (!is_gmin && ACPI_COMPANION(dev))
-		dev = &ACPI_COMPANION(dev)->dev;
-
-	if (!is_gmin)
-		ret = snprintf(var8, sizeof(var8), "%s_%s", dev_name(dev), var);
+	if (!is_gmin && adev)
+		ret = snprintf(var8, sizeof(var8), "%s_%s", acpi_dev_name(adev), var);
 	else
 		ret = snprintf(var8, sizeof(var8), "gmin_%s", var);
 
 	if (ret < 0 || ret >= sizeof(var8) - 1)
 		return -EINVAL;
 
-	/* First check a hard-coded list of board-specific variables.
-	 * Some device firmwares lack the ability to set EFI variables at
-	 * runtime.
-	 */
+	/* DMI based quirks override both the _DSM table and EFI variables */
 	id = dmi_first_match(gmin_vars);
 	if (id) {
 		ret = gmin_get_hardcoded_var(maindev, id->driver_data, var8,
 					     out, out_len);
+		if (!ret)
+			return 0;
+	}
+
+	/* For sensors, try first to use the _DSM table */
+	if (!is_gmin) {
+		ret = gmin_get_config_dsm_var(maindev, var, out, out_len);
 		if (!ret)
 			return 0;
 	}
@@ -1416,8 +1429,8 @@ static int gmin_get_config_var(struct device *maindev,
 
 int gmin_get_var_int(struct device *dev, bool is_gmin, const char *var, int def)
 {
-	char val[CFG_VAR_NAME_MAX];
-	size_t len = sizeof(val);
+	char val[CFG_VAR_NAME_MAX + 1];
+	size_t len = CFG_VAR_NAME_MAX;
 	long result;
 	int ret;
 

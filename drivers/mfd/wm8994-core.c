@@ -279,20 +279,11 @@ static int wm8994_set_pdata_from_of(struct wm8994 *wm8994)
 	of_property_read_u32_array(np, "wlf,micbias-cfg", pdata->micbias,
 				   ARRAY_SIZE(pdata->micbias));
 
-	pdata->lineout1_diff = true;
-	pdata->lineout2_diff = true;
-	if (of_find_property(np, "wlf,lineout1-se", NULL))
-		pdata->lineout1_diff = false;
-	if (of_find_property(np, "wlf,lineout2-se", NULL))
-		pdata->lineout2_diff = false;
-
-	if (of_find_property(np, "wlf,lineout1-feedback", NULL))
-		pdata->lineout1fb = true;
-	if (of_find_property(np, "wlf,lineout2-feedback", NULL))
-		pdata->lineout2fb = true;
-
-	if (of_find_property(np, "wlf,ldoena-always-driven", NULL))
-		pdata->lineout2fb = true;
+	pdata->lineout1_diff = !of_property_read_bool(np, "wlf,lineout1-se");
+	pdata->lineout2_diff = !of_property_read_bool(np, "wlf,lineout2-se");
+	pdata->lineout1fb = of_property_read_bool(np, "wlf,lineout1-feedback");
+	pdata->lineout2fb = of_property_read_bool(np, "wlf,lineout2-feedback") ||
+		of_property_read_bool(np, "wlf,ldoena-always-driven");
 
 	pdata->spkmode_pu = of_property_read_bool(np, "wlf,spkmode-pu");
 
@@ -328,8 +319,6 @@ static int wm8994_device_init(struct wm8994 *wm8994, int irq)
 	ret = wm8994_set_pdata_from_of(wm8994);
 	if (ret != 0)
 		return ret;
-
-	dev_set_drvdata(wm8994->dev, wm8994);
 
 	/* Add the on-chip regulators first for bootstrapping */
 	ret = mfd_add_devices(wm8994->dev, 0,
@@ -681,7 +670,7 @@ static struct i2c_driver wm8994_i2c_driver = {
 		.pm = pm_ptr(&wm8994_pm_ops),
 		.of_match_table = wm8994_of_match,
 	},
-	.probe_new = wm8994_i2c_probe,
+	.probe = wm8994_i2c_probe,
 	.remove = wm8994_i2c_remove,
 	.id_table = wm8994_i2c_id,
 };

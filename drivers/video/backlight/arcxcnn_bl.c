@@ -390,9 +390,9 @@ MODULE_DEVICE_TABLE(i2c, arcxcnn_ids);
 static struct i2c_driver arcxcnn_driver = {
 	.driver = {
 		.name = "arcxcnn_bl",
-		.of_match_table = of_match_ptr(arcxcnn_dt_ids),
+		.of_match_table = arcxcnn_dt_ids,
 	},
-	.probe_new = arcxcnn_probe,
+	.probe = arcxcnn_probe,
 	.remove = arcxcnn_remove,
 	.id_table = arcxcnn_ids,
 };

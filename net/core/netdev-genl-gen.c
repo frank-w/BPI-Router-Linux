@@ -8,7 +8,7 @@
 
 #include "netdev-genl-gen.h"
 
-#include <linux/netdev.h>
+#include <uapi/linux/netdev.h>
 
 /* NETDEV_CMD_DEV_GET - do */
 static const struct nla_policy netdev_dev_get_nl_policy[NETDEV_A_DEV_IFINDEX + 1] = {
@@ -16,7 +16,7 @@ static const struct nla_policy netdev_dev_get_nl_policy[NETDEV_A_DEV_IFINDEX + 1
 };
 
 /* Ops table for netdev */
-static const struct genl_split_ops netdev_nl_ops[2] = {
+static const struct genl_split_ops netdev_nl_ops[] = {
 	{
 		.cmd		= NETDEV_CMD_DEV_GET,
 		.doit		= netdev_nl_dev_get_doit,

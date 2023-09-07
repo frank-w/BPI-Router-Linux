@@ -30,7 +30,7 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/io.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
 
@@ -616,9 +616,8 @@ static void mxs_auart_tx_chars(struct mxs_auart_port *s)
 
 static void mxs_auart_rx_char(struct mxs_auart_port *s)
 {
-	int flag;
 	u32 stat;
-	u8 c;
+	u8 c, flag;
 
 	c = mxs_read(s, REG_DATA);
 	stat = mxs_read(s, REG_STAT);
@@ -1587,8 +1586,8 @@ static int mxs_auart_probe(struct platform_device *pdev)
 	}
 	s->port.line = ret;
 
-	if (of_get_property(np, "uart-has-rtscts", NULL) ||
-	    of_get_property(np, "fsl,uart-has-rtscts", NULL) /* deprecated */)
+	if (of_property_read_bool(np, "uart-has-rtscts") ||
+	    of_property_read_bool(np, "fsl,uart-has-rtscts") /* deprecated */)
 		set_bit(MXS_AUART_RTSCTS, &s->flags);
 
 	if (s->port.line >= ARRAY_SIZE(auart_port)) {

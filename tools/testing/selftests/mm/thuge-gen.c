@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <string.h>
+#include "vm_util.h"
 
 #define err(x) perror(x), exit(1)
 
@@ -72,24 +73,6 @@ void find_pagesizes(void)
 	}
 	num_page_sizes = g.gl_pathc;
 	globfree(&g);
-}
-
-unsigned long default_huge_page_size(void)
-{
-	unsigned long hps = 0;
-	char *line = NULL;
-	size_t linelen = 0;
-	FILE *f = fopen("/proc/meminfo", "r");
-	if (!f)
-		return 0;
-	while (getline(&line, &linelen, f) > 0) {
-		if (sscanf(line, "Hugepagesize:       %lu kB", &hps) == 1) {
-			hps <<= 10;
-			break;
-		}
-	}
-	free(line);
-	return hps;
 }
 
 void show(unsigned long ps)
@@ -156,7 +139,7 @@ void test_mmap(unsigned long size, unsigned flags)
 		before, after, before - after, size);
 	assert(size == getpagesize() || (before - after) == NUM_PAGES);
 	show(size);
-	err = munmap(map, size);
+	err = munmap(map, size * NUM_PAGES);
 	assert(!err);
 }
 
@@ -239,7 +222,7 @@ int main(void)
 		test_mmap(ps, MAP_HUGETLB | arg);
 	}
 	printf("Testing default huge mmap\n");
-	test_mmap(default_hps, SHM_HUGETLB);
+	test_mmap(default_hps, MAP_HUGETLB);
 
 	puts("Testing non-huge shmget");
 	test_shmget(getpagesize(), 0);
