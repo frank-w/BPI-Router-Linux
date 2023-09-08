@@ -3727,7 +3727,8 @@ static int sd_remove(struct device *dev)
 
 	device_del(&sdkp->disk_dev);
 	del_gendisk(sdkp->disk);
-	sd_shutdown(dev);
+	if (sdkp->device->sdev_state == SDEV_RUNNING)
+		sd_shutdown(dev);
 
 	put_disk(sdkp->disk);
 	return 0;
