@@ -44,6 +44,11 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-wifi-mt7996a.dtbo");
 			type = "flat_dt";
 		};
+		fdt-ov-sata {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-sata.dtbo");
+			type = "flat_dt";
+		};
 /*		fdt-ov-nand{
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-nand.dtbo");
 			type = "flat_dt";
@@ -90,6 +95,13 @@
 				algo = "sha1";
 			};
 		};
+		wifi {
+			description = "WIFI FDT Overlay";
+			fdt = "fdt-ov-wifi";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		conf-sd-wifi {
 			description = "Boot Linux kernel with SD + WIFI FDT blob";
 			kernel = "kernel-1";
@@ -99,23 +111,21 @@
 				algo = "sha1";
 			};
 		};
-/*		conf-sd-nand {
-			description = "Boot Linux kernel with SD+NAND FDT blob";
+		sata {
+			description = "SATA FDT overlay";
+			fdt = "fdt-ov-sata";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-sd-sata {
+			description = "Boot Linux kernel with SD + SATA FDT blob";
 			kernel = "kernel-1";
-			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-nand";
+			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-sata";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
 			};
 		};
-		conf-emmc-nand {
-			description = "Boot Linux kernel with EMMC+NAND FDT blob";
-			kernel = "kernel-1";
-			fdt = "fdt-base", "fdt-ov-emmc", "fdt-ov-nand";
-			//ramdisk = "ramdisk-1";
-			hash-1 {
-				algo = "sha1";
-			};
-		};*/
 	};
 };
