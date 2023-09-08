@@ -1164,28 +1164,28 @@
 
 				port@0 {
 					reg = <0>;
-					label = "lan0";
+					label = "wan";
 					phy-mode = "internal";
 					phy-handle = <&gsw_phy0>;
 				};
 
 				port@1 {
 					reg = <1>;
-					label = "lan1";
+					label = "lan0";
 					phy-mode = "internal";
 					phy-handle = <&gsw_phy1>;
 				};
 
 				port@2 {
 					reg = <2>;
-					label = "lan2";
+					label = "lan1";
 					phy-mode = "internal";
 					phy-handle = <&gsw_phy2>;
 				};
 
 				port@3 {
 					reg = <3>;
-					label = "lan3";
+					label = "lan2";
 					phy-mode = "internal";
 					phy-handle = <&gsw_phy3>;
 				};
