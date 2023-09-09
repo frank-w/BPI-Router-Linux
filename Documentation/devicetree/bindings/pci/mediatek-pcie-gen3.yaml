@@ -49,6 +49,7 @@ properties:
       - items:
           - enum:
               - mediatek,mt7986-pcie
+              - mediatek,mt7988-pcie
               - mediatek,mt8188-pcie
               - mediatek,mt8195-pcie
           - const: mediatek,mt8192-pcie
