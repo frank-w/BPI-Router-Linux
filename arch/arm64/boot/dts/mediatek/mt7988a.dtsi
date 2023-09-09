@@ -653,8 +653,7 @@
 		};
 
 		i2c0: i2c@11003000 {
-			compatible = "mediatek,mt7988-i2c",
-				     "mediatek,mt7981-i2c";
+			compatible = "mediatek,mt7988-i2c";
 			reg = <0 0x11003000 0 0x1000>,
 			      <0 0x10217080 0 0x80>;
 			interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
@@ -668,8 +667,7 @@
 		};
 
 		i2c1: i2c@11004000 {
-			compatible = "mediatek,mt7988-i2c",
-				     "mediatek,mt7981-i2c";
+			compatible = "mediatek,mt7988-i2c";
 			reg = <0 0x11004000 0 0x1000>,
 			      <0 0x10217100 0 0x80>;
 			interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
@@ -683,8 +681,7 @@
 		};
 
 		i2c2: i2c@11005000 {
-			compatible = "mediatek,mt7988-i2c",
-				"mediatek,mt7981-i2c";
+			compatible = "mediatek,mt7988-i2c";
 			reg = <0 0x11005000 0 0x1000>,
 			      <0 0x10217180 0 0x80>;
 			interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
@@ -1033,8 +1030,7 @@
 		};
 
 		mmc0: mmc@11230000 {
-			compatible = "mediatek,mt7986-mmc",
-				     "mediatek,mt7981-mmc";
+			compatible = "mediatek,mt7986-mmc";
 			reg = <0 0x11230000 0 0x1000>,
 			      <0 0x11D60000 0 0x1000>;
 			interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
@@ -1046,8 +1042,7 @@
 					  <&topckgen CLK_TOP_EMMC_400M_SEL>;
 			assigned-clock-parents = <&topckgen CLK_TOP_NET1PLL_D5_D2>,
 						 <&apmixedsys CLK_APMIXED_MSDCPLL>;
-			clock-names = "source",
-				      "hclk",
+			clock-names = "source", "hclk",
 				      "axi_cg",
 				      "ahb_cg";
 			#address-cells = <1>;
@@ -1055,8 +1050,8 @@
 			status = "disabled";
 		};
 
-		tphy: tphy@11c50000 {
-			compatible = "mediatek,mt7988",
+		tphy: t-phy@11c50000 {
+			compatible = "mediatek,mt7988-tphy",
 				     "mediatek,generic-tphy-v2";
 			#address-cells = <2>;
 			#size-cells = <2>;
@@ -1089,7 +1084,7 @@
 		};
 
 		xphy: xphy@11e10000 {
-			compatible = "mediatek,mt7988",
+			compatible = "mediatek,mt7988-xsphy",
 				     "mediatek,xsphy";
 			#address-cells = <2>;
 			#size-cells = <2>;
@@ -1113,7 +1108,7 @@
 		};
 
 		efuse: efuse@11f50000 {
-			compatible = "mediatek,efuse";
+			compatible = "mediatek,mt7988-efuse","mediatek,efuse";
 			reg = <0 0x11f50000 0 0x1000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
