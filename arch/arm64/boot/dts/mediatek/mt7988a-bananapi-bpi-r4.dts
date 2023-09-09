@@ -325,7 +325,7 @@
 	pinctrl-0 = <&spi0_flash_pins>;
 	status = "okay";
 
-	spi_nand: spi_nand@0 {
+	spi_nand: nand@0 {
 		compatible = "spi-nand";
 		reg = <0>;
 		spi-max-frequency = <52000000>;

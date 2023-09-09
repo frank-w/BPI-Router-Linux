@@ -280,8 +280,7 @@
 
 		watchdog: watchdog@1001c000 {
 			compatible = "mediatek,mt7988-wdt",
-				     "mediatek,mt6589-wdt",
-				     "syscon";
+				     "mediatek,mt6589-wdt";
 			reg = <0 0x1001c000 0 0x1000>;
 			interrupts = <GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH>;
 			#reset-cells = <1>;
@@ -643,13 +642,13 @@
 		};
 
 		snand: spi@11001000 {
-			compatible = "mediatek,mt7986-snand";
+			compatible = "mediatek,mt7988-snand";
 			reg = <0 0x11001000 0 0x1000>;
 			interrupts = <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&infracfg CLK_INFRA_SPINFI>,
-				 <&infracfg CLK_INFRA_NFI>,
+			clocks = <&infracfg CLK_INFRA_NFI>,
+				 <&infracfg CLK_INFRA_SPINFI>, 
 				 <&infracfg CLK_INFRA_66M_NFI_HCK>;
-			clock-names = "pad_clk", "nfi_clk", "nfi_hclk";
+			clock-names = "nfi_clk", "pad_clk", "nfi_hclk";
 			nand-ecc-engine = <&bch>;
 			mediatek,quad-spi;
 			#address-cells = <1>;
@@ -669,8 +668,7 @@
 		};
 
 		i2c0: i2c@11003000 {
-			compatible = "mediatek,mt7988-i2c",
-				     "mediatek,mt7981-i2c";
+			compatible = "mediatek,mt7988-i2c";
 			reg = <0 0x11003000 0 0x1000>,
 			      <0 0x10217080 0 0x80>;
 			interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
@@ -684,8 +682,7 @@
 		};
 
 		i2c1: i2c@11004000 {
-			compatible = "mediatek,mt7988-i2c",
-				     "mediatek,mt7981-i2c";
+			compatible = "mediatek,mt7988-i2c";
 			reg = <0 0x11004000 0 0x1000>,
 			      <0 0x10217100 0 0x80>;
 			interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
@@ -699,8 +696,7 @@
 		};
 
 		i2c2: i2c@11005000 {
-			compatible = "mediatek,mt7988-i2c",
-				"mediatek,mt7981-i2c";
+			compatible = "mediatek,mt7988-i2c";
 			reg = <0 0x11005000 0 0x1000>,
 			      <0 0x10217180 0 0x80>;
 			interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
@@ -722,7 +718,7 @@
 				 <&infracfg CLK_INFRA_104M_SPI0>,
 				 <&infracfg CLK_INFRA_66M_SPI0_HCK>;
 			clock-names = "parent-clk", "sel-clk", "spi-clk",
-				      "spi-hclk";
+				      "hclk";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
@@ -737,7 +733,7 @@
 				 <&infracfg CLK_INFRA_104M_SPI1>,
 				 <&infracfg CLK_INFRA_66M_SPI1_HCK>;
 			clock-names = "parent-clk", "sel-clk", "spi-clk",
-				      "spi-hclk";
+				      "hclk";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			pinctrl-names = "default";
@@ -754,7 +750,7 @@
 				 <&infracfg CLK_INFRA_104M_SPI2_BCK>,
 				 <&infracfg CLK_INFRA_66M_SPI2_HCK>;
 			clock-names = "parent-clk", "sel-clk", "spi-clk",
-				      "spi-hclk";
+				      "hclk";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
@@ -840,7 +836,6 @@
 
 		pcie2: pcie@11280000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
@@ -882,7 +877,6 @@
 
 		pcie3: pcie@11290000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
@@ -921,7 +915,6 @@
 
 		pcie0: pcie@11300000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
@@ -960,7 +953,6 @@
 
 		pcie1: pcie@11310000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
@@ -1007,15 +999,15 @@
 			phys = <&xphyu2port0 PHY_TYPE_USB2>,
 			       <&xphyu3port0 PHY_TYPE_USB3>;
 			clocks = <&infracfg CLK_INFRA_USB_SYS>,
-				 <&infracfg CLK_INFRA_USB_XHCI>,
 				 <&infracfg CLK_INFRA_USB_REF>,
 				 <&infracfg CLK_INFRA_66M_USB_HCK>,
-				 <&infracfg CLK_INFRA_133M_USB_HCK>;
+				 <&infracfg CLK_INFRA_133M_USB_HCK>,
+				 <&infracfg CLK_INFRA_USB_XHCI>;
 			clock-names = "sys_ck",
-				      "xhci_ck",
 				      "ref_ck",
 				      "mcu_ck",
-				      "dma_ck";
+				      "dma_ck",
+				      "xhci_ck";
 			#address-cells = <2>;
 			#size-cells = <2>;
 			mediatek,p0_speed_fixup;
@@ -1032,23 +1024,22 @@
 			phys = <&tphyu2port0 PHY_TYPE_USB2>,
 			       <&tphyu3port0 PHY_TYPE_USB3>;
 			clocks = <&infracfg CLK_INFRA_USB_SYS_CK_P1>,
-				 <&infracfg CLK_INFRA_USB_XHCI_CK_P1>,
 				 <&infracfg CLK_INFRA_USB_CK_P1>,
 				 <&infracfg CLK_INFRA_66M_USB_HCK_CK_P1>,
-				 <&infracfg CLK_INFRA_133M_USB_HCK_CK_P1>;
+				 <&infracfg CLK_INFRA_133M_USB_HCK_CK_P1>,
+				 <&infracfg CLK_INFRA_USB_XHCI_CK_P1>;
 			clock-names = "sys_ck",
-				      "xhci_ck",
 				      "ref_ck",
 				      "mcu_ck",
-				      "dma_ck";
+				      "dma_ck",
+				      "xhci_ck";
 			#address-cells = <2>;
 			#size-cells = <2>;
 			status = "disabled";
 		};
 
 		mmc0: mmc@11230000 {
-			compatible = "mediatek,mt7986-mmc",
-				     "mediatek,mt7981-mmc";
+			compatible = "mediatek,mt7986-mmc";
 			reg = <0 0x11230000 0 0x1000>,
 			      <0 0x11D60000 0 0x1000>;
 			interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
@@ -1060,8 +1051,7 @@
 					  <&topckgen CLK_TOP_EMMC_400M_SEL>;
 			assigned-clock-parents = <&topckgen CLK_TOP_NET1PLL_D5_D2>,
 						 <&apmixedsys CLK_APMIXED_MSDCPLL>;
-			clock-names = "source",
-				      "hclk",
+			clock-names = "source", "hclk",
 				      "axi_cg",
 				      "ahb_cg";
 			#address-cells = <1>;
@@ -1069,8 +1059,8 @@
 			status = "disabled";
 		};
 
-		tphy: tphy@11c50000 {
-			compatible = "mediatek,mt7988",
+		tphy: t-phy@11c50000 {
+			compatible = "mediatek,mt7988-tphy",
 				     "mediatek,generic-tphy-v2";
 			#address-cells = <2>;
 			#size-cells = <2>;
@@ -1102,8 +1092,8 @@
 			#size-cells = <0>;
 		};
 
-		xphy: xphy@11e10000 {
-			compatible = "mediatek,mt7988",
+		xphy: xs-phy@11e10000 {
+			compatible = "mediatek,mt7988-xsphy",
 				     "mediatek,xsphy";
 			#address-cells = <2>;
 			#size-cells = <2>;
@@ -1127,7 +1117,7 @@
 		};
 
 		efuse: efuse@11f50000 {
-			compatible = "mediatek,efuse";
+			compatible = "mediatek,mt7988-efuse","mediatek,efuse";
 			reg = <0 0x11f50000 0 0x1000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
