@@ -822,7 +822,6 @@
 
 		pcie2: pcie@11280000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
@@ -864,7 +863,6 @@
 
 		pcie3: pcie@11290000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
@@ -903,7 +901,6 @@
 
 		pcie0: pcie@11300000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
@@ -942,7 +939,6 @@
 
 		pcie1: pcie@11310000 {
 			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
