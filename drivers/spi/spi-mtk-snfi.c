@@ -291,6 +291,20 @@ static const struct mtk_snand_caps mt7986_snand_caps = {
 	.num_spare_size = ARRAY_SIZE(mt7986_spare_sizes)
 };
 
+static const struct mtk_snand_caps mt7988_snand_caps = {
+	.sector_size = 1024,
+	.max_sectors = 8,
+	.fdm_size = 8,
+	.fdm_ecc_size = 1,
+	.fifo_size = 64,
+	.bbm_swap = true,
+	.empty_page_check = true,
+	.mastersta_mask = NFI_MASTERSTA_MASK_7986,
+	.nandfsm_mask = NFI_NAND_FSM_7986,
+	.spare_sizes = mt7986_spare_sizes,
+	.num_spare_size = ARRAY_SIZE(mt7986_spare_sizes)
+};
+
 struct mtk_snand_conf {
 	size_t page_size;
 	size_t oob_size;
@@ -1327,6 +1341,7 @@ static const struct of_device_id mtk_snand_ids[] = {
 	{ .compatible = "mediatek,mt7622-snand", .data = &mt7622_snand_caps },
 	{ .compatible = "mediatek,mt7629-snand", .data = &mt7629_snand_caps },
 	{ .compatible = "mediatek,mt7986-snand", .data = &mt7986_snand_caps },
+	{ .compatible = "mediatek,mt7988-snand", .data = &mt7988_snand_caps },
 	{},
 };
 
