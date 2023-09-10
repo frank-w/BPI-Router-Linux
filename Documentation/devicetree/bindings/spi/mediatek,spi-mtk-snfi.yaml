@@ -24,6 +24,7 @@ properties:
       - mediatek,mt7622-snand
       - mediatek,mt7629-snand
       - mediatek,mt7986-snand
+      - mediatek,mt7988-snand
 
   reg:
     items:
@@ -64,6 +65,7 @@ allOf:
           enum:
             - mediatek,mt7622-snand
             - mediatek,mt7629-snand
+            - mediatek,mt7988-snand
     then:
       properties:
         clocks:
