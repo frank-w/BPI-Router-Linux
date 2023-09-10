@@ -623,12 +623,12 @@
 		};
 
 		snand: spi@11001000 {
-			compatible = "mediatek,mt7986-snand";
+			compatible = "mediatek,mt7988-snand";
 			reg = <0 0x11001000 0 0x1000>;
 			interrupts = <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&infracfg CLK_INFRA_SPINFI>,
-				 <&infracfg CLK_INFRA_NFI>;
-			clock-names = "pad_clk", "nfi_clk";
+			clocks = <&infracfg CLK_INFRA_NFI>,
+			         <&infracfg CLK_INFRA_SPINFI>;
+			clock-names = "nfi_clk", "pad_clk";
 			assigned-clocks = <&topckgen CLK_TOP_SPINFI_SEL>,
 					  <&topckgen CLK_TOP_NFI1X_SEL>;
 			assigned-clock-parents = <&topckgen CLK_TOP_MPLL_D8>,
