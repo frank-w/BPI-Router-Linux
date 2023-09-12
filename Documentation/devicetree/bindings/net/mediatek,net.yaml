@@ -385,6 +385,34 @@ allOf:
           minItems: 2
           maxItems: 2
 
+        mediatek,toprgu:
+          $ref: /schemas/types.yaml#/definitions/phandle
+          description:
+            Phandle to the syscon representing the reset controller.
+
+        mediatek,usxgmiisys:
+          $ref: /schemas/types.yaml#/definitions/phandle-array
+          minItems: 2
+          maxItems: 2
+          items:
+            maxItems: 1
+          description:
+            A list of phandle to the syscon node referencing the USXGMII PCS.
+
+        mediatek,xfi-pextp:
+          $ref: /schemas/types.yaml#/definitions/phandle-array
+          minItems: 2
+          maxItems: 2
+          items:
+            maxItems: 1
+          description:
+            A list of phandle to the syscon node that handles the 10GE SerDes PHY.
+
+        mediatek,xfi-pll:
+          $ref: /schemas/types.yaml#/definitions/phandle
+          description:
+            Phandle to the syscon node handling the 10GE SerDes clock setup.
+
 patternProperties:
   "^mac@[0-1]$":
     type: object
