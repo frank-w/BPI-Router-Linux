@@ -717,6 +717,7 @@ EXPORT_SYMBOL(kthread_stop);
 
 /**
  * kthread_stop_put - stop a thread and put its task struct
+ * @k: thread created by kthread_create().
  *
  * Stops a thread created by kthread_create() and put its task_struct.
  * Only use when holding an extra task struct reference obtained by
