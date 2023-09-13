@@ -2684,6 +2684,12 @@ static long btrfs_ioctl_rm_dev_v2(struct file *file, void __user *arg)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
+	if (btrfs_fs_compat_ro(fs_info, TEMP_FSID)) {
+		btrfs_err(fs_info,
+			  "device removal is unsupported on TEMP_FSID devices");
+		return -EINVAL;
+	}
+
 	vol_args = memdup_user(arg, sizeof(*vol_args));
 	if (IS_ERR(vol_args))
 		return PTR_ERR(vol_args);
@@ -2749,6 +2755,12 @@ static long btrfs_ioctl_rm_dev(struct file *file, void __user *arg)
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (btrfs_fs_compat_ro(fs_info, TEMP_FSID)) {
+		btrfs_err(fs_info,
+			  "device removal is unsupported on TEMP_FSID devices");
+		return -EINVAL;
+	}
 
 	vol_args = memdup_user(arg, sizeof(*vol_args));
 	if (IS_ERR(vol_args))
@@ -3273,6 +3285,12 @@ static long btrfs_ioctl_dev_replace(struct btrfs_fs_info *fs_info,
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (btrfs_fs_compat_ro(fs_info, TEMP_FSID)) {
+		btrfs_err(fs_info,
+			  "device replace is unsupported on TEMP_FSID devices");
+		return -EINVAL;
+	}
 
 	if (btrfs_fs_incompat(fs_info, EXTENT_TREE_V2)) {
 		btrfs_err(fs_info, "device replace not supported on extent tree v2 yet");
