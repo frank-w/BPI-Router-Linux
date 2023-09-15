@@ -3172,7 +3172,8 @@ found:
 
 	/*
 	 * Only initialize the head struct page in memmap_init_reserved_pages,
-	 * rest of the struct pages will be initialized by the HugeTLB subsystem itself.
+	 * rest of the struct pages will be initialized by the HugeTLB
+	 * subsystem itself.
 	 * The head struct page is used to get folio information by the HugeTLB
 	 * subsystem like zone id and node id.
 	 */
@@ -3187,8 +3188,8 @@ found:
 
 /* Initialize [start_page:end_page_number] tail struct pages of a hugepage */
 static void __init hugetlb_folio_init_tail_vmemmap(struct folio *folio,
-						    unsigned long start_page_number,
-						    unsigned long end_page_number)
+					unsigned long start_page_number,
+					unsigned long end_page_number)
 {
 	enum zone_type zone = zone_idx(folio_zone(folio));
 	int nid = folio_nid(folio);
@@ -3206,8 +3207,9 @@ static void __init hugetlb_folio_init_tail_vmemmap(struct folio *folio,
 	}
 }
 
-static void __init hugetlb_folio_init_vmemmap(struct folio *folio, struct hstate *h,
-					       unsigned long nr_pages)
+static void __init hugetlb_folio_init_vmemmap(struct folio *folio,
+					      struct hstate *h,
+					      unsigned long nr_pages)
 {
 	int ret;
 
@@ -3237,12 +3239,14 @@ static void __init gather_bootmem_prealloc(void)
 		VM_BUG_ON(!hstate_is_gigantic(h));
 		WARN_ON(folio_ref_count(folio) != 1);
 
-		hugetlb_folio_init_vmemmap(folio, h, HUGETLB_VMEMMAP_RESERVE_PAGES);
+		hugetlb_folio_init_vmemmap(folio, h,
+					   HUGETLB_VMEMMAP_RESERVE_PAGES);
 		prep_new_hugetlb_folio(h, folio, folio_nid(folio));
 		/* If HVO fails, initialize all tail struct pages */
 		if (!HPageVmemmapOptimized(&folio->page))
-			hugetlb_folio_init_tail_vmemmap(folio, HUGETLB_VMEMMAP_RESERVE_PAGES,
-							pages_per_huge_page(h));
+			hugetlb_folio_init_tail_vmemmap(folio,
+						HUGETLB_VMEMMAP_RESERVE_PAGES,
+						pages_per_huge_page(h));
 		free_huge_folio(folio); /* add to the hugepage allocator */
 
 		/*
@@ -3254,6 +3258,7 @@ static void __init gather_bootmem_prealloc(void)
 		cond_resched();
 	}
 }
+
 static void __init hugetlb_hstate_alloc_pages_onenode(struct hstate *h, int nid)
 {
 	unsigned long i;
