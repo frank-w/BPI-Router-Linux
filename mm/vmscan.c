@@ -618,7 +618,8 @@ static inline bool can_reclaim_anon_pages(struct mem_cgroup *memcg,
 			return true;
 		/* Is there any swapcache pages to reclaim? */
 		if (total_swapcache_pages() > 0) {
-			sc->swapcache_only = 1;
+			if (sc)
+				sc->swapcache_only = 1;
 			return true;
 		}
 	} else {
@@ -627,7 +628,8 @@ static inline bool can_reclaim_anon_pages(struct mem_cgroup *memcg,
 			return true;
 		/* Is there any swapcache pages in memcg to reclaim? */
 		if (mem_cgroup_get_nr_swapcache_pages(memcg) > 0) {
-			sc->swapcache_only = 1;
+			if (sc)
+				sc->swapcache_only = 1;
 			return true;
 		}
 	}
@@ -2293,19 +2295,6 @@ static bool skip_cma(struct folio *folio, struct scan_control *sc)
 }
 #endif
 
-static bool skip_isolate(struct folio *folio, struct scan_control *sc,
-			 enum lru_list lru)
-{
-	if (folio_zonenum(folio) > sc->reclaim_idx)
-		return true;
-	if (skip_cma(folio, sc))
-		return true;
-	if (unlikely(sc->swapcache_only && !is_file_lru(lru) &&
-	    !folio_test_swapcache(folio)))
-		return true;
-	return false;
-}
-
 /*
  * Isolating page from the lruvec to fill in @dst list by nr_to_scan times.
  *
@@ -2352,7 +2341,8 @@ static unsigned long isolate_lru_folios(unsigned long nr_to_scan,
 		nr_pages = folio_nr_pages(folio);
 		total_scan += nr_pages;
 
-		if (skip_isolate(folio, sc, lru)) {
+		if (folio_zonenum(folio) > sc->reclaim_idx ||
+				skip_cma(folio, sc)) {
 			nr_skipped[folio_zonenum(folio)] += nr_pages;
 			move_to = &folios_skipped;
 			goto move;
@@ -2366,6 +2356,15 @@ static unsigned long isolate_lru_folios(unsigned long nr_to_scan,
 		 * Account all pages in a folio.
 		 */
 		scan += nr_pages;
+
+		/*
+		 * Count non-swapcache too because the swapcache pages may
+		 * be rare and it takes too much times here if not count
+		 * the non-swapcache pages.
+		 */
+		if (unlikely(sc->swapcache_only && !is_file_lru(lru) &&
+		    !folio_test_swapcache(folio)))
+			goto move;
 
 		if (!folio_test_lru(folio))
 			goto move;
