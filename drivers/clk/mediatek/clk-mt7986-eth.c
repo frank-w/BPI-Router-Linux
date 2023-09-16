@@ -53,7 +53,7 @@ static const struct mtk_gate_regs eth_cg_regs = {
 };
 
 #define GATE_ETH(_id, _name, _parent, _shift)			\
-	GATE_MTK(_id, _name, _parent, &eth_cg_regs, _shift, &mtk_clk_gate_ops_no_setclr_inv)
+	GATE_MTK_FLAGS(_id, _name, _parent, &eth_cg_regs, _shift, &mtk_clk_gate_ops_no_setclr_inv, CLK_IS_CRITICAL)
 
 static const struct mtk_gate eth_clks[] = {
 	GATE_ETH(CLK_ETH_FE_EN, "eth_fe_en", "netsys_2x_sel", 6),
