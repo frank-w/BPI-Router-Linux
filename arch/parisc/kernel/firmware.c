@@ -78,12 +78,9 @@ static unsigned long pdc_result[NUM_PDC_RESULT]  __aligned(8);
 static unsigned long pdc_result2[NUM_PDC_RESULT] __aligned(8);
 
 #ifdef CONFIG_64BIT
-#define WIDE_FIRMWARE 0x1
-#define NARROW_FIRMWARE 0x2
-
 /* Firmware needs to be initially set to narrow to determine the 
  * actual firmware width. */
-int parisc_narrow_firmware __ro_after_init = 2;
+int parisc_narrow_firmware __ro_after_init = PDC_MODEL_OS32;
 #endif
 
 /* On most currently-supported platforms, IODC I/O calls are 32-bit calls
@@ -163,7 +160,7 @@ void set_firmware_width_unlocked(void)
 	if (ret < 0)
 		return;
 	convert_to_wide(pdc_result);
-	if (pdc_result[0] != NARROW_FIRMWARE)
+	if (pdc_result[0] != PDC_MODEL_OS32)
 		parisc_narrow_firmware = 0;
 }
 	
@@ -178,7 +175,7 @@ void set_firmware_width(void)
 	unsigned long flags;
 
 	/* already initialized? */
-	if (parisc_narrow_firmware != 2)
+	if (parisc_narrow_firmware != PDC_MODEL_OS32)
 		return;
 
 	spin_lock_irqsave(&pdc_lock, flags);
