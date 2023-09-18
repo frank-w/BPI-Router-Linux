@@ -1342,6 +1342,9 @@ static long do_mbind(unsigned long start, unsigned long len,
 	vma_iter_init(&vmi, mm, start);
 	prev = vma_prev(&vmi);
 	for_each_vma_range(vmi, vma, end) {
+		/* If queue_pages_range failed then not all VMAs might be locked */
+		if (ret)
+			vma_start_write(vma);
 		err = mbind_range(&vmi, vma, &prev, start, end, new);
 		if (err)
 			break;
