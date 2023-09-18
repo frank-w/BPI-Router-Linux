@@ -33,6 +33,44 @@ enum execmem_type {
 };
 
 /**
+ * struct execmem_range - definition of a memory range suitable for code and
+ *			  related data allocations
+ * @start:	address space start
+ * @end:	address space end (inclusive)
+ * @pgprot:	permissions for memory in this address space
+ * @alignment:	alignment required for text allocations
+ */
+struct execmem_range {
+	unsigned long   start;
+	unsigned long   end;
+	pgprot_t        pgprot;
+	unsigned int	alignment;
+};
+
+/**
+ * struct execmem_params - architecture parameters for code allocations
+ * @ranges: array of ranges defining architecture specific parameters for
+ * each type of executable memory allocations
+ */
+struct execmem_params {
+	struct execmem_range	ranges[EXECMEM_TYPE_MAX];
+};
+
+/**
+ * execmem_arch_params - supply parameters for allocations of executable memory
+ *
+ * A hook for architectures to define parameters for allocations of
+ * executable memory described by struct execmem_params
+ *
+ * For architectures that do not implement this method a default set of
+ * parameters will be used
+ *
+ * Return: a structure defining architecture parameters and restrictions
+ * for allocations of executable memory
+ */
+struct execmem_params *execmem_arch_params(void);
+
+/**
  * execmem_text_alloc - allocate executable memory
  * @type: type of the allocation
  * @size: how many bytes of memory are required
@@ -52,5 +90,11 @@ void *execmem_text_alloc(enum execmem_type type, size_t size);
  * @ptr: pointer to the memory that should be freed
  */
 void execmem_free(void *ptr);
+
+#ifdef CONFIG_EXECMEM
+void execmem_init(void);
+#else
+static inline void execmem_init(void) {}
+#endif
 
 #endif /* _LINUX_EXECMEM_ALLOC_H */
