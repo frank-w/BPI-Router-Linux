@@ -33,25 +33,6 @@ struct mips_hi16 {
 static LIST_HEAD(dbe_list);
 static DEFINE_SPINLOCK(dbe_lock);
 
-#ifdef MODULE_START
-static struct execmem_params execmem_params __ro_after_init = {
-	.ranges = {
-		[EXECMEM_DEFAULT] = {
-			.start = MODULE_START,
-			.end = MODULE_END,
-			.alignment = 1,
-		},
-	},
-};
-
-struct execmem_params __init *execmem_arch_params(void)
-{
-	execmem_params.ranges[EXECMEM_DEFAULT].pgprot = PAGE_KERNEL;
-
-	return &execmem_params;
-}
-#endif
-
 static void apply_r_mips_32(u32 *location, u32 base, Elf_Addr v)
 {
 	*location = base + v;
