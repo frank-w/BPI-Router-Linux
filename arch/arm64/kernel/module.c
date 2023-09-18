@@ -116,6 +116,16 @@ static struct execmem_params execmem_params __ro_after_init = {
 			.flags = EXECMEM_KASAN_SHADOW,
 			.alignment = MODULE_ALIGN,
 		},
+		[EXECMEM_KPROBES] = {
+			.start = VMALLOC_START,
+			.end = VMALLOC_END,
+			.alignment = 1,
+		},
+		[EXECMEM_BPF] = {
+			.start = VMALLOC_START,
+			.end = VMALLOC_END,
+			.alignment = 1,
+		},
 	},
 };
 
@@ -139,6 +149,9 @@ struct execmem_params __init *execmem_arch_params(void)
 		r->start = module_plt_base;
 		r->end = module_plt_base + SZ_2G;
 	}
+
+	execmem_params.ranges[EXECMEM_KPROBES].pgprot = PAGE_KERNEL_ROX;
+	execmem_params.ranges[EXECMEM_BPF].pgprot = PAGE_KERNEL;
 
 	return &execmem_params;
 }
