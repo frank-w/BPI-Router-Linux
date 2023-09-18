@@ -769,27 +769,29 @@ static struct btrfs_fs_devices *find_fsid_reverted_metadata(
 	return NULL;
 }
 
-static void prepare_random_fsid(struct btrfs_super_block *disk_super,
-				 const char *path)
+static void prepare_random_fsid(struct btrfs_super_block *disk_super, const char *path)
 {
 	struct btrfs_fs_devices *fs_devices;
-	u8 vfsid[BTRFS_FSID_SIZE];
+	u8 temp_fsid[BTRFS_FSID_SIZE];
 	bool dup_fsid = true;
 
 	while (dup_fsid) {
 		dup_fsid = false;
-		generate_random_uuid(vfsid);
+		generate_random_uuid(temp_fsid);
 
 		list_for_each_entry(fs_devices, &fs_uuids, fs_list) {
-			if (!memcmp(vfsid, fs_devices->fsid, BTRFS_FSID_SIZE) ||
-			    !memcmp(vfsid, fs_devices->metadata_uuid,
-				    BTRFS_FSID_SIZE))
+			if (memcmp(temp_fsid, fs_devices->fsid,
+				   BTRFS_FSID_SIZE) == 0 ||
+			    memcmp(temp_fsid, fs_devices->metadata_uuid,
+				    BTRFS_FSID_SIZE) == 0) {
 				dup_fsid = true;
+				break;
+			}
 		}
 	}
 
 	memcpy(disk_super->metadata_uuid, disk_super->fsid, BTRFS_FSID_SIZE);
-	memcpy(disk_super->fsid, vfsid, BTRFS_FSID_SIZE);
+	memcpy(disk_super->fsid, temp_fsid, BTRFS_FSID_SIZE);
 
 	btrfs_info(NULL,
 		"random fsid (%pU) set for TEMP_FSID device %s (real fsid %pU)",
@@ -819,7 +821,7 @@ static noinline struct btrfs_device *device_list_add(const char *path,
 		BTRFS_FEATURE_INCOMPAT_METADATA_UUID);
 	bool fsid_change_in_progress = (btrfs_super_flags(disk_super) &
 					BTRFS_SUPER_FLAG_CHANGING_FSID_V2);
-	bool temp_fsid = (btrfs_super_compat_ro_flags(disk_super) &
+	const bool temp_fsid = (btrfs_super_compat_ro_flags(disk_super) &
 			 BTRFS_FEATURE_COMPAT_RO_TEMP_FSID);
 
 	error = lookup_bdev(path, &path_devt);

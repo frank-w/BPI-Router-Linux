@@ -301,7 +301,7 @@ struct btrfs_fs_devices {
 	 *       fs_devices->metadata_uuid == sb->metadata_uuid
 	 *
 	 *   - When the BTRFS_FEATURE_COMPAT_RO_TEMP_FSID flag is set:
-	 *       fs_devices->fsid == random; [see the function prepare_random_fsid()]
+	 *       fs_devices->fsid == random;		(see prepare_random_fsid)
 	 *       fs_devices->metadata_uuid = sb->fsid;
 	 *       sb->metadata_uuid == 0;
 	 */

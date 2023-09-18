@@ -315,10 +315,9 @@ struct btrfs_ioctl_fs_info_args {
 
 /*
  * A random fsid is generated for TEMP_FSID devices (as flagged by the
- * corresponding compat_ro flag), in order to cope with same-fsid FS
- * mounts.
+ * corresponding compat_ro flag), in order to cope with same-fsid FS mounts.
  */
-#define BTRFS_FEATURE_COMPAT_RO_TEMP_FSID	(1ULL << 4)
+#define BTRFS_FEATURE_COMPAT_RO_TEMP_FSID		(1ULL << 4)
 
 #define BTRFS_FEATURE_INCOMPAT_MIXED_BACKREF	(1ULL << 0)
 #define BTRFS_FEATURE_INCOMPAT_DEFAULT_SUBVOL	(1ULL << 1)
