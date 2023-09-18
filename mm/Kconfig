@@ -1259,6 +1259,9 @@ config LOCK_MM_AND_FIND_VMA
 	bool
 	depends on !STACK_GROWSUP
 
+config EXECMEM
+	bool
+
 source "mm/damon/Kconfig"
 
 endmenu
