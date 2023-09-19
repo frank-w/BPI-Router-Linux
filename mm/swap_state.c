@@ -21,6 +21,7 @@
 #include <linux/swap_slots.h>
 #include <linux/huge_mm.h>
 #include <linux/shmem_fs.h>
+#include <linux/zswap.h>
 #include "internal.h"
 #include "swap.h"
 
@@ -417,6 +418,7 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 	struct folio *folio;
 	struct page *page;
 	void *shadow = NULL;
+	bool zswap_lru_removed = false;
 
 	*new_page_allocated = false;
 	si = get_swap_device(entry);
@@ -485,6 +487,17 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 	__folio_set_locked(folio);
 	__folio_set_swapbacked(folio);
 
+	/*
+	 * Page fault might itself trigger reclaim, on a zswap object that
+	 * corresponds to the same swap entry. However, as the swap entry has
+	 * previously been pinned, the task will run into an infinite loop trying
+	 * to pin the swap entry again.
+	 *
+	 * To prevent this from happening, we remove it from the zswap
+	 * LRU to prevent its reclamation.
+	 */
+	zswap_lru_removed = zswap_remove_swpentry_from_lru(entry);
+
 	if (mem_cgroup_swapin_charge_folio(folio, NULL, gfp_mask, entry))
 		goto fail_unlock;
 
@@ -497,6 +510,9 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 	if (shadow)
 		workingset_refault(folio, shadow);
 
+	if (zswap_lru_removed)
+		zswap_insert_swpentry_into_lru(entry);
+
 	/* Caller will initiate read into locked folio */
 	folio_add_lru(folio);
 	*new_page_allocated = true;
@@ -506,6 +522,9 @@ got_page:
 	return page;
 
 fail_unlock:
+	if (zswap_lru_removed)
+		zswap_insert_swpentry_into_lru(entry);
+
 	put_swap_folio(folio, entry);
 	folio_unlock(folio);
 	folio_put(folio);

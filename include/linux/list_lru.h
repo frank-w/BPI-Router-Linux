@@ -90,6 +90,24 @@ void memcg_reparent_list_lrus(struct mem_cgroup *memcg, struct mem_cgroup *paren
 bool list_lru_add(struct list_lru *lru, struct list_head *item);
 
 /**
+ * __list_lru_add: add an element to a specific sublist.
+ * @list_lru: the lru pointer
+ * @item: the item to be added.
+ * @memcg: the cgroup of the sublist to add the item to.
+ * @nid: the node id of the sublist to add the item to.
+ *
+ * This function is similar to list_lru_add(), but it allows the caller to
+ * specify the sublist to which the item should be added. This can be useful
+ * when the list_head node is not necessarily in the same cgroup and NUMA node
+ * as the data it represents, such as zswap, where the list_head node could be
+ * from kswapd and the data from a different cgroup altogether.
+ *
+ * Return value: true if the list was updated, false otherwise
+ */
+bool __list_lru_add(struct list_lru *lru, struct list_head *item, int nid,
+		struct mem_cgroup *memcg);
+
+/**
  * list_lru_del: delete an element to the lru list
  * @list_lru: the lru pointer
  * @item: the item to be deleted.
@@ -101,6 +119,18 @@ bool list_lru_add(struct list_lru *lru, struct list_head *item);
  * Return value: true if the list was updated, false otherwise
  */
 bool list_lru_del(struct list_lru *lru, struct list_head *item);
+
+/**
+ * __list_lru_delete: delete an element from a specific sublist.
+ * @list_lru: the lru pointer
+ * @item: the item to be deleted.
+ * @memcg: the cgroup of the sublist to delete the item from.
+ * @nid: the node id of the sublist to delete the item from.
+ *
+ * Return value: true if the list was updated, false otherwise.
+ */
+bool __list_lru_del(struct list_lru *lru, struct list_head *item, int nid,
+		struct mem_cgroup *memcg);
 
 /**
  * list_lru_count_one: return the number of objects currently held by @lru
@@ -136,6 +166,15 @@ static inline unsigned long list_lru_count(struct list_lru *lru)
 void list_lru_isolate(struct list_lru_one *list, struct list_head *item);
 void list_lru_isolate_move(struct list_lru_one *list, struct list_head *item,
 			   struct list_head *head);
+
+/*
+ * list_lru_putback: undo list_lru_isolate.
+ *
+ * Since we might have dropped the LRU lock in between, recompute list_lru_one
+ * from the node's id and memcg.
+ */
+void list_lru_putback(struct list_lru *lru, struct list_head *item, int nid,
+		struct mem_cgroup *memcg);
 
 typedef enum lru_status (*list_lru_walk_cb)(struct list_head *item,
 		struct list_lru_one *list, spinlock_t *lock, void *cb_arg);
