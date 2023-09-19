@@ -219,6 +219,7 @@ struct mem_cgroup {
 
 #if defined(CONFIG_MEMCG_KMEM) && defined(CONFIG_ZSWAP)
 	unsigned long zswap_max;
+	atomic_t zswap_shrinker_enabled;
 #endif
 
 	unsigned long soft_limit;

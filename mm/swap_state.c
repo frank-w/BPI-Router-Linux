@@ -618,6 +618,22 @@ static unsigned long swapin_nr_pages(unsigned long offset)
 	return pages;
 }
 
+#ifdef CONFIG_ZSWAP
+/*
+ * Refault is an indication that warmer pages are not resident in memory.
+ * Increase the size of zswap's protected area.
+ */
+static void inc_nr_protected(struct page *page)
+{
+	struct lruvec *lruvec = folio_lruvec(page_folio(page));
+	unsigned long flags;
+
+	spin_lock_irqsave(&lruvec->lru_lock, flags);
+	lruvec->nr_zswap_protected++;
+	spin_unlock_irqrestore(&lruvec->lru_lock, flags);
+}
+#endif
+
 /**
  * swap_cluster_readahead - swap in pages in hope we need them soon
  * @entry: swap entry of this memory
@@ -686,7 +702,12 @@ struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,
 	lru_add_drain();	/* Push any new pages onto the LRU now */
 skip:
 	/* The page was likely read above, so no need for plugging here */
-	return read_swap_cache_async(entry, gfp_mask, vma, addr, NULL);
+	page = read_swap_cache_async(entry, gfp_mask, vma, addr, NULL);
+#ifdef CONFIG_ZSWAP
+	if (page)
+		inc_nr_protected(page);
+#endif
+	return page;
 }
 
 int init_swap_address_space(unsigned int type, unsigned long nr_pages)
@@ -853,8 +874,12 @@ static struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,
 	lru_add_drain();
 skip:
 	/* The page was likely read above, so no need for plugging here */
-	return read_swap_cache_async(fentry, gfp_mask, vma, vmf->address,
-				     NULL);
+	page = read_swap_cache_async(fentry, gfp_mask, vma, vmf->address, NULL);
+#ifdef CONFIG_ZSWAP
+	if (page)
+		inc_nr_protected(page);
+#endif
+	return page;
 }
 
 /**

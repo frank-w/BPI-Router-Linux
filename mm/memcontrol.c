@@ -5353,6 +5353,8 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 	WRITE_ONCE(memcg->soft_limit, PAGE_COUNTER_MAX);
 #if defined(CONFIG_MEMCG_KMEM) && defined(CONFIG_ZSWAP)
 	memcg->zswap_max = PAGE_COUNTER_MAX;
+	/* Disable the shrinker by default */
+	atomic_set(&memcg->zswap_shrinker_enabled, 0);
 #endif
 	page_counter_set_high(&memcg->swap, PAGE_COUNTER_MAX);
 	if (parent) {
@@ -7878,6 +7880,31 @@ static ssize_t zswap_max_write(struct kernfs_open_file *of,
 	return nbytes;
 }
 
+static int zswap_shrinker_enabled_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+
+	seq_printf(m, "%d\n", atomic_read(&memcg->zswap_shrinker_enabled));
+	return 0;
+}
+
+static ssize_t zswap_shrinker_enabled_write(struct kernfs_open_file *of,
+			       char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	int zswap_shrinker_enabled;
+	ssize_t parse_ret = kstrtoint(strstrip(buf), 0, &zswap_shrinker_enabled);
+
+	if (parse_ret)
+		return parse_ret;
+
+	if (zswap_shrinker_enabled < 0 || zswap_shrinker_enabled > 1)
+		return -ERANGE;
+
+	atomic_set(&memcg->zswap_shrinker_enabled, zswap_shrinker_enabled);
+	return nbytes;
+}
+
 static struct cftype zswap_files[] = {
 	{
 		.name = "zswap.current",
@@ -7889,6 +7916,12 @@ static struct cftype zswap_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = zswap_max_show,
 		.write = zswap_max_write,
+	},
+	{
+		.name = "zswap.shrinker.enabled",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = zswap_shrinker_enabled_show,
+		.write = zswap_shrinker_enabled_write,
 	},
 	{ }	/* terminate */
 };
