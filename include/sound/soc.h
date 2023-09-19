@@ -10,6 +10,7 @@
 #ifndef __LINUX_SND_SOC_H
 #define __LINUX_SND_SOC_H
 
+#include <linux/args.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/types.h>
@@ -870,12 +871,8 @@ asoc_link_to_platform(struct snd_soc_dai_link *link, int n) {
 	.platforms	= platform,			\
 	.num_platforms	= ARRAY_SIZE(platform)
 
-#define SND_SOC_DAILINK_REGx(_1, _2, _3, func, ...) func
 #define SND_SOC_DAILINK_REG(...) \
-	SND_SOC_DAILINK_REGx(__VA_ARGS__,		\
-			SND_SOC_DAILINK_REG3,	\
-			SND_SOC_DAILINK_REG2,	\
-			SND_SOC_DAILINK_REG1)(__VA_ARGS__)
+	CONCATENATE(SND_SOC_DAILINK_REG, COUNT_ARGS(__VA_ARGS__))(__VA_ARGS__)
 
 #define SND_SOC_DAILINK_DEF(name, def...)		\
 	static struct snd_soc_dai_link_component name[]	= { def }
@@ -932,6 +929,17 @@ struct snd_soc_card {
 #ifdef CONFIG_DMI
 	char dmi_longname[80];
 #endif /* CONFIG_DMI */
+
+#ifdef CONFIG_PCI
+	/*
+	 * PCI does not define 0 as invalid, so pci_subsystem_set indicates
+	 * whether a value has been written to these fields.
+	 */
+	unsigned short pci_subsystem_vendor;
+	unsigned short pci_subsystem_device;
+	bool pci_subsystem_set;
+#endif /* CONFIG_PCI */
+
 	char topology_shortname[32];
 
 	struct device *dev;
