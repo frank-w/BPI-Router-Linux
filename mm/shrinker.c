@@ -572,18 +572,23 @@ struct shrinker *shrinker_alloc(unsigned int flags, const char *fmt, ...)
 
 	if (flags & SHRINKER_MEMCG_AWARE) {
 		err = prealloc_memcg_shrinker(shrinker);
-		if (err == -ENOSYS)
+		if (err == -ENOSYS) {
+			/* Memcg is not supported, fallback to non-memcg-aware shrinker. */
 			shrinker->flags &= ~SHRINKER_MEMCG_AWARE;
-		else if (err == 0)
-			goto done;
-		else
+			goto non_memcg;
+		}
+
+		if (err)
 			goto err_flags;
+
+		return shrinker;
 	}
 
+non_memcg:
 	/*
 	 * The nr_deferred is available on per memcg level for memcg aware
 	 * shrinkers, so only allocate nr_deferred in the following cases:
-	 *  - non memcg aware shrinkers
+	 *  - non-memcg-aware shrinkers
 	 *  - !CONFIG_MEMCG
 	 *  - memcg is disabled by kernel command line
 	 */
@@ -595,7 +600,6 @@ struct shrinker *shrinker_alloc(unsigned int flags, const char *fmt, ...)
 	if (!shrinker->nr_deferred)
 		goto err_flags;
 
-done:
 	return shrinker;
 
 err_flags:
@@ -634,9 +638,9 @@ void shrinker_free(struct shrinker *shrinker)
 		list_del(&shrinker->list);
 		debugfs_entry = shrinker_debugfs_detach(shrinker, &debugfs_id);
 		shrinker->flags &= ~SHRINKER_REGISTERED;
-	} else {
-		shrinker_debugfs_name_free(shrinker);
 	}
+
+	shrinker_debugfs_name_free(shrinker);
 
 	if (shrinker->flags & SHRINKER_MEMCG_AWARE)
 		unregister_memcg_shrinker(shrinker);

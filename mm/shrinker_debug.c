@@ -193,20 +193,6 @@ int shrinker_debugfs_add(struct shrinker *shrinker)
 	return 0;
 }
 
-int shrinker_debugfs_name_alloc(struct shrinker *shrinker, const char *fmt,
-				va_list ap)
-{
-	shrinker->name = kvasprintf_const(GFP_KERNEL, fmt, ap);
-
-	return shrinker->name ? 0 : -ENOMEM;
-}
-
-void shrinker_debugfs_name_free(struct shrinker *shrinker)
-{
-	kfree_const(shrinker->name);
-	shrinker->name = NULL;
-}
-
 int shrinker_debugfs_rename(struct shrinker *shrinker, const char *fmt, ...)
 {
 	struct dentry *entry;
@@ -254,8 +240,6 @@ struct dentry *shrinker_debugfs_detach(struct shrinker *shrinker,
 	struct dentry *entry = shrinker->debugfs_entry;
 
 	lockdep_assert_held(&shrinker_rwsem);
-
-	shrinker_debugfs_name_free(shrinker);
 
 	*debugfs_id = entry ? shrinker->debugfs_id : -1;
 	shrinker->debugfs_entry = NULL;
