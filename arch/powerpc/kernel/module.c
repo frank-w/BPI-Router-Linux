@@ -138,8 +138,8 @@ struct execmem_params __init *execmem_arch_params(void)
 
 	range->pgprot = prot;
 
-	execmem_params.ranges[EXECMEM_KPROBES].start = VMALLOC_START;
-	execmem_params.ranges[EXECMEM_KPROBES].start = VMALLOC_END;
+	execmem_params.ranges[EXECMEM_KPROBES].start = range->start;
+	execmem_params.ranges[EXECMEM_KPROBES].end = range->end;
 
 	if (strict_module_rwx_enabled())
 		execmem_params.ranges[EXECMEM_KPROBES].pgprot = PAGE_KERNEL_ROX;
