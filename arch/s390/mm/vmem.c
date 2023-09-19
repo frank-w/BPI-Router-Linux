@@ -14,6 +14,7 @@
 #include <linux/sort.h>
 #include <asm/cacheflush.h>
 #include <asm/nospec-branch.h>
+#include <asm/ctlreg.h>
 #include <asm/pgalloc.h>
 #include <asm/setup.h>
 #include <asm/tlbflush.h>
@@ -659,7 +660,7 @@ void __init vmem_map_init(void)
 		__set_memory_4k(__va(0), RELOC_HIDE(__va(0), ident_map_size));
 	}
 	if (MACHINE_HAS_NX)
-		ctl_set_bit(0, 20);
+		system_ctl_set_bit(0, CR0_INSTRUCTION_EXEC_PROTECTION_BIT);
 	pr_info("Write protected kernel read-only data: %luk\n",
 		(unsigned long)(__end_rodata - _stext) >> 10);
 }
