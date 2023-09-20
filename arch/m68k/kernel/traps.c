@@ -41,6 +41,9 @@
 #include <asm/siginfo.h>
 #include <asm/tlbflush.h>
 
+#include "traps.h"
+#include "../mm/fault.h"
+
 static const char *vec_names[] = {
 	[VEC_RESETSP]	= "RESET SP",
 	[VEC_RESETPC]	= "RESET PC",
@@ -124,10 +127,6 @@ static const char *space_names[] = {
 };
 
 void die_if_kernel(char *,struct pt_regs *,int);
-asmlinkage int do_page_fault(struct pt_regs *regs, unsigned long address,
-                             unsigned long error_code);
-int send_fault_sig(struct pt_regs *regs);
-
 asmlinkage void trap_c(struct frame *fp);
 
 #if defined (CONFIG_M68060)
@@ -365,7 +364,7 @@ disable_wb:
 #if defined(CONFIG_SUN3)
 #include <asm/sun3mmu.h>
 
-extern int mmu_emu_handle_fault (unsigned long, int, int);
+#include "../sun3/sun3.h"
 
 /* sun3 version of bus_error030 */
 
@@ -965,7 +964,7 @@ void show_stack(struct task_struct *task, unsigned long *stack,
  * real 68k parts, but it won't hurt either.
  */
 
-void bad_super_trap (struct frame *fp)
+static void bad_super_trap(struct frame *fp)
 {
 	int vector = (fp->ptregs.vector >> 2) & 0xff;
 

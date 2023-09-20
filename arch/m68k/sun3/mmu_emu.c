@@ -27,6 +27,7 @@
 #include <asm/mmu_context.h>
 #include <asm/dvma.h>
 
+#include "sun3.h"
 
 #undef DEBUG_MMU_EMU
 #define DEBUG_PROM_MAPS
@@ -67,7 +68,7 @@ static unsigned char ctx_avail = CONTEXTS_NUM-1;
 unsigned long rom_pages[256];
 
 /* Print a PTE value in symbolic form. For debugging. */
-void print_pte (pte_t pte)
+static void print_pte(pte_t pte)
 {
 #if 0
 	/* Verbose version. */
