@@ -26,6 +26,7 @@
 #include <linux/ratelimit.h>
 #include <linux/crc32c.h>
 #include <linux/btrfs.h>
+#include <linux/security.h>
 #include "messages.h"
 #include "delayed-inode.h"
 #include "ctree.h"
@@ -129,9 +130,6 @@ enum {
 	Opt_inode_cache, Opt_noinode_cache,
 
 	/* Debugging options */
-	Opt_check_integrity,
-	Opt_check_integrity_including_extent_data,
-	Opt_check_integrity_print_mask,
 	Opt_enospc_debug, Opt_noenospc_debug,
 #ifdef CONFIG_BTRFS_DEBUG
 	Opt_fragment_data, Opt_fragment_metadata, Opt_fragment_all,
@@ -200,9 +198,6 @@ static const match_table_t tokens = {
 	{Opt_recovery, "recovery"},
 
 	/* Debugging options */
-	{Opt_check_integrity, "check_int"},
-	{Opt_check_integrity_including_extent_data, "check_int_data"},
-	{Opt_check_integrity_print_mask, "check_int_print_mask=%u"},
 	{Opt_enospc_debug, "enospc_debug"},
 	{Opt_noenospc_debug, "noenospc_debug"},
 #ifdef CONFIG_BTRFS_DEBUG
@@ -707,44 +702,6 @@ int btrfs_parse_options(struct btrfs_fs_info *info, char *options,
 		case Opt_skip_balance:
 			btrfs_set_opt(info->mount_opt, SKIP_BALANCE);
 			break;
-#ifdef CONFIG_BTRFS_FS_CHECK_INTEGRITY
-		case Opt_check_integrity_including_extent_data:
-			btrfs_warn(info,
-	"integrity checker is deprecated and will be removed in 6.7");
-			btrfs_info(info,
-				   "enabling check integrity including extent data");
-			btrfs_set_opt(info->mount_opt, CHECK_INTEGRITY_DATA);
-			btrfs_set_opt(info->mount_opt, CHECK_INTEGRITY);
-			break;
-		case Opt_check_integrity:
-			btrfs_warn(info,
-	"integrity checker is deprecated and will be removed in 6.7");
-			btrfs_info(info, "enabling check integrity");
-			btrfs_set_opt(info->mount_opt, CHECK_INTEGRITY);
-			break;
-		case Opt_check_integrity_print_mask:
-			ret = match_int(&args[0], &intarg);
-			if (ret) {
-				btrfs_err(info,
-				"unrecognized check_integrity_print_mask value %s",
-					args[0].from);
-				goto out;
-			}
-			info->check_integrity_print_mask = intarg;
-			btrfs_warn(info,
-	"integrity checker is deprecated and will be removed in 6.7");
-			btrfs_info(info, "check_integrity_print_mask 0x%x",
-				   info->check_integrity_print_mask);
-			break;
-#else
-		case Opt_check_integrity_including_extent_data:
-		case Opt_check_integrity:
-		case Opt_check_integrity_print_mask:
-			btrfs_err(info,
-				  "support for check_integrity* not compiled in!");
-			ret = -EINVAL;
-			goto out;
-#endif
 		case Opt_fatal_errors:
 			if (strcmp(args[0].from, "panic") == 0) {
 				btrfs_set_opt(info->mount_opt,
@@ -855,7 +812,7 @@ out:
  * All other options will be parsed on much later in the mount process and
  * only when we need to allocate a new super block.
  */
-static int btrfs_parse_device_options(const char *options, blk_mode_t flags)
+static int btrfs_parse_device_options(const char *options)
 {
 	substring_t args[MAX_OPT_ARGS];
 	char *device_name, *opts, *orig, *p;
@@ -889,7 +846,7 @@ static int btrfs_parse_device_options(const char *options, blk_mode_t flags)
 				error = -ENOMEM;
 				goto out;
 			}
-			device = btrfs_scan_one_device(device_name, flags);
+			device = btrfs_scan_one_device(device_name, false);
 			kfree(device_name);
 			if (IS_ERR(device)) {
 				error = PTR_ERR(device);
@@ -1305,15 +1262,6 @@ static int btrfs_show_options(struct seq_file *seq, struct dentry *dentry)
 		seq_puts(seq, ",autodefrag");
 	if (btrfs_test_opt(info, SKIP_BALANCE))
 		seq_puts(seq, ",skip_balance");
-#ifdef CONFIG_BTRFS_FS_CHECK_INTEGRITY
-	if (btrfs_test_opt(info, CHECK_INTEGRITY_DATA))
-		seq_puts(seq, ",check_int_data");
-	else if (btrfs_test_opt(info, CHECK_INTEGRITY))
-		seq_puts(seq, ",check_int");
-	if (info->check_integrity_print_mask)
-		seq_printf(seq, ",check_int_print_mask=%d",
-				info->check_integrity_print_mask);
-#endif
 	if (info->metadata_ratio)
 		seq_printf(seq, ",metadata_ratio=%u", info->metadata_ratio);
 	if (btrfs_test_opt(info, PANIC_ON_FATAL_ERROR))
@@ -1440,13 +1388,11 @@ out:
 static struct dentry *btrfs_mount_root(struct file_system_type *fs_type,
 		int flags, const char *device_name, void *data)
 {
-	struct block_device *bdev = NULL;
 	struct super_block *s;
 	struct btrfs_device *device = NULL;
 	struct btrfs_fs_devices *fs_devices = NULL;
 	struct btrfs_fs_info *fs_info = NULL;
 	void *new_sec_opts = NULL;
-	blk_mode_t mode = sb_open_mode(flags);
 	int error = 0;
 
 	if (data) {
@@ -1478,13 +1424,18 @@ static struct dentry *btrfs_mount_root(struct file_system_type *fs_type,
 	}
 
 	mutex_lock(&uuid_mutex);
-	error = btrfs_parse_device_options(data, mode);
+	error = btrfs_parse_device_options(data);
 	if (error) {
 		mutex_unlock(&uuid_mutex);
 		goto error_fs_info;
 	}
 
-	device = btrfs_scan_one_device(device_name, mode);
+	/*
+	 * With 'true' passed to btrfs_scan_one_device() (mount time) we expect
+	 * either a valid device or an error.
+	 */
+	device = btrfs_scan_one_device(device_name, true);
+	ASSERT(device != NULL);
 	if (IS_ERR(device)) {
 		mutex_unlock(&uuid_mutex);
 		error = PTR_ERR(device);
@@ -1493,32 +1444,37 @@ static struct dentry *btrfs_mount_root(struct file_system_type *fs_type,
 
 	fs_devices = device->fs_devices;
 	fs_info->fs_devices = fs_devices;
-
-	error = btrfs_open_devices(fs_devices, mode, fs_type);
+	fs_devices->in_use++;
 	mutex_unlock(&uuid_mutex);
-	if (error)
-		goto error_fs_info;
 
-	if (!(flags & SB_RDONLY) && fs_devices->rw_devices == 0) {
-		error = -EACCES;
-		goto error_close_devices;
-	}
-
-	bdev = fs_devices->latest_dev->bdev;
 	s = sget(fs_type, btrfs_test_super, btrfs_set_super, flags | SB_NOSEC,
 		 fs_info);
 	if (IS_ERR(s)) {
 		error = PTR_ERR(s);
-		goto error_close_devices;
+		goto error_fs_info;
 	}
 
 	if (s->s_root) {
-		btrfs_close_devices(fs_devices);
 		btrfs_free_fs_info(fs_info);
 		if ((flags ^ s->s_flags) & SB_RDONLY)
 			error = -EBUSY;
 	} else {
-		snprintf(s->s_id, sizeof(s->s_id), "%pg", bdev);
+		struct btrfs_fs_devices *fs_devices = fs_info->fs_devices;
+
+		mutex_lock(&uuid_mutex);
+		error = btrfs_open_devices(fs_devices, sb_open_mode(flags),
+					   fs_type);
+		mutex_unlock(&uuid_mutex);
+		if (error)
+			goto error_deactivate;
+
+		if (!(flags & SB_RDONLY) && fs_devices->rw_devices == 0) {
+			error = -EACCES;
+			goto error_deactivate;
+		}
+
+		snprintf(s->s_id, sizeof(s->s_id), "%pg",
+			 fs_devices->latest_dev->bdev);
 		shrinker_debugfs_rename(&s->s_shrink, "sb-%s:%s", fs_type->name,
 					s->s_id);
 		btrfs_sb(s)->bdev_holder = fs_type;
@@ -1526,21 +1482,20 @@ static struct dentry *btrfs_mount_root(struct file_system_type *fs_type,
 	}
 	if (!error)
 		error = security_sb_set_mnt_opts(s, new_sec_opts, 0, NULL);
+	if (error)
+		goto error_deactivate;
 	security_free_mnt_opts(&new_sec_opts);
-	if (error) {
-		deactivate_locked_super(s);
-		return ERR_PTR(error);
-	}
-
 	return dget(s->s_root);
 
-error_close_devices:
-	btrfs_close_devices(fs_devices);
 error_fs_info:
 	btrfs_free_fs_info(fs_info);
 error_sec_opts:
 	security_free_mnt_opts(&new_sec_opts);
 	return ERR_PTR(error);
+
+error_deactivate:
+	deactivate_locked_super(s);
+	goto error_sec_opts;
 }
 
 /*
@@ -2117,7 +2072,7 @@ static int btrfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	 * calculated f_bavail.
 	 */
 	if (!mixed && block_rsv->space_info->full &&
-	    total_free_meta - thresh < block_rsv->size)
+	    (total_free_meta < thresh || total_free_meta - thresh < block_rsv->size))
 		buf->f_bavail = 0;
 
 	buf->f_type = BTRFS_SUPER_MAGIC;
@@ -2197,7 +2152,11 @@ static long btrfs_control_ioctl(struct file *file, unsigned int cmd,
 	switch (cmd) {
 	case BTRFS_IOC_SCAN_DEV:
 		mutex_lock(&uuid_mutex);
-		device = btrfs_scan_one_device(vol->name, BLK_OPEN_READ);
+		/*
+		 * Scanning outside of mount can return NULL which would turn
+		 * into 0 error code.
+		 */
+		device = btrfs_scan_one_device(vol->name, false);
 		ret = PTR_ERR_OR_ZERO(device);
 		mutex_unlock(&uuid_mutex);
 		break;
@@ -2211,8 +2170,12 @@ static long btrfs_control_ioctl(struct file *file, unsigned int cmd,
 		break;
 	case BTRFS_IOC_DEVICES_READY:
 		mutex_lock(&uuid_mutex);
-		device = btrfs_scan_one_device(vol->name, BLK_OPEN_READ);
-		if (IS_ERR(device)) {
+		/*
+		 * Scanning outside of mount can return NULL which would turn
+		 * into 0 error code.
+		 */
+		device = btrfs_scan_one_device(vol->name, false);
+		if (IS_ERR_OR_NULL(device)) {
 			mutex_unlock(&uuid_mutex);
 			ret = PTR_ERR(device);
 			break;
@@ -2404,9 +2367,6 @@ static int __init btrfs_print_mod_info(void)
 #endif
 #ifdef CONFIG_BTRFS_ASSERT
 			", assert=on"
-#endif
-#ifdef CONFIG_BTRFS_FS_CHECK_INTEGRITY
-			", integrity-checker=on"
 #endif
 #ifdef CONFIG_BTRFS_FS_REF_VERIFY
 			", ref-verify=on"

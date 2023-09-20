@@ -652,18 +652,18 @@ static noinline int create_subvol(struct mnt_idmap *idmap,
 	/* Tree log can't currently deal with an inode which is a new root. */
 	btrfs_set_log_full_commit(trans);
 
-	ret = btrfs_qgroup_inherit(trans, 0, objectid, inherit);
+	ret = btrfs_qgroup_inherit(trans, 0, objectid, root->root_key.objectid, inherit);
 	if (ret)
 		goto out;
 
-	leaf = btrfs_alloc_tree_block(trans, root, 0, objectid, NULL, 0, 0, 0,
+	leaf = btrfs_alloc_tree_block(trans, root, 0, objectid, NULL, 0, 0, 0, 0,
 				      BTRFS_NESTING_NORMAL);
 	if (IS_ERR(leaf)) {
 		ret = PTR_ERR(leaf);
 		goto out;
 	}
 
-	btrfs_mark_buffer_dirty(leaf);
+	btrfs_mark_buffer_dirty(trans, leaf);
 
 	inode_item = &root_item->inode;
 	btrfs_set_stack_inode_generation(inode_item, 1);
@@ -2684,6 +2684,12 @@ static long btrfs_ioctl_rm_dev_v2(struct file *file, void __user *arg)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
+	if (btrfs_fs_compat_ro(fs_info, TEMP_FSID)) {
+		btrfs_err(fs_info,
+			  "device removal is unsupported on TEMP_FSID devices");
+		return -EINVAL;
+	}
+
 	vol_args = memdup_user(arg, sizeof(*vol_args));
 	if (IS_ERR(vol_args))
 		return PTR_ERR(vol_args);
@@ -2749,6 +2755,12 @@ static long btrfs_ioctl_rm_dev(struct file *file, void __user *arg)
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (btrfs_fs_compat_ro(fs_info, TEMP_FSID)) {
+		btrfs_err(fs_info,
+			  "device removal is unsupported on TEMP_FSID devices");
+		return -EINVAL;
+	}
 
 	vol_args = memdup_user(arg, sizeof(*vol_args));
 	if (IS_ERR(vol_args))
@@ -2947,7 +2959,7 @@ static long btrfs_ioctl_default_subvol(struct file *file, void __user *argp)
 
 	btrfs_cpu_key_to_disk(&disk_key, &new_root->root_key);
 	btrfs_set_dir_item_key(path->nodes[0], di, &disk_key);
-	btrfs_mark_buffer_dirty(path->nodes[0]);
+	btrfs_mark_buffer_dirty(trans, path->nodes[0]);
 	btrfs_release_path(path);
 
 	btrfs_set_fs_incompat(fs_info, DEFAULT_SUBVOL);
@@ -3273,6 +3285,12 @@ static long btrfs_ioctl_dev_replace(struct btrfs_fs_info *fs_info,
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (btrfs_fs_compat_ro(fs_info, TEMP_FSID)) {
+		btrfs_err(fs_info,
+			  "device replace is unsupported on TEMP_FSID devices");
+		return -EINVAL;
+	}
 
 	if (btrfs_fs_incompat(fs_info, EXTENT_TREE_V2)) {
 		btrfs_err(fs_info, "device replace not supported on extent tree v2 yet");
@@ -3697,7 +3715,8 @@ static long btrfs_ioctl_quota_ctl(struct file *file, void __user *arg)
 
 	switch (sa->cmd) {
 	case BTRFS_QUOTA_CTL_ENABLE:
-		ret = btrfs_quota_enable(fs_info);
+	case BTRFS_QUOTA_CTL_ENABLE_SIMPLE_QUOTA:
+		ret = btrfs_quota_enable(fs_info, sa);
 		break;
 	case BTRFS_QUOTA_CTL_DISABLE:
 		ret = btrfs_quota_disable(fs_info);
