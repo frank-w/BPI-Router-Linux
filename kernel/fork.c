@@ -2406,10 +2406,6 @@ __latent_entropy struct task_struct *copy_process(
 	p->io_uring = NULL;
 #endif
 
-#if defined(SPLIT_RSS_COUNTING)
-	memset(&p->rss_stat, 0, sizeof(p->rss_stat));
-#endif
-
 	p->default_timer_slack_ns = current->timer_slack_ns;
 
 #ifdef CONFIG_PSI
@@ -2576,7 +2572,6 @@ __latent_entropy struct task_struct *copy_process(
 	p->dirty_paused_when = 0;
 
 	p->pdeath_signal = 0;
-	INIT_LIST_HEAD(&p->thread_group);
 	p->task_works = NULL;
 	clear_posix_cputimers_work(p);
 
@@ -2704,8 +2699,6 @@ __latent_entropy struct task_struct *copy_process(
 			atomic_inc(&current->signal->live);
 			refcount_inc(&current->signal->sigcnt);
 			task_join_group_stop(p);
-			list_add_tail_rcu(&p->thread_group,
-					  &p->group_leader->thread_group);
 			list_add_tail_rcu(&p->thread_node,
 					  &p->signal->thread_head);
 		}

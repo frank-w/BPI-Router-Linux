@@ -18,26 +18,24 @@
 #include <linux/fs.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
+#include <linux/execmem.h>
 
 #include <asm/cacheflush.h>
 
-/*
- * Modules should NOT be allocated with kmalloc for (obvious) reasons.
- * But we do it for now to avoid relocation issues. CALL26/PCREL26 cannot reach
- * from 0x80000000 (vmalloc area) to 0xc00000000 (kernel) (kmalloc returns
- * addresses in 0xc0000000)
- */
-void *module_alloc(unsigned long size)
-{
-	if (size == 0)
-		return NULL;
-	return kmalloc(size, GFP_KERNEL);
-}
+static struct execmem_params execmem_params __ro_after_init = {
+	.ranges = {
+		[EXECMEM_DEFAULT] = {
+			.start = MODULES_VADDR,
+			.end = MODULES_END,
+			.pgprot = PAGE_KERNEL_EXEC,
+			.alignment = 1,
+		},
+	},
+};
 
-/* Free memory returned from module_alloc */
-void module_memfree(void *module_region)
+struct execmem_params __init *execmem_arch_params(void)
 {
-	kfree(module_region);
+	return &execmem_params;
 }
 
 int apply_relocate_add(Elf32_Shdr *sechdrs, const char *strtab,

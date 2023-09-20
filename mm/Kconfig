@@ -130,6 +130,7 @@ config ZSWAP_COMPRESSOR_DEFAULT
 choice
 	prompt "Default allocator"
 	depends on ZSWAP
+	default ZSWAP_ZPOOL_DEFAULT_ZSMALLOC if MMU
 	default ZSWAP_ZPOOL_DEFAULT_ZBUD
 	help
 	  Selects the default allocator for the compressed cache for
@@ -1257,6 +1258,9 @@ config PER_VMA_LOCK
 config LOCK_MM_AND_FIND_VMA
 	bool
 	depends on !STACK_GROWSUP
+
+config EXECMEM
+	bool
 
 source "mm/damon/Kconfig"
 

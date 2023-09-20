@@ -15,6 +15,8 @@ bool zswap_load(struct folio *folio);
 void zswap_invalidate(int type, pgoff_t offset);
 void zswap_swapon(int type);
 void zswap_swapoff(int type);
+bool zswap_remove_swpentry_from_lru(swp_entry_t swpentry);
+void zswap_insert_swpentry_into_lru(swp_entry_t swpentry);
 
 #else
 
@@ -31,6 +33,13 @@ static inline bool zswap_load(struct folio *folio)
 static inline void zswap_invalidate(int type, pgoff_t offset) {}
 static inline void zswap_swapon(int type) {}
 static inline void zswap_swapoff(int type) {}
+
+static inline bool zswap_remove_swpentry_from_lru(swp_entry_t swpentry)
+{
+	return false;
+}
+
+static inline void zswap_insert_swpentry_into_lru(swp_entry_t swpentry) {}
 
 #endif
 

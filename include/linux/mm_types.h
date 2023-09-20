@@ -256,6 +256,17 @@ typedef struct {
 	unsigned long val;
 } swp_entry_t;
 
+/*
+ * This macro defines the maximum tail pages (of a folio) that can have the
+ * page->mapping field reused.
+ *
+ * When the tail page's mapping field reused, it'll be exempted from
+ * ->mapping poisoning and checks.  Also see the macro TAIL_MAPPING.
+ *
+ * When grow the folio struct, please consider growing this too.
+ */
+#define  TAIL_MAPPING_REUSED_MAX  (2)
+
 /**
  * struct folio - Represents a contiguous set of bytes.
  * @flags: Identical to the page flags.

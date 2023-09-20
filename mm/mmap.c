@@ -2159,8 +2159,6 @@ struct vm_area_struct *find_extend_vma_locked(struct mm_struct *mm, unsigned lon
 #else
 int expand_stack_locked(struct vm_area_struct *vma, unsigned long address)
 {
-	if (unlikely(!(vma->vm_flags & VM_GROWSDOWN)))
-		return -EINVAL;
 	return expand_downwards(vma, address);
 }
 
@@ -3278,7 +3276,8 @@ int insert_vm_struct(struct mm_struct *mm, struct vm_area_struct *vma)
 	}
 
 	if (vma_link(mm, vma)) {
-		vm_unacct_memory(charged);
+		if (vma->vm_flags & VM_ACCOUNT)
+			vm_unacct_memory(charged);
 		return -ENOMEM;
 	}
 

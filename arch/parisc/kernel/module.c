@@ -49,6 +49,7 @@
 #include <linux/bug.h>
 #include <linux/mm.h>
 #include <linux/slab.h>
+#include <linux/execmem.h>
 
 #include <asm/unwind.h>
 #include <asm/sections.h>
@@ -171,17 +172,6 @@ static inline int reassemble_22(int as22)
 		((as22 & 0x00f800) << 5) |
 		((as22 & 0x000400) >> 8) |
 		((as22 & 0x0003ff) << 3));
-}
-
-void *module_alloc(unsigned long size)
-{
-	/* using RWX means less protection for modules, but it's
-	 * easier than trying to map the text, data, init_text and
-	 * init_data correctly */
-	return __vmalloc_node_range(size, 1, VMALLOC_START, VMALLOC_END,
-				    GFP_KERNEL,
-				    PAGE_KERNEL_RWX, 0, NUMA_NO_NODE,
-				    __builtin_return_address(0));
 }
 
 #ifndef CONFIG_64BIT
