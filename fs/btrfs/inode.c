@@ -71,6 +71,7 @@
 #include "super.h"
 #include "orphan.h"
 #include "backref.h"
+#include "raid-stripe-tree.h"
 
 struct btrfs_iget_args {
 	u64 ino;
@@ -348,7 +349,7 @@ static void __cold btrfs_print_data_csum_error(struct btrfs_inode *inode,
 }
 
 /*
- * btrfs_inode_lock - lock inode i_rwsem based on arguments passed
+ * Lock inode i_rwsem based on arguments passed.
  *
  * ilock_flags can have the following bit set:
  *
@@ -382,7 +383,7 @@ int btrfs_inode_lock(struct btrfs_inode *inode, unsigned int ilock_flags)
 }
 
 /*
- * btrfs_inode_unlock - unock inode i_rwsem
+ * Unock inode i_rwsem.
  *
  * ilock_flags should contain the same bits set as passed to btrfs_inode_lock()
  * to decide whether the lock acquired is shared or exclusive.
@@ -573,7 +574,7 @@ static int insert_inline_extent(struct btrfs_trans_handle *trans,
 		kunmap_local(kaddr);
 		put_page(page);
 	}
-	btrfs_mark_buffer_dirty(leaf);
+	btrfs_mark_buffer_dirty(trans, leaf);
 	btrfs_release_path(path);
 
 	/*
@@ -1085,9 +1086,6 @@ static void submit_uncompressed_range(struct btrfs_inode *inode,
 			btrfs_mark_ordered_io_finished(inode, locked_page,
 						       page_start, PAGE_SIZE,
 						       !ret);
-			btrfs_page_clear_uptodate(inode->root->fs_info,
-						  locked_page, page_start,
-						  PAGE_SIZE);
 			mapping_set_error(locked_page->mapping, ret);
 			unlock_page(locked_page);
 		}
@@ -2791,7 +2789,6 @@ out_page:
 		mapping_set_error(page->mapping, ret);
 		btrfs_mark_ordered_io_finished(inode, page, page_start,
 					       PAGE_SIZE, !ret);
-		btrfs_page_clear_uptodate(fs_info, page, page_start, PAGE_SIZE);
 		clear_page_dirty_for_io(page);
 	}
 	btrfs_page_clear_checked(fs_info, page, page_start, PAGE_SIZE);
@@ -2916,7 +2913,7 @@ static int insert_reserved_file_extent(struct btrfs_trans_handle *trans,
 			btrfs_item_ptr_offset(leaf, path->slots[0]),
 			sizeof(struct btrfs_file_extent_item));
 
-	btrfs_mark_buffer_dirty(leaf);
+	btrfs_mark_buffer_dirty(trans, leaf);
 	btrfs_release_path(path);
 
 	/*
@@ -3095,6 +3092,10 @@ int btrfs_finish_one_ordered(struct btrfs_ordered_extent *ordered_extent)
 
 	trans->block_rsv = &inode->block_rsv;
 
+	ret = btrfs_insert_raid_extent(trans, ordered_extent);
+	if (ret)
+		goto out;
+
 	if (test_bit(BTRFS_ORDERED_COMPRESSED, &ordered_extent->flags))
 		compress_type = ordered_extent->compress_type;
 	if (test_bit(BTRFS_ORDERED_PREALLOC, &ordered_extent->flags)) {
@@ -3228,7 +3229,8 @@ out:
 int btrfs_finish_ordered_io(struct btrfs_ordered_extent *ordered)
 {
 	if (btrfs_is_zoned(btrfs_sb(ordered->inode->i_sb)) &&
-	    !test_bit(BTRFS_ORDERED_IOERR, &ordered->flags))
+	    !test_bit(BTRFS_ORDERED_IOERR, &ordered->flags) &&
+	    list_empty(&ordered->bioc_list))
 		btrfs_finish_ordered_zoned(ordered);
 	return btrfs_finish_one_ordered(ordered);
 }
@@ -3310,7 +3312,7 @@ zeroit:
 }
 
 /*
- * btrfs_add_delayed_iput - perform a delayed iput on @inode
+ * Perform a delayed iput on @inode.
  *
  * @inode: The inode we want to perform iput on
  *
@@ -3985,7 +3987,7 @@ static noinline int btrfs_update_inode_item(struct btrfs_trans_handle *trans,
 				    struct btrfs_inode_item);
 
 	fill_inode_item(trans, leaf, inode_item, &inode->vfs_inode);
-	btrfs_mark_buffer_dirty(leaf);
+	btrfs_mark_buffer_dirty(trans, leaf);
 	btrfs_set_inode_last_trans(trans, inode);
 	ret = 0;
 failed:
@@ -4645,7 +4647,8 @@ out_notrans:
 }
 
 /*
- * btrfs_truncate_block - read, zero a chunk and write a block
+ * Read, zero a chunk and write a block.
+ *
  * @inode - inode that we're zeroing
  * @from - the offset to start zeroing
  * @len - the length to zero, 0 to zero the entire range respective to the
@@ -5769,20 +5772,24 @@ out:
 
 static int btrfs_get_dir_last_index(struct btrfs_inode *dir, u64 *index)
 {
-	if (dir->index_cnt == (u64)-1) {
-		int ret;
+	int ret = 0;
 
+	btrfs_inode_lock(dir, 0);
+	if (dir->index_cnt == (u64)-1) {
 		ret = btrfs_inode_delayed_dir_index_count(dir);
 		if (ret) {
 			ret = btrfs_set_inode_index_count(dir);
 			if (ret)
-				return ret;
+				goto out;
 		}
 	}
 
-	*index = dir->index_cnt;
+	/* index_cnt is the index number of next new entry, so decrement it. */
+	*index = dir->index_cnt - 1;
+out:
+	btrfs_inode_unlock(dir, 0);
 
-	return 0;
+	return ret;
 }
 
 /*
@@ -5815,6 +5822,19 @@ static int btrfs_opendir(struct inode *inode, struct file *file)
 	}
 	file->private_data = private;
 	return 0;
+}
+
+static loff_t btrfs_dir_llseek(struct file *file, loff_t offset, int whence)
+{
+	struct btrfs_file_private *private = file->private_data;
+	int ret;
+
+	ret = btrfs_get_dir_last_index(BTRFS_I(file_inode(file)),
+				       &private->last_index);
+	if (ret)
+		return ret;
+
+	return generic_file_llseek(file, offset, whence);
 }
 
 struct dir_entry {
@@ -6297,7 +6317,7 @@ int btrfs_create_new_inode(struct btrfs_trans_handle *trans,
 		}
 	}
 
-	btrfs_mark_buffer_dirty(path->nodes[0]);
+	btrfs_mark_buffer_dirty(trans, path->nodes[0]);
 	/*
 	 * We don't need the path anymore, plus inheriting properties, adding
 	 * ACLs, security xattrs, orphan item or adding the link, will result in
@@ -9433,7 +9453,7 @@ static int btrfs_symlink(struct mnt_idmap *idmap, struct inode *dir,
 
 	ptr = btrfs_file_extent_inline_start(ei);
 	write_extent_buffer(leaf, symname, ptr, name_len);
-	btrfs_mark_buffer_dirty(leaf);
+	btrfs_mark_buffer_dirty(trans, leaf);
 	btrfs_free_path(path);
 
 	d_instantiate_new(dentry, inode);
@@ -10868,7 +10888,7 @@ static const struct inode_operations btrfs_dir_inode_operations = {
 };
 
 static const struct file_operations btrfs_dir_file_operations = {
-	.llseek		= generic_file_llseek,
+	.llseek		= btrfs_dir_llseek,
 	.read		= generic_read_dir,
 	.iterate_shared	= btrfs_real_readdir,
 	.open		= btrfs_opendir,

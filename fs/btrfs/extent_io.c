@@ -21,7 +21,6 @@
 #include "ctree.h"
 #include "btrfs_inode.h"
 #include "bio.h"
-#include "check-integrity.h"
 #include "locking.h"
 #include "rcu-string.h"
 #include "backref.h"
@@ -484,10 +483,8 @@ static void end_bio_extent_writepage(struct btrfs_bio *bbio)
 				   bvec->bv_offset, bvec->bv_len);
 
 		btrfs_finish_ordered_extent(bbio->ordered, page, start, len, !error);
-		if (error) {
-			btrfs_page_clear_uptodate(fs_info, page, start, len);
+		if (error)
 			mapping_set_error(page->mapping, error);
-		}
 		btrfs_page_clear_writeback(fs_info, page, start, len);
 	}
 
@@ -1456,8 +1453,6 @@ done:
 	if (ret) {
 		btrfs_mark_ordered_io_finished(BTRFS_I(inode), page, page_start,
 					       PAGE_SIZE, !ret);
-		btrfs_page_clear_uptodate(btrfs_sb(inode->i_sb), page,
-					  page_start, PAGE_SIZE);
 		mapping_set_error(page->mapping, ret);
 	}
 	unlock_page(page);
@@ -1624,8 +1619,6 @@ static void extent_buffer_write_end_io(struct btrfs_bio *bbio)
 		struct page *page = bvec->bv_page;
 		u32 len = bvec->bv_len;
 
-		if (!uptodate)
-			btrfs_page_clear_uptodate(fs_info, page, start, len);
 		btrfs_page_clear_writeback(fs_info, page, start, len);
 		bio_offset += len;
 	}
@@ -2201,7 +2194,6 @@ void extent_write_locked_range(struct inode *inode, struct page *locked_page,
 		if (ret) {
 			btrfs_mark_ordered_io_finished(BTRFS_I(inode), page,
 						       cur, cur_len, !ret);
-			btrfs_page_clear_uptodate(fs_info, page, cur, cur_len);
 			mapping_set_error(page->mapping, ret);
 		}
 		btrfs_page_unlock_writer(fs_info, page, cur, cur_len);
@@ -3462,6 +3454,12 @@ static int check_eb_alignment(struct btrfs_fs_info *fs_info, u64 start)
 			  start, fs_info->nodesize);
 		return -EINVAL;
 	}
+	if (!IS_ALIGNED(start, fs_info->nodesize) &&
+	    !test_and_set_bit(BTRFS_FS_UNALIGNED_TREE_BLOCK, &fs_info->flags)) {
+		btrfs_warn(fs_info,
+"tree block not nodesize aligned, start %llu nodesize %u, can be resolved by a full metadata balance",
+			      start, fs_info->nodesize);
+	}
 	return 0;
 }
 
@@ -4002,8 +4000,14 @@ void read_extent_buffer(const struct extent_buffer *eb, void *dstv,
 	char *dst = (char *)dstv;
 	unsigned long i = get_eb_page_index(start);
 
-	if (check_eb_range(eb, start, len))
+	if (check_eb_range(eb, start, len)) {
+		/*
+		 * Invalid range hit, reset the memory, so callers won't get
+		 * some random garbage for their uninitialzed memory.
+		 */
+		memset(dstv, 0, len);
 		return;
+	}
 
 	offset = get_eb_offset_in_page(eb, start);
 
@@ -4249,14 +4253,14 @@ void copy_extent_buffer(const struct extent_buffer *dst,
 }
 
 /*
- * eb_bitmap_offset() - calculate the page and offset of the byte containing the
- * given bit number
- * @eb: the extent buffer
- * @start: offset of the bitmap item in the extent buffer
- * @nr: bit number
- * @page_index: return index of the page in the extent buffer that contains the
- * given bit number
- * @page_offset: return offset into the page given by page_index
+ * Calculate the page and offset of the byte containing the given bit number.
+ *
+ * @eb:           the extent buffer
+ * @start:        offset of the bitmap item in the extent buffer
+ * @nr:           bit number
+ * @page_index:   return index of the page in the extent buffer that contains
+ *                the given bit number
+ * @page_offset:  return offset into the page given by page_index
  *
  * This helper hides the ugliness of finding the byte in an extent buffer which
  * contains a given bit.
@@ -4615,7 +4619,8 @@ int try_release_extent_buffer(struct page *page)
 }
 
 /*
- * btrfs_readahead_tree_block - attempt to readahead a child block
+ * Attempt to readahead a child block.
+ *
  * @fs_info:	the fs_info
  * @bytenr:	bytenr to read
  * @owner_root: objectid of the root that owns this eb
@@ -4654,7 +4659,8 @@ void btrfs_readahead_tree_block(struct btrfs_fs_info *fs_info,
 }
 
 /*
- * btrfs_readahead_node_child - readahead a node's child block
+ * Readahead a node's child block.
+ *
  * @node:	parent node we're reading from
  * @slot:	slot in the parent node for the child we want to read
  *

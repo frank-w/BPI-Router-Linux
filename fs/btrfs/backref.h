@@ -247,7 +247,7 @@ struct prelim_ref {
 	struct rb_node rbnode;
 	u64 root_id;
 	struct btrfs_key key_for_search;
-	int level;
+	u8 level;
 	int count;
 	struct extent_inode_elem *inode_list;
 	u64 parent;
@@ -533,9 +533,9 @@ void btrfs_backref_cleanup_node(struct btrfs_backref_cache *cache,
 void btrfs_backref_release_cache(struct btrfs_backref_cache *cache);
 
 static inline void btrfs_backref_panic(struct btrfs_fs_info *fs_info,
-				       u64 bytenr, int errno)
+				       u64 bytenr, int error)
 {
-	btrfs_panic(fs_info, errno,
+	btrfs_panic(fs_info, error,
 		    "Inconsistency in backref cache found at offset %llu",
 		    bytenr);
 }

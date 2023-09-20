@@ -139,6 +139,12 @@ enum {
 	 */
 	BTRFS_FS_FEATURE_CHANGED,
 
+	/*
+	 * Indicate that we have found a tree block which is only aligned to
+	 * sectorsize, but not to nodesize.  This should be rare nowadays.
+	 */
+	BTRFS_FS_UNALIGNED_TREE_BLOCK,
+
 #if BITS_PER_LONG == 32
 	/* Indicate if we have error/warn message printed on 32bit systems */
 	BTRFS_FS_32BIT_ERROR,
@@ -171,19 +177,17 @@ enum {
 	BTRFS_MOUNT_AUTO_DEFRAG			= (1UL << 16),
 	BTRFS_MOUNT_USEBACKUPROOT		= (1UL << 17),
 	BTRFS_MOUNT_SKIP_BALANCE		= (1UL << 18),
-	BTRFS_MOUNT_CHECK_INTEGRITY		= (1UL << 19),
-	BTRFS_MOUNT_CHECK_INTEGRITY_DATA	= (1UL << 20),
-	BTRFS_MOUNT_PANIC_ON_FATAL_ERROR	= (1UL << 21),
-	BTRFS_MOUNT_RESCAN_UUID_TREE		= (1UL << 22),
-	BTRFS_MOUNT_FRAGMENT_DATA		= (1UL << 23),
-	BTRFS_MOUNT_FRAGMENT_METADATA		= (1UL << 24),
-	BTRFS_MOUNT_FREE_SPACE_TREE		= (1UL << 25),
-	BTRFS_MOUNT_NOLOGREPLAY			= (1UL << 26),
-	BTRFS_MOUNT_REF_VERIFY			= (1UL << 27),
-	BTRFS_MOUNT_DISCARD_ASYNC		= (1UL << 28),
-	BTRFS_MOUNT_IGNOREBADROOTS		= (1UL << 29),
-	BTRFS_MOUNT_IGNOREDATACSUMS		= (1UL << 30),
-	BTRFS_MOUNT_NODISCARD			= (1UL << 31),
+	BTRFS_MOUNT_PANIC_ON_FATAL_ERROR	= (1UL << 19),
+	BTRFS_MOUNT_RESCAN_UUID_TREE		= (1UL << 20),
+	BTRFS_MOUNT_FRAGMENT_DATA		= (1UL << 21),
+	BTRFS_MOUNT_FRAGMENT_METADATA		= (1UL << 22),
+	BTRFS_MOUNT_FREE_SPACE_TREE		= (1UL << 23),
+	BTRFS_MOUNT_NOLOGREPLAY			= (1UL << 24),
+	BTRFS_MOUNT_REF_VERIFY			= (1UL << 25),
+	BTRFS_MOUNT_DISCARD_ASYNC		= (1UL << 26),
+	BTRFS_MOUNT_IGNOREBADROOTS		= (1UL << 27),
+	BTRFS_MOUNT_IGNOREDATACSUMS		= (1UL << 28),
+	BTRFS_MOUNT_NODISCARD			= (1UL << 29),
 };
 
 /*
@@ -225,6 +229,7 @@ enum {
 	 */
 #define BTRFS_FEATURE_INCOMPAT_SUPP		\
 	(BTRFS_FEATURE_INCOMPAT_SUPP_STABLE |	\
+	 BTRFS_FEATURE_INCOMPAT_RAID_STRIPE_TREE | \
 	 BTRFS_FEATURE_INCOMPAT_EXTENT_TREE_V2)
 
 #else
@@ -369,6 +374,7 @@ struct btrfs_fs_info {
 	struct btrfs_root *uuid_root;
 	struct btrfs_root *data_reloc_root;
 	struct btrfs_root *block_group_root;
+	struct btrfs_root *stripe_root;
 
 	/* The log root tree is a directory of all the other log roots */
 	struct btrfs_root *log_root_tree;
@@ -645,9 +651,6 @@ struct btrfs_fs_info {
 
 	struct btrfs_discard_ctl discard_ctl;
 
-#ifdef CONFIG_BTRFS_FS_CHECK_INTEGRITY
-	u32 check_integrity_print_mask;
-#endif
 	/* Is qgroup tracking in a consistent state? */
 	u64 qgroup_flags;
 
