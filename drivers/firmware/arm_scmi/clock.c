@@ -21,6 +21,14 @@ enum scmi_clock_protocol_cmd {
 	CLOCK_NAME_GET = 0x8,
 	CLOCK_RATE_NOTIFY = 0x9,
 	CLOCK_RATE_CHANGE_REQUESTED_NOTIFY = 0xA,
+	CLOCK_CONFIG_GET = 0xB,
+};
+
+enum clk_state {
+	CLK_STATE_DISABLE,
+	CLK_STATE_ENABLE,
+	CLK_STATE_RESERVED,
+	CLK_STATE_UNCHANGED,
 };
 
 struct scmi_msg_resp_clock_protocol_attributes {
@@ -31,7 +39,6 @@ struct scmi_msg_resp_clock_protocol_attributes {
 
 struct scmi_msg_resp_clock_attributes {
 	__le32 attributes;
-#define	CLOCK_ENABLE	BIT(0)
 #define SUPPORTS_RATE_CHANGED_NOTIF(x)		((x) & BIT(31))
 #define SUPPORTS_RATE_CHANGE_REQUESTED_NOTIF(x)	((x) & BIT(30))
 #define SUPPORTS_EXTENDED_NAMES(x)		((x) & BIT(29))
@@ -39,9 +46,31 @@ struct scmi_msg_resp_clock_attributes {
 	__le32 clock_enable_latency;
 };
 
-struct scmi_clock_set_config {
+struct scmi_msg_clock_config_set_v2 {
 	__le32 id;
 	__le32 attributes;
+};
+
+struct scmi_msg_clock_config_set_v21 {
+	__le32 id;
+	__le32 attributes;
+#define NULL_OEM_TYPE			0
+#define REGMASK_OEM_TYPE_SET		GENMASK(23, 16)
+#define REGMASK_CLK_STATE		GENMASK(1, 0)
+	__le32 oem_config_val;
+};
+
+struct scmi_msg_clock_config_get {
+	__le32 id;
+	__le32 flags;
+#define REGMASK_OEM_TYPE_GET		GENMASK(7, 0)
+};
+
+struct scmi_msg_resp_clock_config_get {
+	__le32 attributes;
+	__le32 config;
+#define IS_CLK_ENABLED(x)		le32_get_bits((x), BIT(0))
+	__le32 oem_config_val;
 };
 
 struct scmi_msg_clock_describe_rates {
@@ -100,6 +129,12 @@ struct clock_info {
 	int max_async_req;
 	atomic_t cur_async_req;
 	struct scmi_clock_info *clk;
+	int (*clock_config_set)(const struct scmi_protocol_handle *ph,
+				u32 clk_id, enum clk_state state,
+				u8 oem_type, u32 oem_val, bool atomic);
+	int (*clock_config_get)(const struct scmi_protocol_handle *ph,
+				u32 clk_id, u8 oem_type, u32 *attributes,
+				bool *enabled, u32 *oem_val, bool atomic);
 };
 
 static enum scmi_clock_protocol_cmd evt_2_cmd[] = {
@@ -394,12 +429,16 @@ static int scmi_clock_rate_set(const struct scmi_protocol_handle *ph,
 }
 
 static int
-scmi_clock_config_set(const struct scmi_protocol_handle *ph, u32 clk_id,
-		      u32 config, bool atomic)
+scmi_clock_config_set_v2(const struct scmi_protocol_handle *ph, u32 clk_id,
+			 enum clk_state state, u8 __unused0, u32 __unused1,
+			 bool atomic)
 {
 	int ret;
 	struct scmi_xfer *t;
-	struct scmi_clock_set_config *cfg;
+	struct scmi_msg_clock_config_set_v2 *cfg;
+
+	if (state >= CLK_STATE_RESERVED)
+		return -EINVAL;
 
 	ret = ph->xops->xfer_get_init(ph, CLOCK_CONFIG_SET,
 				      sizeof(*cfg), 0, &t);
@@ -410,7 +449,7 @@ scmi_clock_config_set(const struct scmi_protocol_handle *ph, u32 clk_id,
 
 	cfg = t->tx.buf;
 	cfg->id = cpu_to_le32(clk_id);
-	cfg->attributes = cpu_to_le32(config);
+	cfg->attributes = cpu_to_le32(state);
 
 	ret = ph->xops->do_xfer(ph, t);
 
@@ -418,26 +457,161 @@ scmi_clock_config_set(const struct scmi_protocol_handle *ph, u32 clk_id,
 	return ret;
 }
 
-static int scmi_clock_enable(const struct scmi_protocol_handle *ph, u32 clk_id)
+static int
+scmi_clock_config_set_v21(const struct scmi_protocol_handle *ph, u32 clk_id,
+			  enum clk_state state, u8 oem_type, u32 oem_val,
+			  bool atomic)
 {
-	return scmi_clock_config_set(ph, clk_id, CLOCK_ENABLE, false);
+	int ret;
+	u32 attrs;
+	struct scmi_xfer *t;
+	struct scmi_msg_clock_config_set_v21 *cfg;
+
+	if (state == CLK_STATE_RESERVED ||
+	    (!oem_type && state == CLK_STATE_UNCHANGED))
+		return -EINVAL;
+
+	ret = ph->xops->xfer_get_init(ph, CLOCK_CONFIG_SET,
+				      sizeof(*cfg), 0, &t);
+	if (ret)
+		return ret;
+
+	t->hdr.poll_completion = atomic;
+
+	attrs = FIELD_PREP(REGMASK_OEM_TYPE_SET, oem_type) |
+		 FIELD_PREP(REGMASK_CLK_STATE, state);
+
+	cfg = t->tx.buf;
+	cfg->id = cpu_to_le32(clk_id);
+	cfg->attributes = cpu_to_le32(attrs);
+	/* Clear in any case */
+	cfg->oem_config_val = cpu_to_le32(0);
+	if (oem_type)
+		cfg->oem_config_val = cpu_to_le32(oem_val);
+
+	ret = ph->xops->do_xfer(ph, t);
+
+	ph->xops->xfer_put(ph, t);
+	return ret;
 }
 
-static int scmi_clock_disable(const struct scmi_protocol_handle *ph, u32 clk_id)
+static int scmi_clock_enable(const struct scmi_protocol_handle *ph, u32 clk_id,
+			     bool atomic)
 {
-	return scmi_clock_config_set(ph, clk_id, 0, false);
+	struct clock_info *ci = ph->get_priv(ph);
+
+	return ci->clock_config_set(ph, clk_id, CLK_STATE_ENABLE,
+				    NULL_OEM_TYPE, 0, atomic);
 }
 
-static int scmi_clock_enable_atomic(const struct scmi_protocol_handle *ph,
-				    u32 clk_id)
+static int scmi_clock_disable(const struct scmi_protocol_handle *ph, u32 clk_id,
+			      bool atomic)
 {
-	return scmi_clock_config_set(ph, clk_id, CLOCK_ENABLE, true);
+	struct clock_info *ci = ph->get_priv(ph);
+
+	return ci->clock_config_set(ph, clk_id, CLK_STATE_DISABLE,
+				    NULL_OEM_TYPE, 0, atomic);
 }
 
-static int scmi_clock_disable_atomic(const struct scmi_protocol_handle *ph,
-				     u32 clk_id)
+static int
+scmi_clock_config_get_v21(const struct scmi_protocol_handle *ph, u32 clk_id,
+			  u8 oem_type, u32 *attributes, bool *enabled,
+			  u32 *oem_val, bool atomic)
 {
-	return scmi_clock_config_set(ph, clk_id, 0, true);
+	int ret;
+	u32 flags;
+	struct scmi_xfer *t;
+	struct scmi_msg_clock_config_get *cfg;
+
+	ret = ph->xops->xfer_get_init(ph, CLOCK_CONFIG_GET,
+				      sizeof(*cfg), 0, &t);
+	if (ret)
+		return ret;
+
+	t->hdr.poll_completion = atomic;
+
+	flags = FIELD_PREP(REGMASK_OEM_TYPE_GET, oem_type);
+
+	cfg = t->tx.buf;
+	cfg->id = cpu_to_le32(clk_id);
+	cfg->flags = cpu_to_le32(flags);
+
+	ret = ph->xops->do_xfer(ph, t);
+	if (!ret) {
+		struct scmi_msg_resp_clock_config_get *resp = t->rx.buf;
+
+		if (attributes)
+			*attributes = le32_to_cpu(resp->attributes);
+
+		if (enabled)
+			*enabled = IS_CLK_ENABLED(resp->config);
+
+		if (oem_val && oem_type)
+			*oem_val = le32_to_cpu(resp->oem_config_val);
+	}
+
+	ph->xops->xfer_put(ph, t);
+
+	return ret;
+}
+
+static int
+scmi_clock_config_get_v2(const struct scmi_protocol_handle *ph, u32 clk_id,
+			 u8 oem_type, u32 *attributes, bool *enabled,
+			 u32 *oem_val, bool atomic)
+{
+	int ret;
+	struct scmi_xfer *t;
+	struct scmi_msg_resp_clock_attributes *resp;
+
+	if (!enabled)
+		return -EINVAL;
+
+	ret = ph->xops->xfer_get_init(ph, CLOCK_ATTRIBUTES,
+				      sizeof(clk_id), sizeof(*resp), &t);
+	if (ret)
+		return ret;
+
+	t->hdr.poll_completion = atomic;
+	put_unaligned_le32(clk_id, t->tx.buf);
+	resp = t->rx.buf;
+
+	ret = ph->xops->do_xfer(ph, t);
+	if (!ret)
+		*enabled = IS_CLK_ENABLED(resp->attributes);
+
+	ph->xops->xfer_put(ph, t);
+
+	return ret;
+}
+
+static int scmi_clock_state_get(const struct scmi_protocol_handle *ph,
+				u32 clk_id, bool *enabled, bool atomic)
+{
+	struct clock_info *ci = ph->get_priv(ph);
+
+	return ci->clock_config_get(ph, clk_id, NULL_OEM_TYPE, NULL,
+				    enabled, NULL, atomic);
+}
+
+static int scmi_clock_config_oem_set(const struct scmi_protocol_handle *ph,
+				     u32 clk_id, u8 oem_type, u32 oem_val,
+				     bool atomic)
+{
+	struct clock_info *ci = ph->get_priv(ph);
+
+	return ci->clock_config_set(ph, clk_id, CLK_STATE_UNCHANGED,
+				    oem_type, oem_val, atomic);
+}
+
+static int scmi_clock_config_oem_get(const struct scmi_protocol_handle *ph,
+				     u32 clk_id, u8 oem_type, u32 *oem_val,
+				     u32 *attributes, bool atomic)
+{
+	struct clock_info *ci = ph->get_priv(ph);
+
+	return ci->clock_config_get(ph, clk_id, oem_type, attributes,
+				    NULL, oem_val, atomic);
 }
 
 static int scmi_clock_count_get(const struct scmi_protocol_handle *ph)
@@ -470,8 +644,9 @@ static const struct scmi_clk_proto_ops clk_proto_ops = {
 	.rate_set = scmi_clock_rate_set,
 	.enable = scmi_clock_enable,
 	.disable = scmi_clock_disable,
-	.enable_atomic = scmi_clock_enable_atomic,
-	.disable_atomic = scmi_clock_disable_atomic,
+	.state_get = scmi_clock_state_get,
+	.config_oem_get = scmi_clock_config_oem_get,
+	.config_oem_set = scmi_clock_config_oem_set,
 };
 
 static int scmi_clk_rate_notify(const struct scmi_protocol_handle *ph,
@@ -602,6 +777,15 @@ static int scmi_clock_protocol_init(const struct scmi_protocol_handle *ph)
 		ret = scmi_clock_attributes_get(ph, clkid, clk, version);
 		if (!ret)
 			scmi_clock_describe_rates_get(ph, clkid, clk);
+	}
+
+	if (PROTOCOL_REV_MAJOR(version) >= 0x2 &&
+	    PROTOCOL_REV_MINOR(version) >= 0x1) {
+		cinfo->clock_config_set = scmi_clock_config_set_v21;
+		cinfo->clock_config_get = scmi_clock_config_get_v21;
+	} else {
+		cinfo->clock_config_set = scmi_clock_config_set_v2;
+		cinfo->clock_config_get = scmi_clock_config_get_v2;
 	}
 
 	cinfo->version = version;
