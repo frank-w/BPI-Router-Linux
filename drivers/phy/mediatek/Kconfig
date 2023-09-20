@@ -13,6 +13,16 @@ config PHY_MTK_PCIE
 	  callback for PCIe GEN3 port, it supports software efuse
 	  initialization.
 
+config PHY_MTK_PEXTP
+	tristate "MediaTek PEXTP Driver"
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on OF && OF_ADDRESS
+	depends on HAS_IOMEM
+	select GENERIC_PHY
+	help
+	  Say 'Y' here to add support for MediaTek pextp PHY driver
+	  supporting various Ethernet SerDes modes.
+
 config PHY_MTK_TPHY
 	tristate "MediaTek T-PHY Driver"
 	depends on ARCH_MEDIATEK || COMPILE_TEST
