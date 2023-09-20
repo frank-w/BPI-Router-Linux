@@ -280,8 +280,8 @@ int ramfs_init_fs_context(struct fs_context *fc)
 
 void ramfs_kill_sb(struct super_block *sb)
 {
-	kfree(sb->s_fs_info);
 	kill_litter_super(sb);
+	kfree(sb->s_fs_info);
 }
 
 static struct file_system_type ramfs_fs_type = {
