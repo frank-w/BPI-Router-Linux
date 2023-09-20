@@ -1262,6 +1262,7 @@ struct rtsx_pcr {
 	u8			ocp_stat;
 	u8			ocp_stat2;
 	u8			rtd3_en;
+	bool			is_sd_express;
 };
 
 #define PID_524A	0x524A

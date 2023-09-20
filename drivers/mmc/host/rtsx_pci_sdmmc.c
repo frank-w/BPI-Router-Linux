@@ -1393,6 +1393,7 @@ static int sdmmc_init_sd_express(struct mmc_host *mmc, struct mmc_ios *ios)
 		RTS5261_MCU_BUS_SEL_MASK | RTS5261_MCU_CLOCK_SEL_MASK
 		| RTS5261_DRIVER_ENABLE_FW,
 		RTS5261_MCU_CLOCK_SEL_16M | RTS5261_DRIVER_ENABLE_FW);
+	pcr->is_sd_express = true;
 	host->eject = true;
 	return 0;
 }

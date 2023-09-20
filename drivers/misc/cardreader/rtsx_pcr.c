@@ -1526,6 +1526,7 @@ static int rtsx_pci_probe(struct pci_dev *pcidev,
 	pcr->host_sg_tbl_addr = pcr->rtsx_resv_buf_addr + HOST_CMDS_BUF_LEN;
 	pcr->card_inserted = 0;
 	pcr->card_removed = 0;
+	pcr->is_sd_express = false;
 	INIT_DELAYED_WORK(&pcr->carddet_work, rtsx_pci_card_detect);
 
 	pcr->msi_en = msi_en;
@@ -1735,12 +1736,13 @@ static int rtsx_pci_runtime_idle(struct device *device)
 
 	pcr->state = PDEV_STAT_IDLE;
 
-	if (pcr->ops->disable_auto_blink)
-		pcr->ops->disable_auto_blink(pcr);
-	if (pcr->ops->turn_off_led)
-		pcr->ops->turn_off_led(pcr);
-
-	rtsx_pm_power_saving(pcr);
+	if (!pcr->is_sd_express) {
+		if (pcr->ops->disable_auto_blink)
+			pcr->ops->disable_auto_blink(pcr);
+		if (pcr->ops->turn_off_led)
+			pcr->ops->turn_off_led(pcr);
+		rtsx_pm_power_saving(pcr);
+	}
 
 	mutex_unlock(&pcr->pcr_mutex);
 
