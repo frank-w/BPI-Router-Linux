@@ -149,6 +149,12 @@ enum {
 #define DIR_CACHE_SIZE		\
 	(DIV_ROUND_UP(EXFAT_DEN_TO_B(ES_MAX_ENTRY_NUM), SECTOR_SIZE) + 1)
 
+/*
+ * attribute ioctls, same as their FAT equivalents.
+ */
+#define EXFAT_IOCTL_GET_ATTRIBUTES	_IOR('r', 0x10, __u32)
+#define EXFAT_IOCTL_SET_ATTRIBUTES	_IOW('r', 0x11, __u32)
+
 struct exfat_dentry_namebuf {
 	char *lfn;
 	int lfnbuf_len; /* usually MAX_UNINAME_BUF_SIZE */
@@ -234,6 +240,8 @@ struct exfat_mount_options {
 		 discard:1, /* Issue discard requests on deletions */
 		 keep_last_dots:1; /* Keep trailing periods in paths */
 	int time_offset; /* Offset of timestamps from UTC (in minutes) */
+	/* Support creating zero-size directory, default: false */
+	bool zero_size_dir;
 };
 
 /*
