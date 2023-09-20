@@ -18,6 +18,7 @@
  * no good way to detect the paging mode of the target kernel which will be
  * loaded for dumping.
  */
+extern unsigned long swiotlb_size_or_default(void);
 
 #ifdef CONFIG_X86_32
 # define CRASH_ADDR_LOW_MAX     SZ_512M
@@ -29,6 +30,13 @@
 
 # define DEFAULT_CRASH_KERNEL_LOW_SIZE crash_low_size_default()
 
-extern unsigned long crash_low_size_default(void);
+static inline unsigned long crash_low_size_default(void)
+{
+#ifdef CONFIG_X86_64
+	return max(swiotlb_size_or_default() + (8UL << 20), 256UL << 20);
+#else
+	return 0;
+#endif
+}
 
 #endif /* _X86_CRASH_CORE_H */
