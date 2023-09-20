@@ -220,7 +220,8 @@ enum {
 	 BTRFS_FEATURE_INCOMPAT_NO_HOLES	|	\
 	 BTRFS_FEATURE_INCOMPAT_METADATA_UUID	|	\
 	 BTRFS_FEATURE_INCOMPAT_RAID1C34	|	\
-	 BTRFS_FEATURE_INCOMPAT_ZONED)
+	 BTRFS_FEATURE_INCOMPAT_ZONED		|	\
+	 BTRFS_FEATURE_INCOMPAT_SIMPLE_QUOTA)
 
 #ifdef CONFIG_BTRFS_DEBUG
 	/*
@@ -686,6 +687,7 @@ struct btrfs_fs_info {
 	/* Protected by qgroup_rescan_lock */
 	bool qgroup_rescan_running;
 	u8 qgroup_drop_subtree_thres;
+	u64 qgroup_enable_gen;
 
 	/*
 	 * If this is not 0, then it indicates a serious filesystem error has
