@@ -172,14 +172,16 @@ static inline bool is_swiotlb_buffer(struct device *dev, phys_addr_t paddr)
 	if (!mem)
 		return false;
 
-	if (IS_ENABLED(CONFIG_SWIOTLB_DYNAMIC)) {
-		/* Pairs with smp_wmb() in swiotlb_find_slots() and
-		 * swiotlb_dyn_alloc(), which modify the RCU lists.
-		 */
-		smp_rmb();
-		return swiotlb_find_pool(dev, paddr);
-	}
+#ifdef CONFIG_SWIOTLB_DYNAMIC
+	/* Pairs with smp_wmb() in swiotlb_find_slots() and
+	 * swiotlb_dyn_alloc(), which modify the RCU lists.
+	 */
+	smp_rmb();
+	return READ_ONCE(dev->dma_uses_io_tlb) &&
+		swiotlb_find_pool(dev, paddr);
+#else
 	return paddr >= mem->defpool.start && paddr < mem->defpool.end;
+#endif
 }
 
 static inline bool is_swiotlb_force_bounce(struct device *dev)
