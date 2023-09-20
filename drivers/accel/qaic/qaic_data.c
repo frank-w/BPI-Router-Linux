@@ -23,6 +23,7 @@
 #include <linux/wait.h>
 #include <drm/drm_file.h>
 #include <drm/drm_gem.h>
+#include <drm/drm_prime.h>
 #include <drm/drm_print.h>
 #include <uapi/drm/qaic_accel.h>
 
@@ -616,8 +617,7 @@ static void qaic_free_object(struct drm_gem_object *obj)
 
 	if (obj->import_attach) {
 		/* DMABUF/PRIME Path */
-		dma_buf_detach(obj->import_attach->dmabuf, obj->import_attach);
-		dma_buf_put(obj->import_attach->dmabuf);
+		drm_prime_gem_destroy(obj, NULL);
 	} else {
 		/* Private buffer allocation path */
 		qaic_free_sgt(bo->sgt);
@@ -1021,6 +1021,7 @@ int qaic_attach_slice_bo_ioctl(struct drm_device *dev, void *data, struct drm_fi
 	bo->dbc = dbc;
 	srcu_read_unlock(&dbc->ch_lock, rcu_id);
 	drm_gem_object_put(obj);
+	kfree(slice_ent);
 	srcu_read_unlock(&qdev->dev_lock, qdev_rcu_id);
 	srcu_read_unlock(&usr->qddev_lock, usr_rcu_id);
 
