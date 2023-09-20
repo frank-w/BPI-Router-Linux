@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * hardware cryptographic offloader for rk3588 SoC
+ * hardware cryptographic offloader for rk3568/rk3588 SoC
  *
  * Copyright (c) 2022, Corentin Labbe <clabbe.montjoie@gmail.com>
  */
@@ -31,6 +31,10 @@ struct rk_crypto_dev *get_rk_crypto(void)
 	spin_unlock(&rocklist.lock);
 	return first;
 }
+
+static const struct rk_variant rk3568_variant = {
+	.num_clks = 3,
+};
 
 static const struct rk_variant rk3588_variant = {
 	.num_clks = 3,
@@ -543,6 +547,9 @@ static void rk_crypto_unregister(void)
 }
 
 static const struct of_device_id crypto_of_id_table[] = {
+	{ .compatible = "rockchip,rk3568-crypto",
+	  .data = &rk3568_variant,
+	},
 	{ .compatible = "rockchip,rk3588-crypto",
 	  .data = &rk3588_variant,
 	},
