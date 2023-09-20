@@ -11,6 +11,7 @@
 #include <adf_gen4_pm.h>
 #include <adf_gen4_timer.h>
 #include "adf_4xxx_hw_data.h"
+#include "adf_cfg_services.h"
 #include "icp_qat_hw.h"
 
 enum adf_fw_objs {
@@ -75,11 +76,18 @@ static const struct adf_fw_config adf_fw_sym_dc_config[] = {
 	{0x100, ADF_FW_ADMIN_OBJ},
 };
 
+static const struct adf_fw_config adf_fw_dcc_config[] = {
+	{0xF0, ADF_FW_DC_OBJ},
+	{0xF, ADF_FW_SYM_OBJ},
+	{0x100, ADF_FW_ADMIN_OBJ},
+};
+
 static_assert(ARRAY_SIZE(adf_fw_cy_config) == ARRAY_SIZE(adf_fw_dc_config));
 static_assert(ARRAY_SIZE(adf_fw_cy_config) == ARRAY_SIZE(adf_fw_sym_config));
 static_assert(ARRAY_SIZE(adf_fw_cy_config) == ARRAY_SIZE(adf_fw_asym_config));
 static_assert(ARRAY_SIZE(adf_fw_cy_config) == ARRAY_SIZE(adf_fw_asym_dc_config));
 static_assert(ARRAY_SIZE(adf_fw_cy_config) == ARRAY_SIZE(adf_fw_sym_dc_config));
+static_assert(ARRAY_SIZE(adf_fw_cy_config) == ARRAY_SIZE(adf_fw_dcc_config));
 
 /* Worker thread to service arbiter mappings */
 static const u32 default_thrd_to_arb_map[ADF_4XXX_MAX_ACCELENGINES] = {
@@ -94,34 +102,16 @@ static const u32 thrd_to_arb_map_dc[ADF_4XXX_MAX_ACCELENGINES] = {
 	0x0
 };
 
+static const u32 thrd_to_arb_map_dcc[ADF_4XXX_MAX_ACCELENGINES] = {
+	0x00000000, 0x00000000, 0x00000000, 0x00000000,
+	0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
+	0x0
+};
+
 static struct adf_hw_device_class adf_4xxx_class = {
 	.name = ADF_4XXX_DEVICE_NAME,
 	.type = DEV_4XXX,
 	.instances = 0,
-};
-
-enum dev_services {
-	SVC_CY = 0,
-	SVC_CY2,
-	SVC_DC,
-	SVC_SYM,
-	SVC_ASYM,
-	SVC_DC_ASYM,
-	SVC_ASYM_DC,
-	SVC_DC_SYM,
-	SVC_SYM_DC,
-};
-
-static const char *const dev_cfg_services[] = {
-	[SVC_CY] = ADF_CFG_CY,
-	[SVC_CY2] = ADF_CFG_ASYM_SYM,
-	[SVC_DC] = ADF_CFG_DC,
-	[SVC_SYM] = ADF_CFG_SYM,
-	[SVC_ASYM] = ADF_CFG_ASYM,
-	[SVC_DC_ASYM] = ADF_CFG_DC_ASYM,
-	[SVC_ASYM_DC] = ADF_CFG_ASYM_DC,
-	[SVC_DC_SYM] = ADF_CFG_DC_SYM,
-	[SVC_SYM_DC] = ADF_CFG_SYM_DC,
 };
 
 static int get_service_enabled(struct adf_accel_dev *accel_dev)
@@ -137,7 +127,7 @@ static int get_service_enabled(struct adf_accel_dev *accel_dev)
 		return ret;
 	}
 
-	ret = match_string(dev_cfg_services, ARRAY_SIZE(dev_cfg_services),
+	ret = match_string(adf_cfg_services, ARRAY_SIZE(adf_cfg_services),
 			   services);
 	if (ret < 0)
 		dev_err(&GET_DEV(accel_dev),
@@ -212,6 +202,7 @@ static u32 get_accel_cap(struct adf_accel_dev *accel_dev)
 {
 	struct pci_dev *pdev = accel_dev->accel_pci_dev.pci_dev;
 	u32 capabilities_sym, capabilities_asym, capabilities_dc;
+	u32 capabilities_dcc;
 	u32 fusectl1;
 
 	/* Read accelerator capabilities mask */
@@ -284,6 +275,14 @@ static u32 get_accel_cap(struct adf_accel_dev *accel_dev)
 		return capabilities_sym | capabilities_asym;
 	case SVC_DC:
 		return capabilities_dc;
+	case SVC_DCC:
+		/*
+		 * Sym capabilities are available for chaining operations,
+		 * but sym crypto instances cannot be supported
+		 */
+		capabilities_dcc = capabilities_dc | capabilities_sym;
+		capabilities_dcc &= ~ICP_ACCEL_CAPABILITIES_CRYPTO_SYMMETRIC;
+		return capabilities_dcc;
 	case SVC_SYM:
 		return capabilities_sym;
 	case SVC_ASYM:
@@ -309,6 +308,8 @@ static const u32 *adf_get_arbiter_mapping(struct adf_accel_dev *accel_dev)
 	switch (get_service_enabled(accel_dev)) {
 	case SVC_DC:
 		return thrd_to_arb_map_dc;
+	case SVC_DCC:
+		return thrd_to_arb_map_dcc;
 	default:
 		return default_thrd_to_arb_map;
 	}
@@ -406,6 +407,9 @@ static const char *uof_get_name(struct adf_accel_dev *accel_dev, u32 obj_num,
 	case SVC_DC:
 		id = adf_fw_dc_config[obj_num].obj;
 		break;
+	case SVC_DCC:
+		id = adf_fw_dcc_config[obj_num].obj;
+		break;
 	case SVC_SYM:
 		id = adf_fw_sym_config[obj_num].obj;
 		break;
@@ -452,6 +456,8 @@ static u32 uof_get_ae_mask(struct adf_accel_dev *accel_dev, u32 obj_num)
 		return adf_fw_cy_config[obj_num].ae_mask;
 	case SVC_DC:
 		return adf_fw_dc_config[obj_num].ae_mask;
+	case SVC_DCC:
+		return adf_fw_dcc_config[obj_num].ae_mask;
 	case SVC_CY2:
 		return adf_fw_cy_config[obj_num].ae_mask;
 	case SVC_SYM:
