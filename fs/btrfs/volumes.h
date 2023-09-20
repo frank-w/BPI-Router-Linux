@@ -299,6 +299,11 @@ struct btrfs_fs_devices {
 	 *   - When the BTRFS_FEATURE_INCOMPAT_METADATA_UUID flag is set:
 	 *       fs_devices->fsid == sb->fsid
 	 *       fs_devices->metadata_uuid == sb->metadata_uuid
+	 *
+	 *   - When the BTRFS_FEATURE_COMPAT_RO_TEMP_FSID flag is set:
+	 *       fs_devices->fsid == random;		(see prepare_random_fsid)
+	 *       fs_devices->metadata_uuid = sb->fsid;
+	 *       sb->metadata_uuid == 0;
 	 */
 	u8 metadata_uuid[BTRFS_FSID_SIZE];
 

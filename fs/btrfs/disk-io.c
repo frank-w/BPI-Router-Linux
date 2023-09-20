@@ -2311,6 +2311,7 @@ int btrfs_validate_super(struct btrfs_fs_info *fs_info,
 {
 	u64 nodesize = btrfs_super_nodesize(sb);
 	u64 sectorsize = btrfs_super_sectorsize(sb);
+	const u8 *fsid;
 	int ret = 0;
 
 	if (btrfs_super_magic(sb) != BTRFS_MAGIC) {
@@ -2391,7 +2392,22 @@ int btrfs_validate_super(struct btrfs_fs_info *fs_info,
 		ret = -EINVAL;
 	}
 
-	if (memcmp(fs_info->fs_devices->fsid, sb->fsid, BTRFS_FSID_SIZE) != 0) {
+	/*
+	 * For TEMP_FSID devices, btrfs creates a random fsid and makes use of
+	 * the metadata_uuid infrastructure in order to allow, for example, two
+	 * devices with same fsid getting mounted at the same time. But notice
+	 * no changes happen at the disk level, the random generated fsid is a
+	 * driver abstraction, not written to the disk.  That's the reason
+	 * we're required here to compare the fsid  with the metadata_uuid for
+	 * such devices. See volumes.h for a more descriptive analysis of the
+	 * relation between fsid/metadata_uuid.
+	 */
+	if (btrfs_fs_compat_ro(fs_info, TEMP_FSID))
+		fsid = fs_info->fs_devices->metadata_uuid;
+	else
+		fsid = fs_info->fs_devices->fsid;
+
+	if (memcmp(fsid, sb->fsid, BTRFS_FSID_SIZE) != 0) {
 		btrfs_err(fs_info,
 		"superblock fsid doesn't match fsid of fs_devices: %pU != %pU",
 			  sb->fsid, fs_info->fs_devices->fsid);

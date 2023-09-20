@@ -769,8 +769,39 @@ static struct btrfs_fs_devices *find_fsid_reverted_metadata(
 
 	return NULL;
 }
+
+static void prepare_random_fsid(struct btrfs_super_block *disk_super, const char *path)
+{
+	struct btrfs_fs_devices *fs_devices;
+	u8 temp_fsid[BTRFS_FSID_SIZE];
+	bool dup_fsid = true;
+
+	while (dup_fsid) {
+		dup_fsid = false;
+		generate_random_uuid(temp_fsid);
+
+		list_for_each_entry(fs_devices, &fs_uuids, fs_list) {
+			if (memcmp(temp_fsid, fs_devices->fsid,
+				   BTRFS_FSID_SIZE) == 0 ||
+			    memcmp(temp_fsid, fs_devices->metadata_uuid,
+				    BTRFS_FSID_SIZE) == 0) {
+				dup_fsid = true;
+				break;
+			}
+		}
+	}
+
+	memcpy(disk_super->metadata_uuid, disk_super->fsid, BTRFS_FSID_SIZE);
+	memcpy(disk_super->fsid, temp_fsid, BTRFS_FSID_SIZE);
+
+	btrfs_info(NULL,
+		"random fsid (%pU) set for TEMP_FSID device %s (real fsid %pU)",
+		disk_super->fsid, path, disk_super->metadata_uuid);
+}
+
 /*
- * Add new device to list of registered devices
+ * Add new device to list of registered devices, or in case of a TEMP_FSID
+ * device, also creates a random fsid to cope with same-fsid cases.
  *
  * Returns:
  * device pointer which was just added or updated when successful
@@ -791,6 +822,8 @@ static noinline struct btrfs_device *device_list_add(const char *path,
 		BTRFS_FEATURE_INCOMPAT_METADATA_UUID);
 	bool fsid_change_in_progress = (btrfs_super_flags(disk_super) &
 					BTRFS_SUPER_FLAG_CHANGING_FSID_V2);
+	const bool temp_fsid = (btrfs_super_compat_ro_flags(disk_super) &
+			 BTRFS_FEATURE_COMPAT_RO_TEMP_FSID);
 
 	error = lookup_bdev(path, &path_devt);
 	if (error) {
@@ -799,23 +832,32 @@ static noinline struct btrfs_device *device_list_add(const char *path,
 		return ERR_PTR(error);
 	}
 
-	if (fsid_change_in_progress) {
-		if (!has_metadata_uuid)
-			fs_devices = find_fsid_inprogress(disk_super);
-		else
-			fs_devices = find_fsid_changed(disk_super);
-	} else if (has_metadata_uuid) {
-		fs_devices = find_fsid_with_metadata_uuid(disk_super);
+	if (temp_fsid) {
+		if (has_metadata_uuid || fsid_change_in_progress) {
+			btrfs_err(NULL,
+		"TEMP_FSID devices don't support the metadata_uuid feature");
+			return ERR_PTR(-EINVAL);
+		}
+		prepare_random_fsid(disk_super, path);
 	} else {
-		fs_devices = find_fsid_reverted_metadata(disk_super);
-		if (!fs_devices)
-			fs_devices = find_fsid(disk_super->fsid, NULL);
+		if (fsid_change_in_progress) {
+			if (!has_metadata_uuid)
+				fs_devices = find_fsid_inprogress(disk_super);
+			else
+				fs_devices = find_fsid_changed(disk_super);
+		} else if (has_metadata_uuid) {
+			fs_devices = find_fsid_with_metadata_uuid(disk_super);
+		} else {
+			fs_devices = find_fsid_reverted_metadata(disk_super);
+			if (!fs_devices)
+				fs_devices = find_fsid(disk_super->fsid, NULL);
+		}
 	}
 
 
 	if (!fs_devices) {
 		fs_devices = alloc_fs_devices(disk_super->fsid);
-		if (has_metadata_uuid)
+		if (has_metadata_uuid || temp_fsid)
 			memcpy(fs_devices->metadata_uuid,
 			       disk_super->metadata_uuid, BTRFS_FSID_SIZE);
 
@@ -2414,6 +2456,12 @@ int btrfs_get_dev_args_from_path(struct btrfs_fs_info *fs_info,
 
 	args->devid = btrfs_stack_device_id(&disk_super->dev_item);
 	memcpy(args->uuid, disk_super->dev_item.uuid, BTRFS_UUID_SIZE);
+
+	/*
+	 * Note that TEMP_FSID devices are not handled in a special way here;
+	 * device removal/replace is instead forbidden when such feature is
+	 * present, this note is for future users/readers of this function.
+	 */
 	if (btrfs_fs_incompat(fs_info, METADATA_UUID))
 		memcpy(args->fsid, disk_super->metadata_uuid, BTRFS_FSID_SIZE);
 	else
