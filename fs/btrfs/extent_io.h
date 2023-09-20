@@ -86,6 +86,13 @@ struct extent_buffer {
 
 	struct rw_semaphore lock;
 
+	/*
+	 * For virtually mapped address of the associated pages.
+	 *
+	 * NULL if the pages are physically contiguous.
+	 */
+	void *vaddr;
+
 	struct page *pages[INLINE_EXTENT_BUFFER_PAGES];
 #ifdef CONFIG_BTRFS_DEBUG
 	struct list_head leak_list;
@@ -131,6 +138,16 @@ static inline unsigned long get_eb_page_index(unsigned long offset)
 	 * thus we always get index == 0.
 	 */
 	return offset >> PAGE_SHIFT;
+}
+
+static inline void *btrfs_get_eb_addr(const struct extent_buffer *eb)
+{
+	/* For fallback vmapped extent buffer. */
+	if (eb->vaddr)
+		return eb->vaddr;
+
+	/* For physically contiguous pages and subpage cases. */
+	return page_address(eb->pages[0]) + offset_in_page(eb->start);
 }
 
 /*

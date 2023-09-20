@@ -74,24 +74,14 @@ static void btrfs_free_csum_hash(struct btrfs_fs_info *fs_info)
 static void csum_tree_block(struct extent_buffer *buf, u8 *result)
 {
 	struct btrfs_fs_info *fs_info = buf->fs_info;
-	const int num_pages = num_extent_pages(buf);
-	const int first_page_part = min_t(u32, PAGE_SIZE, fs_info->nodesize);
 	SHASH_DESC_ON_STACK(shash, fs_info->csum_shash);
-	char *kaddr;
-	int i;
+	void *eb_addr = btrfs_get_eb_addr(buf);
 
+	memset(result, 0, BTRFS_CSUM_SIZE);
 	shash->tfm = fs_info->csum_shash;
 	crypto_shash_init(shash);
-	kaddr = page_address(buf->pages[0]) + offset_in_page(buf->start);
-	crypto_shash_update(shash, kaddr + BTRFS_CSUM_SIZE,
-			    first_page_part - BTRFS_CSUM_SIZE);
-
-	for (i = 1; i < num_pages && INLINE_EXTENT_BUFFER_PAGES > 1; i++) {
-		kaddr = page_address(buf->pages[i]);
-		crypto_shash_update(shash, kaddr, PAGE_SIZE);
-	}
-	memset(result, 0, BTRFS_CSUM_SIZE);
-	crypto_shash_final(shash, result);
+	crypto_shash_digest(shash, eb_addr + BTRFS_CSUM_SIZE,
+			    buf->len - BTRFS_CSUM_SIZE, result);
 }
 
 /*
