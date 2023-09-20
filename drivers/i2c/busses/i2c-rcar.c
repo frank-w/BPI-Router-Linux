@@ -291,45 +291,40 @@ static int rcar_i2c_clock_calculate(struct rcar_i2c_priv *priv)
 	ick = rate / (cdf + 1);
 
 	/*
-	 * it is impossible to calculate large scale
-	 * number on u32. separate it
+	 * It is impossible to calculate a large scale number on u32. Separate it.
 	 *
 	 * F[(ticf + tr + intd) * ick] with sum = (ticf + tr + intd)
 	 *  = F[sum * ick / 1000000000]
 	 *  = F[(ick / 1000000) * sum / 1000]
 	 */
 	sum = t.scl_fall_ns + t.scl_rise_ns + t.scl_int_delay_ns;
-	round = (ick + 500000) / 1000000 * sum;
-	round = (round + 500) / 1000;
+	round = DIV_ROUND_CLOSEST(ick, 1000000);
+	round = DIV_ROUND_CLOSEST(round * sum, 1000);
 
 	/*
-	 * SCL	= ick / (20 + SCGD * 8 + F[(ticf + tr + intd) * ick])
-	 *
-	 * Calculation result (= SCL) should be less than
-	 * bus_speed for hardware safety
-	 *
-	 * We could use something along the lines of
-	 *	div = ick / (bus_speed + 1) + 1;
-	 *	scgd = (div - 20 - round + 7) / 8;
-	 *	scl = ick / (20 + (scgd * 8) + round);
-	 * (not fully verified) but that would get pretty involved
+	 * SCL	= ick / (20 + 8 * SCGD + F[(ticf + tr + intd) * ick])
+	 * 20 + 8 * SCGD + F[...] = ick / SCL
+	 * SCGD = ((ick / SCL) - 20 - F[...]) / 8
+	 * Result (= SCL) should be less than bus_speed for hardware safety
 	 */
-	for (scgd = 0; scgd < 0x40; scgd++) {
-		scl = ick / (20 + (scgd * 8) + round);
-		if (scl <= t.bus_freq_hz)
-			goto scgd_find;
-	}
-	dev_err(dev, "it is impossible to calculate best SCL\n");
-	return -EIO;
+	scgd = DIV_ROUND_UP(ick, t.bus_freq_hz ?: 1);
+	scgd = DIV_ROUND_UP(scgd - 20 - round, 8);
+	scl = ick / (20 + 8 * scgd + round);
 
-scgd_find:
-	dev_dbg(dev, "clk %d/%d(%lu), round %u, CDF:0x%x, SCGD: 0x%x\n",
+	if (scgd > 0x3f)
+		goto err_no_val;
+
+	dev_dbg(dev, "clk %u/%u(%lu), round %u, CDF: %u, SCGD: %u\n",
 		scl, t.bus_freq_hz, rate, round, cdf, scgd);
 
 	/* keep icccr value */
 	priv->icccr = scgd << cdf_width | cdf;
 
 	return 0;
+
+err_no_val:
+	dev_err(dev, "it is impossible to calculate best SCL\n");
+	return -EINVAL;
 }
 
 /*
