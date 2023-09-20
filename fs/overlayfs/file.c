@@ -249,6 +249,7 @@ static void ovl_file_accessed(struct file *file)
 	if (!upperinode)
 		return;
 
+	spin_lock(&inode->i_lock);
 	ctime = inode_get_ctime(inode);
 	uctime = inode_get_ctime(upperinode);
 	if ((!timespec64_equal(&inode->i_mtime, &upperinode->i_mtime) ||
@@ -256,24 +257,17 @@ static void ovl_file_accessed(struct file *file)
 		inode->i_mtime = upperinode->i_mtime;
 		inode_set_ctime_to_ts(inode, uctime);
 	}
+	spin_unlock(&inode->i_lock);
 
 	touch_atime(&file->f_path);
 }
 
-static rwf_t ovl_iocb_to_rwf(int ifl)
+#define OVL_IOCB_MASK \
+	(IOCB_NOWAIT | IOCB_HIPRI | IOCB_DSYNC | IOCB_SYNC | IOCB_APPEND)
+
+static rwf_t iocb_to_rw_flags(int flags)
 {
-	rwf_t flags = 0;
-
-	if (ifl & IOCB_NOWAIT)
-		flags |= RWF_NOWAIT;
-	if (ifl & IOCB_HIPRI)
-		flags |= RWF_HIPRI;
-	if (ifl & IOCB_DSYNC)
-		flags |= RWF_DSYNC;
-	if (ifl & IOCB_SYNC)
-		flags |= RWF_SYNC;
-
-	return flags;
+	return (__force rwf_t)(flags & OVL_IOCB_MASK);
 }
 
 static inline void ovl_aio_put(struct ovl_aio_req *aio_req)
@@ -284,29 +278,43 @@ static inline void ovl_aio_put(struct ovl_aio_req *aio_req)
 	}
 }
 
-static void ovl_aio_cleanup_handler(struct ovl_aio_req *aio_req)
+/* Completion for submitted/failed sync/async rw io */
+static void ovl_rw_complete(struct kiocb *orig_iocb)
+{
+	struct file *file = orig_iocb->ki_filp;
+
+	if (orig_iocb->ki_flags & IOCB_WRITE) {
+		/* Update size/mtime */
+		ovl_copyattr(file_inode(file));
+	} else {
+		/* Update atime */
+		ovl_file_accessed(file);
+	}
+}
+
+/* Completion for submitted/failed async rw io */
+static void ovl_aio_cleanup(struct ovl_aio_req *aio_req)
 {
 	struct kiocb *iocb = &aio_req->iocb;
 	struct kiocb *orig_iocb = aio_req->orig_iocb;
 
-	if (iocb->ki_flags & IOCB_WRITE) {
-		struct inode *inode = file_inode(orig_iocb->ki_filp);
-
+	if (iocb->ki_flags & IOCB_WRITE)
 		kiocb_end_write(iocb);
-		ovl_copyattr(inode);
-	}
 
 	orig_iocb->ki_pos = iocb->ki_pos;
+	ovl_rw_complete(orig_iocb);
+
 	ovl_aio_put(aio_req);
 }
 
+/* Completion for submitted async rw io */
 static void ovl_aio_rw_complete(struct kiocb *iocb, long res)
 {
 	struct ovl_aio_req *aio_req = container_of(iocb,
 						   struct ovl_aio_req, iocb);
 	struct kiocb *orig_iocb = aio_req->orig_iocb;
 
-	ovl_aio_cleanup_handler(aio_req);
+	ovl_aio_cleanup(aio_req);
 	orig_iocb->ki_complete(orig_iocb, res);
 }
 
@@ -331,8 +339,10 @@ static ssize_t ovl_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 
 	old_cred = ovl_override_creds(file_inode(file)->i_sb);
 	if (is_sync_kiocb(iocb)) {
-		ret = vfs_iter_read(real.file, iter, &iocb->ki_pos,
-				    ovl_iocb_to_rwf(iocb->ki_flags));
+		rwf_t rwf = iocb_to_rw_flags(iocb->ki_flags);
+
+		ret = vfs_iter_read(real.file, iter, &iocb->ki_pos, rwf);
+		ovl_rw_complete(iocb);
 	} else {
 		struct ovl_aio_req *aio_req;
 
@@ -349,11 +359,10 @@ static ssize_t ovl_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		ret = vfs_iocb_iter_read(real.file, &aio_req->iocb, iter);
 		ovl_aio_put(aio_req);
 		if (ret != -EIOCBQUEUED)
-			ovl_aio_cleanup_handler(aio_req);
+			ovl_aio_cleanup(aio_req);
 	}
 out:
 	revert_creds(old_cred);
-	ovl_file_accessed(file);
 out_fdput:
 	fdput(real);
 
@@ -367,7 +376,7 @@ static ssize_t ovl_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 	struct fd real;
 	const struct cred *old_cred;
 	ssize_t ret;
-	int ifl = iocb->ki_flags;
+	int flags = iocb->ki_flags;
 
 	if (!iov_iter_count(iter))
 		return 0;
@@ -389,16 +398,16 @@ static ssize_t ovl_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 		goto out_fdput;
 
 	if (!ovl_should_sync(OVL_FS(inode->i_sb)))
-		ifl &= ~(IOCB_DSYNC | IOCB_SYNC);
+		flags &= ~(IOCB_DSYNC | IOCB_SYNC);
 
-	old_cred = ovl_override_creds(file_inode(file)->i_sb);
+	old_cred = ovl_override_creds(inode->i_sb);
 	if (is_sync_kiocb(iocb)) {
+		rwf_t rwf = iocb_to_rw_flags(flags);
+
 		file_start_write(real.file);
-		ret = vfs_iter_write(real.file, iter, &iocb->ki_pos,
-				     ovl_iocb_to_rwf(ifl));
+		ret = vfs_iter_write(real.file, iter, &iocb->ki_pos, rwf);
 		file_end_write(real.file);
-		/* Update size */
-		ovl_copyattr(inode);
+		ovl_rw_complete(iocb);
 	} else {
 		struct ovl_aio_req *aio_req;
 
@@ -410,14 +419,14 @@ static ssize_t ovl_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 		real.flags = 0;
 		aio_req->orig_iocb = iocb;
 		kiocb_clone(&aio_req->iocb, iocb, get_file(real.file));
-		aio_req->iocb.ki_flags = ifl;
+		aio_req->iocb.ki_flags = flags;
 		aio_req->iocb.ki_complete = ovl_aio_rw_complete;
 		refcount_set(&aio_req->ref, 2);
 		kiocb_start_write(&aio_req->iocb);
 		ret = vfs_iocb_iter_write(real.file, &aio_req->iocb, iter);
 		ovl_aio_put(aio_req);
 		if (ret != -EIOCBQUEUED)
-			ovl_aio_cleanup_handler(aio_req);
+			ovl_aio_cleanup(aio_req);
 	}
 out:
 	revert_creds(old_cred);
