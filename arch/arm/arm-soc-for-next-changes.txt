@@ -1,0 +1,238 @@
+arm/soc
+
+soc/dt
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.6-dt-bindings
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.6-arm-dt
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.6-arm64-dt
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dts-for-v6.6-tag1
+	patch
+		ARM: dts: st: spear: split interrupts per cells
+	at91/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-dt-6.6
+	microchip/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/microchip-dt64-6.6
+	hisi/dt
+		https://github.com/hisilicon/linux-hisi tags/hisi-arm64-dt-for-6.6
+	hisi/dt32
+		https://github.com/hisilicon/linux-hisi tags/hisi-arm32-dt-for-6.6
+	zynq/dt
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-6.6
+	juno/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/juno-update-6.6
+	amlogic/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm64-dt-for-v6.6
+	patch
+		arm64: dts: mediatek: Fix "status" values
+	sunxi/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-6.6-1
+	omap/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/dt-bindings-signed
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/dt-take2-signed
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/bmc tags/aspeed-6.6-devicetree-2
+	samsung/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.6
+	samsung/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-6.6
+	patch
+		ARM: dts: nspire: Use syscon-reboot to handle restart
+		ARM: dts: nspire: Fix cpu node to conform with DT binding
+		ARM: dts: nspire: Fix sram node to conform with DT binding
+		ARM: dts: nspire: Fix vbus_reg node to conform with DT binding
+		ARM: dts: nspire: Fix uart node to conform with DT binding
+		ARM: dts: nspire: Use MATRIX_KEY macro for linux,keymap
+		ARM: dts: nspire: Remove file name from the files themselves
+		ARM: dts: aspeed: Fix pca954x i2c-mux node names
+		ARM: dts: nuvoton: Fix pca954x i2c-mux node names
+	mvebu/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-6.6-1
+	mvebu/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt-6.6-1
+	riscv/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-for-v6.6
+	sunxi/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-6.6-2
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-6.6
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-6.6
+	ixm/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-6.6
+	k3/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.6
+	dt/cleanup-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt64-cleanup-6.6
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v6.6-1
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-dts64-1
+	rockchip/dt32
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-dts32-1
+	qcom/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-dts-for-6.6
+	qcom/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-6.6
+	riscv/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-for-v6.6-pt2
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_updates_for_v6.6
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/devicetree
+	broadcom/dt64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/devicetree-arm64
+	patch
+		ARM: dts: use capital "OR" for multiple licenses in SPDX
+		arm64: dts: use capital "OR" for multiple licenses in SPDX
+
+soc/drivers
+	<no branch> (b43f11e5b453a9c48159d7121c88d79d81901276)
+		git://git.kernel.org/pub/scm/linux/kernel/git/ulfh/linux-pm genpd_create_dir
+	drivers/genpd
+		Merge branch 'drivers/genpd' into soc/drivers
+	tegra/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.6-soc
+	zynq/soc
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-6.6
+	vexpress/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/vexpress-updates-6.6
+	firmware/scmi
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-6.6
+	amlogic/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-drivers-for-v6.6
+	sunxi/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-drivers-for-6.6-1
+	reset/cleanups
+		git://git.pengutronix.de/pza/linux tags/reset-for-v6.6
+	samsung/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-6.6
+	hisi/drivers
+		https://github.com/hisilicon/linux-hisi tags/hisi-drivers-for-6.6
+	patch
+		soc: kunpeng_hccs: fix size_t format string
+		soc: kunpeng_hccs: add MAILBOX dependency
+	imx/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-drivers-6.6
+	oxnas-final
+		https://git.kernel.org/pub/scm/linux/kernel/git/narmstrong/linux-oxnas tags/oxnas-final-for-6.6
+	k3/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.6
+	drivers/memory
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.6
+	patch
+		soc: dt-bindings: add loongson-2 pm
+		soc: loongson2_pm: add power management support
+		soc: kunpeng_hccs: fix some sparse warnings about incorrect type
+	rockchip/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-drivers1
+	qcom/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.6
+	omap/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/ti-sysc-signed
+	broadcom/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/drivers
+	patch
+		bus: fsl-mc: Use common ranges functions
+
+arm/defconfig
+
+arm/late
+
+arm/fixes
+	<no branch> (78e869dd8b2ba19765ac9b05cdea3e432d1dc188)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-6.5-2
+	<no branch> (bb54e6609977f5140eb0af9b0c42d957cb35b4f4)
+		https://github.com/Xilinx/linux-xlnx tags/zynq-soc-for-6.6
+	patch
+		ARM: dts: integrator: fix PCI bus dtc warnings
+		soc: aspeed: uart-routing: Use __sysfs_match_string
+		soc: aspeed: socinfo: Add kfree for kstrdup
+	<no branch> (ebceec271e552a2b05e47d8ef0597052b1a39449)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.5-rockchip-dtsfixes1
+	<no branch> (7aff940ec88658f7fd21137cf515956a7deaaf54)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.5/fixes-signed
+	<no branch> (6d4cc57630a867a944483fdf7f8a060d2bbebdb9)
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-fixes-for-6.5
+
+soc/arm
+	patch
+		ARM: l2x0: Add explicit includes for init and types
+		ARM: sti: Drop unused includes
+		ARM: alpine: Drop unused includes
+		ARM: berlin: Drop unused includes
+		ARM: dove: Drop unused includes
+		ARM: hpe: Drop unused includes
+		ARM: mmp: Drop unused includes
+		ARM: nomadik: Drop unused includes
+		ARM: npcm: Drop unused includes
+		ARM: nspire: Drop unused includes
+		ARM: pxa: Drop unused includes
+		ARM: rockchip: Drop unused includes
+		ARM: versatile: Drop unused includes
+		ARM: mvebu: Explicitly include correct DT includes
+		ARM: spear: Explicitly include correct DT includes
+		bus: Explicitly include correct DT includes
+		firmware: Explicitly include correct DT includes
+		soc: aspeed: Explicitly include correct DT includes
+		soc: mediatek: Explicitly include correct DT includes
+		soc: rockchip: Explicitly include correct DT includes
+		soc: sunxi: Explicitly include correct DT includes
+		soc: xilinx: Explicitly include correct DT includes
+		soc: fsl: Explicitly include correct DT includes
+	at91/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-soc-6.6
+	amlogic/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm-mach-for-v6.6
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/soc-signed
+	renesas/arm
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v6.6-tag1
+	patch
+		ARM: nspire: Use syscon-reboot to handle restart
+		ARM: nspire: Remove unused header file mmio.h
+	hisi/soc
+		https://github.com/hisilicon/linux-hisi tags/hisi-arm-soc-for-6.6
+	omap/maintainers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.6/maintainers-signed
+	patch
+		MAINTAINERS: soc: reference maintainer profile
+		Documentation/process: maintainer-soc: add clean platforms profile
+		MAINTAINER: samsung: document dtbs_check requirement for Samsung
+		Documentation/process: maintainer-soc: document dtbs_check requirement for Samsung
+	mvebu/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-arm-6.6-1
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-6.6
+	patch
+		ARM: s5pv210: Explicitly include correct DT includes
+	keystone/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-soc-for-v6.6
+	broadcom/soc
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.6/soc
+	<no branch> (37e2d7d23765c3948e21cb361100f1baeb65f4f3)
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_update_for_v6.6
+	patch
+		ARM: davinci: Drop unused includes
+
+soc/defconfig
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v6.6-tag1
+	patch
+		ARM: multi_v7_defconfig: Enable TLV320AIC3x
+		ARM: multi_v7_defconfig: Enable TI Remoteproc and related configs
+		ARM: multi_v7_defconfig: Enable OMAP audio/display support
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.6
+	k3/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-config-for-v6.6
+	patch
+		ARM: multi_v7_defconfig: Add SCMI regulator support
+	rockchip/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-defconfig64-1
+	qcom/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-6.6
+
