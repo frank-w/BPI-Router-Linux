@@ -5,7 +5,7 @@
  * Copied from cfg.c - originally
  * Copyright 2006-2010	Johannes Berg <johannes@sipsolutions.net>
  * Copyright 2014	Intel Corporation (Author: Johannes Berg)
- * Copyright (C) 2018, 2022 Intel Corporation
+ * Copyright (C) 2018, 2022-2023 Intel Corporation
  */
 #include <linux/types.h>
 #include <net/cfg80211.h>
@@ -102,7 +102,7 @@ static void ieee80211_get_stats(struct net_device *dev,
 	 * network device.
 	 */
 
-	mutex_lock(&local->sta_mtx);
+	wiphy_lock(local->hw.wiphy);
 
 	if (sdata->vif.type == NL80211_IFTYPE_STATION) {
 		sta = sta_info_get_bss(sdata, sdata->deflink.u.mgd.bssid);
@@ -198,12 +198,13 @@ do_survey:
 	else
 		data[i++] = -1LL;
 
-	mutex_unlock(&local->sta_mtx);
-
-	if (WARN_ON(i != STA_STATS_LEN))
+	if (WARN_ON(i != STA_STATS_LEN)) {
+		wiphy_unlock(local->hw.wiphy);
 		return;
+	}
 
 	drv_get_et_stats(sdata, stats, &(data[STA_STATS_LEN]));
+	wiphy_unlock(local->hw.wiphy);
 }
 
 static void ieee80211_get_strings(struct net_device *dev, u32 sset, u8 *data)

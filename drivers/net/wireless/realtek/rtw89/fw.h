@@ -2931,6 +2931,11 @@ static inline void RTW89_SET_FWCMD_ADD_MCC_COURTESY_TARGET(void *cmd, u32 val)
 	le32p_replace_bits((__le32 *)cmd + 3, val, GENMASK(23, 16));
 }
 
+enum rtw89_fw_mcc_old_group_actions {
+	RTW89_FW_MCC_OLD_GROUP_ACT_NONE = 0,
+	RTW89_FW_MCC_OLD_GROUP_ACT_REPLACE = 1,
+};
+
 struct rtw89_fw_mcc_start_req {
 	u32 group: 2;
 	u32 btc_in_group: 1;
@@ -3618,7 +3623,9 @@ struct rtw89_fw_h2c_rf_get_mccch {
 #define RTW89_FW_BACKTRACE_MAX_SIZE 512 /* 8 * 64 (entries) */
 #define RTW89_FW_BACKTRACE_KEY 0xBACEBACE
 
-int rtw89_fw_check_rdy(struct rtw89_dev *rtwdev);
+#define FWDL_WAIT_CNT 400000
+
+int rtw89_fw_check_rdy(struct rtw89_dev *rtwdev, enum rtw89_fwdl_check_type type);
 int rtw89_fw_recognize(struct rtw89_dev *rtwdev);
 int rtw89_fw_recognize_elements(struct rtw89_dev *rtwdev);
 const struct firmware *
@@ -3626,7 +3633,8 @@ rtw89_early_fw_feature_recognize(struct device *device,
 				 const struct rtw89_chip_info *chip,
 				 struct rtw89_fw_info *early_fw,
 				 int *used_fw_format);
-int rtw89_fw_download(struct rtw89_dev *rtwdev, enum rtw89_fw_type type);
+int rtw89_fw_download(struct rtw89_dev *rtwdev, enum rtw89_fw_type type,
+		      bool include_bb);
 void rtw89_load_firmware_work(struct work_struct *work);
 void rtw89_unload_firmware(struct rtw89_dev *rtwdev);
 int rtw89_wait_firmware_completion(struct rtw89_dev *rtwdev);
@@ -3755,7 +3763,7 @@ int rtw89_fw_h2c_reset_mcc_group(struct rtw89_dev *rtwdev, u8 group);
 int rtw89_fw_h2c_mcc_req_tsf(struct rtw89_dev *rtwdev,
 			     const struct rtw89_fw_mcc_tsf_req *req,
 			     struct rtw89_mac_mcc_tsf_rpt *rpt);
-int rtw89_fw_h2c_mcc_macid_bitamp(struct rtw89_dev *rtwdev, u8 group, u8 macid,
+int rtw89_fw_h2c_mcc_macid_bitmap(struct rtw89_dev *rtwdev, u8 group, u8 macid,
 				  u8 *bitmap);
 int rtw89_fw_h2c_mcc_sync(struct rtw89_dev *rtwdev, u8 group, u8 source,
 			  u8 target, u8 offset);
