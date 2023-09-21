@@ -268,7 +268,7 @@ static void rtllib_tx_query_agg_cap(struct rtllib_device *ieee,
 {
 	struct rt_hi_throughput *ht_info = ieee->ht_info;
 	struct tx_ts_record *pTxTs = NULL;
-	struct rtllib_hdr_1addr *hdr = (struct rtllib_hdr_1addr *)skb->data;
+	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
 
 	if (rtllib_act_scanning(ieee, false))
 		return;
@@ -544,17 +544,17 @@ static int rtllib_xmit_inter(struct sk_buff *skb, struct net_device *dev)
 	struct rtllib_device *ieee = (struct rtllib_device *)
 				     netdev_priv_rsl(dev);
 	struct rtllib_txb *txb = NULL;
-	struct rtllib_hdr_3addrqos *frag_hdr;
+	struct ieee80211_qos_hdr *frag_hdr;
 	int i, bytes_per_frag, nr_frags, bytes_last_frag, frag_size;
 	unsigned long flags;
 	struct net_device_stats *stats = &ieee->stats;
 	int ether_type = 0, encrypt;
 	int bytes, fc, qos_ctl = 0, hdr_len;
 	struct sk_buff *skb_frag;
-	struct rtllib_hdr_3addrqos header = { /* Ensure zero initialized */
+	struct ieee80211_qos_hdr header = { /* Ensure zero initialized */
 		.duration_id = 0,
-		.seq_ctl = 0,
-		.qos_ctl = 0
+		.seq_ctrl = 0,
+		.qos_ctrl = 0
 	};
 	int qos_activated = ieee->current_network.qos_data.active;
 	u8 dest[ETH_ALEN];
@@ -655,17 +655,17 @@ static int rtllib_xmit_inter(struct sk_buff *skb, struct net_device *dev)
 		bytes = skb->len + SNAP_SIZE + sizeof(u16);
 
 		if (encrypt)
-			fc = RTLLIB_FTYPE_DATA | RTLLIB_FCTL_WEP;
+			fc = RTLLIB_FTYPE_DATA | IEEE80211_FCTL_PROTECTED;
 		else
 			fc = RTLLIB_FTYPE_DATA;
 
 		if (qos_activated)
-			fc |= RTLLIB_STYPE_QOS_DATA;
+			fc |= IEEE80211_STYPE_QOS_DATA;
 		else
-			fc |= RTLLIB_STYPE_DATA;
+			fc |= IEEE80211_STYPE_DATA;
 
 		if (ieee->iw_mode == IW_MODE_INFRA) {
-			fc |= RTLLIB_FCTL_TODS;
+			fc |= IEEE80211_FCTL_TODS;
 			/* To DS: Addr1 = BSSID, Addr2 = SA,
 			 * Addr3 = DA
 			 */
@@ -689,7 +689,7 @@ static int rtllib_xmit_inter(struct sk_buff *skb, struct net_device *dev)
 
 		bIsMulticast = is_multicast_ether_addr(header.addr1);
 
-		header.frame_ctl = cpu_to_le16(fc);
+		header.frame_control = cpu_to_le16(fc);
 
 		/* Determine fragmentation size based on destination (multicast
 		 * and broadcast are not fragmented)
@@ -716,7 +716,7 @@ static int rtllib_xmit_inter(struct sk_buff *skb, struct net_device *dev)
 			}
 
 			qos_ctl |= skb->priority;
-			header.qos_ctl = cpu_to_le16(qos_ctl & RTLLIB_QOS_TID);
+			header.qos_ctrl = cpu_to_le16(qos_ctl & RTLLIB_QOS_TID);
 
 		} else {
 			hdr_len = RTLLIB_3ADDR_LEN;
@@ -798,8 +798,8 @@ static int rtllib_xmit_inter(struct sk_buff *skb, struct net_device *dev)
 			 * MOREFRAGS bit to the frame control
 			 */
 			if (i != nr_frags - 1) {
-				frag_hdr->frame_ctl = cpu_to_le16(fc |
-								  RTLLIB_FCTL_MOREFRAGS);
+				frag_hdr->frame_control = cpu_to_le16(fc |
+								  IEEE80211_FCTL_MOREFRAGS);
 				bytes = bytes_per_frag;
 
 			} else {
@@ -807,13 +807,13 @@ static int rtllib_xmit_inter(struct sk_buff *skb, struct net_device *dev)
 				bytes = bytes_last_frag;
 			}
 			if ((qos_activated) && (!bIsMulticast)) {
-				frag_hdr->seq_ctl =
+				frag_hdr->seq_ctrl =
 					 cpu_to_le16(rtllib_query_seqnum(ieee, skb_frag,
 									 header.addr1));
-				frag_hdr->seq_ctl =
-					 cpu_to_le16(le16_to_cpu(frag_hdr->seq_ctl) << 4 | i);
+				frag_hdr->seq_ctrl =
+					 cpu_to_le16(le16_to_cpu(frag_hdr->seq_ctrl) << 4 | i);
 			} else {
-				frag_hdr->seq_ctl =
+				frag_hdr->seq_ctrl =
 					 cpu_to_le16(ieee->seq_ctrl[0] << 4 | i);
 			}
 			/* Put a SNAP header on the first fragment */
@@ -853,7 +853,7 @@ static int rtllib_xmit_inter(struct sk_buff *skb, struct net_device *dev)
 				ieee->seq_ctrl[0]++;
 		}
 	} else {
-		if (unlikely(skb->len < sizeof(struct rtllib_hdr_3addr))) {
+		if (unlikely(skb->len < sizeof(struct ieee80211_hdr_3addr))) {
 			netdev_warn(ieee->dev, "skb too small (%d).\n",
 				    skb->len);
 			goto success;
