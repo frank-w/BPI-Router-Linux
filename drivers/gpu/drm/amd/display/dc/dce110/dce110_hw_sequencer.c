@@ -1178,12 +1178,15 @@ void dce110_disable_stream(struct pipe_ctx *pipe_ctx)
 		dto_params.otg_inst = tg->inst;
 		dto_params.timing = &pipe_ctx->stream->timing;
 		dp_hpo_inst = pipe_ctx->stream_res.hpo_dp_stream_enc->inst;
-		dccg->funcs->set_dtbclk_dto(dccg, &dto_params);
-		dccg->funcs->disable_symclk32_se(dccg, dp_hpo_inst);
-		dccg->funcs->set_dpstreamclk(dccg, REFCLK, tg->inst, dp_hpo_inst);
-	} else if (pipe_ctx->stream->signal == SIGNAL_TYPE_DISPLAY_PORT_MST && dccg->funcs->disable_symclk_se)
+		if (dccg) {
+			dccg->funcs->set_dtbclk_dto(dccg, &dto_params);
+			dccg->funcs->disable_symclk32_se(dccg, dp_hpo_inst);
+			dccg->funcs->set_dpstreamclk(dccg, REFCLK, tg->inst, dp_hpo_inst);
+		}
+	} else if (dccg && dccg->funcs->disable_symclk_se) {
 		dccg->funcs->disable_symclk_se(dccg, stream_enc->stream_enc_inst,
 				link_enc->transmitter - TRANSMITTER_UNIPHY_A);
+	}
 
 	if (dc->link_srv->dp_is_128b_132b_signal(pipe_ctx)) {
 		/* TODO: This looks like a bug to me as we are disabling HPO IO when
@@ -1223,7 +1226,7 @@ void dce110_blank_stream(struct pipe_ctx *pipe_ctx)
 	struct dce_hwseq *hws = link->dc->hwseq;
 
 	if (link->local_sink && link->local_sink->sink_signal == SIGNAL_TYPE_EDP) {
-		if (!stream->skip_edp_power_down)
+		if (!link->skip_implict_edp_power_control)
 			hws->funcs.edp_backlight_control(link, false);
 		link->dc->hwss.set_abm_immediate_disable(pipe_ctx);
 	}
@@ -1999,9 +2002,6 @@ static bool should_enable_fbc(struct dc *dc,
 
 			pipe_ctx = &res_ctx->pipe_ctx[i];
 
-			if (!pipe_ctx)
-				continue;
-
 			/* fbc not applicable on underlay pipe */
 			if (pipe_ctx->pipe_idx != underlay_idx) {
 				*pipe_idx = i;
@@ -2658,11 +2658,11 @@ void dce110_prepare_bandwidth(
 	struct clk_mgr *dccg = dc->clk_mgr;
 
 	dce110_set_safe_displaymarks(&context->res_ctx, dc->res_pool);
-
-	dccg->funcs->update_clocks(
-			dccg,
-			context,
-			false);
+	if (dccg)
+		dccg->funcs->update_clocks(
+				dccg,
+				context,
+				false);
 }
 
 void dce110_optimize_bandwidth(
@@ -2673,10 +2673,11 @@ void dce110_optimize_bandwidth(
 
 	dce110_set_displaymarks(dc, context);
 
-	dccg->funcs->update_clocks(
-			dccg,
-			context,
-			true);
+	if (dccg)
+		dccg->funcs->update_clocks(
+				dccg,
+				context,
+				true);
 }
 
 static void dce110_program_front_end_for_pipe(

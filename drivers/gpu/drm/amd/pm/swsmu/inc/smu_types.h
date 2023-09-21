@@ -247,7 +247,12 @@
 	__SMU_DUMMY_MAP(Mode2Reset),	\
 	__SMU_DUMMY_MAP(RequestI2cTransaction), \
 	__SMU_DUMMY_MAP(GetMetricsTable), \
-	__SMU_DUMMY_MAP(DALNotPresent),
+	__SMU_DUMMY_MAP(DALNotPresent), \
+	__SMU_DUMMY_MAP(ClearMcaOnRead),	\
+	__SMU_DUMMY_MAP(QueryValidMcaCount),	\
+	__SMU_DUMMY_MAP(QueryValidMcaCeCount),	\
+	__SMU_DUMMY_MAP(McaBankDumpDW),		\
+	__SMU_DUMMY_MAP(McaBankCeDumpDW),
 
 #undef __SMU_DUMMY_MAP
 #define __SMU_DUMMY_MAP(type)	SMU_MSG_##type
@@ -280,6 +285,11 @@ enum smu_clk_type {
 	SMU_OD_VDDC_CURVE,
 	SMU_OD_RANGE,
 	SMU_OD_VDDGFX_OFFSET,
+	SMU_OD_FAN_CURVE,
+	SMU_OD_ACOUSTIC_LIMIT,
+	SMU_OD_ACOUSTIC_TARGET,
+	SMU_OD_FAN_TARGET_TEMPERATURE,
+	SMU_OD_FAN_MINIMUM_PWM,
 	SMU_CLK_COUNT,
 };
 

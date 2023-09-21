@@ -38,6 +38,7 @@
 #include "mcif_wb.h"
 #include "panel_cntl.h"
 #include "dmub/inc/dmub_cmd.h"
+#include "pg_cntl.h"
 
 #define MAX_CLOCK_SOURCES 7
 #define MAX_SVP_PHANTOM_STREAMS 2
@@ -131,6 +132,16 @@ struct resource_funcs {
 			struct dc_state *new_ctx,
 			const struct resource_pool *pool,
 			const struct pipe_ctx *opp_head_pipe);
+
+	struct pipe_ctx *(*acquire_free_pipe_as_secondary_opp_head)(
+			const struct dc_state *cur_ctx,
+			struct dc_state *new_ctx,
+			const struct resource_pool *pool,
+			const struct pipe_ctx *otg_master);
+
+	void (*release_pipe)(struct dc_state *context,
+			struct pipe_ctx *pipe,
+			const struct resource_pool *pool);
 
 	enum dc_status (*validate_plane)(
 			const struct dc_plane_state *plane_state,
@@ -275,6 +286,7 @@ struct resource_pool {
 	struct audio_support audio_support;
 
 	struct dccg *dccg;
+	struct pg_cntl *pg_cntl;
 	struct irq_service *irqs;
 
 	struct abm *abm;
@@ -409,6 +421,8 @@ struct pipe_ctx {
 	union pipe_update_flags update_flags;
 	struct tg_color visual_confirm_color;
 	bool has_vactive_margin;
+	/* subvp_index: only valid if the pipe is a SUBVP_MAIN*/
+	uint8_t subvp_index;
 };
 
 /* Data used for dynamic link encoder assignment.

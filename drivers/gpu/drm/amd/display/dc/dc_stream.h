@@ -188,7 +188,6 @@ struct dc_stream_state {
 	struct link_encoder *link_enc;
 	struct dc_stream_debug_options debug;
 	struct dc_panel_patch sink_patches;
-	union display_content_support content_support;
 	struct dc_crtc_timing timing;
 	struct dc_crtc_timing_adjust adjust;
 	struct dc_info_packet vrr_infopacket;
@@ -212,6 +211,7 @@ struct dc_stream_state {
 	struct dc_csc_transform csc_color_matrix;
 
 	enum dc_color_space output_color_space;
+	enum display_content_type content_type;
 	enum dc_dither_option dither_option;
 
 	enum view_3d_format view_format;
@@ -302,7 +302,6 @@ struct dc_stream_state {
 	bool vblank_synchronized;
 	bool fpo_in_use;
 	struct mall_stream_config mall_stream_config;
-	bool skip_edp_power_down;
 };
 
 #define ABM_LEVEL_IMMEDIATE_DISABLE 255

@@ -32,6 +32,7 @@
 #include "../basics/conversion.h"
 #include "cursor_reg_cache.h"
 #include "resource.h"
+#include "clk_mgr.h"
 
 #define CTX dc_dmub_srv->ctx
 #define DC_LOGGER CTX->logger
@@ -552,7 +553,8 @@ static void populate_subvp_cmd_vblank_pipe_info(struct dc *dc,
 	pipe_data->pipe_config.vblank_data.vblank_end =
 			vblank_pipe->stream->timing.v_total - vblank_pipe->stream->timing.v_front_porch - vblank_pipe->stream->timing.v_addressable;
 
-	if (vblank_pipe->stream->ignore_msa_timing_param)
+	if (vblank_pipe->stream->ignore_msa_timing_param &&
+		(vblank_pipe->stream->allow_freesync || vblank_pipe->stream->vrr_active_variable || vblank_pipe->stream->vrr_active_fixed))
 		populate_subvp_cmd_drr_info(dc, pipe, vblank_pipe, pipe_data);
 }
 
@@ -645,7 +647,8 @@ static void populate_subvp_cmd_pipe_info(struct dc *dc,
 			main_timing->v_total - main_timing->v_front_porch - main_timing->v_addressable;
 	pipe_data->pipe_config.subvp_data.mall_region_lines = phantom_timing->v_addressable;
 	pipe_data->pipe_config.subvp_data.main_pipe_index = subvp_pipe->stream_res.tg->inst;
-	pipe_data->pipe_config.subvp_data.is_drr = subvp_pipe->stream->ignore_msa_timing_param;
+	pipe_data->pipe_config.subvp_data.is_drr = subvp_pipe->stream->ignore_msa_timing_param &&
+		(subvp_pipe->stream->allow_freesync || subvp_pipe->stream->vrr_active_variable || subvp_pipe->stream->vrr_active_fixed);
 
 	/* Calculate the scaling factor from the src and dst height.
 	 * e.g. If 3840x2160 being downscaled to 1920x1080, the scaling factor is 1/2.
@@ -1055,3 +1058,73 @@ void dc_dmub_srv_enable_dpia_trace(const struct dc *dc)
 
 	DC_LOG_DEBUG("Enabled DPIA trace\n");
 }
+
+void dc_dmub_srv_subvp_save_surf_addr(const struct dc_dmub_srv *dc_dmub_srv, const struct dc_plane_address *addr, uint8_t subvp_index)
+{
+	dmub_srv_subvp_save_surf_addr(dc_dmub_srv->dmub, addr, subvp_index);
+}
+
+bool dc_dmub_srv_is_hw_pwr_up(struct dc_dmub_srv *dc_dmub_srv, bool wait)
+{
+	struct dc_context *dc_ctx = dc_dmub_srv->ctx;
+	enum dmub_status status;
+
+	if (dc_dmub_srv->ctx->dc->debug.dmcub_emulation)
+		return true;
+
+	if (wait) {
+		status = dmub_srv_wait_for_hw_pwr_up(dc_dmub_srv->dmub, 500000);
+		if (status != DMUB_STATUS_OK) {
+			DC_ERROR("Error querying DMUB hw power up status: error=%d\n", status);
+			return false;
+		}
+	} else
+		return dmub_srv_is_hw_pwr_up(dc_dmub_srv->dmub);
+
+	return true;
+}
+
+void dc_dmub_srv_notify_idle(const struct dc *dc, bool allow_idle)
+{
+	union dmub_rb_cmd cmd = {0};
+
+	if (dc->debug.dmcub_emulation)
+		return;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.idle_opt_notify_idle.header.type = DMUB_CMD__IDLE_OPT;
+	cmd.idle_opt_notify_idle.header.sub_type = DMUB_CMD__IDLE_OPT_DCN_NOTIFY_IDLE;
+	cmd.idle_opt_notify_idle.header.payload_bytes =
+		sizeof(cmd.idle_opt_notify_idle) -
+		sizeof(cmd.idle_opt_notify_idle.header);
+
+	cmd.idle_opt_notify_idle.cntl_data.driver_idle = allow_idle;
+
+	dm_execute_dmub_cmd(dc->ctx, &cmd, DM_DMUB_WAIT_TYPE_WAIT);
+
+	if (allow_idle)
+		udelay(500);
+}
+
+void dc_dmub_srv_exit_low_power_state(const struct dc *dc)
+{
+	if (dc->debug.dmcub_emulation)
+		return;
+
+	if (!dc->idle_optimizations_allowed)
+		return;
+
+	// Tell PMFW to exit low power state
+	if (dc->clk_mgr->funcs->exit_low_power_state)
+		dc->clk_mgr->funcs->exit_low_power_state(dc->clk_mgr);
+
+	// Wait for dmcub to load up
+	dc_dmub_srv_is_hw_pwr_up(dc->ctx->dmub_srv, true);
+
+	// Notify dmcub disallow idle
+	dc_dmub_srv_notify_idle(dc, false);
+
+	// Confirm dmu is powered up
+	dc_dmub_srv_is_hw_pwr_up(dc->ctx->dmub_srv, true);
+}
+

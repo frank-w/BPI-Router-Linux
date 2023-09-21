@@ -45,6 +45,7 @@ struct dpp;
 struct dce_hwseq;
 struct link_resource;
 struct dc_dmub_cmd;
+struct pg_block_update;
 
 struct subvp_pipe_control_lock_fast_params {
 	struct dc *dc;
@@ -134,6 +135,12 @@ struct set_ocsc_default_params {
 	enum mpc_output_csc_mode ocsc_mode;
 };
 
+struct subvp_save_surf_addr {
+	struct dc_dmub_srv *dc_dmub_srv;
+	const struct dc_plane_address *addr;
+	uint8_t subvp_index;
+};
+
 union block_sequence_params {
 	struct update_plane_addr_params update_plane_addr_params;
 	struct subvp_pipe_control_lock_fast_params subvp_pipe_control_lock_fast_params;
@@ -151,6 +158,7 @@ union block_sequence_params {
 	struct power_on_mpc_mem_pwr_params power_on_mpc_mem_pwr_params;
 	struct set_output_csc_params set_output_csc_params;
 	struct set_ocsc_default_params set_ocsc_default_params;
+	struct subvp_save_surf_addr subvp_save_surf_addr;
 };
 
 enum block_sequence_func {
@@ -170,6 +178,7 @@ enum block_sequence_func {
 	MPC_POWER_ON_MPC_MEM_PWR,
 	MPC_SET_OUTPUT_CSC,
 	MPC_SET_OCSC_DEFAULT,
+	DMUB_SUBVP_SAVE_SURF_ADDR,
 };
 
 struct block_sequence {
@@ -388,6 +397,11 @@ struct hw_sequencer_funcs {
 	void (*z10_restore)(const struct dc *dc);
 	void (*z10_save_init)(struct dc *dc);
 
+	void (*blank_phantom)(struct dc *dc,
+			struct timing_generator *tg,
+			int width,
+			int height);
+
 	void (*update_visual_confirm_color)(struct dc *dc,
 			struct pipe_ctx *pipe_ctx,
 			int mpcc_id);
@@ -396,6 +410,18 @@ struct hw_sequencer_funcs {
 			struct dc_state *context,
 			struct pipe_ctx *phantom_pipe);
 	void (*apply_update_flags_for_phantom)(struct pipe_ctx *phantom_pipe);
+	bool (*is_pipe_topology_transition_seamless)(struct dc *dc,
+			const struct dc_state *cur_ctx,
+			const struct dc_state *new_ctx);
+
+	void (*calc_blocks_to_gate)(struct dc *dc, struct dc_state *context,
+		struct pg_block_update *update_state);
+	void (*calc_blocks_to_ungate)(struct dc *dc, struct dc_state *context,
+		struct pg_block_update *update_state);
+	void (*block_power_control)(struct dc *dc,
+		struct pg_block_update *update_state, bool power_on);
+	void (*root_clock_control)(struct dc *dc,
+		struct pg_block_update *update_state, bool power_on);
 
 	void (*commit_subvp_config)(struct dc *dc, struct dc_state *context);
 	void (*enable_phantom_streams)(struct dc *dc, struct dc_state *context);
@@ -470,5 +496,7 @@ void hwss_power_on_mpc_mem_pwr(union block_sequence_params *params);
 void hwss_set_output_csc(union block_sequence_params *params);
 
 void hwss_set_ocsc_default(union block_sequence_params *params);
+
+void hwss_subvp_save_surf_addr(union block_sequence_params *params);
 
 #endif /* __DC_HW_SEQUENCER_H__ */

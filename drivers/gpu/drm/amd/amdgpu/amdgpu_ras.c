@@ -201,8 +201,8 @@ static ssize_t amdgpu_ras_debugfs_read(struct file *f, char __user *buf,
 		return -EINVAL;
 
 	/* Hardware counter will be reset automatically after the query on Vega20 and Arcturus */
-	if (obj->adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 2) &&
-	    obj->adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 4)) {
+	if (amdgpu_ip_version(obj->adev, MP0_HWIP, 0) != IP_VERSION(11, 0, 2) &&
+	    amdgpu_ip_version(obj->adev, MP0_HWIP, 0) != IP_VERSION(11, 0, 4)) {
 		if (amdgpu_ras_reset_error_status(obj->adev, info.head.block))
 			dev_warn(obj->adev->dev, "Failed to reset error counter and error status");
 	}
@@ -611,8 +611,8 @@ static ssize_t amdgpu_ras_sysfs_read(struct device *dev,
 	if (amdgpu_ras_query_error_status(obj->adev, &info))
 		return -EINVAL;
 
-	if (obj->adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 2) &&
-	    obj->adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 4)) {
+	if (amdgpu_ip_version(obj->adev, MP0_HWIP, 0) != IP_VERSION(11, 0, 2) &&
+	    amdgpu_ip_version(obj->adev, MP0_HWIP, 0) != IP_VERSION(11, 0, 4)) {
 		if (amdgpu_ras_reset_error_status(obj->adev, info.head.block))
 			dev_warn(obj->adev->dev, "Failed to reset error counter and error status");
 	}
@@ -769,9 +769,10 @@ int amdgpu_ras_feature_enable(struct amdgpu_device *adev,
 	if (!con)
 		return -EINVAL;
 
-	/* Do not enable ras feature if it is not allowed */
-	if (enable &&
-	    head->block != AMDGPU_RAS_BLOCK__GFX &&
+	/* For non-gfx ip, do not enable ras feature if it is not allowed */
+	/* For gfx ip, regardless of feature support status, */
+	/* Force issue enable or disable ras feature commands */
+	if (head->block != AMDGPU_RAS_BLOCK__GFX &&
 	    !amdgpu_ras_is_feature_allowed(adev, head))
 		return 0;
 
@@ -801,6 +802,7 @@ int amdgpu_ras_feature_enable(struct amdgpu_device *adev,
 				enable ? "enable":"disable",
 				get_ras_block_str(head),
 				amdgpu_ras_is_poison_mode_supported(adev), ret);
+			kfree(info);
 			return ret;
 		}
 
@@ -1100,14 +1102,14 @@ int amdgpu_ras_reset_error_status(struct amdgpu_device *adev,
 {
 	struct amdgpu_ras_block_object *block_obj = amdgpu_ras_get_ras_block(adev, block, 0);
 
-	if (!amdgpu_ras_is_supported(adev, block))
-		return -EINVAL;
-
-	if (!block_obj || !block_obj->hw_ops)   {
+	if (!block_obj || !block_obj->hw_ops) {
 		dev_dbg_once(adev->dev, "%s doesn't config RAS function\n",
 			     ras_block_str(block));
-		return -EINVAL;
+		return 0;
 	}
+
+	if (!amdgpu_ras_is_supported(adev, block))
+		return 0;
 
 	if (block_obj->hw_ops->reset_ras_error_count)
 		block_obj->hw_ops->reset_ras_error_count(adev);
@@ -1207,8 +1209,8 @@ static int amdgpu_ras_query_error_count_helper(struct amdgpu_device *adev,
 
 	/* some hardware/IP supports read to clear
 	 * no need to explictly reset the err status after the query call */
-	if (adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 2) &&
-	    adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 4)) {
+	if (amdgpu_ip_version(adev, MP0_HWIP, 0) != IP_VERSION(11, 0, 2) &&
+	    amdgpu_ip_version(adev, MP0_HWIP, 0) != IP_VERSION(11, 0, 4)) {
 		if (amdgpu_ras_reset_error_status(adev, query_info->head.block))
 			dev_warn(adev->dev,
 				 "Failed to reset error counter and error status\n");
@@ -1569,6 +1571,8 @@ void amdgpu_ras_debugfs_create_all(struct amdgpu_device *adev)
 			amdgpu_ras_debugfs_create(adev, &fs_info, dir);
 		}
 	}
+
+	amdgpu_mca_smu_debugfs_init(adev, dir);
 }
 
 /* debugfs end */
@@ -1904,14 +1908,18 @@ static void amdgpu_ras_log_on_err_counter(struct amdgpu_device *adev)
 		 * should be removed until smu fix handle ecc_info table.
 		 */
 		if ((info.head.block == AMDGPU_RAS_BLOCK__UMC) &&
-			(adev->ip_versions[MP1_HWIP][0] == IP_VERSION(13, 0, 2)))
+		    (amdgpu_ip_version(adev, MP1_HWIP, 0) ==
+		     IP_VERSION(13, 0, 2)))
 			continue;
 
 		amdgpu_ras_query_error_status(adev, &info);
 
-		if (adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 2) &&
-		    adev->ip_versions[MP0_HWIP][0] != IP_VERSION(11, 0, 4) &&
-		    adev->ip_versions[MP0_HWIP][0] != IP_VERSION(13, 0, 0)) {
+		if (amdgpu_ip_version(adev, MP0_HWIP, 0) !=
+			    IP_VERSION(11, 0, 2) &&
+		    amdgpu_ip_version(adev, MP0_HWIP, 0) !=
+			    IP_VERSION(11, 0, 4) &&
+		    amdgpu_ip_version(adev, MP0_HWIP, 0) !=
+			    IP_VERSION(13, 0, 0)) {
 			if (amdgpu_ras_reset_error_status(adev, info.head.block))
 				dev_warn(adev->dev, "Failed to reset error counter and error status");
 		}
@@ -2399,7 +2407,7 @@ static int amdgpu_ras_recovery_fini(struct amdgpu_device *adev)
 static bool amdgpu_ras_asic_supported(struct amdgpu_device *adev)
 {
 	if (amdgpu_sriov_vf(adev)) {
-		switch (adev->ip_versions[MP0_HWIP][0]) {
+		switch (amdgpu_ip_version(adev, MP0_HWIP, 0)) {
 		case IP_VERSION(13, 0, 2):
 		case IP_VERSION(13, 0, 6):
 			return true;
@@ -2409,7 +2417,7 @@ static bool amdgpu_ras_asic_supported(struct amdgpu_device *adev)
 	}
 
 	if (adev->asic_type == CHIP_IP_DISCOVERY) {
-		switch (adev->ip_versions[MP0_HWIP][0]) {
+		switch (amdgpu_ip_version(adev, MP0_HWIP, 0)) {
 		case IP_VERSION(13, 0, 0):
 		case IP_VERSION(13, 0, 6):
 		case IP_VERSION(13, 0, 10):
@@ -2483,8 +2491,10 @@ static void amdgpu_ras_check_supported(struct amdgpu_device *adev)
 			/* VCN/JPEG RAS can be supported on both bare metal and
 			 * SRIOV environment
 			 */
-			if (adev->ip_versions[VCN_HWIP][0] == IP_VERSION(2, 6, 0) ||
-			    adev->ip_versions[VCN_HWIP][0] == IP_VERSION(4, 0, 0))
+			if (amdgpu_ip_version(adev, VCN_HWIP, 0) ==
+				    IP_VERSION(2, 6, 0) ||
+			    amdgpu_ip_version(adev, VCN_HWIP, 0) ==
+				    IP_VERSION(4, 0, 0))
 				adev->ras_hw_enabled |= (1 << AMDGPU_RAS_BLOCK__VCN |
 							1 << AMDGPU_RAS_BLOCK__JPEG);
 			else
@@ -2518,7 +2528,7 @@ static void amdgpu_ras_check_supported(struct amdgpu_device *adev)
 	 * Disable ras feature for aqua vanjaram
 	 * by default on apu platform.
 	 */
-	if (adev->ip_versions[MP0_HWIP][0] == IP_VERSION(13, 0, 6) &&
+	if (amdgpu_ip_version(adev, MP0_HWIP, 0) == IP_VERSION(13, 0, 6) &&
 	    adev->gmc.is_app_apu)
 		adev->ras_enabled = amdgpu_ras_enable != 1 ? 0 :
 			adev->ras_hw_enabled & amdgpu_ras_mask;
@@ -2633,7 +2643,7 @@ int amdgpu_ras_init(struct amdgpu_device *adev)
 	/* initialize nbio ras function ahead of any other
 	 * ras functions so hardware fatal error interrupt
 	 * can be enabled as early as possible */
-	switch (adev->ip_versions[NBIO_HWIP][0]) {
+	switch (amdgpu_ip_version(adev, NBIO_HWIP, 0)) {
 	case IP_VERSION(7, 4, 0):
 	case IP_VERSION(7, 4, 1):
 	case IP_VERSION(7, 4, 4):

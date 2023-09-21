@@ -200,6 +200,44 @@ out:
 	return r;
 }
 
+static enum amd_ip_block_type
+	amdgpu_ip_get_block_type(struct amdgpu_device *adev, uint32_t ip)
+{
+	enum amd_ip_block_type type;
+
+	switch (ip) {
+	case AMDGPU_HW_IP_GFX:
+		type = AMD_IP_BLOCK_TYPE_GFX;
+		break;
+	case AMDGPU_HW_IP_COMPUTE:
+		type = AMD_IP_BLOCK_TYPE_GFX;
+		break;
+	case AMDGPU_HW_IP_DMA:
+		type = AMD_IP_BLOCK_TYPE_SDMA;
+		break;
+	case AMDGPU_HW_IP_UVD:
+	case AMDGPU_HW_IP_UVD_ENC:
+		type = AMD_IP_BLOCK_TYPE_UVD;
+		break;
+	case AMDGPU_HW_IP_VCE:
+		type = AMD_IP_BLOCK_TYPE_VCE;
+		break;
+	case AMDGPU_HW_IP_VCN_DEC:
+	case AMDGPU_HW_IP_VCN_ENC:
+		type = AMD_IP_BLOCK_TYPE_VCN;
+		break;
+	case AMDGPU_HW_IP_VCN_JPEG:
+		type = (amdgpu_device_ip_get_ip_block(adev, AMD_IP_BLOCK_TYPE_JPEG)) ?
+				   AMD_IP_BLOCK_TYPE_JPEG : AMD_IP_BLOCK_TYPE_VCN;
+		break;
+	default:
+		type = AMD_IP_BLOCK_TYPE_NUM;
+		break;
+	}
+
+	return type;
+}
+
 static int amdgpu_firmware_info(struct drm_amdgpu_info_firmware *fw_info,
 				struct drm_amdgpu_query_fw *query_fw,
 				struct amdgpu_device *adev)
@@ -352,6 +390,10 @@ static int amdgpu_firmware_info(struct drm_amdgpu_info_firmware *fw_info,
 		fw_info->ver = adev->gfx.imu_fw_version;
 		fw_info->feature = 0;
 		break;
+	case AMDGPU_INFO_FW_VPE:
+		fw_info->ver = adev->vpe.fw_version;
+		fw_info->feature = adev->vpe.feature_version;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -469,6 +511,13 @@ static int amdgpu_hw_ip_info(struct amdgpu_device *adev,
 		ib_start_alignment = 16;
 		ib_size_alignment = 16;
 		break;
+	case AMDGPU_HW_IP_VPE:
+		type = AMD_IP_BLOCK_TYPE_VPE;
+		if (adev->vpe.ring.sched.ready)
+			++num_rings;
+		ib_start_alignment = 256;
+		ib_size_alignment = 4;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -490,18 +539,26 @@ static int amdgpu_hw_ip_info(struct amdgpu_device *adev,
 	if (adev->asic_type >= CHIP_VEGA10) {
 		switch (type) {
 		case AMD_IP_BLOCK_TYPE_GFX:
-			result->ip_discovery_version = adev->ip_versions[GC_HWIP][0];
+			result->ip_discovery_version =
+				IP_VERSION_MAJ_MIN_REV(amdgpu_ip_version(adev, GC_HWIP, 0));
 			break;
 		case AMD_IP_BLOCK_TYPE_SDMA:
-			result->ip_discovery_version = adev->ip_versions[SDMA0_HWIP][0];
+			result->ip_discovery_version =
+				IP_VERSION_MAJ_MIN_REV(amdgpu_ip_version(adev, SDMA0_HWIP, 0));
 			break;
 		case AMD_IP_BLOCK_TYPE_UVD:
 		case AMD_IP_BLOCK_TYPE_VCN:
 		case AMD_IP_BLOCK_TYPE_JPEG:
-			result->ip_discovery_version = adev->ip_versions[UVD_HWIP][0];
+			result->ip_discovery_version =
+				IP_VERSION_MAJ_MIN_REV(amdgpu_ip_version(adev, UVD_HWIP, 0));
 			break;
 		case AMD_IP_BLOCK_TYPE_VCE:
-			result->ip_discovery_version = adev->ip_versions[VCE_HWIP][0];
+			result->ip_discovery_version =
+				IP_VERSION_MAJ_MIN_REV(amdgpu_ip_version(adev, VCE_HWIP, 0));
+			break;
+		case AMD_IP_BLOCK_TYPE_VPE:
+			result->ip_discovery_version =
+				IP_VERSION_MAJ_MIN_REV(amdgpu_ip_version(adev, VPE_HWIP, 0));
 			break;
 		default:
 			result->ip_discovery_version = 0;
@@ -581,44 +638,38 @@ int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 	}
 	case AMDGPU_INFO_HW_IP_COUNT: {
 		enum amd_ip_block_type type;
+		struct amdgpu_ip_block *ip_block = NULL;
 		uint32_t count = 0;
 
-		switch (info->query_hw_ip.type) {
-		case AMDGPU_HW_IP_GFX:
-			type = AMD_IP_BLOCK_TYPE_GFX;
-			break;
-		case AMDGPU_HW_IP_COMPUTE:
-			type = AMD_IP_BLOCK_TYPE_GFX;
-			break;
-		case AMDGPU_HW_IP_DMA:
-			type = AMD_IP_BLOCK_TYPE_SDMA;
-			break;
-		case AMDGPU_HW_IP_UVD:
-			type = AMD_IP_BLOCK_TYPE_UVD;
-			break;
-		case AMDGPU_HW_IP_VCE:
-			type = AMD_IP_BLOCK_TYPE_VCE;
-			break;
-		case AMDGPU_HW_IP_UVD_ENC:
-			type = AMD_IP_BLOCK_TYPE_UVD;
-			break;
-		case AMDGPU_HW_IP_VCN_DEC:
-		case AMDGPU_HW_IP_VCN_ENC:
-			type = AMD_IP_BLOCK_TYPE_VCN;
-			break;
-		case AMDGPU_HW_IP_VCN_JPEG:
-			type = (amdgpu_device_ip_get_ip_block(adev, AMD_IP_BLOCK_TYPE_JPEG)) ?
-				AMD_IP_BLOCK_TYPE_JPEG : AMD_IP_BLOCK_TYPE_VCN;
-			break;
-		default:
+		type = amdgpu_ip_get_block_type(adev, info->query_hw_ip.type);
+		ip_block = amdgpu_device_ip_get_ip_block(adev, type);
+		if (!ip_block || !ip_block->status.valid)
 			return -EINVAL;
-		}
 
-		for (i = 0; i < adev->num_ip_blocks; i++)
-			if (adev->ip_blocks[i].version->type == type &&
-			    adev->ip_blocks[i].status.valid &&
-			    count < AMDGPU_HW_IP_INSTANCE_MAX_COUNT)
-				count++;
+		switch (type) {
+		case AMD_IP_BLOCK_TYPE_GFX:
+		case AMD_IP_BLOCK_TYPE_VCE:
+			count = 1;
+			break;
+		case AMD_IP_BLOCK_TYPE_SDMA:
+			count = adev->sdma.num_instances;
+			break;
+		case AMD_IP_BLOCK_TYPE_JPEG:
+			count = adev->jpeg.num_jpeg_inst * adev->jpeg.num_jpeg_rings;
+			break;
+		case AMD_IP_BLOCK_TYPE_VCN:
+			count = adev->vcn.num_vcn_inst;
+			break;
+		case AMD_IP_BLOCK_TYPE_UVD:
+			count = adev->uvd.num_uvd_inst;
+			break;
+		/* For all other IP block types not listed in the switch statement
+		 * the ip status is valid here and the instance count is one.
+		 */
+		default:
+			count = 1;
+			break;
+		}
 
 		return copy_to_user(out, &count, min(size, 4u)) ? -EFAULT : 0;
 	}
@@ -1727,6 +1778,14 @@ static int amdgpu_debugfs_firmware_info_show(struct seq_file *m, void *unused)
 	if (ret)
 		return ret;
 	seq_printf(m, "MES feature version: %u, firmware version: 0x%08x\n",
+		   fw_info.feature, fw_info.ver);
+
+	/* VPE */
+	query_fw.fw_type = AMDGPU_INFO_FW_VPE;
+	ret = amdgpu_firmware_info(&fw_info, &query_fw, adev);
+	if (ret)
+		return ret;
+	seq_printf(m, "VPE feature version: %u, firmware version: 0x%08x\n",
 		   fw_info.feature, fw_info.ver);
 
 	seq_printf(m, "VBIOS version: %s\n", ctx->vbios_pn);

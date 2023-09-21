@@ -41,7 +41,8 @@ static const struct subvp_high_refresh_list subvp_high_refresh_list = {
 			.res = {
 				{.width = 3840, .height = 2160, },
 				{.width = 3440, .height = 1440, },
-				{.width = 2560, .height = 1440, }},
+				{.width = 2560, .height = 1440, },
+				{.width = 1920, .height = 1080, }},
 };
 
 struct _vcs_dpi_ip_params_st dcn3_2_ip = {
@@ -345,90 +346,6 @@ void dcn32_helper_populate_phantom_dlg_params(struct dc *dc,
 		}
 		pipe_idx++;
 	}
-}
-
-/**
- * dcn32_predict_pipe_split - Predict if pipe split will occur for a given DML pipe
- * @context: [in] New DC state to be programmed
- * @pipe_e2e: [in] DML pipe end to end context
- *
- * This function takes in a DML pipe (pipe_e2e) and predicts if pipe split is required (both
- * ODM and MPC). For pipe split, ODM combine is determined by the ODM mode, and MPC combine is
- * determined by DPPClk requirements
- *
- * This function follows the same policy as DML:
- * - Check for ODM combine requirements / policy first
- * - MPC combine is only chosen if there is no ODM combine requirements / policy in place, and
- *   MPC is required
- *
- * Return: Number of splits expected (1 for 2:1 split, 3 for 4:1 split, 0 for no splits).
- */
-uint8_t dcn32_predict_pipe_split(struct dc_state *context,
-				  display_e2e_pipe_params_st *pipe_e2e)
-{
-	double pscl_throughput;
-	double pscl_throughput_chroma;
-	double dpp_clk_single_dpp, clock;
-	double clk_frequency = 0.0;
-	double vco_speed = context->bw_ctx.dml.soc.dispclk_dppclk_vco_speed_mhz;
-	bool total_available_pipes_support = false;
-	uint32_t number_of_dpp = 0;
-	enum odm_combine_mode odm_mode = dm_odm_combine_mode_disabled;
-	double req_dispclk_per_surface = 0;
-	uint8_t num_splits = 0;
-
-	dc_assert_fp_enabled();
-
-	dml32_CalculateODMMode(context->bw_ctx.dml.ip.maximum_pixels_per_line_per_dsc_unit,
-			pipe_e2e->pipe.dest.hactive,
-			pipe_e2e->dout.output_format,
-			pipe_e2e->dout.output_type,
-			pipe_e2e->pipe.dest.odm_combine_policy,
-			context->bw_ctx.dml.soc.clock_limits[context->bw_ctx.dml.soc.num_states - 1].dispclk_mhz,
-			context->bw_ctx.dml.soc.clock_limits[context->bw_ctx.dml.soc.num_states - 1].dispclk_mhz,
-			pipe_e2e->dout.dsc_enable != 0,
-			0, /* TotalNumberOfActiveDPP can be 0 since we're predicting pipe split requirement */
-			context->bw_ctx.dml.ip.max_num_dpp,
-			pipe_e2e->pipe.dest.pixel_rate_mhz,
-			context->bw_ctx.dml.soc.dcn_downspread_percent,
-			context->bw_ctx.dml.ip.dispclk_ramp_margin_percent,
-			context->bw_ctx.dml.soc.dispclk_dppclk_vco_speed_mhz,
-			pipe_e2e->dout.dsc_slices,
-			/* Output */
-			&total_available_pipes_support,
-			&number_of_dpp,
-			&odm_mode,
-			&req_dispclk_per_surface);
-
-	dml32_CalculateSinglePipeDPPCLKAndSCLThroughput(pipe_e2e->pipe.scale_ratio_depth.hscl_ratio,
-			pipe_e2e->pipe.scale_ratio_depth.hscl_ratio_c,
-			pipe_e2e->pipe.scale_ratio_depth.vscl_ratio,
-			pipe_e2e->pipe.scale_ratio_depth.vscl_ratio_c,
-			context->bw_ctx.dml.ip.max_dchub_pscl_bw_pix_per_clk,
-			context->bw_ctx.dml.ip.max_pscl_lb_bw_pix_per_clk,
-			pipe_e2e->pipe.dest.pixel_rate_mhz,
-			pipe_e2e->pipe.src.source_format,
-			pipe_e2e->pipe.scale_taps.htaps,
-			pipe_e2e->pipe.scale_taps.htaps_c,
-			pipe_e2e->pipe.scale_taps.vtaps,
-			pipe_e2e->pipe.scale_taps.vtaps_c,
-			/* Output */
-			&pscl_throughput, &pscl_throughput_chroma,
-			&dpp_clk_single_dpp);
-
-	clock = dpp_clk_single_dpp * (1 + context->bw_ctx.dml.soc.dcn_downspread_percent / 100);
-
-	if (clock > 0)
-		clk_frequency = vco_speed * 4.0 / ((int)(vco_speed * 4.0) / clock);
-
-	if (odm_mode == dm_odm_combine_mode_2to1)
-		num_splits = 1;
-	else if (odm_mode == dm_odm_combine_mode_4to1)
-		num_splits = 3;
-	else if (clk_frequency > context->bw_ctx.dml.soc.clock_limits[context->bw_ctx.dml.soc.num_states - 1].dppclk_mhz)
-		num_splits = 1;
-
-	return num_splits;
 }
 
 static float calculate_net_bw_in_kbytes_sec(struct _vcs_dpi_voltage_scaling_st *entry)
@@ -905,7 +822,7 @@ static bool subvp_drr_schedulable(struct dc *dc, struct dc_state *context)
 			continue;
 
 		if (drr_pipe->stream->mall_stream_config.type == SUBVP_NONE && drr_pipe->stream->ignore_msa_timing_param &&
-				(drr_pipe->stream->allow_freesync || drr_pipe->stream->vrr_active_variable))
+				(drr_pipe->stream->allow_freesync || drr_pipe->stream->vrr_active_variable || drr_pipe->stream->vrr_active_fixed))
 			break;
 	}
 
@@ -1144,6 +1061,351 @@ static bool subvp_validate_static_schedulability(struct dc *dc,
 	return schedulable;
 }
 
+static void assign_subvp_index(struct dc *dc, struct dc_state *context)
+{
+	int i;
+	int index = 0;
+
+	for (i = 0; i < dc->res_pool->pipe_count; i++) {
+		struct pipe_ctx *pipe_ctx = &context->res_ctx.pipe_ctx[i];
+
+		if (resource_is_pipe_type(pipe_ctx, OTG_MASTER) &&
+				pipe_ctx->stream->mall_stream_config.type == SUBVP_MAIN) {
+			pipe_ctx->subvp_index = index++;
+		} else {
+			pipe_ctx->subvp_index = 0;
+		}
+	}
+}
+
+struct pipe_slice_table {
+	struct {
+		struct dc_stream_state *stream;
+		int slice_count;
+	} odm_combines[MAX_STREAMS];
+	int odm_combine_count;
+
+	struct {
+		struct dc_plane_state *plane;
+		int slice_count;
+	} mpc_combines[MAX_SURFACES];
+	int mpc_combine_count;
+};
+
+
+static void update_slice_table_for_stream(struct pipe_slice_table *table,
+		struct dc_stream_state *stream, int diff)
+{
+	int i;
+
+	for (i = 0; i < table->odm_combine_count; i++) {
+		if (table->odm_combines[i].stream == stream) {
+			table->odm_combines[i].slice_count += diff;
+			break;
+		}
+	}
+
+	if (i == table->odm_combine_count) {
+		table->odm_combine_count++;
+		table->odm_combines[i].stream = stream;
+		table->odm_combines[i].slice_count = diff;
+	}
+}
+
+static void update_slice_table_for_plane(struct pipe_slice_table *table,
+		struct dc_plane_state *plane, int diff)
+{
+	int i;
+
+	for (i = 0; i < table->mpc_combine_count; i++) {
+		if (table->mpc_combines[i].plane == plane) {
+			table->mpc_combines[i].slice_count += diff;
+			break;
+		}
+	}
+
+	if (i == table->mpc_combine_count) {
+		table->mpc_combine_count++;
+		table->mpc_combines[i].plane = plane;
+		table->mpc_combines[i].slice_count = diff;
+	}
+}
+
+static void init_pipe_slice_table_from_context(
+		struct pipe_slice_table *table,
+		struct dc_state *context)
+{
+	int i, j;
+	struct pipe_ctx *otg_master;
+	struct pipe_ctx *dpp_pipes[MAX_PIPES];
+	struct dc_stream_state *stream;
+	int count;
+
+	memset(table, 0, sizeof(*table));
+
+	for (i = 0; i < context->stream_count; i++) {
+		stream = context->streams[i];
+		otg_master = resource_get_otg_master_for_stream(
+				&context->res_ctx, stream);
+		count = resource_get_odm_slice_count(otg_master);
+		update_slice_table_for_stream(table, stream, count);
+
+		count = resource_get_dpp_pipes_for_opp_head(otg_master,
+				&context->res_ctx, dpp_pipes);
+		for (j = 0; j < count; j++)
+			if (dpp_pipes[j]->plane_state)
+				update_slice_table_for_plane(table,
+						dpp_pipes[j]->plane_state, 1);
+	}
+}
+
+static bool update_pipe_slice_table_with_split_flags(
+		struct pipe_slice_table *table,
+		struct dc *dc,
+		struct dc_state *context,
+		struct vba_vars_st *vba,
+		int split[MAX_PIPES],
+		bool merge[MAX_PIPES])
+{
+	/* NOTE: we are deprecating the support for the concept of pipe splitting
+	 * or pipe merging. Instead we append slices to the end and remove
+	 * slices from the end. The following code converts a pipe split or
+	 * merge to an append or remove operation.
+	 *
+	 * For example:
+	 * When split flags describe the following pipe connection transition
+	 *
+	 * from:
+	 *  pipe 0 (split=2) -> pipe 1 (split=2)
+	 * to: (old behavior)
+	 *  pipe 0 -> pipe 2 -> pipe 1 -> pipe 3
+	 *
+	 * the code below actually does:
+	 *  pipe 0 -> pipe 1 -> pipe 2 -> pipe 3
+	 *
+	 * This is the new intended behavior and for future DCNs we will retire
+	 * the old concept completely.
+	 */
+	struct pipe_ctx *pipe;
+	bool odm;
+	int i;
+	bool updated = false;
+
+	for (i = 0; i < dc->res_pool->pipe_count; i++) {
+		pipe = &context->res_ctx.pipe_ctx[i];
+
+		if (merge[i]) {
+			if (resource_is_pipe_type(pipe, OPP_HEAD))
+				/* merging OPP head means reducing ODM slice
+				 * count by 1
+				 */
+				update_slice_table_for_stream(table, pipe->stream, -1);
+			else if (resource_is_pipe_type(pipe, DPP_PIPE) &&
+					resource_get_odm_slice_index(resource_get_opp_head(pipe)) == 0)
+				/* merging DPP pipe of the first ODM slice means
+				 * reducing MPC slice count by 1
+				 */
+				update_slice_table_for_plane(table, pipe->plane_state, -1);
+			updated = true;
+		}
+
+		if (split[i]) {
+			odm = vba->ODMCombineEnabled[vba->pipe_plane[i]] !=
+					dm_odm_combine_mode_disabled;
+			if (odm && resource_is_pipe_type(pipe, OPP_HEAD))
+				update_slice_table_for_stream(
+						table, pipe->stream, split[i] - 1);
+			else if (!odm && resource_is_pipe_type(pipe, DPP_PIPE))
+				update_slice_table_for_plane(
+						table, pipe->plane_state, split[i] - 1);
+			updated = true;
+		}
+	}
+	return updated;
+}
+
+static void update_pipes_with_slice_table(struct dc *dc, struct dc_state *context,
+		struct pipe_slice_table *table)
+{
+	int i;
+
+	for (i = 0; i < table->odm_combine_count; i++) {
+		resource_update_pipes_for_stream_with_slice_count(context,
+				dc->current_state, dc->res_pool,
+				table->odm_combines[i].stream,
+				table->odm_combines[i].slice_count);
+		/* TODO: move this into the function above */
+		dcn20_build_mapped_resource(dc, context,
+				table->odm_combines[i].stream);
+	}
+
+	for (i = 0; i < table->mpc_combine_count; i++)
+		resource_update_pipes_for_plane_with_slice_count(context,
+				dc->current_state, dc->res_pool,
+				table->mpc_combines[i].plane,
+				table->mpc_combines[i].slice_count);
+}
+
+static bool update_pipes_with_split_flags(struct dc *dc, struct dc_state *context,
+		struct vba_vars_st *vba, int split[MAX_PIPES],
+		bool merge[MAX_PIPES])
+{
+	struct pipe_slice_table slice_table;
+	bool updated;
+
+	init_pipe_slice_table_from_context(&slice_table, context);
+	updated = update_pipe_slice_table_with_split_flags(
+			&slice_table, dc, context, vba,
+			split, merge);
+	update_pipes_with_slice_table(dc, context, &slice_table);
+	return updated;
+}
+
+static bool should_allow_odm_power_optimization(struct dc *dc,
+		struct dc_state *context, struct vba_vars_st *v, int *split,
+		bool *merge)
+{
+	struct dc_stream_state *stream = context->streams[0];
+	struct pipe_slice_table slice_table;
+	struct dc_plane_state *plane;
+	struct rect guaranteed_viewport;
+	int i;
+
+	/*
+	 * this debug flag allows us to disable ODM power optimization feature
+	 * unconditionally. we force the feature off if this is set to false.
+	 */
+	if (!dc->debug.enable_single_display_2to1_odm_policy)
+		return false;
+
+	/* current design and test coverage is only limited to allow ODM power
+	 * optimization for single stream. Supporting it for multiple streams
+	 * use case would require additional algorithm to decide how to
+	 * optimize power consumption when there are not enough free pipes to
+	 * allocate for all the streams. This level of optimization would
+	 * require multiple attempts of revalidation to make an optimized
+	 * decision. Unfortunately We do not support revalidation flow in
+	 * current version of DML.
+	 */
+	if (context->stream_count != 1)
+		return false;
+
+	/*
+	 * Our hardware doesn't support ODM for HDMI TMDS
+	 */
+	if (dc_is_hdmi_signal(stream->signal))
+		return false;
+
+	/*
+	 * ODM Combine 2:1 requires horizontal timing divisible by 2 so each
+	 * ODM segment has the same size.
+	 */
+	if (!is_h_timing_divisible_by_2(stream))
+		return false;
+
+	/*
+	 * No power benefits if the timing's pixel clock is not high enough to
+	 * raise display clock from minimum power state.
+	 */
+	if (stream->timing.pix_clk_100hz * 100 <= DCN3_2_VMIN_DISPCLK_HZ)
+		return false;
+
+	if (dc->config.enable_windowed_mpo_odm) {
+		/*
+		 * ODM power optimization should only be allowed if the feature
+		 * can be seamlessly toggled off within an update. This would
+		 * require that the feature is applied on top of a minimal
+		 * state. A minimal state is defined as a state validated
+		 * without the need of pipe split. Therefore, when transition to
+		 * toggle the feature off, the same stream and plane
+		 * configuration can be supported by the pipe resource in the
+		 * first ODM slice alone without the need to acquire extra
+		 * resources.
+		 */
+		init_pipe_slice_table_from_context(&slice_table, context);
+		update_pipe_slice_table_with_split_flags(
+				&slice_table, dc, context, v,
+				split, merge);
+		for (i = 0; i < slice_table.mpc_combine_count; i++)
+			if (slice_table.mpc_combines[i].slice_count > 1)
+				return false;
+
+		for (i = 0; i < slice_table.odm_combine_count; i++)
+			if (slice_table.odm_combines[i].slice_count > 1)
+				return false;
+
+		/* up to here we know that a plane with viewport equal to stream
+		 * src can be validated with single DPP pipe. Therefore any
+		 * planes with smaller or equal viewport is guaranteed to work
+		 * regardless of its position and scaling ratio. Also we know
+		 * any plane without downscale ratio greater than 1 should also
+		 * work. Up until DCN3x we still have software limitation that
+		 * doesn't implement a smooth transition between ODM combine and
+		 * MPC combine during plane resizing when we are crossing ODM
+		 * capability boundary. So we are adding this guaranteed
+		 * viewport condition to limit ODM power optimization support
+		 * for only the planes within the guaranteed viewport size. Such
+		 * planes can be supported with ODM power optimization without
+		 * ever the need to transition to MPC combine in any scaling
+		 * ratios and positions. Therefore we cover the software
+		 * limitation of this transition sequence.
+		 */
+		guaranteed_viewport = stream->src;
+		for (i = 0; i < context->stream_status[0].plane_count; i++) {
+			plane = context->stream_status[0].plane_states[i];
+
+			if ((plane->src_rect.height > plane->dst_rect.height && plane->src_rect.height > guaranteed_viewport.height) ||
+					(plane->src_rect.width > plane->dst_rect.width && plane->src_rect.width > guaranteed_viewport.width))
+				return false;
+		}
+	} else {
+		/*
+		 * the new ODM power optimization feature reduces software
+		 * design limitation and allows ODM power optimization to be
+		 * supported even with presence of overlay planes. The new
+		 * feature is enabled based on enable_windowed_mpo_odm flag. If
+		 * the flag is not set, we limit our feature scope due to
+		 * previous software design limitation
+		 */
+		if (context->stream_status[0].plane_count != 1)
+			return false;
+
+		if (memcmp(&context->stream_status[0].plane_states[0]->clip_rect,
+				&stream->src, sizeof(struct rect)) != 0)
+			return false;
+
+		if (stream->src.width >= 5120 &&
+				stream->src.width > stream->dst.width)
+			return false;
+	}
+	return true;
+}
+
+static void try_odm_power_optimization_and_revalidate(
+		struct dc *dc,
+		struct dc_state *context,
+		display_e2e_pipe_params_st *pipes,
+		int *split,
+		bool *merge,
+		unsigned int *vlevel,
+		int pipe_cnt)
+{
+	int i;
+	unsigned int new_vlevel;
+
+	for (i = 0; i < pipe_cnt; i++)
+		pipes[i].pipe.dest.odm_combine_policy = dm_odm_combine_policy_2to1;
+
+	new_vlevel = dml_get_voltage_level(&context->bw_ctx.dml, pipes, pipe_cnt);
+
+	if (new_vlevel < context->bw_ctx.dml.soc.num_states) {
+		memset(split, 0, MAX_PIPES * sizeof(int));
+		memset(merge, 0, MAX_PIPES * sizeof(bool));
+		*vlevel = dcn20_validate_apply_pipe_split_flags(dc, context, new_vlevel, split, merge);
+		context->bw_ctx.dml.vba.VoltageLevel = *vlevel;
+	}
+}
+
 static void dcn32_full_validate_bw_helper(struct dc *dc,
 				   struct dc_state *context,
 				   display_e2e_pipe_params_st *pipes,
@@ -1294,8 +1556,14 @@ static void dcn32_full_validate_bw_helper(struct dc *dc,
 			vba->VoltageLevel = *vlevel;
 			// Note: We can't apply the phantom pipes to hardware at this time. We have to wait
 			// until driver has acquired the DMCUB lock to do it safely.
+			assign_subvp_index(dc, context);
 		}
 	}
+
+	if (should_allow_odm_power_optimization(dc, context, vba, split, merge))
+		try_odm_power_optimization_and_revalidate(
+				dc, context, pipes, split, merge, vlevel, *pipe_cnt);
+
 }
 
 static bool is_dtbclk_required(struct dc *dc, struct dc_state *context)
@@ -1730,173 +1998,181 @@ bool dcn32_internal_validate_bw(struct dc *dc,
 		pipe_idx++;
 	}
 
-	/* merge pipes if necessary */
-	for (i = 0; i < dc->res_pool->pipe_count; i++) {
-		struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
+	if (dc->config.enable_windowed_mpo_odm) {
+		repopulate_pipes = update_pipes_with_split_flags(
+				dc, context, vba, split, merge);
+	} else {
+		/* the code below will be removed once windowed mpo odm is fully
+		 * enabled.
+		 */
+		/* merge pipes if necessary */
+		for (i = 0; i < dc->res_pool->pipe_count; i++) {
+			struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
 
-		/*skip pipes that don't need merging*/
-		if (!merge[i])
-			continue;
+			/*skip pipes that don't need merging*/
+			if (!merge[i])
+				continue;
 
-		/* if ODM merge we ignore mpc tree, mpo pipes will have their own flags */
-		if (pipe->prev_odm_pipe) {
-			/*split off odm pipe*/
-			pipe->prev_odm_pipe->next_odm_pipe = pipe->next_odm_pipe;
-			if (pipe->next_odm_pipe)
-				pipe->next_odm_pipe->prev_odm_pipe = pipe->prev_odm_pipe;
+			/* if ODM merge we ignore mpc tree, mpo pipes will have their own flags */
+			if (pipe->prev_odm_pipe) {
+				/*split off odm pipe*/
+				pipe->prev_odm_pipe->next_odm_pipe = pipe->next_odm_pipe;
+				if (pipe->next_odm_pipe)
+					pipe->next_odm_pipe->prev_odm_pipe = pipe->prev_odm_pipe;
 
-			/*2:1ODM+MPC Split MPO to Single Pipe + MPC Split MPO*/
-			if (pipe->bottom_pipe) {
-				if (pipe->bottom_pipe->prev_odm_pipe || pipe->bottom_pipe->next_odm_pipe) {
-					/*MPC split rules will handle this case*/
-					pipe->bottom_pipe->top_pipe = NULL;
-				} else {
-					/* when merging an ODM pipes, the bottom MPC pipe must now point to
-					 * the previous ODM pipe and its associated stream assets
-					 */
-					if (pipe->prev_odm_pipe->bottom_pipe) {
-						/* 3 plane MPO*/
-						pipe->bottom_pipe->top_pipe = pipe->prev_odm_pipe->bottom_pipe;
-						pipe->prev_odm_pipe->bottom_pipe->bottom_pipe = pipe->bottom_pipe;
+				/*2:1ODM+MPC Split MPO to Single Pipe + MPC Split MPO*/
+				if (pipe->bottom_pipe) {
+					if (pipe->bottom_pipe->prev_odm_pipe || pipe->bottom_pipe->next_odm_pipe) {
+						/*MPC split rules will handle this case*/
+						pipe->bottom_pipe->top_pipe = NULL;
 					} else {
-						/* 2 plane MPO*/
-						pipe->bottom_pipe->top_pipe = pipe->prev_odm_pipe;
-						pipe->prev_odm_pipe->bottom_pipe = pipe->bottom_pipe;
+						/* when merging an ODM pipes, the bottom MPC pipe must now point to
+						 * the previous ODM pipe and its associated stream assets
+						 */
+						if (pipe->prev_odm_pipe->bottom_pipe) {
+							/* 3 plane MPO*/
+							pipe->bottom_pipe->top_pipe = pipe->prev_odm_pipe->bottom_pipe;
+							pipe->prev_odm_pipe->bottom_pipe->bottom_pipe = pipe->bottom_pipe;
+						} else {
+							/* 2 plane MPO*/
+							pipe->bottom_pipe->top_pipe = pipe->prev_odm_pipe;
+							pipe->prev_odm_pipe->bottom_pipe = pipe->bottom_pipe;
+						}
+
+						memcpy(&pipe->bottom_pipe->stream_res, &pipe->bottom_pipe->top_pipe->stream_res, sizeof(struct stream_resource));
 					}
-
-					memcpy(&pipe->bottom_pipe->stream_res, &pipe->bottom_pipe->top_pipe->stream_res, sizeof(struct stream_resource));
 				}
+
+				if (pipe->top_pipe) {
+					pipe->top_pipe->bottom_pipe = NULL;
+				}
+
+				pipe->bottom_pipe = NULL;
+				pipe->next_odm_pipe = NULL;
+				pipe->plane_state = NULL;
+				pipe->stream = NULL;
+				pipe->top_pipe = NULL;
+				pipe->prev_odm_pipe = NULL;
+				if (pipe->stream_res.dsc)
+					dcn20_release_dsc(&context->res_ctx, dc->res_pool, &pipe->stream_res.dsc);
+				memset(&pipe->plane_res, 0, sizeof(pipe->plane_res));
+				memset(&pipe->stream_res, 0, sizeof(pipe->stream_res));
+				memset(&pipe->link_res, 0, sizeof(pipe->link_res));
+				repopulate_pipes = true;
+			} else if (pipe->top_pipe && pipe->top_pipe->plane_state == pipe->plane_state) {
+				struct pipe_ctx *top_pipe = pipe->top_pipe;
+				struct pipe_ctx *bottom_pipe = pipe->bottom_pipe;
+
+				top_pipe->bottom_pipe = bottom_pipe;
+				if (bottom_pipe)
+					bottom_pipe->top_pipe = top_pipe;
+
+				pipe->top_pipe = NULL;
+				pipe->bottom_pipe = NULL;
+				pipe->plane_state = NULL;
+				pipe->stream = NULL;
+				memset(&pipe->plane_res, 0, sizeof(pipe->plane_res));
+				memset(&pipe->stream_res, 0, sizeof(pipe->stream_res));
+				memset(&pipe->link_res, 0, sizeof(pipe->link_res));
+				repopulate_pipes = true;
+			} else
+				ASSERT(0); /* Should never try to merge master pipe */
+
+		}
+
+		for (i = 0, pipe_idx = -1; i < dc->res_pool->pipe_count; i++) {
+			struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
+			struct pipe_ctx *old_pipe = &dc->current_state->res_ctx.pipe_ctx[i];
+			struct pipe_ctx *hsplit_pipe = NULL;
+			bool odm;
+			int old_index = -1;
+
+			if (!pipe->stream || newly_split[i])
+				continue;
+
+			pipe_idx++;
+			odm = vba->ODMCombineEnabled[vba->pipe_plane[pipe_idx]] != dm_odm_combine_mode_disabled;
+
+			if (!pipe->plane_state && !odm)
+				continue;
+
+			if (split[i]) {
+				if (odm) {
+					if (split[i] == 4 && old_pipe->next_odm_pipe && old_pipe->next_odm_pipe->next_odm_pipe)
+						old_index = old_pipe->next_odm_pipe->next_odm_pipe->pipe_idx;
+					else if (old_pipe->next_odm_pipe)
+						old_index = old_pipe->next_odm_pipe->pipe_idx;
+				} else {
+					if (split[i] == 4 && old_pipe->bottom_pipe && old_pipe->bottom_pipe->bottom_pipe &&
+							old_pipe->bottom_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
+						old_index = old_pipe->bottom_pipe->bottom_pipe->pipe_idx;
+					else if (old_pipe->bottom_pipe &&
+							old_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
+						old_index = old_pipe->bottom_pipe->pipe_idx;
+				}
+				hsplit_pipe = dcn32_find_split_pipe(dc, context, old_index);
+				ASSERT(hsplit_pipe);
+				if (!hsplit_pipe)
+					goto validate_fail;
+
+				if (!dcn32_split_stream_for_mpc_or_odm(
+						dc, &context->res_ctx,
+						pipe, hsplit_pipe, odm))
+					goto validate_fail;
+
+				newly_split[hsplit_pipe->pipe_idx] = true;
+				repopulate_pipes = true;
 			}
+			if (split[i] == 4) {
+				struct pipe_ctx *pipe_4to1;
 
-			if (pipe->top_pipe) {
-				pipe->top_pipe->bottom_pipe = NULL;
-			}
-
-			pipe->bottom_pipe = NULL;
-			pipe->next_odm_pipe = NULL;
-			pipe->plane_state = NULL;
-			pipe->stream = NULL;
-			pipe->top_pipe = NULL;
-			pipe->prev_odm_pipe = NULL;
-			if (pipe->stream_res.dsc)
-				dcn20_release_dsc(&context->res_ctx, dc->res_pool, &pipe->stream_res.dsc);
-			memset(&pipe->plane_res, 0, sizeof(pipe->plane_res));
-			memset(&pipe->stream_res, 0, sizeof(pipe->stream_res));
-			memset(&pipe->link_res, 0, sizeof(pipe->link_res));
-			repopulate_pipes = true;
-		} else if (pipe->top_pipe && pipe->top_pipe->plane_state == pipe->plane_state) {
-			struct pipe_ctx *top_pipe = pipe->top_pipe;
-			struct pipe_ctx *bottom_pipe = pipe->bottom_pipe;
-
-			top_pipe->bottom_pipe = bottom_pipe;
-			if (bottom_pipe)
-				bottom_pipe->top_pipe = top_pipe;
-
-			pipe->top_pipe = NULL;
-			pipe->bottom_pipe = NULL;
-			pipe->plane_state = NULL;
-			pipe->stream = NULL;
-			memset(&pipe->plane_res, 0, sizeof(pipe->plane_res));
-			memset(&pipe->stream_res, 0, sizeof(pipe->stream_res));
-			memset(&pipe->link_res, 0, sizeof(pipe->link_res));
-			repopulate_pipes = true;
-		} else
-			ASSERT(0); /* Should never try to merge master pipe */
-
-	}
-
-	for (i = 0, pipe_idx = -1; i < dc->res_pool->pipe_count; i++) {
-		struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
-		struct pipe_ctx *old_pipe = &dc->current_state->res_ctx.pipe_ctx[i];
-		struct pipe_ctx *hsplit_pipe = NULL;
-		bool odm;
-		int old_index = -1;
-
-		if (!pipe->stream || newly_split[i])
-			continue;
-
-		pipe_idx++;
-		odm = vba->ODMCombineEnabled[vba->pipe_plane[pipe_idx]] != dm_odm_combine_mode_disabled;
-
-		if (!pipe->plane_state && !odm)
-			continue;
-
-		if (split[i]) {
-			if (odm) {
-				if (split[i] == 4 && old_pipe->next_odm_pipe && old_pipe->next_odm_pipe->next_odm_pipe)
-					old_index = old_pipe->next_odm_pipe->next_odm_pipe->pipe_idx;
-				else if (old_pipe->next_odm_pipe)
+				if (odm && old_pipe->next_odm_pipe)
 					old_index = old_pipe->next_odm_pipe->pipe_idx;
-			} else {
-				if (split[i] == 4 && old_pipe->bottom_pipe && old_pipe->bottom_pipe->bottom_pipe &&
-						old_pipe->bottom_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
-					old_index = old_pipe->bottom_pipe->bottom_pipe->pipe_idx;
-				else if (old_pipe->bottom_pipe &&
-						old_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
+				else if (!odm && old_pipe->bottom_pipe &&
+							old_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
 					old_index = old_pipe->bottom_pipe->pipe_idx;
+				else
+					old_index = -1;
+				pipe_4to1 = dcn32_find_split_pipe(dc, context, old_index);
+				ASSERT(pipe_4to1);
+				if (!pipe_4to1)
+					goto validate_fail;
+				if (!dcn32_split_stream_for_mpc_or_odm(
+						dc, &context->res_ctx,
+						pipe, pipe_4to1, odm))
+					goto validate_fail;
+				newly_split[pipe_4to1->pipe_idx] = true;
+
+				if (odm && old_pipe->next_odm_pipe && old_pipe->next_odm_pipe->next_odm_pipe
+						&& old_pipe->next_odm_pipe->next_odm_pipe->next_odm_pipe)
+					old_index = old_pipe->next_odm_pipe->next_odm_pipe->next_odm_pipe->pipe_idx;
+				else if (!odm && old_pipe->bottom_pipe && old_pipe->bottom_pipe->bottom_pipe &&
+						old_pipe->bottom_pipe->bottom_pipe->bottom_pipe &&
+						old_pipe->bottom_pipe->bottom_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
+					old_index = old_pipe->bottom_pipe->bottom_pipe->bottom_pipe->pipe_idx;
+				else
+					old_index = -1;
+				pipe_4to1 = dcn32_find_split_pipe(dc, context, old_index);
+				ASSERT(pipe_4to1);
+				if (!pipe_4to1)
+					goto validate_fail;
+				if (!dcn32_split_stream_for_mpc_or_odm(
+						dc, &context->res_ctx,
+						hsplit_pipe, pipe_4to1, odm))
+					goto validate_fail;
+				newly_split[pipe_4to1->pipe_idx] = true;
 			}
-			hsplit_pipe = dcn32_find_split_pipe(dc, context, old_index);
-			ASSERT(hsplit_pipe);
-			if (!hsplit_pipe)
-				goto validate_fail;
-
-			if (!dcn32_split_stream_for_mpc_or_odm(
-					dc, &context->res_ctx,
-					pipe, hsplit_pipe, odm))
-				goto validate_fail;
-
-			newly_split[hsplit_pipe->pipe_idx] = true;
-			repopulate_pipes = true;
+			if (odm)
+				dcn20_build_mapped_resource(dc, context, pipe->stream);
 		}
-		if (split[i] == 4) {
-			struct pipe_ctx *pipe_4to1;
 
-			if (odm && old_pipe->next_odm_pipe)
-				old_index = old_pipe->next_odm_pipe->pipe_idx;
-			else if (!odm && old_pipe->bottom_pipe &&
-						old_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
-				old_index = old_pipe->bottom_pipe->pipe_idx;
-			else
-				old_index = -1;
-			pipe_4to1 = dcn32_find_split_pipe(dc, context, old_index);
-			ASSERT(pipe_4to1);
-			if (!pipe_4to1)
-				goto validate_fail;
-			if (!dcn32_split_stream_for_mpc_or_odm(
-					dc, &context->res_ctx,
-					pipe, pipe_4to1, odm))
-				goto validate_fail;
-			newly_split[pipe_4to1->pipe_idx] = true;
+		for (i = 0; i < dc->res_pool->pipe_count; i++) {
+			struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
 
-			if (odm && old_pipe->next_odm_pipe && old_pipe->next_odm_pipe->next_odm_pipe
-					&& old_pipe->next_odm_pipe->next_odm_pipe->next_odm_pipe)
-				old_index = old_pipe->next_odm_pipe->next_odm_pipe->next_odm_pipe->pipe_idx;
-			else if (!odm && old_pipe->bottom_pipe && old_pipe->bottom_pipe->bottom_pipe &&
-					old_pipe->bottom_pipe->bottom_pipe->bottom_pipe &&
-					old_pipe->bottom_pipe->bottom_pipe->bottom_pipe->plane_state == old_pipe->plane_state)
-				old_index = old_pipe->bottom_pipe->bottom_pipe->bottom_pipe->pipe_idx;
-			else
-				old_index = -1;
-			pipe_4to1 = dcn32_find_split_pipe(dc, context, old_index);
-			ASSERT(pipe_4to1);
-			if (!pipe_4to1)
-				goto validate_fail;
-			if (!dcn32_split_stream_for_mpc_or_odm(
-					dc, &context->res_ctx,
-					hsplit_pipe, pipe_4to1, odm))
-				goto validate_fail;
-			newly_split[pipe_4to1->pipe_idx] = true;
-		}
-		if (odm)
-			dcn20_build_mapped_resource(dc, context, pipe->stream);
-	}
-
-	for (i = 0; i < dc->res_pool->pipe_count; i++) {
-		struct pipe_ctx *pipe = &context->res_ctx.pipe_ctx[i];
-
-		if (pipe->plane_state) {
-			if (!resource_build_scaling_params(pipe))
-				goto validate_fail;
+			if (pipe->plane_state) {
+				if (!resource_build_scaling_params(pipe))
+					goto validate_fail;
+			}
 		}
 	}
 
