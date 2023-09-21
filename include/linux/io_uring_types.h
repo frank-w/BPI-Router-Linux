@@ -313,6 +313,13 @@ struct io_ring_ctx {
 	struct list_head	cq_overflow_list;
 	struct io_hash_table	cancel_table;
 
+	struct hlist_head	waitid_list;
+
+#ifdef CONFIG_FUTEX
+	struct hlist_head	futex_list;
+	struct io_alloc_cache	futex_cache;
+#endif
+
 	const struct cred	*sq_creds;	/* cred used for __io_sq_thread() */
 	struct io_sq_data	*sq_data;	/* if using sq thread polling */
 
