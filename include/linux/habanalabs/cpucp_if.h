@@ -33,6 +33,17 @@
 #define PLL_MAP_MAX_BITS	128
 #define PLL_MAP_LEN		(PLL_MAP_MAX_BITS / 8)
 
+enum eq_event_id {
+	EQ_EVENT_NIC_STS_REQUEST = 0,
+	EQ_EVENT_PWR_MODE_0,
+	EQ_EVENT_PWR_MODE_1,
+	EQ_EVENT_PWR_MODE_2,
+	EQ_EVENT_PWR_MODE_3,
+	EQ_EVENT_PWR_BRK_ENTRY,
+	EQ_EVENT_PWR_BRK_EXIT,
+	EQ_EVENT_HEARTBEAT,
+};
+
 /*
  * info of the pkt queue pointers in the first async occurrence
  */
@@ -69,7 +80,8 @@ struct hl_eq_ecc_data {
 	__le64 ecc_syndrom;
 	__u8 memory_wrapper_idx;
 	__u8 is_critical;
-	__u8 pad[6];
+	__le16 block_id;
+	__u8 pad[4];
 };
 
 enum hl_sm_sei_cause {
@@ -667,7 +679,11 @@ enum pq_init_status {
  *       Packet to register interrupts indicating LKD is ready to receive events from FW.
  *
  * CPUCP_PACKET_SOFT_RESET -
- *	 Packet to perform soft-reset.
+ *      Packet to perform soft-reset.
+ *
+ * CPUCP_PACKET_INTS_REGISTER -
+ *       Packet to inform FW that queues have been established and LKD is ready to receive
+ *       EQ events.
  */
 
 enum cpucp_packet_id {
@@ -733,9 +749,10 @@ enum cpucp_packet_id {
 	CPUCP_PACKET_RESERVED10,		/* not used */
 	CPUCP_PACKET_RESERVED11,		/* not used */
 	CPUCP_PACKET_RESERVED12,		/* internal */
-	CPUCP_PACKET_REGISTER_INTERRUPTS,	/* internal */
-	CPUCP_PACKET_SOFT_RESET,		/* internal */
-	CPUCP_PACKET_ID_MAX			/* must be last */
+	CPUCP_PACKET_RESERVED13,                /* internal */
+	CPUCP_PACKET_SOFT_RESET,                /* internal */
+	CPUCP_PACKET_INTS_REGISTER,             /* internal */
+	CPUCP_PACKET_ID_MAX                     /* must be last */
 };
 
 #define CPUCP_PACKET_FENCE_VAL	0xFE8CE7A5
@@ -987,6 +1004,7 @@ enum cpucp_msi_type {
 	CPUCP_NIC_PORT5_MSI_TYPE,
 	CPUCP_NIC_PORT7_MSI_TYPE,
 	CPUCP_NIC_PORT9_MSI_TYPE,
+	CPUCP_EVENT_QUEUE_ERR_MSI_TYPE,
 	CPUCP_NUM_OF_MSI_TYPES
 };
 
@@ -1137,6 +1155,7 @@ struct cpucp_security_info {
  *                     (0 = functional 1 = binned)
  * @interposer_version: Interposer version programmed in eFuse
  * @substrate_version: Substrate version programmed in eFuse
+ * @eq_health_check_supported: eq health check feature supported in FW.
  * @fw_hbm_region_size: Size in bytes of FW reserved region in HBM.
  * @fw_os_version: Firmware OS Version
  */
@@ -1163,7 +1182,7 @@ struct cpucp_info {
 	__u8 xbar_binning_mask;
 	__u8 interposer_version;
 	__u8 substrate_version;
-	__u8 reserved2;
+	__u8 eq_health_check_supported;
 	struct cpucp_security_info sec_info;
 	__le32 fw_hbm_region_size;
 	__u8 pll_map[PLL_MAP_LEN];
