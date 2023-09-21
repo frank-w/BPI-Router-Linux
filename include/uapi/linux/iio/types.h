@@ -47,6 +47,8 @@ enum iio_chan_type {
 	IIO_POSITIONRELATIVE,
 	IIO_PHASE,
 	IIO_MASSCONCENTRATION,
+	IIO_DELTA_ANGL,
+	IIO_DELTA_VELOCITY,
 };
 
 enum iio_modifier {
