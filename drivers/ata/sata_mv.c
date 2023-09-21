@@ -673,6 +673,7 @@ static const struct scsi_host_template mv6_sht = {
 	.sdev_groups		= ata_ncq_sdev_groups,
 	.change_queue_depth	= ata_scsi_change_queue_depth,
 	.tag_alloc_policy	= BLK_TAG_ALLOC_RR,
+	.slave_alloc		= ata_scsi_slave_alloc,
 	.slave_configure	= ata_scsi_slave_config
 };
 
