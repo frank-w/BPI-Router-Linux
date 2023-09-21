@@ -17,6 +17,7 @@
  *	Tuned number of hash slots for avtab to reduce memory usage
  */
 
+#include <linux/bitops.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
@@ -298,13 +299,7 @@ int avtab_alloc(struct avtab *h, u32 nrules)
 	u32 nslot = 0;
 
 	if (nrules != 0) {
-		u32 shift = 1;
-		u32 work = nrules >> 3;
-		while (work) {
-			work >>= 1;
-			shift++;
-		}
-		nslot = 1 << shift;
+		nslot = nrules > 3 ? rounddown_pow_of_two(nrules / 2) : 2;
 		if (nslot > MAX_AVTAB_HASH_BUCKETS)
 			nslot = MAX_AVTAB_HASH_BUCKETS;
 
@@ -349,7 +344,7 @@ void avtab_hash_eval(struct avtab *h, const char *tag)
 	}
 
 	pr_debug("SELinux: %s:  %d entries and %d/%d buckets used, "
-	       "longest chain length %d sum of chain length^2 %llu\n",
+	       "longest chain length %d, sum of chain length^2 %llu\n",
 	       tag, h->nel, slots_used, h->nslot, max_chain_len,
 	       chain2_len_sum);
 }
@@ -477,11 +472,7 @@ int avtab_read_item(struct avtab *a, void *fp, struct policydb *pol,
 		return -EINVAL;
 	}
 
-	set = 0;
-	for (i = 0; i < ARRAY_SIZE(spec_order); i++) {
-		if (key.specified & spec_order[i])
-			set++;
-	}
+	set = hweight16(key.specified & (AVTAB_XPERMS | AVTAB_TYPE | AVTAB_AV));
 	if (!set || set > 1) {
 		pr_err("SELinux:  avtab:  more than one specifier\n");
 		return -EINVAL;
