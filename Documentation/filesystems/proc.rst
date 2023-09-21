@@ -689,9 +689,11 @@ files are there, and which are missing.
  File         Content
  ============ ===============================================================
  apm          Advanced power management info
+ bootconfig   Kernel command line obtained from boot config	(5.5)
  buddyinfo    Kernel memory allocator information (see text)	(2.5)
  bus          Directory containing bus specific information
- cmdline      Kernel command line
+ cmdline      Kernel command line, both from bootloader and embedded
+ 	      in the kernel image.
  cpuinfo      Info about the CPU
  devices      Available devices (block and character)
  dma          Used DMS channels
@@ -727,6 +729,7 @@ files are there, and which are missing.
  partitions   Table of partitions known to the system
  pci 	      Deprecated info of PCI bus (new way -> /proc/bus/pci/,
               decoupled by lspci				(2.4)
+ raw_cmdline  Kernel command line obtained from kernel image	(6.6)
  rtc          Real time clock
  scsi         SCSI info (see text)
  slabinfo     Slab pool info
