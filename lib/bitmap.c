@@ -988,7 +988,7 @@ static int bitmap_pos_to_ord(const unsigned long *buf, unsigned int pos, unsigne
  * to @dst.
  *
  * The positions of unset bits in @old are mapped to themselves
- * (the identify map).
+ * (the identity map).
  *
  * Apply the above specified mapping to @src, placing the result in
  * @dst, clearing any bits previously set in @dst.
@@ -1037,7 +1037,7 @@ EXPORT_SYMBOL(bitmap_remap);
  * the position of the m-th set bit in @new, where m == n % w.
  *
  * The positions of unset bits in @old are mapped to themselves
- * (the identify map).
+ * (the identity map).
  *
  * Apply the above specified mapping to bit position @oldbit, returning
  * the new bit position.
@@ -1359,29 +1359,6 @@ int bitmap_allocate_region(unsigned long *bitmap, unsigned int pos, int order)
 	return __reg_op(bitmap, pos, order, REG_OP_ALLOC);
 }
 EXPORT_SYMBOL(bitmap_allocate_region);
-
-/**
- * bitmap_copy_le - copy a bitmap, putting the bits into little-endian order.
- * @dst:   destination buffer
- * @src:   bitmap to copy
- * @nbits: number of bits in the bitmap
- *
- * Require nbits % BITS_PER_LONG == 0.
- */
-#ifdef __BIG_ENDIAN
-void bitmap_copy_le(unsigned long *dst, const unsigned long *src, unsigned int nbits)
-{
-	unsigned int i;
-
-	for (i = 0; i < nbits/BITS_PER_LONG; i++) {
-		if (BITS_PER_LONG == 64)
-			dst[i] = cpu_to_le64(src[i]);
-		else
-			dst[i] = cpu_to_le32(src[i]);
-	}
-}
-EXPORT_SYMBOL(bitmap_copy_le);
-#endif
 
 unsigned long *bitmap_alloc(unsigned int nbits, gfp_t flags)
 {
