@@ -159,7 +159,7 @@ int dm_thin_find_mapped_range(struct dm_thin_device *td,
 /*
  * Obtain an unused block.
  */
-int dm_pool_alloc_data_block(struct dm_pool_metadata *pmd, dm_block_t *result);
+int dm_thin_alloc_data_block(struct dm_thin_device *td, dm_block_t *result);
 
 /*
  * Insert or remove block.

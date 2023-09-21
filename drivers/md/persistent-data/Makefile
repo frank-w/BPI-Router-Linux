@@ -4,6 +4,7 @@ dm-persistent-data-objs := \
 	dm-array.o \
 	dm-bitset.o \
 	dm-block-manager.o \
+	dm-extent-allocator.o \
 	dm-space-map-common.o \
 	dm-space-map-disk.o \
 	dm-space-map-metadata.o \

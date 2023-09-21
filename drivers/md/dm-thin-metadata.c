@@ -7,6 +7,7 @@
 
 #include "dm-thin-metadata.h"
 #include "persistent-data/dm-btree.h"
+#include "persistent-data/dm-extent-allocator.h"
 #include "persistent-data/dm-space-map.h"
 #include "persistent-data/dm-space-map-disk.h"
 #include "persistent-data/dm-transaction-manager.h"
@@ -152,6 +153,7 @@ struct dm_pool_metadata {
 	struct dm_block_manager *bm;
 	struct dm_space_map *metadata_sm;
 	struct dm_space_map *data_sm;
+	struct dm_extent_allocator *data_extents;
 	struct dm_transaction_manager *tm;
 	struct dm_transaction_manager *nb_tm;
 
@@ -232,6 +234,7 @@ struct dm_thin_device {
 	struct list_head list;
 	struct dm_pool_metadata *pmd;
 	dm_thin_id id;
+	struct dm_extent_alloc_context data_alloc;
 
 	int open_count;
 	bool changed:1;
@@ -846,6 +849,12 @@ static int __begin_transaction(struct dm_pool_metadata *pmd)
 	return 0;
 }
 
+static void __free_device(struct dm_thin_device *td)
+{
+	dm_ea_context_put(&td->data_alloc);
+	kfree(td);
+}
+
 static int __write_changed_details(struct dm_pool_metadata *pmd)
 {
 	int r;
@@ -874,7 +883,7 @@ static int __write_changed_details(struct dm_pool_metadata *pmd)
 			td->changed = false;
 		else {
 			list_del(&td->list);
-			kfree(td);
+			__free_device(td);
 		}
 	}
 
@@ -956,6 +965,7 @@ struct dm_pool_metadata *dm_pool_metadata_open(struct block_device *bdev,
 {
 	int r;
 	struct dm_pool_metadata *pmd;
+	uint64_t nr_blocks;
 
 	pmd = kmalloc(sizeof(*pmd), GFP_KERNEL);
 	if (!pmd) {
@@ -972,6 +982,7 @@ struct dm_pool_metadata *dm_pool_metadata_open(struct block_device *bdev,
 	pmd->data_block_size = data_block_size;
 	pmd->pre_commit_fn = NULL;
 	pmd->pre_commit_context = NULL;
+	pmd->data_extents = NULL;
 
 	r = __create_persistent_data_objects(pmd, format_device);
 	if (r) {
@@ -981,14 +992,31 @@ struct dm_pool_metadata *dm_pool_metadata_open(struct block_device *bdev,
 
 	r = __begin_transaction(pmd);
 	if (r < 0) {
-		if (dm_pool_metadata_close(pmd) < 0)
-			DMWARN("%s: dm_pool_metadata_close() failed.", __func__);
-		return ERR_PTR(r);
+		DMERR("could not begin transaction");
+		goto bad;
 	}
 
 	__set_metadata_reserve(pmd);
 
+	r = dm_sm_get_nr_blocks(pmd->data_sm, &nr_blocks);
+	if (r) {
+		DMERR("could not get size of data device");
+		goto bad;
+	}
+
+	pmd->data_extents = dm_extent_allocator_create(nr_blocks);
+	if (!pmd->data_extents) {
+		DMWARN("could not create data extent allocator");
+		r = -ENOMEM;
+		goto bad;
+	}
+
 	return pmd;
+
+bad:
+	if (dm_pool_metadata_close(pmd) < 0)
+		DMWARN("%s: dm_pool_metadata_close() failed.", __func__);
+	return ERR_PTR(r);
 }
 
 int dm_pool_metadata_close(struct dm_pool_metadata *pmd)
@@ -1003,7 +1031,7 @@ int dm_pool_metadata_close(struct dm_pool_metadata *pmd)
 			open_devices++;
 		else {
 			list_del(&td->list);
-			kfree(td);
+			__free_device(td);
 		}
 	}
 	up_read(&pmd->root_lock);
@@ -1023,6 +1051,9 @@ int dm_pool_metadata_close(struct dm_pool_metadata *pmd)
 	}
 	pmd_write_unlock(pmd);
 	__destroy_persistent_data_objects(pmd, true);
+
+	if (pmd->data_extents)
+		dm_extent_allocator_destroy(pmd->data_extents);
 
 	kfree(pmd);
 	return 0;
@@ -1091,6 +1122,7 @@ static int __open_device(struct dm_pool_metadata *pmd,
 	(*td)->creation_time = le32_to_cpu(details_le.creation_time);
 	(*td)->snapshotted_time = le32_to_cpu(details_le.snapshotted_time);
 
+	dm_ea_context_get(pmd->data_extents, &(*td)->data_alloc);
 	list_add(&(*td)->list, &pmd->thin_devices);
 
 	return 0;
@@ -1263,7 +1295,8 @@ static int __delete_device(struct dm_pool_metadata *pmd, dm_thin_id dev)
 	}
 
 	list_del(&td->list);
-	kfree(td);
+	__free_device(td);
+
 	r = dm_btree_remove(&pmd->details_info, pmd->details_root,
 			    &key, &pmd->details_root);
 	if (r)
@@ -1849,13 +1882,29 @@ bool dm_thin_aborted_changes(struct dm_thin_device *td)
 	return r;
 }
 
-int dm_pool_alloc_data_block(struct dm_pool_metadata *pmd, dm_block_t *result)
+static int sm_alloc_extent(void *context, uint64_t b, uint64_t e, uint64_t *result)
+{
+	struct dm_pool_metadata *pmd = context;
+	return dm_sm_new_block_in_range(pmd->data_sm, b, e, result);
+}
+
+int dm_thin_alloc_data_block(struct dm_thin_device *td, dm_block_t *result)
 {
 	int r = -EINVAL;
+	struct dm_pool_metadata *pmd = td->pmd;
 
 	pmd_write_lock(pmd);
-	if (!pmd->fail_io)
-		r = dm_sm_new_block(pmd->data_sm, result);
+	if (!pmd->fail_io) {
+		r = dm_ea_context_alloc(&td->data_alloc, sm_alloc_extent, pmd, result);
+		if (r == -ENOSPC) {
+			/*
+			 * If we've run out of space we retry in case any blocks have
+			 * been freed since we last resized/reset the extent allocator.
+			 */
+			dm_extent_allocator_reset(pmd->data_extents);
+			r = dm_ea_context_alloc(&td->data_alloc, sm_alloc_extent, pmd, result);
+		}
+	}
 	pmd_write_unlock(pmd);
 
 	return r;
@@ -2050,8 +2099,11 @@ int dm_pool_resize_data_dev(struct dm_pool_metadata *pmd, dm_block_t new_count)
 	int r = -EINVAL;
 
 	pmd_write_lock(pmd);
-	if (!pmd->fail_io)
+	if (!pmd->fail_io) {
 		r = __resize_space_map(pmd->data_sm, new_count);
+		if (!r)
+			dm_extent_allocator_resize(pmd->data_extents, new_count);
+	}
 	pmd_write_unlock(pmd);
 
 	return r;

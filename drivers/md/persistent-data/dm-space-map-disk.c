@@ -155,6 +155,28 @@ static int sm_disk_new_block(struct dm_space_map *sm, dm_block_t *b)
 	return r;
 }
 
+static int sm_disk_new_block_in_range(struct dm_space_map *sm, dm_block_t b, dm_block_t e, dm_block_t *result)
+{
+	int r;
+	int32_t nr_allocations;
+	struct sm_disk *smd = container_of(sm, struct sm_disk, sm);
+
+	/*
+	 * Any block we allocate has to be free in both the old and current ll.
+	 */
+	r = sm_ll_find_common_free_block(&smd->old_ll, &smd->ll, b, e, result);
+	if (r)
+		return r;
+
+	r = sm_ll_inc(&smd->ll, *result, *result + 1, &nr_allocations);
+	if (!r)
+		smd->nr_allocated_this_transaction += nr_allocations;
+
+	return r;
+}
+
+//--------------------
+
 static int sm_disk_commit(struct dm_space_map *sm)
 {
 	int r;
@@ -208,6 +230,7 @@ static struct dm_space_map ops = {
 	.inc_blocks = sm_disk_inc_blocks,
 	.dec_blocks = sm_disk_dec_blocks,
 	.new_block = sm_disk_new_block,
+	.new_block_in_range = sm_disk_new_block_in_range,
 	.commit = sm_disk_commit,
 	.root_size = sm_disk_root_size,
 	.copy_root = sm_disk_copy_root,

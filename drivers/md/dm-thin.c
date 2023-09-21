@@ -1552,12 +1552,12 @@ static int alloc_data_block(struct thin_c *tc, dm_block_t *result)
 		}
 	}
 
-	r = dm_pool_alloc_data_block(pool->pmd, result);
+	r = dm_thin_alloc_data_block(tc->td, result);
 	if (r) {
 		if (r == -ENOSPC)
 			set_pool_mode(pool, PM_OUT_OF_DATA_SPACE);
 		else
-			metadata_operation_failed(pool, "dm_pool_alloc_data_block", r);
+			metadata_operation_failed(pool, "dm_thin_alloc_data_block", r);
 		return r;
 	}
 

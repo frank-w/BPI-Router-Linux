@@ -54,6 +54,8 @@ struct dm_space_map {
 	 * new_block will increment the returned block.
 	 */
 	int (*new_block)(struct dm_space_map *sm, dm_block_t *b);
+	int (*new_block_in_range)(struct dm_space_map *sm, dm_block_t b, dm_block_t e,
+				  dm_block_t *result);
 
 	/*
 	 * The root contains all the information needed to fix the space map.
@@ -142,6 +144,12 @@ static inline int dm_sm_dec_block(struct dm_space_map *sm, dm_block_t b)
 static inline int dm_sm_new_block(struct dm_space_map *sm, dm_block_t *b)
 {
 	return sm->new_block(sm, b);
+}
+
+static inline int dm_sm_new_block_in_range(struct dm_space_map *sm, dm_block_t b, dm_block_t e,
+					   dm_block_t *result)
+{
+	return sm->new_block_in_range(sm, b, e, result);
 }
 
 static inline int dm_sm_root_size(struct dm_space_map *sm, size_t *result)
