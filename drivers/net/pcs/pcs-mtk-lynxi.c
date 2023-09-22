@@ -81,6 +81,7 @@ struct mtk_pcs_lynxi {
 	phy_interface_t		interface;
 	struct			phylink_pcs pcs;
 	u32			flags;
+	int			advertise;
 };
 
 static struct mtk_pcs_lynxi *pcs_to_mtk_pcs_lynxi(struct phylink_pcs *pcs)
@@ -121,11 +122,19 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 	unsigned int rgc3, sgm_mode, bmcr;
 	int advertise, link_timer;
 
-	advertise = phylink_mii_c22_pcs_encode_advertisement(interface,
-							     advertising);
-	if (advertise < 0)
-		return advertise;
+	if (advertising) {
+		advertise = phylink_mii_c22_pcs_encode_advertisement(interface,
+								     advertising);
+		if (advertise < 0)
+			return advertise;
 
+		mpcs->advertise = advertise;
+	} else {
+		if (mpcs->advertise < 0)
+			return -EINVAL;
+
+		advertise = mpcs->advertise;
+	}
 	/* Clearing IF_MODE_BIT0 switches the PCS to BASE-X mode, and
 	 * we assume that fixes it's speed at bitrate = line rate (in
 	 * other words, 1000Mbps or 2500Mbps).
@@ -299,6 +308,7 @@ struct phylink_pcs *mtk_pcs_lynxi_create(struct device *dev,
 	mpcs->pcs.neg_mode = true;
 	mpcs->pcs.poll = true;
 	mpcs->interface = PHY_INTERFACE_MODE_NA;
+	mpcs->advertise = -1;
 
 	return &mpcs->pcs;
 }
