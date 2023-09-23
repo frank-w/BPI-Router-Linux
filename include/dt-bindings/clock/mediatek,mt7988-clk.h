@@ -273,4 +273,8 @@
 #define CLK_ETHWARP_WOCPU0_EN 2
 #define CLK_ETHWARP_NR_CLK    3
 
+/* XFIPLL */
+#define CLK_XFIPLL_PLL		0
+#define CLK_XFIPLL_PLL_EN	1
+
 #endif /* _DT_BINDINGS_CLK_MT7988_H */
