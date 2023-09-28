@@ -443,11 +443,8 @@ function install
 		read -p "Press [enter] to copy data to SD-Card..."
 		if  [[ -d /media/$USER/BPI-BOOT ]]; then
 
-			if [[ "$board" == "bpi-r2pro" ]];then
-				targetdir=/media/$USER/BPI-BOOT/extlinux
-			elif [[ "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
-				targetdir=/media/$USER/BPI-BOOT
-			else
+			targetdir=/media/$USER/BPI-BOOT
+			if [[ "$board" == "bpi-r2" || "$board" == "bpi-r64" ]];then
 				targetdir=/media/$USER/BPI-BOOT/bananapi/$board/linux
 			fi
 			mkdir -p $targetdir
@@ -455,25 +452,8 @@ function install
 
 			dtinput=n
 			ndtinput=y
-			if [[ "$board" == "bpi-r2pro" ]];then
-				read -e -i "y" -p "install img kernel (img.gz) [yn]? " imginput
-				if [[ "$imginput" == "y" ]];then
-					imgname=${imagename//uImage_/}.gz
-					dtbname=${imgname//.gz/}.dtb
-					imgfile=$targetdir/$imgname
-					if [[ -e ${imgfile} ]];then
-						echo "backup of kernel: $imgfile.bak"
-						cp ${imgfile} ${imgfile}.bak
-					fi
-					echo "copy new kernel"
-					set -x
-					cp ${bindir}arch/arm64/boot/Image.gz $imgfile
-					cp ${bindir}${DTBFILE} ${targetdir}/${dtbname}
-					set +x
-					if [[ $? -ne 0 ]];then exit 1;fi
-					ndtinput=n
-				fi
-			elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
+			imginput=y
+			if [[ -e ${board}.its ]];then
 				read -e -i "y" -p "install FIT kernel (itb) [yn]? " itbinput
 				if [[ "$itbinput" == "y" ]];then
 					itbname=${imagename//uImage_/}.itb
@@ -486,6 +466,7 @@ function install
 					cp ./${board}.itb $itbfile
 					if [[ $? -ne 0 ]];then exit 1;fi
 					ndtinput=n
+					imginput=n
 				fi
 			else
 				read -e -i "y" -p "install kernel with DT [yn]? " dtinput
@@ -505,6 +486,27 @@ function install
 				ndtsuffix="_nodt"
 			fi
 
+			if [[ "$board" == "bpi-r2pro" ]];then
+				targetdir=/media/$USER/BPI-BOOT/extlinux
+				if [ "$imginput" != "y" ];then img="y"; fi
+				read -e -i "$img" -p "install img kernel (img.gz) [yn]? " imginput
+				if [[ "$imginput" == "y" ]];then
+					imgname=${imagename//uImage_/}.gz
+					dtbname=${imgname//.gz/}.dtb
+					imgfile=$targetdir/$imgname
+					if [[ -e ${imgfile} ]];then
+						echo "backup of kernel: $imgfile.bak"
+						cp ${imgfile} ${imgfile}.bak
+					fi
+					echo "copy new kernel"
+					set -x
+					cp ${bindir}arch/arm64/boot/Image.gz $imgfile
+					cp ${bindir}${DTBFILE} ${targetdir}/${dtbname}
+					set +x
+					if [[ $? -ne 0 ]];then exit 1;fi
+					ndtinput=n
+				fi
+			fi
 			if [[ "$ndtinput" == "y" ]];then
 				if [[ -e ${kernelfile}${ndtsuffix} ]];then
 					echo "backup of kernel: $kernelfile.bak"
