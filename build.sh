@@ -202,13 +202,11 @@ function getuenvpath {
 		uenv_base=/boot/
 	fi
 	if [[ -d $uenv_base ]];then
-		if [[ "$board" == "bpi-r2pro" ]];then
-			uenv=${uenv_base}/extlinux/extlinux.conf
-		elif [[ "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
-			uenv=${uenv_base}/uEnv.txt
-		else
+		if [[ "$board" == "bpi-r2" || "$board" == "bpi-r64" ]];then
 			#r2/r64 uboot: ${bpi}/${board}/${service}/${bootenv}
 			uenv=${uenv_base}/bananapi/$board/linux/uEnv.txt
+		else
+			uenv=${uenv_base}/uEnv.txt
 		fi
 		if [[ ! -e $uenv ]];then
 			mkdir -p $(dirname ${uenv})
@@ -576,35 +574,21 @@ function install
 			openuenv=n
 
 			if [[ -e "$uenv" ]];then
-				if [[ "$board" != "bpi-r2pro" ]];then
-					echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
-					if [[ "$itbinput" == "y" ]];then
-						curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
-					else
-						curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
-						curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
-					fi
-					echo "kernel: " $curkernel
-					echo "dtb: " $curfdt
-					if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
-						echo "no change needed!"
-						openuenv=n
-					else
-						echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
-						openuenv=y
-					fi
+				echo "by default this kernel-/dtb-file will be loaded (kernel-var in uEnv.txt):"
+				if [[ "$itbinput" == "y" ]];then
+					curkernel=$(grep '^fit=' $uenv|tail -1| sed 's/fit=//')
 				else
-					entry=$(grep "$imgname" -B5 $uenv)
-					if [[ $? -ne 0 ]];then
-						echo "you have to add new section for the new kernel":
-						newlabel=$(echo "$imgname" | sed 's/.*_\(.*\).gz/\1/')
-						echo -e "LABEL linux-$newlabel\n	linux $imgname\n	fdt $dtbname\n	append earlycon=uart8250,mmio32,0xfe660000 console=ttyS2,1500000n8 root=/dev/mmcblk1p3 rootwait rw earlyprintk"
-						openuenv=y
-					else
-						entryname=$(echo $entry | sed 's/^.*LABEL\s//' | sed 's/\s.*$//')
-						echo "$imgname loaded by entry $entryname..."
-						openuenv=n
-					fi
+					curkernel=$(grep '^kernel=' $uenv|tail -1| sed 's/kernel=//')
+					curfdt=$(grep '^fdt=' $uenv|tail -1| sed 's/fdt=//')
+				fi
+				echo "kernel: " $curkernel
+				echo "dtb: " $curfdt
+				if [[ "$curkernel" == "${imagename}" || "$curkernel" == "${imagename}${ndtsuffix}" || "$curkernel" == "${itbname}" ]];then
+					echo "no change needed!"
+					openuenv=n
+				else
+					echo "change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
+					openuenv=y
 				fi
 			else
 				echo "no bootconfig...change needed to boot new kernel (kernel=${imagename}/fit=${itbname})!"
