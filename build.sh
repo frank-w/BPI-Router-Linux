@@ -488,8 +488,7 @@ function install
 
 			if [[ "$board" == "bpi-r2pro" ]];then
 				targetdir=/media/$USER/BPI-BOOT/extlinux
-				if [ "$imginput" != "y" ];then img="y"; fi
-				read -e -i "$img" -p "install img kernel (img.gz) [yn]? " imginput
+				read -e -i "$imginput" -p "install img kernel (img.gz) [yn]? " imginput
 				if [[ "$imginput" == "y" ]];then
 					imgname=${imagename//uImage_/}.gz
 					dtbname=${imgname//.gz/}.dtb
