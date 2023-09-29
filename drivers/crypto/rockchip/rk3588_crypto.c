@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/reset.h>
+#include <crypto/engine.h>
 
 static struct rockchip_ip rocklist = {
 	.dev_list = LIST_HEAD_INIT(rocklist.dev_list),
