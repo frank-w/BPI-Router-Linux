@@ -409,13 +409,10 @@ function install
 	bindir="";
 	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 
+	imagename="${kernver}${gitbranch}"
 	if [[ "$board" == "bpi-r2pro" ]];then
 		$0 mount
-		imagename="Image_${kernver}${gitbranch}"
-	else
-		imagename="uImage_${kernver}${gitbranch}"
 	fi
-
 	read -e -i $imagename -p "Image-filename: " input
 	imagename="${input:-$imagename}"
 
@@ -454,7 +451,7 @@ function install
 			if [[ -e ${board}.its ]];then
 				read -e -i "y" -p "install FIT kernel (itb) [yn]? " itbinput
 				if [[ "$itbinput" == "y" ]];then
-					itbname=${imagename//uImage_/}.itb
+					itbname=${imagename}.itb
 					itbfile=$targetdir/$itbname
 					if [[ -e $itbfile ]];then
 						echo "backup of kernel: $itbfile.bak"
@@ -488,8 +485,8 @@ function install
 				targetdir=/media/$USER/BPI-BOOT/extlinux
 				read -e -i "$imginput" -p "install img kernel (img.gz) [yn]? " imginput
 				if [[ "$imginput" == "y" ]];then
-					imgname=${imagename//uImage_/}.gz
-					dtbname=${imgname//.gz/}.dtb
+					dtbname=${imgname}.dtb
+					imgname=${imagename}.gz
 					imgfile=$targetdir/$imgname
 					if [[ -e ${imgfile} ]];then
 						echo "backup of kernel: $imgfile.bak"
