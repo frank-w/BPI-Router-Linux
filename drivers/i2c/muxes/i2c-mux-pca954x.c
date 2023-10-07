@@ -567,9 +567,11 @@ static int pca954x_probe(struct i2c_client *client)
 		goto fail_cleanup;
 	}
 
+if (!device_property_present(dev, "gpio-controller")) {
 	ret = pca954x_irq_setup(muxc);
 	if (ret)
 		goto fail_cleanup;
+}
 
 	/* Now create an adapter for each channel */
 	for (num = 0; num < data->chip->nchans; num++) {
