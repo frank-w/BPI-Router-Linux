@@ -882,6 +882,13 @@ static ssize_t sbefifo_user_write(struct file *file, const char __user *buf,
 
 	mutex_lock(&user->file_lock);
 
+	/* If previous write command is still pending then free it. It is safe
+	 * to do that because read cannot be in progress since we hold the
+	 * lock.
+	 */
+	if (user->pending_cmd)
+		sbefifo_release_command(user);
+
 	/* Can we use the pre-allocate buffer ? If not, allocate */
 	if (len <= PAGE_SIZE)
 		user->pending_cmd = user->cmd_page;
