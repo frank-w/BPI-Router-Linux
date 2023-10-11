@@ -3742,7 +3742,8 @@ late_initcall(printk_late_init);
 /* If @con is specified, only wait for that console. Otherwise wait for all. */
 static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progress)
 {
-	int remaining = timeout_ms;
+	unsigned long timeout_jiffies = msecs_to_jiffies(timeout_ms);
+	unsigned long remaining_jiffies = timeout_jiffies;
 	struct console *c;
 	u64 last_diff = 0;
 	u64 printk_seq;
@@ -3755,12 +3756,21 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
 
 	seq = prb_next_seq(prb);
 
+	/* Flush the consoles so that records up to @seq are printed. */
+	console_lock();
+	console_unlock();
+
 	for (;;) {
+		unsigned long begin_jiffies;
+		unsigned long slept_jiffies;
+
 		diff = 0;
 
 		/*
 		 * Hold the console_lock to guarantee safe access to
-		 * console->seq.
+		 * console->seq. Releasing console_lock flushes more
+		 * records in case @seq is still not printed on all
+		 * usable consoles.
 		 */
 		console_lock();
 
@@ -3791,24 +3801,20 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
 		console_srcu_read_unlock(cookie);
 
 		if (diff != last_diff && reset_on_progress)
-			remaining = timeout_ms;
+			remaining_jiffies = timeout_jiffies;
 
 		console_unlock();
 
 		/* Note: @diff is 0 if there are no usable consoles. */
-		if (diff == 0 || remaining == 0)
+		if (diff == 0 || remaining_jiffies == 0)
 			break;
 
-		if (remaining < 0) {
-			/* no timeout limit */
-			msleep(100);
-		} else if (remaining < 100) {
-			msleep(remaining);
-			remaining = 0;
-		} else {
-			msleep(100);
-			remaining -= 100;
-		}
+		/* msleep(1) might sleep much longer. Check time by jiffies. */
+		begin_jiffies = jiffies;
+		msleep(1);
+		slept_jiffies = jiffies - begin_jiffies;
+
+		remaining_jiffies -= min(slept_jiffies, remaining_jiffies);
 
 		last_diff = diff;
 	}
