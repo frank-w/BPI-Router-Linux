@@ -452,7 +452,7 @@ CONFIG_BT=y
 CONFIG_MTK_COMBO_BT=m
 CONFIG_MTK_COMBO_BT_HCI=y
 #needed for BT?
-#Bluetooth Classic (BR/EDR) features 
+#Bluetooth Classic (BR/EDR) features
 CONFIG_BT_BREDR=y
 #Bluetooth High Speed (HS) features
 CONFIG_BT_HS=y
