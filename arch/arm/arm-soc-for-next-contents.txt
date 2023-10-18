@@ -2,6 +2,8 @@ soc/arm
 	patch
 		MAINTAINERS: Add entry for AMD PENSANDO
 		arm64: Add config for AMD Pensando SoC platforms
+	renesas/arm
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-soc-for-v6.7-tag1
 
 soc/dt
 	patch
@@ -60,6 +62,14 @@ samsung/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm64-dt-for-v6.7
 	stm32/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v6.7-1
+	patch
+		arm/arm64: dts: Removed undocumented and unused "pl022,hierarchy" property
+	riscv/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-for-v6.7
+	rockchip/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.7-rockchip-dts64-1
+	rockchip/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.7-rockchip-dts32-1
 
 soc/drivers
 	patch
@@ -90,6 +100,8 @@ soc/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-drivers-for-v6.7
 	riscv/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-soc-for-v6.7
+	qcom/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.7
 
 soc/defconfig
 	patch
@@ -124,4 +136,6 @@ arm/fixes
 		riscv: dts: thead: set dma-noncoherent to soc bus
 	<no branch> (8cd79b729e746cb167f1563d015a93fc0a079899)
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-dtsfixes1
+	omap/fixes
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-audio-clock-and-modem-signed
 
