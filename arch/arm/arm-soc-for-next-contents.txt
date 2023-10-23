@@ -21,8 +21,7 @@ soc/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt-cleanup-6.7
 	samsung/dt64
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.7
-	exynos/dt
-samsung/dt
+	samsung/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-6.7
 	ixp4xx/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/ixp4xx-for-soc-v6.7
@@ -70,6 +69,18 @@ samsung/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.7-rockchip-dts64-1
 	rockchip/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.7-rockchip-dts32-1
+	mediatek/dts64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/matthias.bgg/linux tags/v6.6-next-dts64.3
+	<no branch> (56bc311585206a8955de793301d4f84fb4ad2ee6)
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.7
+	marvell/dts
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-6.7-1
+	patch
+		arm64: dts: Update cache properties for socionext
+		riscv: dts: thead: convert isa detection to new properties
+		arm64: dts: socionext: add missing cache properties
+	<no branch> (23e4a49943624dd83199989c852565a3ff760fa7)
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.7-2
 
 soc/drivers
 	patch
@@ -102,6 +113,8 @@ soc/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-soc-for-v6.7
 	qcom/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.7
+	rockchips/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.7-rockchip-drivers1
 
 soc/defconfig
 	patch
@@ -138,4 +151,6 @@ arm/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.6-rockchip-dtsfixes1
 	omap/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-audio-clock-and-modem-signed
+	<no branch> (1122a9c2ebe02435014a0f40dcc50f4333286f0f)
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-fixes-6.6-1
 
