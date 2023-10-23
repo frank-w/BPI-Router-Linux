@@ -1962,14 +1962,12 @@ mtk_wed_ppe_check(struct mtk_wed_device *dev, struct sk_buff *skb,
 	struct mtk_eth *eth = dev->hw->eth;
 	struct ethhdr *eh;
 
-	printk("%s-%d\n", __func__, __LINE__);
 	if (!skb)
 		return;
 
 	if (reason != MTK_PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
 		return;
 
-	printk("%s-%d\n", __func__, __LINE__);
 	skb_set_mac_header(skb, 0);
 	eh = eth_hdr(skb);
 	skb->protocol = eh->h_proto;

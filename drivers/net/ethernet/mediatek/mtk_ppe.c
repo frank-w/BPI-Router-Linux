@@ -749,7 +749,6 @@ void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 
 	spin_lock_bh(&ppe_lock);
 
-	printk("%s-%d\n", __func__, __LINE__);
 	if (FIELD_GET(MTK_FOE_IB1_STATE, hwe->ib1) == MTK_FOE_STATE_BIND)
 		goto out;
 
@@ -775,7 +774,6 @@ void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 		found = true;
 	}
 
-	printk("%s-%d: FOUND %d\n", __func__, __LINE__, !!found);
 	if (found)
 		goto out;
 
@@ -807,11 +805,9 @@ void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 	}
 
 	entry = rhashtable_lookup_fast(&ppe->l2_flows, &key, mtk_flow_l2_ht_params);
-	printk("%s-%d: entry %d\n", __func__, __LINE__, !!entry);
 	if (!entry)
 		goto out;
 
-	printk("%s-%d: entry %d\n", __func__, __LINE__, !!entry);
 	mtk_foe_entry_commit_subflow(ppe, entry, hash);
 
 out:
