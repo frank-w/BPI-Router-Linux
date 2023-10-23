@@ -257,6 +257,7 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 	int err = 0;
 	int i;
 
+	printk("%s-%d\n", __func__, __LINE__);
 	if (rhashtable_lookup(&eth->flow_table, &f->cookie, mtk_flow_ht_params))
 		return -EEXIST;
 
@@ -286,6 +287,7 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 		return -EOPNOTSUPP;
 	}
 
+	printk("%s-%d\n", __func__, __LINE__);
 	switch (addr_type) {
 	case 0:
 		offload_type = MTK_PPE_PKT_TYPE_BRIDGE;
@@ -320,6 +322,7 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 		return -EOPNOTSUPP;
 	}
 
+	printk("%s-%d\n", __func__, __LINE__);
 	flow_action_for_each(i, act, &rule->action) {
 		switch (act->id) {
 		case FLOW_ACTION_MANGLE:
@@ -356,12 +359,14 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 		}
 	}
 
+	printk("%s-%d: %pM -> %pM\n", __func__, __LINE__, data.eth.h_source, data.eth.h_dest);
 	if (!is_valid_ether_addr(data.eth.h_source) ||
 	    !is_valid_ether_addr(data.eth.h_dest))
 		return -EINVAL;
 
 	err = mtk_foe_entry_prepare(eth, &foe, offload_type, l4proto, 0,
 				    data.eth.h_source, data.eth.h_dest);
+	printk("%s-%d: err %d\n", __func__, __LINE__, err);
 	if (err)
 		return err;
 
@@ -388,6 +393,8 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 
 		mtk_flow_set_ipv4_addr(eth, &foe, &data, false);
 	}
+
+	printk("%s-%d: %pI4 -> %pI4\n", __func__, __LINE__, &data.v4.src_addr, &data.v4.dst_addr);
 
 	if (addr_type == FLOW_DISSECTOR_KEY_IPV6_ADDRS) {
 		struct flow_match_ipv6_addrs addrs;
@@ -432,6 +439,8 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 			return err;
 	}
 
+	printk("%s-%d: %pI4 -> %pI4\n", __func__, __LINE__, &data.v4.src_addr, &data.v4.dst_addr);
+
 	if (offload_type == MTK_PPE_PKT_TYPE_BRIDGE)
 		foe.bridge.vlan = data.vlan_in;
 
@@ -446,12 +455,14 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 
 	err = mtk_flow_set_output_device(eth, &foe, odev, data.eth.h_dest,
 					 &wed_index);
+	printk("%s-%d: %pI4 -> %pI4 ERR %d (IDX %d)\n", __func__, __LINE__, &data.v4.src_addr, &data.v4.dst_addr, err, wed_index);
 	if (err)
 		return err;
 
 	if (wed_index >= 0 && (err = mtk_wed_flow_add(wed_index)) < 0)
 		return err;
 
+	printk("%s-%d: %pI4 -> %pI4 ERR %d\n", __func__, __LINE__, &data.v4.src_addr, &data.v4.dst_addr, err);
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
 		return -ENOMEM;
