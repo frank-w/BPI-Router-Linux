@@ -249,7 +249,6 @@ mt7915_wed_check_ppe(struct mt7915_dev *dev, struct mt76_queue *q,
 	struct ieee80211_vif *vif;
 	struct wireless_dev *wdev;
 
-	printk("%s-%d\n", __func__, __LINE__);
 	if (!msta || !msta->vif)
 		return;
 
@@ -264,7 +263,6 @@ mt7915_wed_check_ppe(struct mt7915_dev *dev, struct mt76_queue *q,
 	wdev = ieee80211_vif_to_wdev(vif);
 	skb->dev = wdev->netdev;
 
-	printk("%s-%d\n", __func__, __LINE__);
 	mtk_wed_device_ppe_check(&dev->mt76.mmio.wed, skb,
 				 FIELD_GET(MT_DMA_PPE_CPU_REASON, info),
 				 FIELD_GET(MT_DMA_PPE_ENTRY, info));

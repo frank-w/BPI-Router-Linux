@@ -1636,7 +1636,6 @@ mt7915_net_fill_forward_path(struct ieee80211_hw *hw,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
 
-	printk("%s-%d\n", __func__, __LINE__);
 	if (!mtk_wed_device_active(wed))
 		return -ENODEV;
 
@@ -1651,7 +1650,6 @@ mt7915_net_fill_forward_path(struct ieee80211_hw *hw,
 	path->mtk_wdma.queue = phy != &dev->phy;
 
 	ctx->dev = NULL;
-	printk("%s-%d\n", __func__, __LINE__);
 
 	return 0;
 }
