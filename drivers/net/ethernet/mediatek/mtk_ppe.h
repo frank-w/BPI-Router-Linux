@@ -368,7 +368,6 @@ mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 	if (diff < HZ / 10)
 		return;
 
-	printk("%s-%d\n", __func__, __LINE__);
 	ppe->foe_check_time[hash] = now;
 	__mtk_ppe_check_skb(ppe, skb, hash);
 }
