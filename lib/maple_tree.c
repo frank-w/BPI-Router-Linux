@@ -249,40 +249,40 @@ static __always_inline bool mt_is_reserved(const void *entry)
 		xa_is_internal(entry);
 }
 
-static inline void mas_set_err(struct ma_state *mas, long err)
+static __always_inline void mas_set_err(struct ma_state *mas, long err)
 {
 	mas->node = MA_ERROR(err);
+	mas->status = ma_error;
 }
 
-static inline bool mas_is_ptr(const struct ma_state *mas)
+static __always_inline bool mas_is_ptr(const struct ma_state *mas)
 {
-	return mas->node == MAS_ROOT;
+	return mas->status == ma_root;
 }
 
-static inline bool mas_is_start(const struct ma_state *mas)
+static __always_inline bool mas_is_start(const struct ma_state *mas)
 {
-	return mas->node == MAS_START;
+	return mas->status == ma_start;
 }
 
-bool mas_is_err(struct ma_state *mas)
+static __always_inline bool mas_is_none(const struct ma_state *mas)
 {
-	return xa_is_err(mas->node);
+	return mas->status == ma_none;
+}
+
+static __always_inline bool mas_is_paused(const struct ma_state *mas)
+{
+	return mas->status == ma_pause;
 }
 
 static __always_inline bool mas_is_overflow(struct ma_state *mas)
 {
-	if (unlikely(mas->node == MAS_OVERFLOW))
-		return true;
-
-	return false;
+	return mas->status == ma_overflow;
 }
 
-static __always_inline bool mas_is_underflow(struct ma_state *mas)
+static inline bool mas_is_underflow(struct ma_state *mas)
 {
-	if (unlikely(mas->node == MAS_UNDERFLOW))
-		return true;
-
-	return false;
+	return mas->status == ma_underflow;
 }
 
 static inline bool mas_searchable(struct ma_state *mas)
@@ -1274,6 +1274,7 @@ static inline void mas_alloc_nodes(struct ma_state *mas, gfp_t gfp)
 	if (mas->mas_flags & MA_STATE_PREALLOC) {
 		if (allocated)
 			return;
+		BUG_ON(!allocated);
 		WARN_ON(!allocated);
 	}
 
@@ -1379,14 +1380,14 @@ static void mas_node_count(struct ma_state *mas, int count)
  * mas_start() - Sets up maple state for operations.
  * @mas: The maple state.
  *
- * If mas->node == MAS_START, then set the min, max and depth to
+ * If mas->status == mas_start, then set the min, max and depth to
  * defaults.
  *
  * Return:
- * - If mas->node is an error or not MAS_START, return NULL.
- * - If it's an empty tree:     NULL & mas->node == MAS_NONE
- * - If it's a single entry:    The entry & mas->node == MAS_ROOT
- * - If it's a tree:            NULL & mas->node == safe root node.
+ * - If mas->node is an error or not mas_start, return NULL.
+ * - If it's an empty tree:     NULL & mas->status == ma_none
+ * - If it's a single entry:    The entry & mas->status == mas_root
+ * - If it's a tree:            NULL & mas->status == safe root node.
  */
 static inline struct maple_enode *mas_start(struct ma_state *mas)
 {
@@ -1402,6 +1403,7 @@ retry:
 		/* Tree with nodes */
 		if (likely(xa_is_node(root))) {
 			mas->depth = 1;
+			mas->status = ma_active;
 			mas->node = mte_safe_root(root);
 			mas->offset = 0;
 			if (mte_dead_node(mas->node))
@@ -1412,13 +1414,14 @@ retry:
 
 		/* empty tree */
 		if (unlikely(!root)) {
-			mas->node = MAS_NONE;
+			mas->node = NULL;
+			mas->status = ma_none;
 			mas->offset = MAPLE_NODE_SLOTS;
 			return NULL;
 		}
 
 		/* Single entry tree */
-		mas->node = MAS_ROOT;
+		mas->status = ma_root;
 		mas->offset = MAPLE_NODE_SLOTS;
 
 		/* Single entry tree. */
@@ -2232,12 +2235,16 @@ static inline bool mas_next_sibling(struct ma_state *mas)
  *
  * Return: @enode or MAS_NONE
  */
-static inline struct maple_enode *mte_node_or_none(struct maple_enode *enode)
+static inline void mas_node_or_none(struct ma_state *mas,
+		struct maple_enode *enode)
 {
-	if (enode)
-		return enode;
-
-	return ma_enode_ptr(MAS_NONE);
+	if (enode) {
+		mas->node = enode;
+		mas->status = ma_active;
+	} else {
+		mas->node = NULL;
+		mas->status = ma_none;
+	}
 }
 
 /*
@@ -2557,13 +2564,15 @@ static inline void mast_set_split_parents(struct maple_subtree_state *mast,
  * The node will either be RCU freed or pushed back on the maple state.
  */
 static inline void mas_topiary_node(struct ma_state *mas,
-		struct maple_enode *enode, bool in_rcu)
+		struct ma_state *tmp_mas, bool in_rcu)
 {
 	struct maple_node *tmp;
+	struct maple_enode *enode;
 
-	if (enode == MAS_NONE)
+	if (mas_is_none(tmp_mas))
 		return;
 
+	enode = tmp_mas->node;
 	tmp = mte_to_node(enode);
 	mte_set_node_dead(enode);
 	if (in_rcu)
@@ -2603,8 +2612,8 @@ static inline void mas_topiary_replace(struct ma_state *mas,
 	/* Update the parent pointers in the tree */
 	tmp[0] = *mas;
 	tmp[0].offset = 0;
-	tmp[1].node = MAS_NONE;
-	tmp[2].node = MAS_NONE;
+	tmp[1].status = ma_none;
+	tmp[2].status = ma_none;
 	while (!mte_is_leaf(tmp[0].node)) {
 		n = 0;
 		for (i = 0; i < 3; i++) {
@@ -2624,7 +2633,7 @@ static inline void mas_topiary_replace(struct ma_state *mas,
 			break;
 
 		while (n < 3)
-			tmp_next[n++].node = MAS_NONE;
+			tmp_next[n++].status = ma_none;
 
 		for (i = 0; i < 3; i++)
 			tmp[i] = tmp_next[i];
@@ -2637,8 +2646,8 @@ static inline void mas_topiary_replace(struct ma_state *mas,
 	tmp[0] = *mas;
 	tmp[0].offset = 0;
 	tmp[0].node = old_enode;
-	tmp[1].node = MAS_NONE;
-	tmp[2].node = MAS_NONE;
+	tmp[1].status = ma_none;
+	tmp[2].status = ma_none;
 	in_rcu = mt_in_rcu(mas->tree);
 	do {
 		n = 0;
@@ -2653,7 +2662,7 @@ static inline void mas_topiary_replace(struct ma_state *mas,
 				if ((tmp_next[n].min >= tmp_next->index) &&
 				    (tmp_next[n].max <= tmp_next->last)) {
 					mat_add(&subtrees, tmp_next[n].node);
-					tmp_next[n].node = MAS_NONE;
+					tmp_next[n].status = ma_none;
 				} else {
 					n++;
 				}
@@ -2664,16 +2673,16 @@ static inline void mas_topiary_replace(struct ma_state *mas,
 			break;
 
 		while (n < 3)
-			tmp_next[n++].node = MAS_NONE;
+			tmp_next[n++].status = ma_none;
 
 		for (i = 0; i < 3; i++) {
-			mas_topiary_node(mas, tmp[i].node, in_rcu);
+			mas_topiary_node(mas, &tmp[i], in_rcu);
 			tmp[i] = tmp_next[i];
 		}
 	} while (!mte_is_leaf(tmp[0].node));
 
 	for (i = 0; i < 3; i++)
-		mas_topiary_node(mas, tmp[i].node, in_rcu);
+		mas_topiary_node(mas, &tmp[i], in_rcu);
 
 	mas_mat_destroy(mas, &subtrees);
 }
@@ -2712,9 +2721,9 @@ static inline void mast_cp_to_nodes(struct maple_subtree_state *mast,
 {
 	bool new_lmax = true;
 
-	mast->l->node = mte_node_or_none(left);
-	mast->m->node = mte_node_or_none(middle);
-	mast->r->node = mte_node_or_none(right);
+	mas_node_or_none(mast->l, left);
+	mas_node_or_none(mast->m, middle);
+	mas_node_or_none(mast->r, right);
 
 	mast->l->min = mast->orig_l->min;
 	if (split == mast->bn->b_end) {
@@ -2894,7 +2903,7 @@ static int mas_spanning_rebalance(struct ma_state *mas,
 	mast->l = &l_mas;
 	mast->m = &m_mas;
 	mast->r = &r_mas;
-	l_mas.node = r_mas.node = m_mas.node = MAS_NONE;
+	l_mas.status = r_mas.status = m_mas.status = ma_none;
 
 	/* Check if this is not root and has sufficient data.  */
 	if (((mast->orig_l->min != 0) || (mast->orig_r->max != ULONG_MAX)) &&
@@ -3421,7 +3430,6 @@ static int mas_split(struct ma_state *mas, struct maple_big_node *b_node)
 		/* Try to push left. */
 		if (mas_push_data(mas, height, &mast, true))
 			break;
-
 		/* Try to push right. */
 		if (mas_push_data(mas, height, &mast, false))
 			break;
@@ -3537,6 +3545,7 @@ static inline int mas_root_expand(struct ma_state *mas, void *entry)
 	slots = ma_slots(node, type);
 	node->parent = ma_parent_ptr(mas_tree_parent(mas));
 	mas->node = mt_mk_node(node, type);
+	mas->status = ma_active;
 
 	if (mas->index) {
 		if (contents) {
@@ -3569,7 +3578,7 @@ static inline void mas_store_root(struct ma_state *mas, void *entry)
 		mas_root_expand(mas, entry);
 	else {
 		rcu_assign_pointer(mas->tree->ma_root, entry);
-		mas->node = MAS_START;
+		mas->status = ma_start;
 	}
 }
 
@@ -3801,7 +3810,7 @@ static inline int mas_new_root(struct ma_state *mas, void *entry)
 		mas->depth = 0;
 		mas_set_height(mas);
 		rcu_assign_pointer(mas->tree->ma_root, entry);
-		mas->node = MAS_START;
+		mas->status = ma_start;
 		goto done;
 	}
 
@@ -3814,6 +3823,7 @@ static inline int mas_new_root(struct ma_state *mas, void *entry)
 	slots = ma_slots(node, type);
 	node->parent = ma_parent_ptr(mas_tree_parent(mas));
 	mas->node = mt_mk_node(node, type);
+	mas->status = ma_active;
 	rcu_assign_pointer(slots[0], entry);
 	pivots[0] = mas->last;
 	mas->depth = 1;
@@ -4441,7 +4451,7 @@ no_entry:
 	if (unlikely(ma_dead_node(node)))
 		return 1;
 
-	mas->node = MAS_NONE;
+	mas->status = ma_underflow;
 	return 0;
 }
 
@@ -4455,8 +4465,7 @@ no_entry:
  *
  * Return: The entry in the previous slot which is possibly NULL
  */
-static void *mas_prev_slot(struct ma_state *mas, unsigned long min, bool empty,
-			   bool set_underflow)
+static void *mas_prev_slot(struct ma_state *mas, unsigned long min, bool empty)
 {
 	void *entry;
 	void __rcu **slots;
@@ -4494,8 +4503,8 @@ again:
 			goto retry;
 		}
 
-		if (mas_is_none(mas))
-			goto underflow;
+		if (WARN_ON_ONCE(mas_is_underflow(mas)))
+			return NULL;
 
 		mas->last = mas->max;
 		node = mas_mn(mas);
@@ -4509,12 +4518,15 @@ again:
 	if (unlikely(mas_rewalk_if_dead(mas, node, save_point)))
 		goto retry;
 
+	if (mas->index <= min)
+		mas->status = ma_underflow;
+
 	if (likely(entry))
 		return entry;
 
 	if (!empty) {
-		if (mas->index <= min)
-			goto underflow;
+		if (mas_is_underflow(mas))
+			return NULL;
 
 		goto again;
 	}
@@ -4522,8 +4534,7 @@ again:
 	return entry;
 
 underflow:
-	if (set_underflow)
-		mas->node = MAS_UNDERFLOW;
+	mas->status = ma_underflow;
 	return NULL;
 }
 
@@ -4532,7 +4543,8 @@ underflow:
  * @mas: The maple state
  * @max: The maximum pivot value to check.
  *
- * The next value will be mas->node[mas->offset] or MAS_NONE.
+ * The next value will be mas->node[mas->offset] or the status will have
+ * overflowed.
  * Return: 1 on dead node, 0 otherwise.
  */
 static int mas_next_node(struct ma_state *mas, struct maple_node *node,
@@ -4548,13 +4560,13 @@ static int mas_next_node(struct ma_state *mas, struct maple_node *node,
 	void __rcu **slots;
 
 	if (mas->max >= max)
-		goto no_entry;
+		goto overflow;
 
 	min = mas->max + 1;
 	level = 0;
 	do {
 		if (ma_is_root(node))
-			goto no_entry;
+			goto overflow;
 
 		/* Walk up. */
 		if (unlikely(mas_ascend(mas)))
@@ -4605,11 +4617,11 @@ static int mas_next_node(struct ma_state *mas, struct maple_node *node,
 	mas->min = min;
 	return 0;
 
-no_entry:
+overflow:
 	if (unlikely(ma_dead_node(node)))
 		return 1;
 
-	mas->node = MAS_NONE;
+	mas->status = ma_overflow;
 	return 0;
 }
 
@@ -4624,8 +4636,7 @@ no_entry:
  *
  * Return: The entry in the next slot which is possibly NULL
  */
-static void *mas_next_slot(struct ma_state *mas, unsigned long max, bool empty,
-			   bool set_overflow)
+static void *mas_next_slot(struct ma_state *mas, unsigned long max, bool empty)
 {
 	void __rcu **slots;
 	unsigned long *pivots;
@@ -4646,13 +4657,15 @@ retry:
 		if (likely(mas->offset < mas->end))
 			pivot = pivots[mas->offset];
 		else
-			goto overflow;
+			pivot = mas->max;
 
 		if (unlikely(mas_rewalk_if_dead(mas, node, save_point)))
 			goto retry;
 
-		if (pivot >= max)
-			goto overflow;
+		if (pivot >= max) {
+			mas->status = ma_overflow;
+			return NULL;
+		}
 	}
 
 	if (likely(mas->offset < mas->end)) {
@@ -4669,11 +4682,8 @@ again:
 			goto retry;
 		}
 
-		if (WARN_ON_ONCE(mas_is_none(mas))) {
-			mas->node = MAS_OVERFLOW;
+		if (WARN_ON_ONCE(mas_is_overflow(mas)))
 			return NULL;
-			goto overflow;
-		}
 
 		mas->offset = 0;
 		mas->index = mas->min;
@@ -4691,20 +4701,18 @@ again:
 	if (entry)
 		return entry;
 
+
 	if (!empty) {
-		if (mas->last >= max)
-			goto overflow;
+		if (mas->last >= max) {
+			mas->status = ma_overflow;
+			return NULL;
+		}
 
 		mas->index = mas->last + 1;
 		goto again;
 	}
 
 	return entry;
-
-overflow:
-	if (set_overflow)
-		mas->node = MAS_OVERFLOW;
-	return NULL;
 }
 
 /*
@@ -4723,11 +4731,11 @@ overflow:
 static inline void *mas_next_entry(struct ma_state *mas, unsigned long limit)
 {
 	if (mas->last >= limit) {
-		mas->node = MAS_OVERFLOW;
+		mas->status = ma_overflow;
 		return NULL;
 	}
 
-	return mas_next_slot(mas, limit, false, true);
+	return mas_next_slot(mas, limit, false);
 }
 
 /*
@@ -4895,7 +4903,7 @@ done:
  * @mas: The maple state.
  *
  * mas->index and mas->last will be set to the range if there is a value.  If
- * mas->node is MAS_NONE, reset to MAS_START.
+ * mas->node is MAS_NONE, reset to mas_start
  *
  * Return: the entry at the location or %NULL.
  */
@@ -4904,7 +4912,7 @@ void *mas_walk(struct ma_state *mas)
 	void *entry;
 
 	if (!mas_is_active(mas) || !mas_is_start(mas))
-		mas->node = MAS_START;
+		mas->status = ma_start;
 retry:
 	entry = mas_state_walk(mas);
 	if (mas_is_start(mas)) {
@@ -4920,7 +4928,7 @@ retry:
 
 		mas->index = 1;
 		mas->last = ULONG_MAX;
-		mas->node = MAS_NONE;
+		mas->status = ma_none;
 		return NULL;
 	}
 
@@ -5672,27 +5680,40 @@ static bool mas_next_setup(struct ma_state *mas, unsigned long max,
 	bool was_none = mas_is_none(mas);
 
 	if (unlikely(mas->last >= max)) {
-		mas->node = MAS_OVERFLOW;
+		mas->status = ma_overflow;
 		return true;
 	}
 
-	if (mas_is_active(mas))
+	switch (mas->status) {
+	case ma_active:
 		return false;
-
-	if (mas_is_none(mas) || mas_is_paused(mas)) {
-		mas->node = MAS_START;
-	} else if (mas_is_overflow(mas)) {
+	case ma_none:
+		fallthrough;
+	case ma_pause:
+		mas->status = ma_start;
+		fallthrough;
+	case ma_start:
+		mas_walk(mas); /* Retries on dead nodes handled by mas_walk */
+		break;
+	case ma_overflow:
 		/* Overflowed before, but the max changed */
-		mas->node = MAS_START;
-	} else if (mas_is_underflow(mas)) {
-		mas->node = MAS_START;
+		mas->status = ma_active;
+		break;
+	case ma_underflow:
+		/* The user expects the mas to be one before where it is */
+		mas->status = ma_active;
 		*entry = mas_walk(mas);
 		if (*entry)
 			return true;
+		break;
+	case ma_root:
+		break;
+	case ma_error:
+		return true;
 	}
 
-	if (mas_is_start(mas))
-		*entry = mas_walk(mas); /* Retries on dead nodes handled by mas_walk */
+	if (likely(mas_is_active(mas))) /* Fast path */
+		return false;
 
 	if (mas_is_ptr(mas)) {
 		*entry = NULL;
@@ -5702,7 +5723,7 @@ static bool mas_next_setup(struct ma_state *mas, unsigned long max,
 		}
 		mas->index = 1;
 		mas->last = ULONG_MAX;
-		mas->node = MAS_NONE;
+		mas->status = ma_none;
 		return true;
 	}
 
@@ -5731,7 +5752,7 @@ void *mas_next(struct ma_state *mas, unsigned long max)
 		return entry;
 
 	/* Retries on dead nodes handled by mas_next_slot */
-	return mas_next_slot(mas, max, false, true);
+	return mas_next_slot(mas, max, false);
 }
 EXPORT_SYMBOL_GPL(mas_next);
 
@@ -5754,7 +5775,7 @@ void *mas_next_range(struct ma_state *mas, unsigned long max)
 		return entry;
 
 	/* Retries on dead nodes handled by mas_next_slot */
-	return mas_next_slot(mas, max, true, true);
+	return mas_next_slot(mas, max, true);
 }
 EXPORT_SYMBOL_GPL(mas_next_range);
 
@@ -5785,33 +5806,45 @@ EXPORT_SYMBOL_GPL(mt_next);
 static bool mas_prev_setup(struct ma_state *mas, unsigned long min, void **entry)
 {
 	if (unlikely(mas->index <= min)) {
-		mas->node = MAS_UNDERFLOW;
+		mas->status = ma_underflow;
 		return true;
 	}
 
-	if (mas_is_active(mas))
+	switch (mas->status) {
+	case ma_active:
 		return false;
-
-	if (mas_is_overflow(mas)) {
-		mas->node = MAS_START;
+	case ma_start:
+		break;
+	case ma_none:
+		fallthrough;
+	case ma_pause:
+		mas->status = ma_start;
+		break;
+	case ma_underflow:
+		/* underflowed before but the min changed */
+		mas->status = ma_active;
+		break;
+	case ma_overflow:
+		/* User expects mas to be one after where it is */
+		mas->status = ma_active;
 		*entry = mas_walk(mas);
 		if (*entry)
 			return true;
-	}
-
-	if (mas_is_none(mas) || mas_is_paused(mas)) {
-		mas->node = MAS_START;
-	} else if (mas_is_underflow(mas)) {
-		/* underflowed before but the min changed */
-		mas->node = MAS_START;
+		break;
+	case ma_root:
+		break;
+	case ma_error:
+		return true;
 	}
 
 	if (mas_is_start(mas))
 		mas_walk(mas);
 
 	if (unlikely(mas_is_ptr(mas))) {
-		if (!mas->index)
-			goto none;
+		if (!mas->index) {
+			mas->status = ma_none;
+			return true;
+		}
 		mas->index = mas->last = 0;
 		*entry = mas_root(mas);
 		return true;
@@ -5821,7 +5854,7 @@ static bool mas_prev_setup(struct ma_state *mas, unsigned long min, void **entry
 		if (mas->index) {
 			/* Walked to out-of-range pointer? */
 			mas->index = mas->last = 0;
-			mas->node = MAS_ROOT;
+			mas->status = ma_root;
 			*entry = mas_root(mas);
 			return true;
 		}
@@ -5829,10 +5862,6 @@ static bool mas_prev_setup(struct ma_state *mas, unsigned long min, void **entry
 	}
 
 	return false;
-
-none:
-	mas->node = MAS_NONE;
-	return true;
 }
 
 /**
@@ -5853,7 +5882,7 @@ void *mas_prev(struct ma_state *mas, unsigned long min)
 	if (mas_prev_setup(mas, min, &entry))
 		return entry;
 
-	return mas_prev_slot(mas, min, false, true);
+	return mas_prev_slot(mas, min, false);
 }
 EXPORT_SYMBOL_GPL(mas_prev);
 
@@ -5876,7 +5905,7 @@ void *mas_prev_range(struct ma_state *mas, unsigned long min)
 	if (mas_prev_setup(mas, min, &entry))
 		return entry;
 
-	return mas_prev_slot(mas, min, true, true);
+	return mas_prev_slot(mas, min, true);
 }
 EXPORT_SYMBOL_GPL(mas_prev_range);
 
@@ -5919,7 +5948,8 @@ EXPORT_SYMBOL_GPL(mt_prev);
  */
 void mas_pause(struct ma_state *mas)
 {
-	mas->node = MAS_PAUSE;
+	mas->status = ma_pause;
+	mas->node = NULL;
 }
 EXPORT_SYMBOL_GPL(mas_pause);
 
@@ -5933,32 +5963,52 @@ EXPORT_SYMBOL_GPL(mas_pause);
  */
 static __always_inline bool mas_find_setup(struct ma_state *mas, unsigned long max, void **entry)
 {
-	if (mas_is_active(mas)) {
+	switch (mas->status) {
+	case ma_active:
 		if (mas->last < max)
 			return false;
-
 		return true;
-	}
-
-	if (mas_is_paused(mas)) {
+	case ma_start:
+		break;
+	case ma_pause:
 		if (unlikely(mas->last >= max))
 			return true;
 
 		mas->index = ++mas->last;
-		mas->node = MAS_START;
-	} else if (mas_is_none(mas)) {
+		mas->status = ma_start;
+		break;
+	case ma_none:
 		if (unlikely(mas->last >= max))
 			return true;
 
 		mas->index = mas->last;
-		mas->node = MAS_START;
-	} else if (mas_is_overflow(mas) || mas_is_underflow(mas)) {
-		if (mas->index > max) {
-			mas->node = MAS_OVERFLOW;
+		mas->status = ma_start;
+		break;
+	case ma_underflow:
+		/* mas is pointing at entry before unable to go lower */
+		if (unlikely(mas->index >= max)) {
+			mas->status = ma_overflow;
 			return true;
 		}
 
-		mas->node = MAS_START;
+		mas->status = ma_active;
+		*entry = mas_walk(mas);
+		if (*entry)
+			return true;
+		break;
+	case ma_overflow:
+		if (unlikely(mas->last >= max))
+			return true;
+
+		mas->status = ma_active;
+		*entry = mas_walk(mas);
+		if (*entry)
+			return true;
+		break;
+	case ma_root:
+		break;
+	case ma_error:
+		return true;
 	}
 
 	if (mas_is_start(mas)) {
@@ -5985,7 +6035,7 @@ static __always_inline bool mas_find_setup(struct ma_state *mas, unsigned long m
 	return false;
 
 ptr_out_of_range:
-	mas->node = MAS_NONE;
+	mas->status = ma_none;
 	mas->index = 1;
 	mas->last = ULONG_MAX;
 	return true;
@@ -6011,7 +6061,10 @@ void *mas_find(struct ma_state *mas, unsigned long max)
 		return entry;
 
 	/* Retries on dead nodes handled by mas_next_slot */
-	return mas_next_slot(mas, max, false, false);
+	entry = mas_next_slot(mas, max, false);
+	/* Ignore overflow */
+	mas->status = ma_active;
+	return entry;
 }
 EXPORT_SYMBOL_GPL(mas_find);
 
@@ -6035,7 +6088,7 @@ void *mas_find_range(struct ma_state *mas, unsigned long max)
 		return entry;
 
 	/* Retries on dead nodes handled by mas_next_slot */
-	return mas_next_slot(mas, max, true, false);
+	return mas_next_slot(mas, max, true);
 }
 EXPORT_SYMBOL_GPL(mas_find_range);
 
@@ -6050,33 +6103,45 @@ EXPORT_SYMBOL_GPL(mas_find_range);
 static bool mas_find_rev_setup(struct ma_state *mas, unsigned long min,
 		void **entry)
 {
-	if (mas_is_active(mas)) {
-		if (mas->index > min)
-			return false;
 
-		return true;
-	}
-
-	if (mas_is_paused(mas)) {
+	switch (mas->status) {
+	case ma_active:
+		goto active;
+	case ma_start:
+		break;
+	case ma_pause:
 		if (unlikely(mas->index <= min)) {
-			mas->node = MAS_NONE;
+			mas->status = ma_underflow;
 			return true;
 		}
-		mas->node = MAS_START;
 		mas->last = --mas->index;
-	} else if (mas_is_none(mas)) {
+		mas->status = ma_start;
+		break;
+	case ma_none:
 		if (mas->index <= min)
 			goto none;
 
 		mas->last = mas->index;
-		mas->node = MAS_START;
-	} else if (mas_is_underflow(mas) || mas_is_overflow(mas)) {
-		if (mas->last <= min) {
-			mas->node = MAS_UNDERFLOW;
+		mas->status = ma_start;
+		break;
+	case ma_overflow: /* user expects the mas to be one after where it is */
+		if (unlikely(mas->index <= min)) {
+			mas->status = ma_underflow;
 			return true;
 		}
 
-		mas->node = MAS_START;
+		mas->status = ma_active;
+		break;
+	case ma_underflow: /* user expects the mas to be one before where it is */
+		if (unlikely(mas->index <= min))
+			return true;
+
+		mas->status = ma_active;
+		break;
+	case ma_root:
+		break;
+	case ma_error:
+		return true;
 	}
 
 	if (mas_is_start(mas)) {
@@ -6099,19 +6164,20 @@ static bool mas_find_rev_setup(struct ma_state *mas, unsigned long min,
 			 * previous location is 0.
 			 */
 			mas->last = mas->index = 0;
-			mas->node = MAS_ROOT;
+			mas->status = ma_root;
 			*entry = mas_root(mas);
 			return true;
 		}
 	}
 
+active:
 	if (mas->index < min)
 		return true;
 
 	return false;
 
 none:
-	mas->node = MAS_NONE;
+	mas->status = ma_none;
 	return true;
 }
 
@@ -6136,7 +6202,7 @@ void *mas_find_rev(struct ma_state *mas, unsigned long min)
 		return entry;
 
 	/* Retries on dead nodes handled by mas_prev_slot */
-	return mas_prev_slot(mas, min, false, false);
+	return mas_prev_slot(mas, min, false);
 
 }
 EXPORT_SYMBOL_GPL(mas_find_rev);
@@ -6162,7 +6228,7 @@ void *mas_find_range_rev(struct ma_state *mas, unsigned long min)
 		return entry;
 
 	/* Retries on dead nodes handled by mas_prev_slot */
-	return mas_prev_slot(mas, min, true, false);
+	return mas_prev_slot(mas, min, true);
 }
 EXPORT_SYMBOL_GPL(mas_find_range_rev);
 
@@ -6183,7 +6249,7 @@ void *mas_erase(struct ma_state *mas)
 	MA_WR_STATE(wr_mas, mas, NULL);
 
 	if (!mas_is_active(mas) || !mas_is_start(mas))
-		mas->node = MAS_START;
+		mas->status = ma_start;
 
 	/* Retry unnecessary when holding the write lock. */
 	entry = mas_state_walk(mas);
@@ -6228,7 +6294,7 @@ bool mas_nomem(struct ma_state *mas, gfp_t gfp)
 	if (!mas_allocated(mas))
 		return false;
 
-	mas->node = MAS_START;
+	mas->status = ma_start;
 	return true;
 }
 
@@ -6971,11 +7037,11 @@ static inline struct maple_enode *mas_get_slot(struct ma_state *mas,
 static void mas_dfs_postorder(struct ma_state *mas, unsigned long max)
 {
 
-	struct maple_enode *p = MAS_NONE, *mn = mas->node;
+	struct maple_enode *p, *mn = mas->node;
 	unsigned long p_min, p_max;
 
 	mas_next_node(mas, mas_mn(mas), max);
-	if (!mas_is_none(mas))
+	if (!mas_is_overflow(mas))
 		return;
 
 	if (mte_is_root(mn))
@@ -6988,7 +7054,7 @@ static void mas_dfs_postorder(struct ma_state *mas, unsigned long max)
 		p_min = mas->min;
 		p_max = mas->max;
 		mas_prev_node(mas, 0);
-	} while (!mas_is_none(mas));
+	} while (!mas_is_underflow(mas));
 
 	mas->node = p;
 	mas->max = p_max;
@@ -7443,7 +7509,7 @@ static void mt_validate_nulls(struct maple_tree *mt)
 	MA_STATE(mas, mt, 0, 0);
 
 	mas_start(&mas);
-	if (mas_is_none(&mas) || (mas.node == MAS_ROOT))
+	if (mas_is_none(&mas) || (mas_is_ptr(&mas)))
 		return;
 
 	while (!mte_is_leaf(mas.node))
@@ -7460,7 +7526,7 @@ static void mt_validate_nulls(struct maple_tree *mt)
 		last = entry;
 		if (offset == mas_data_end(&mas)) {
 			mas_next_node(&mas, mas_mn(&mas), ULONG_MAX);
-			if (mas_is_none(&mas))
+			if (mas_is_overflow(&mas))
 				return;
 			offset = 0;
 			slots = ma_slots(mte_to_node(mas.node),
@@ -7469,7 +7535,7 @@ static void mt_validate_nulls(struct maple_tree *mt)
 			offset++;
 		}
 
-	} while (!mas_is_none(&mas));
+	} while (!mas_is_overflow(&mas));
 }
 
 /*
@@ -7490,7 +7556,7 @@ void mt_validate(struct maple_tree *mt)
 	while (!mte_is_leaf(mas.node))
 		mas_descend(&mas);
 
-	while (!mas_is_none(&mas)) {
+	while (!mas_is_overflow(&mas)) {
 		MAS_WARN_ON(&mas, mte_dead_node(mas.node));
 		end = mas_data_end(&mas);
 		if (MAS_WARN_ON(&mas, (end < mt_min_slot_count(mas.node)) &&
@@ -7515,16 +7581,35 @@ EXPORT_SYMBOL_GPL(mt_validate);
 void mas_dump(const struct ma_state *mas)
 {
 	pr_err("MAS: tree=%p enode=%p ", mas->tree, mas->node);
-	if (mas_is_none(mas))
-		pr_err("(MAS_NONE) ");
-	else if (mas_is_ptr(mas))
-		pr_err("(MAS_ROOT) ");
-	else if (mas_is_start(mas))
-		 pr_err("(MAS_START) ");
-	else if (mas_is_paused(mas))
-		pr_err("(MAS_PAUSED) ");
+	switch (mas->status) {
+	case ma_active:
+		pr_err("(ma_active)");
+		break;
+	case ma_none:
+		pr_err("(ma_none)");
+		break;
+	case ma_root:
+		pr_err("(ma_root)");
+		break;
+	case ma_start:
+		pr_err("(ma_start) ");
+		break;
+	case ma_pause:
+		pr_err("(ma_pause) ");
+		break;
+	case ma_overflow:
+		pr_err("(ma_overflow) ");
+		break;
+	case ma_underflow:
+		pr_err("(ma_underflow) ");
+		break;
+	case ma_error:
+		pr_err("(ma_error) ");
+		break;
+	}
 
-	pr_err("[%u] index=%lx last=%lx\n", mas->offset, mas->index, mas->last);
+	pr_err("[%u/%u] index=%lx last=%lx\n", mas->offset, mas->end,
+	       mas->index, mas->last);
 	pr_err("     min=%lx max=%lx alloc=%p, depth=%u, flags=%x\n",
 	       mas->min, mas->max, mas->alloc, mas->depth, mas->mas_flags);
 	if (mas->index > mas->last)
