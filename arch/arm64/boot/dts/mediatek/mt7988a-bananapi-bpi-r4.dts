@@ -33,36 +33,11 @@
 		reg = <0x00 0x40000000 0x00 0x10000000>;
 	};
 
-	regulator-sfp1-3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "sfp1";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&pio 82 GPIO_ACTIVE_LOW>;
-		regulator-always-on;
-	};
-
-	regulator-sfp2-3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "sfp2";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&pio 83 GPIO_ACTIVE_LOW>;
-		regulator-always-on;
-	};
-
 	/* left SFP cage (wan) */
-	/*
-	GPIO69_GPIO_B: SFP1_TX_Fault
-	GPIO70_GPIO_C: SFP1_TX_Disable
-	GPIO82_UART1_CTS: SFP1_MOD_DEF0
-	GPIO54: SFP1_Rate_SEL
-	GPIO21_PWMD1: SFP1_LOS
-	*/
 	sfp0: sfp1-wan {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp1>;
-		/*mod-def0-gpios = <&pio 82 GPIO_ACTIVE_LOW>;*/
+		mod-def0-gpios = <&pio 82 GPIO_ACTIVE_LOW>;
 		los-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
 		tx-disable-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
 		rate-select0-gpios = <&pio 54 GPIO_ACTIVE_LOW>;
@@ -70,17 +45,10 @@
 	};
 
 	/* right SFP cage (lan) */
-	/*
-	GPIO1_UART2_TXD: SFP2_TX_Fault
-	GPIO0_UART2_RXD: SFP2_TX_Disable
-	GPIO83_UART1_RTS: SFP2_MOD_DEF0
-	GPIO3_UART2_RTS: SFP2_Rate_SEL
-	GPIO2_UART2_CTS: SFP2_LOS
-	*/
 	sfp1: sfp2-lan {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp2>;
-		/*mod-def0-gpios = <&pio 83 GPIO_ACTIVE_LOW>;*/
+		mod-def0-gpios = <&pio 83 GPIO_ACTIVE_LOW>;
 		los-gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
 		tx-disable-gpios = <&pio 0 GPIO_ACTIVE_HIGH>;
 		rate-select0-gpios = <&pio 3 GPIO_ACTIVE_LOW>;
@@ -110,7 +78,7 @@
 			label = "status:green";
 			function = LED_FUNCTION_STATUS;
 			color = <LED_COLOR_ID_GREEN>;
-			gpios = <&pio 64 GPIO_ACTIVE_HIGH>;
+			gpios = <&pio 79 GPIO_ACTIVE_HIGH>;
 			default-state = "on";
 		};
 
@@ -118,7 +86,7 @@
 			label = "wps:blue";
 			function = LED_FUNCTION_WPS;
 			color = <LED_COLOR_ID_BLUE>;
-			gpios = <&pio 65 GPIO_ACTIVE_HIGH>;
+			gpios = <&pio 63 GPIO_ACTIVE_HIGH>;
 			default-state = "off";
 		};
 	};
@@ -152,7 +120,7 @@
 
 &gsw_phy0 {
 	pinctrl-names = "gbe-led";
-	pinctrl-0 = <&gbe0_led1_pins>;
+	pinctrl-0 = <&gbe0_led0_pins>;
 };
 
 &gsw_phy0_led1 {
@@ -162,7 +130,7 @@
 
 &gsw_phy1 {
 	pinctrl-names = "gbe-led";
-	pinctrl-0 = <&gbe1_led1_pins>;
+	pinctrl-0 = <&gbe1_led0_pins>;
 };
 
 &gsw_phy1_led1 {
@@ -172,7 +140,7 @@
 
 &gsw_phy2 {
 	pinctrl-names = "gbe-led";
-	pinctrl-0 = <&gbe2_led1_pins>;
+	pinctrl-0 = <&gbe2_led0_pins>;
 };
 
 &gsw_phy2_led1 {
@@ -182,7 +150,7 @@
 
 &gsw_phy3 {
 	pinctrl-names = "gbe-led";
-	pinctrl-0 = <&gbe3_led1_pins>;
+	pinctrl-0 = <&gbe3_led0_pins>;
 };
 
 &gsw_phy3_led1 {
@@ -265,47 +233,34 @@
 	};
 };
 
-/*&i2c1 {
+&i2c1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_sfp_pins>;
 	status = "okay";
-};*/
-
+};
+ 
 &i2c2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_1_pins>;
 	status = "okay";
 
-	i2c-switch@70 {
+	pca9545: i2c-switch@70 {
+		reg = <0x70>;
 		compatible = "nxp,pca9545";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x70>;
-
-		/*
-		GPIO5_SMI_0_MDC 	PCA9545APW Reset
-		GPIO6_SMI_0_MDIO 	PCA9545APW INT
-		*/
-
-		/*interrupt-parent = <&ipic>;
-		interrupts = <17 IRQ_TYPE_LEVEL_LOW>;
-		interrupt-controller;
-		#interrupt-cells = <2>;*/
-		//interrupt-parent = <&pio>;
-		//interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
-		reset-gpios = <&pio 5 GPIO_ACTIVE_LOW>;
 
 		i2c_rtc: i2c@0 { //eeprom,rtc,ngff
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
 
-			eeprom@50 {
+			eeprom@57 {
 				compatible = "atmel,24c02";
-				reg = <0x50>;
-				address-bits = <0x08>;
-				page-size = <0x08>;
-				size = <0x100>;
+				reg = <0x57>;
+				address-bits = <8>;
+				page-size = <8>;
+				size = <256>;
 			};
 
 			pcf8563: rtc@51 {
@@ -314,20 +269,42 @@
 				status = "disabled";
 			};
 		};
-		i2c_sfp1: i2c@1 { //sfp1
+
+		i2c_sfp1: i2c@1 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <1>;
 		};
-		i2c_sfp2: i2c@2 { //sfp2
+
+		i2c_sfp2: i2c@2 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <2>;
 		};
-		i2c_wifi: i2c@3 { //wifi
+
+		i2c_wifi: i2c@3 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <3>;
+
+			// 5G WIFI MAC Address EEPROM
+			wifi_eeprom@51 {
+				compatible = "atmel,24c02";
+				reg = <0x51>;
+				address-bits = <8>;
+				page-size = <8>;
+				size = <256>;
+			};
+
+			// 6G WIFI MAC Address EEPROM
+			wifi_eeprom@52 {
+				compatible = "atmel,24c02";
+				reg = <0x52>;
+
+				address-bits = <8>;
+				page-size = <8>;
+				size = <256>;
+			};
 		};
 	};
 };
@@ -371,7 +348,7 @@
 	pinctrl-0 = <&spi0_flash_pins>;
 	status = "okay";
 
-	spi_nand: nand@0 {
+	spi_nand: spi_nand@0 {
 		compatible = "spi-nand";
 		reg = <0>;
 		spi-max-frequency = <52000000>;
