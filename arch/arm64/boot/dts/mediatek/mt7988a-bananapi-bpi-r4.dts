@@ -233,11 +233,11 @@
 	};
 };
 
-&i2c1 {
+/*&i2c1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_sfp_pins>;
 	status = "okay";
-};
+};*/
  
 &i2c2 {
 	pinctrl-names = "default";
@@ -247,6 +247,7 @@
 	pca9545: i2c-switch@70 {
 		reg = <0x70>;
 		compatible = "nxp,pca9545";
+		reset-gpios = <&pio 5 GPIO_ACTIVE_LOW>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 
