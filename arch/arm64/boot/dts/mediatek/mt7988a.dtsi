@@ -340,6 +340,13 @@
 				};
 			};
 
+			i2c1_sfp_pins: i2c1-sfp-pins-g0 {
+				mux {
+					function = "i2c";
+					groups = "i2c1_sfp";
+				};
+			};
+
 			i2c2_pins: i2c2-pins {
 				mux {
 					function = "i2c";
