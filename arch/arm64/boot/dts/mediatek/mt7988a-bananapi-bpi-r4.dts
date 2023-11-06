@@ -12,7 +12,7 @@
 #include <dt-bindings/regulator/richtek,rt5190a-regulator.h>
 
 / {
-	model = "Bananapi BPI-R4 V00";
+	model = "Bananapi BPI-R4";
 	compatible = "bananapi,bpi-r4",
 		     "mediatek,mt7988";
 
@@ -51,34 +51,39 @@
 		regulator-always-on;
 	};
 
-	/* left SFP cage (wan) using hardware i2c bus */
+	/* left SFP cage (wan) */
+	/*
+	GPIO69_GPIO_B: SFP1_TX_Fault
+	GPIO70_GPIO_C: SFP1_TX_Disable
+	GPIO82_UART1_CTS: SFP1_MOD_DEF0
+	GPIO54: SFP1_Rate_SEL
+	GPIO21_PWMD1: SFP1_LOS
+	*/
 	sfp0: sfp1-wan {
 		compatible = "sff,sfp";
-		i2c-bus = <&i2c1>;
-		mod-def0-gpios = <&pio 12 GPIO_ACTIVE_LOW>;
-		los-gpios = <&pio 68 GPIO_ACTIVE_HIGH>;
-		tx-disable-gpios = <&pio 11 GPIO_ACTIVE_HIGH>;
+		i2c-bus = <&i2c_sfp1>;
+		/*mod-def0-gpios = <&pio 82 GPIO_ACTIVE_LOW>;*/
+		los-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
+		tx-disable-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
 		rate-select0-gpios = <&pio 54 GPIO_ACTIVE_LOW>;
 		maximum-power-milliwatt = <3000>;
 	};
 
-	/* i2c of the right SFP cage (lan) */
-	i2c_sfp2: i2c-gpio-0 {
-		compatible = "i2c-gpio";
-		sda-gpios = <&pio 51 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-		scl-gpios = <&pio 53 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-		i2c-gpio,delay-us = <2>;
-		#address-cells = <1>;
-		#size-cells = <0>;
-	};
-
+	/* right SFP cage (lan) */
+	/*
+	GPIO1_UART2_TXD: SFP2_TX_Fault
+	GPIO0_UART2_RXD: SFP2_TX_Disable
+	GPIO83_UART1_RTS: SFP2_MOD_DEF0
+	GPIO3_UART2_RTS: SFP2_Rate_SEL
+	GPIO2_UART2_CTS: SFP2_LOS
+	*/
 	sfp1: sfp2-lan {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp2>;
-		mod-def0-gpios = <&pio 52 GPIO_ACTIVE_LOW>;
-		los-gpios = <&pio 80 GPIO_ACTIVE_HIGH>;
-		tx-disable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
-		rate-select0-gpios = <&pio 81 GPIO_ACTIVE_LOW>;
+		/*mod-def0-gpios = <&pio 83 GPIO_ACTIVE_LOW>;*/
+		los-gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
+		tx-disable-gpios = <&pio 0 GPIO_ACTIVE_HIGH>;
+		rate-select0-gpios = <&pio 3 GPIO_ACTIVE_LOW>;
 		maximum-power-milliwatt = <3000>;
 	};
 
@@ -260,29 +265,70 @@
 	};
 };
 
-&i2c1 {
+/*&i2c1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_sfp_pins>;
 	status = "okay";
-};
+};*/
 
 &i2c2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_1_pins>;
 	status = "okay";
 
-	eeprom@50 {
-		compatible = "atmel,24c02";
-		reg = <0x50>;
-		address-bits = <0x08>;
-		page-size = <0x08>;
-		size = <0x100>;
-	};
+	i2c-switch@70 {
+		compatible = "nxp,pca9545";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x70>;
 
-	pcf8563: rtc@51 {
-		compatible = "nxp,pcf8563";
-		reg = <0x51>;
-		status = "disabled";
+		/*
+		GPIO5_SMI_0_MDC 	PCA9545APW Reset
+		GPIO6_SMI_0_MDIO 	PCA9545APW INT
+		*/
+
+		/*interrupt-parent = <&ipic>;
+		interrupts = <17 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;*/
+		//interrupt-parent = <&pio>;
+		//interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&pio 5 GPIO_ACTIVE_LOW>;
+
+		i2c_rtc: i2c@0 { //eeprom,rtc,ngff
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+
+			eeprom@50 {
+				compatible = "atmel,24c02";
+				reg = <0x50>;
+				address-bits = <0x08>;
+				page-size = <0x08>;
+				size = <0x100>;
+			};
+
+			pcf8563: rtc@51 {
+				compatible = "nxp,pcf8563";
+				reg = <0x51>;
+				status = "disabled";
+			};
+		};
+		i2c_sfp1: i2c@1 { //sfp1
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+		};
+		i2c_sfp2: i2c@2 { //sfp2
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+		};
+		i2c_wifi: i2c@3 { //wifi
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+		};
 	};
 };
 
