@@ -5921,6 +5921,12 @@ next_op:
 		fallthrough;
 	case CEPH_SPARSE_READ_DATA:
 		if (sr->sr_index >= count) {
+			if (sr->sr_datalen && count) {
+				pr_err("%s: datalen mismatch, %u bytes left\n",
+				       __func__, sr->sr_datalen);
+				return -EREMOTEIO;
+			}
+
 			sr->sr_state = CEPH_SPARSE_READ_HDR;
 			goto next_op;
 		}
@@ -5936,6 +5942,8 @@ next_op:
 			     elen);
 			return -EREMOTEIO;
 		}
+
+		sr->sr_datalen -= elen;
 
 		/* zero out anything from sr_pos to start of extent */
 		if (sr->sr_pos < eoff)
