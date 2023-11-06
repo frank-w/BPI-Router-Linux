@@ -59,9 +59,10 @@ struct sys_off_handler {
 };
 
 /*
- * This variable is used to indicate if a halt initiated instead when
- * reboot call is invoked with LINUX_REBOOT_CMD_POWER_OFF, but system
- * cannot be powered off. This allowes kernel_halt() to notify that.
+ * This variable is used to indicate if a halt was initiated instead of a
+ * reboot when the reboot call was invoked with LINUX_REBOOT_CMD_POWER_OFF, but
+ * the system cannot be powered off. This allowes kernel_halt() to notify users
+ * of that.
  */
 static bool poweroff_fallback_to_halt;
 
