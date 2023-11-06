@@ -35956,7 +35956,7 @@ static int __init compare_tree(struct maple_tree *mt_a, struct maple_tree *mt_b)
 
 	if (mas_is_ptr(&mas_a) || mas_is_ptr(&mas_b)) {
 		if (!(mas_is_ptr(&mas_a) && mas_is_ptr(&mas_b))) {
-			pr_err("One is MAS_ROOT and the other is not.\n");
+			pr_err("One is ma_root and the other is not.\n");
 			return -1;
 		}
 		return 0;
@@ -35965,7 +35965,7 @@ static int __init compare_tree(struct maple_tree *mt_a, struct maple_tree *mt_b)
 	while (!mas_is_none(&mas_a) || !mas_is_none(&mas_b)) {
 
 		if (mas_is_none(&mas_a) || mas_is_none(&mas_b)) {
-			pr_err("One is MAS_NONE and the other is not.\n");
+			pr_err("One is ma_none and the other is not.\n");
 			return -1;
 		}
 

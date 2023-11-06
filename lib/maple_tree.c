@@ -6693,7 +6693,7 @@ static inline void mas_dup_build(struct ma_state *mas, struct ma_state *new_mas,
 
 	node = mt_alloc_one(gfp);
 	if (!node) {
-		new_mas->node = MAS_NONE;
+		new_mas->status = ma_none;
 		mas_set_err(mas, -ENOMEM);
 		return;
 	}
