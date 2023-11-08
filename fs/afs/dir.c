@@ -1260,6 +1260,7 @@ void afs_check_for_remote_deletion(struct afs_operation *op)
 	switch (afs_op_abort_code(op)) {
 	case VNOVNODE:
 		set_bit(AFS_VNODE_DELETED, &vnode->flags);
+		clear_nlink(&vnode->netfs.inode);
 		afs_break_callback(vnode, afs_cb_break_for_deleted);
 	}
 }
@@ -1375,7 +1376,7 @@ static void afs_dir_remove_subdir(struct dentry *dentry)
 
 		clear_nlink(&vnode->netfs.inode);
 		set_bit(AFS_VNODE_DELETED, &vnode->flags);
-		clear_bit(AFS_VNODE_CB_PROMISED, &vnode->flags);
+		vnode->cb_expires_at = AFS_NO_CB_PROMISE;
 		clear_bit(AFS_VNODE_DIR_VALID, &vnode->flags);
 	}
 }
