@@ -486,8 +486,8 @@ static inline void memcpy_to_folio(struct folio *folio, size_t offset,
 /**
  * folio_zero_tail - Zero the tail of a folio.
  * @folio: The folio to zero.
- * @kaddr: The address the folio is currently mapped to.
  * @offset: The byte offset in the folio to start zeroing at.
+ * @kaddr: The address the folio is currently mapped to.
  *
  * If you have already used kmap_local_folio() to map a folio, written
  * some data to it and now need to zero the end of the folio (and flush
