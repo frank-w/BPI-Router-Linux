@@ -104,7 +104,7 @@
 		reset-key {
 			label = "reset";
 			linux,code = <KEY_RESTART>;
-			gpios = <&pio 2 GPIO_ACTIVE_LOW>;
+			gpios = <&pio 7 GPIO_ACTIVE_LOW>;
 		};
 	};
 
