@@ -555,7 +555,7 @@ static inline void folio_fill_tail(struct folio *folio, size_t offset,
 	}
 
 	memcpy(to, from, len);
-	to = folio_zero_tail(folio, offset, to);
+	to = folio_zero_tail(folio, offset + len, to + len);
 	kunmap_local(to);
 }
 
