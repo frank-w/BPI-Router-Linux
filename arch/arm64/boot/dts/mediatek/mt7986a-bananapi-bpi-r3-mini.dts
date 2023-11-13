@@ -118,16 +118,16 @@
 			trip = <&cpu_trip_active_high>;
 		};
 
-		cpu-active-low {
+		cpu-active-med {
 			/* active: set fan to cooling level 1 */
 			cooling-device = <&fan 1 1>;
-			trip = <&cpu_trip_active_low>;
+			trip = <&cpu_trip_active_med>;
 		};
 
-		cpu-passive {
-			/* passive: set fan to cooling level 0 */
+		cpu-active-low {
+			/* active: set fan to cooling level 0 */
 			cooling-device = <&fan 0 0>;
-			trip = <&cpu_trip_passive>;
+			trip = <&cpu_trip_active_low>;
 		};
 	};
 };
@@ -290,14 +290,14 @@
 	pcie_pins: pcie-pins {
 		mux {
 			function = "pcie";
-			groups = "pcie_clk", "pcie_pereset";
+			groups = "pcie_clk", "pcie_wake", "pcie_pereset";
 		};
 	};
 
 	pwm_pins: pwm-pins {
 		mux {
 			function = "pwm";
-			groups = "pwm0", "pwm1_0";
+			groups = "pwm0";
 		};
 	};
 
@@ -305,13 +305,6 @@
 		mux {
 			function = "spi";
 			groups = "spi0", "spi0_wp_hold";
-		};
-	};
-
-	uart1_pins: uart1-pins {
-		mux {
-			function = "uart";
-			groups = "uart1_rx_tx";
 		};
 	};
 
