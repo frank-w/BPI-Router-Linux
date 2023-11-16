@@ -3177,7 +3177,6 @@ from_memcg:
 		objcg = rcu_dereference_check(memcg->objcg, 1);
 		if (likely(objcg))
 			break;
-		objcg = NULL;
 	}
 
 	return objcg;
