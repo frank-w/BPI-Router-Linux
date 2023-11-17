@@ -29,15 +29,13 @@ uint64_t pagemap_get_entry(int fd, char *start)
 	return entry;
 }
 
-static uint64_t pagemap_scan_get_categories(int fd, char *start)
+static uint64_t __pagemap_scan_get_categories(int fd, char *start, struct page_region *r)
 {
 	struct pm_scan_arg arg;
-	struct page_region r;
-	long ret;
 
 	arg.start = (uintptr_t)start;
 	arg.end = (uintptr_t)(start + psize());
-	arg.vec = (uintptr_t)&r;
+	arg.vec = (uintptr_t)r;
 	arg.vec_len = 1;
 	arg.flags = 0;
 	arg.size = sizeof(struct pm_scan_arg);
@@ -49,7 +47,15 @@ static uint64_t pagemap_scan_get_categories(int fd, char *start)
 				  PAGE_IS_HUGE | PAGE_IS_SOFT_DIRTY;
 	arg.return_mask = arg.category_anyof_mask;
 
-	ret = ioctl(fd, PAGEMAP_SCAN, &arg);
+	return ioctl(fd, PAGEMAP_SCAN, &arg);
+}
+
+static uint64_t pagemap_scan_get_categories(int fd, char *start)
+{
+	struct page_region r;
+	long ret;
+
+	ret = __pagemap_scan_get_categories(fd, start, &r);
 	if (ret < 0)
 		ksft_exit_fail_msg("PAGEMAP_SCAN failed: %s\n", strerror(errno));
 	if (ret == 0)
@@ -57,18 +63,39 @@ static uint64_t pagemap_scan_get_categories(int fd, char *start)
 	return r.categories;
 }
 
+/* `start` is any valid address. */
+static bool pagemap_scan_supported(int fd, char *start)
+{
+	static int supported = -1;
+	int ret;
+
+	if (supported != -1)
+		return supported;
+
+	/* Provide an invalid address in order to trigger EFAULT. */
+	ret = __pagemap_scan_get_categories(fd, start, (struct page_region *) ~0UL);
+	if (ret == 0)
+		ksft_exit_fail_msg("PAGEMAP_SCAN succedded unexpectedly\n");
+
+	supported = errno == EFAULT;
+
+	return supported;
+}
+
 static bool page_entry_is(int fd, char *start, char *desc,
 			  uint64_t pagemap_flags, uint64_t pagescan_flags)
 {
-	bool m, s;
+	bool m = pagemap_get_entry(fd, start) & pagemap_flags;
 
-	m = pagemap_get_entry(fd, start) & pagemap_flags;
-	s = pagemap_scan_get_categories(fd, start) & pagescan_flags;
-	if (m == s)
-		return m;
+	if (pagemap_scan_supported(fd, start)) {
+		bool s = pagemap_scan_get_categories(fd, start) & pagescan_flags;
 
-	ksft_exit_fail_msg(
-		"read and ioctl return unmatched results for %s: %d %d", desc, m, s);
+		if (m == s)
+			return m;
+
+		ksft_exit_fail_msg(
+			"read and ioctl return unmatched results for %s: %d %d", desc, m, s);
+	}
 	return m;
 }
 
