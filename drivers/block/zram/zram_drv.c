@@ -301,7 +301,7 @@ static void mark_idle(struct zram *zram, ktime_t cutoff)
 		zram_slot_lock(zram, index);
 		if (zram_allocated(zram, index) &&
 				!zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
-#ifdef ZRAM_TRACK_ENTRY_ACTIME
+#ifdef CONFIG_ZRAM_TRACK_ENTRY_ACTIME
 			is_idle = !cutoff || ktime_after(cutoff,
 							 zram->table[index].ac_time);
 #endif

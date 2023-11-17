@@ -74,7 +74,7 @@ config ZRAM_TRACK_ENTRY_ACTIME
 	depends on ZRAM
 	help
 	  With this feature zram tracks access time of every stored
-	  entry (page), which can be used for a more fine-grained IDLE
+	  entry (page), which can be used for a more fine grained IDLE
 	  pages writeback.
 
 config ZRAM_MEMORY_TRACKING
