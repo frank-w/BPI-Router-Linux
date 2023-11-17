@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 #include <fcntl.h>
+#include <linux/fs.h>
 #include <linux/landlock.h>
 #include <linux/magic.h>
 #include <sched.h>
@@ -3380,7 +3381,7 @@ TEST_F_FORK(layout1, truncate_unhandled)
 			      LANDLOCK_ACCESS_FS_WRITE_FILE;
 	int ruleset_fd;
 
-	/* Enable Landlock. */
+	/* Enables Landlock. */
 	ruleset_fd = create_ruleset(_metadata, handled, rules);
 
 	ASSERT_LE(0, ruleset_fd);
@@ -3463,7 +3464,7 @@ TEST_F_FORK(layout1, truncate)
 			      LANDLOCK_ACCESS_FS_TRUNCATE;
 	int ruleset_fd;
 
-	/* Enable Landlock. */
+	/* Enables Landlock. */
 	ruleset_fd = create_ruleset(_metadata, handled, rules);
 
 	ASSERT_LE(0, ruleset_fd);
@@ -3690,7 +3691,7 @@ TEST_F_FORK(ftruncate, open_and_ftruncate)
 	};
 	int fd, ruleset_fd;
 
-	/* Enable Landlock. */
+	/* Enables Landlock. */
 	ruleset_fd = create_ruleset(_metadata, variant->handled, rules);
 	ASSERT_LE(0, ruleset_fd);
 	enforce_ruleset(_metadata, ruleset_fd);
@@ -3767,6 +3768,16 @@ TEST_F_FORK(ftruncate, open_and_ftruncate_in_different_processes)
 	ASSERT_EQ(0, close(socket_fds[1]));
 }
 
+/* Invokes the FS_IOC_GETFLAGS IOCTL and returns its errno or 0. */
+static int test_fs_ioc_getflags_ioctl(int fd)
+{
+	uint32_t flags;
+
+	if (ioctl(fd, FS_IOC_GETFLAGS, &flags) < 0)
+		return errno;
+	return 0;
+}
+
 TEST(memfd_ftruncate)
 {
 	int fd;
@@ -3779,6 +3790,412 @@ TEST(memfd_ftruncate)
 	 * created in ways other than open(2).
 	 */
 	EXPECT_EQ(0, test_ftruncate(fd));
+
+	ASSERT_EQ(0, close(fd));
+}
+
+/* clang-format off */
+FIXTURE(ioctl) {};
+/* clang-format on */
+
+FIXTURE_SETUP(ioctl)
+{
+	prepare_layout(_metadata);
+	create_file(_metadata, file1_s1d1);
+}
+
+FIXTURE_TEARDOWN(ioctl)
+{
+	EXPECT_EQ(0, remove_path(file1_s1d1));
+	cleanup_layout(_metadata);
+}
+
+FIXTURE_VARIANT(ioctl)
+{
+	const __u64 handled;
+	const __u64 permitted;
+	const mode_t open_mode;
+	/*
+	 * These are the expected IOCTL results for a representative IOCTL from
+	 * each of the IOCTL groups.  We only distinguish the 0 and EACCES
+	 * results here, and treat other errors as 0.
+	 */
+	const int expected_fioqsize_result; /* G1 */
+	const int expected_fibmap_result; /* G2 */
+	const int expected_fionread_result; /* G3 */
+	const int expected_fs_ioc_zero_range_result; /* G4 */
+	const int expected_fs_ioc_getflags_result; /* other */
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_i_permitted_none) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_EXECUTE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_EXECUTE,
+	.open_mode = O_RDWR,
+	.expected_fioqsize_result = EACCES,
+	.expected_fibmap_result = EACCES,
+	.expected_fionread_result = EACCES,
+	.expected_fs_ioc_zero_range_result = EACCES,
+	.expected_fs_ioc_getflags_result = EACCES,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_i_permitted_i) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_IOCTL,
+	.open_mode = O_RDWR,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = 0,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_unhandled) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_EXECUTE,
+	.permitted = LANDLOCK_ACCESS_FS_EXECUTE,
+	.open_mode = O_RDWR,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = 0,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_rwd_permitted_r) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE |
+		   LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_READ_DIR,
+	.permitted = LANDLOCK_ACCESS_FS_READ_FILE,
+	.open_mode = O_RDONLY,
+	/* If LANDLOCK_ACCESS_FS_IOCTL is not handled, all IOCTLs work. */
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = 0,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_rwd_permitted_w) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE |
+		   LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_READ_DIR,
+	.permitted = LANDLOCK_ACCESS_FS_WRITE_FILE,
+	.open_mode = O_WRONLY,
+	/* If LANDLOCK_ACCESS_FS_IOCTL is not handled, all IOCTLs work. */
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = 0,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_ri_permitted_r) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_READ_FILE,
+	.open_mode = O_RDONLY,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = EACCES,
+	.expected_fs_ioc_getflags_result = EACCES,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_wi_permitted_w) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_WRITE_FILE,
+	.open_mode = O_WRONLY,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = EACCES,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = EACCES,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_di_permitted_d) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_DIR | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_READ_DIR,
+	.open_mode = O_RDWR,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = EACCES,
+	.expected_fionread_result = EACCES,
+	.expected_fs_ioc_zero_range_result = EACCES,
+	.expected_fs_ioc_getflags_result = EACCES,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_rwi_permitted_rw) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE |
+		   LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_READ_FILE |
+		     LANDLOCK_ACCESS_FS_WRITE_FILE,
+	.open_mode = O_RDWR,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = EACCES,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_rwi_permitted_r) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE |
+		   LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_READ_FILE,
+	.open_mode = O_RDONLY,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = EACCES,
+	.expected_fs_ioc_getflags_result = EACCES,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_rwi_permitted_ri) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE |
+		   LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.open_mode = O_RDONLY,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = 0,
+	.expected_fs_ioc_zero_range_result = EACCES,
+	.expected_fs_ioc_getflags_result = 0,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_rwi_permitted_w) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE |
+		   LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_WRITE_FILE,
+	.open_mode = O_WRONLY,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = EACCES,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = EACCES,
+};
+
+/* clang-format off */
+FIXTURE_VARIANT_ADD(ioctl, ioctl_handled_rwi_permitted_wi) {
+	/* clang-format on */
+	.handled = LANDLOCK_ACCESS_FS_READ_FILE |
+		   LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.permitted = LANDLOCK_ACCESS_FS_WRITE_FILE | LANDLOCK_ACCESS_FS_IOCTL,
+	.open_mode = O_WRONLY,
+	.expected_fioqsize_result = 0,
+	.expected_fibmap_result = 0,
+	.expected_fionread_result = EACCES,
+	.expected_fs_ioc_zero_range_result = 0,
+	.expected_fs_ioc_getflags_result = 0,
+};
+
+static int test_fioqsize_ioctl(int fd)
+{
+	size_t sz;
+
+	if (ioctl(fd, FIOQSIZE, &sz) < 0)
+		return errno;
+	return 0;
+}
+
+static int test_fibmap_ioctl(int fd)
+{
+	int blk = 0;
+
+	/*
+	 * We only want to distinguish here whether Landlock already caught it,
+	 * so we treat anything but EACCESS as success.  (It commonly returns
+	 * EPERM when missing CAP_SYS_RAWIO.)
+	 */
+	if (ioctl(fd, FIBMAP, &blk) < 0 && errno == EACCES)
+		return errno;
+	return 0;
+}
+
+static int test_fionread_ioctl(int fd)
+{
+	size_t sz = 0;
+
+	if (ioctl(fd, FIONREAD, &sz) < 0 && errno == EACCES)
+		return errno;
+	return 0;
+}
+
+#define FS_IOC_ZERO_RANGE _IOW('X', 57, struct space_resv)
+
+static int test_fs_ioc_zero_range_ioctl(int fd)
+{
+	struct space_resv {
+		__s16 l_type;
+		__s16 l_whence;
+		__s64 l_start;
+		__s64 l_len; /* len == 0 means until end of file */
+		__s32 l_sysid;
+		__u32 l_pid;
+		__s32 l_pad[4]; /* reserved area */
+	} reservation = {};
+	/*
+	 * This can fail for various reasons, but we only want to distinguish
+	 * here whether Landlock already caught it, so we treat anything but
+	 * EACCES as success.
+	 */
+	if (ioctl(fd, FS_IOC_ZERO_RANGE, &reservation) < 0 && errno == EACCES)
+		return errno;
+	return 0;
+}
+
+TEST_F_FORK(ioctl, handle_dir_access_file)
+{
+	const int flag = 0;
+	const struct rule rules[] = {
+		{
+			.path = dir_s1d1,
+			.access = variant->permitted,
+		},
+		{},
+	};
+	int fd, ruleset_fd;
+
+	/* Enables Landlock. */
+	ruleset_fd = create_ruleset(_metadata, variant->handled, rules);
+	ASSERT_LE(0, ruleset_fd);
+	enforce_ruleset(_metadata, ruleset_fd);
+	ASSERT_EQ(0, close(ruleset_fd));
+
+	fd = open(file1_s1d1, variant->open_mode);
+	ASSERT_LE(0, fd);
+
+	/*
+	 * Checks that IOCTL commands in each IOCTL group return the expected
+	 * errors.
+	 */
+	EXPECT_EQ(variant->expected_fioqsize_result, test_fioqsize_ioctl(fd));
+	EXPECT_EQ(variant->expected_fibmap_result, test_fibmap_ioctl(fd));
+	EXPECT_EQ(variant->expected_fionread_result, test_fionread_ioctl(fd));
+	EXPECT_EQ(variant->expected_fs_ioc_zero_range_result,
+		  test_fs_ioc_zero_range_ioctl(fd));
+	EXPECT_EQ(variant->expected_fs_ioc_getflags_result,
+		  test_fs_ioc_getflags_ioctl(fd));
+
+	/* Checks that unrestrictable commands are unrestricted. */
+	EXPECT_EQ(0, ioctl(fd, FIOCLEX));
+	EXPECT_EQ(0, ioctl(fd, FIONCLEX));
+	EXPECT_EQ(0, ioctl(fd, FIONBIO, &flag));
+	EXPECT_EQ(0, ioctl(fd, FIOASYNC, &flag));
+
+	ASSERT_EQ(0, close(fd));
+}
+
+TEST_F_FORK(ioctl, handle_dir_access_dir)
+{
+	const char *const path = dir_s1d1;
+	const int flag = 0;
+	const struct rule rules[] = {
+		{
+			.path = path,
+			.access = variant->permitted,
+		},
+		{},
+	};
+	int fd, ruleset_fd;
+
+	/* Enables Landlock. */
+	ruleset_fd = create_ruleset(_metadata, variant->handled, rules);
+	ASSERT_LE(0, ruleset_fd);
+	enforce_ruleset(_metadata, ruleset_fd);
+	ASSERT_EQ(0, close(ruleset_fd));
+
+	/*
+	 * Ignore variant->open_mode for this test, as we intend to open a
+	 * directory.  If the directory can not be opened, the variant is
+	 * infeasible to test with an opened directory.
+	 */
+	fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return;
+
+	/*
+	 * Checks that IOCTL commands in each IOCTL group return the expected
+	 * errors.
+	 */
+	EXPECT_EQ(variant->expected_fioqsize_result, test_fioqsize_ioctl(fd));
+	EXPECT_EQ(variant->expected_fibmap_result, test_fibmap_ioctl(fd));
+	EXPECT_EQ(variant->expected_fionread_result, test_fionread_ioctl(fd));
+	EXPECT_EQ(variant->expected_fs_ioc_zero_range_result,
+		  test_fs_ioc_zero_range_ioctl(fd));
+	EXPECT_EQ(variant->expected_fs_ioc_getflags_result,
+		  test_fs_ioc_getflags_ioctl(fd));
+
+	/* Checks that unrestrictable commands are unrestricted. */
+	EXPECT_EQ(0, ioctl(fd, FIOCLEX));
+	EXPECT_EQ(0, ioctl(fd, FIONCLEX));
+	EXPECT_EQ(0, ioctl(fd, FIONBIO, &flag));
+	EXPECT_EQ(0, ioctl(fd, FIOASYNC, &flag));
+
+	ASSERT_EQ(0, close(fd));
+}
+
+TEST_F_FORK(ioctl, handle_file_access_file)
+{
+	const char *const path = file1_s1d1;
+	const int flag = 0;
+	const struct rule rules[] = {
+		{
+			.path = path,
+			.access = variant->permitted,
+		},
+		{},
+	};
+	int fd, ruleset_fd;
+
+	if (variant->permitted & LANDLOCK_ACCESS_FS_READ_DIR) {
+		/* This access right can not be granted on files. */
+		return;
+	}
+
+	/* Enables Landlock. */
+	ruleset_fd = create_ruleset(_metadata, variant->handled, rules);
+	ASSERT_LE(0, ruleset_fd);
+	enforce_ruleset(_metadata, ruleset_fd);
+	ASSERT_EQ(0, close(ruleset_fd));
+
+	fd = open(path, variant->open_mode);
+	ASSERT_LE(0, fd);
+
+	/*
+	 * Checks that IOCTL commands in each IOCTL group return the expected
+	 * errors.
+	 */
+	EXPECT_EQ(variant->expected_fioqsize_result, test_fioqsize_ioctl(fd));
+	EXPECT_EQ(variant->expected_fibmap_result, test_fibmap_ioctl(fd));
+	EXPECT_EQ(variant->expected_fionread_result, test_fionread_ioctl(fd));
+	EXPECT_EQ(variant->expected_fs_ioc_zero_range_result,
+		  test_fs_ioc_zero_range_ioctl(fd));
+	EXPECT_EQ(variant->expected_fs_ioc_getflags_result,
+		  test_fs_ioc_getflags_ioctl(fd));
+
+	/* Checks that unrestrictable commands are unrestricted. */
+	EXPECT_EQ(0, ioctl(fd, FIOCLEX));
+	EXPECT_EQ(0, ioctl(fd, FIONCLEX));
+	EXPECT_EQ(0, ioctl(fd, FIONBIO, &flag));
+	EXPECT_EQ(0, ioctl(fd, FIOASYNC, &flag));
 
 	ASSERT_EQ(0, close(fd));
 }
