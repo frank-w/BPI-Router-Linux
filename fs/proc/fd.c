@@ -138,7 +138,8 @@ static void tid_fd_update_inode(struct task_struct *task, struct inode *inode,
 	security_task_to_inode(task, inode);
 }
 
-static int tid_fd_revalidate(struct dentry *dentry, unsigned int flags)
+static int tid_fd_revalidate(struct dentry *dentry, const struct qstr *name,
+			     unsigned int flags)
 {
 	struct task_struct *task;
 	struct inode *inode;

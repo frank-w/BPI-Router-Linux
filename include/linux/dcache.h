@@ -126,7 +126,7 @@ enum dentry_d_lock_class
 };
 
 struct dentry_operations {
-	int (*d_revalidate)(struct dentry *, unsigned int);
+	int (*d_revalidate)(struct dentry *, const struct qstr *, unsigned int);
 	int (*d_weak_revalidate)(struct dentry *, unsigned int);
 	int (*d_hash)(const struct dentry *, struct qstr *);
 	int (*d_compare)(const struct dentry *,
@@ -208,6 +208,7 @@ struct dentry_operations {
 #define DCACHE_FALLTHRU			0x01000000 /* Fall through to lower layer */
 #define DCACHE_NOKEY_NAME		0x02000000 /* Encrypted name encoded without key */
 #define DCACHE_OP_REAL			0x04000000
+#define DCACHE_CASEFOLDED_NAME		0x08000000 /* Dentry comes from a casefold directory */
 
 #define DCACHE_PAR_LOOKUP		0x10000000 /* being looked up (with parent locked shared) */
 #define DCACHE_DENTRY_CURSOR		0x20000000
@@ -495,6 +496,13 @@ extern void d_set_fallthru(struct dentry *dentry);
 static inline bool d_is_fallthru(const struct dentry *dentry)
 {
 	return dentry->d_flags & DCACHE_FALLTHRU;
+}
+
+extern void d_set_casefolded_name(struct dentry *dentry);
+
+static inline bool d_is_casefolded_name(const struct dentry *dentry)
+{
+	return dentry->d_flags & DCACHE_CASEFOLDED_NAME;
 }
 
 

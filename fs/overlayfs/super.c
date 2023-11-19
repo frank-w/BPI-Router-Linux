@@ -88,7 +88,8 @@ bug:
 	return dentry;
 }
 
-static int ovl_revalidate_real(struct dentry *d, unsigned int flags, bool weak)
+static int ovl_revalidate_real(struct dentry *d, const struct qstr *name,
+			       unsigned int flags, bool weak)
 {
 	int ret = 1;
 
@@ -99,7 +100,7 @@ static int ovl_revalidate_real(struct dentry *d, unsigned int flags, bool weak)
 		if (d->d_flags & DCACHE_OP_WEAK_REVALIDATE)
 			ret =  d->d_op->d_weak_revalidate(d, flags);
 	} else if (d->d_flags & DCACHE_OP_REVALIDATE) {
-		ret = d->d_op->d_revalidate(d, flags);
+		ret = d->d_op->d_revalidate(d, name, flags);
 		if (!ret) {
 			if (!(flags & LOOKUP_RCU))
 				d_invalidate(d);
@@ -110,6 +111,7 @@ static int ovl_revalidate_real(struct dentry *d, unsigned int flags, bool weak)
 }
 
 static int ovl_dentry_revalidate_common(struct dentry *dentry,
+					const struct qstr *name,
 					unsigned int flags, bool weak)
 {
 	struct ovl_entry *oe;
@@ -127,22 +129,24 @@ static int ovl_dentry_revalidate_common(struct dentry *dentry,
 	lowerstack = ovl_lowerstack(oe);
 	upper = ovl_i_dentry_upper(inode);
 	if (upper)
-		ret = ovl_revalidate_real(upper, flags, weak);
+		ret = ovl_revalidate_real(upper, name, flags, weak);
 
 	for (i = 0; ret > 0 && i < ovl_numlower(oe); i++)
-		ret = ovl_revalidate_real(lowerstack[i].dentry, flags, weak);
+		ret = ovl_revalidate_real(lowerstack[i].dentry, name, flags, weak);
 
 	return ret;
 }
 
-static int ovl_dentry_revalidate(struct dentry *dentry, unsigned int flags)
+static int ovl_dentry_revalidate(struct dentry *dentry,
+				 const struct qstr *name, unsigned int flags)
 {
-	return ovl_dentry_revalidate_common(dentry, flags, false);
+	return ovl_dentry_revalidate_common(dentry, name, flags, false);
 }
 
-static int ovl_dentry_weak_revalidate(struct dentry *dentry, unsigned int flags)
+static int ovl_dentry_weak_revalidate(struct dentry *dentry,
+				      unsigned int flags)
 {
-	return ovl_dentry_revalidate_common(dentry, flags, true);
+	return ovl_dentry_revalidate_common(dentry, NULL, flags, true);
 }
 
 static const struct dentry_operations ovl_dentry_operations = {

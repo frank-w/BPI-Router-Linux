@@ -1765,9 +1765,71 @@ static int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
 	return 0;
 }
 
-static const struct dentry_operations generic_ci_dentry_ops = {
+static int ci_d_revalidate(struct dentry *dentry, const struct qstr *name,
+			   unsigned int flags)
+{
+	const struct dentry *parent;
+	const struct inode *dir;
+
+	if (!d_is_negative(dentry))
+		return 1;
+
+	parent = READ_ONCE(dentry->d_parent);
+	dir = READ_ONCE(parent->d_inode);
+
+	if (!dir || !IS_CASEFOLDED(dir))
+		return 1;
+
+	/*
+	 * Negative dentries created prior to turning the directory
+	 * case-insensitive cannot be trusted, since they don't ensure
+	 * any possible case version of the filename doesn't exist.
+	 */
+	if (!d_is_casefolded_name(dentry))
+		return 0;
+
+	/*
+	 * If the lookup is for creation, then a negative dentry can only be
+	 * reused if it's a case-sensitive match, not just a case-insensitive
+	 * one.  This is needed to make the new file be created with the name
+	 * the user specified, preserving case.
+	 *
+	 * LOOKUP_CREATE or LOOKUP_RENAME_TARGET cover most creations.  In these
+	 * cases, ->d_name is stable and can be compared to 'name' without
+	 * taking ->d_lock because the caller must hold dir->i_rwsem.  (This
+	 * is because the directory lock blocks the dentry from being
+	 * concurrently instantiated, and negative dentries are never moved.)
+	 *
+	 * All other creations actually use flags==0.  These come from the edge
+	 * case of filesystems calling functions like lookup_one() that do a
+	 * lookup without setting the lookup flags at all.  Such lookups might
+	 * or might not be for creation, and if not don't guarantee stable
+	 * ->d_name.  Therefore, invalidate all negative dentries when flags==0.
+	 */
+	if (flags & (LOOKUP_CREATE | LOOKUP_RENAME_TARGET)) {
+		if (dentry->d_name.len != name->len ||
+		    memcmp(dentry->d_name.name, name->name, name->len))
+			return 0;
+	} else if (!flags) {
+		return 0;
+	}
+
+	return 1;
+}
+
+static int generic_ci_d_revalidate(struct dentry *dentry,
+				   const struct qstr *name,
+				   unsigned int flags)
+{
+	if (!ci_d_revalidate(dentry, name, flags))
+		return 0;
+	return fscrypt_d_revalidate(dentry, name, flags);
+}
+
+static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
 	.d_hash = generic_ci_d_hash,
 	.d_compare = generic_ci_d_compare,
+	.d_revalidate = generic_ci_d_revalidate,
 };
 #endif
 
@@ -1777,26 +1839,19 @@ static const struct dentry_operations generic_encrypted_dentry_ops = {
 };
 #endif
 
-#if defined(CONFIG_FS_ENCRYPTION) && IS_ENABLED(CONFIG_UNICODE)
-static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
-	.d_hash = generic_ci_d_hash,
-	.d_compare = generic_ci_d_compare,
-	.d_revalidate = fscrypt_d_revalidate,
-};
-#endif
-
 /**
  * generic_set_encrypted_ci_d_ops - helper for setting d_ops for given dentry
  * @dentry:	dentry to set ops on
  *
- * Casefolded directories need d_hash and d_compare set, so that the dentries
- * contained in them are handled case-insensitively.  Note that these operations
- * are needed on the parent directory rather than on the dentries in it, and
- * while the casefolding flag can be toggled on and off on an empty directory,
- * dentry_operations can't be changed later.  As a result, if the filesystem has
- * casefolding support enabled at all, we have to give all dentries the
- * casefolding operations even if their inode doesn't have the casefolding flag
- * currently (and thus the casefolding ops would be no-ops for now).
+ * Casefolded directories need some dentry_operations set, so that the dentries
+ * contained in them are handled case-insensitively.  Note that d_hash and
+ * d_compare are needed on the parent directory rather than on the dentries in
+ * it, and while the casefolding flag can be toggled on and off on an empty
+ * directory, dentry_operations can't be changed later.  As a result, if the
+ * filesystem has casefolding support enabled at all, we have to give all
+ * dentries the casefolding operations even if their inode doesn't have the
+ * casefolding flag currently (and thus the casefolding ops would be no-ops for
+ * now).
  *
  * Encryption works differently in that the only dentry operation it needs is
  * d_revalidate, which it only needs on dentries that have the no-key name flag.
@@ -1805,31 +1860,19 @@ static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
  * Finally, to maximize compatibility with overlayfs (which isn't compatible
  * with certain dentry operations) and to avoid taking an unnecessary
  * performance hit, we use custom dentry_operations for each possible
- * combination rather than always installing all operations.
+ * combination of operations rather than always installing them.
  */
 void generic_set_encrypted_ci_d_ops(struct dentry *dentry)
 {
-#ifdef CONFIG_FS_ENCRYPTION
-	bool needs_encrypt_ops = dentry->d_flags & DCACHE_NOKEY_NAME;
-#endif
 #if IS_ENABLED(CONFIG_UNICODE)
-	bool needs_ci_ops = dentry->d_sb->s_encoding;
-#endif
-#if defined(CONFIG_FS_ENCRYPTION) && IS_ENABLED(CONFIG_UNICODE)
-	if (needs_encrypt_ops && needs_ci_ops) {
+	if (dentry->d_sb->s_encoding) {
 		d_set_d_op(dentry, &generic_encrypted_ci_dentry_ops);
 		return;
 	}
 #endif
 #ifdef CONFIG_FS_ENCRYPTION
-	if (needs_encrypt_ops) {
+	if (dentry->d_flags & DCACHE_NOKEY_NAME) {
 		d_set_d_op(dentry, &generic_encrypted_dentry_ops);
-		return;
-	}
-#endif
-#if IS_ENABLED(CONFIG_UNICODE)
-	if (needs_ci_ops) {
-		d_set_d_op(dentry, &generic_ci_dentry_ops);
 		return;
 	}
 #endif
