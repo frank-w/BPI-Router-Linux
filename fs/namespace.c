@@ -32,6 +32,7 @@
 #include <linux/fs_context.h>
 #include <linux/shmem_fs.h>
 #include <linux/mnt_idmapping.h>
+#include <linux/nospec.h>
 
 #include "pnode.h"
 #include "internal.h"
@@ -5046,6 +5047,7 @@ static ssize_t do_listmount(struct vfsmount *mnt, u64 __user *buf,
 
 		if (ctr >= bufsize)
 			return -EOVERFLOW;
+		ctr = array_index_nospec(ctr, bufsize);
 		if (put_user(r->mnt_id_unique, buf + ctr))
 			return -EFAULT;
 		if (check_add_overflow(ctr, 1, &ctr))
