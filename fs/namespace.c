@@ -5048,8 +5048,7 @@ static ssize_t do_listmount(struct vfsmount *mnt, u64 __user *buf,
 			return -EOVERFLOW;
 		if (put_user(r->mnt_id_unique, buf + ctr))
 			return -EFAULT;
-		ctr++;
-		if (ctr < 0)
+		if (check_add_overflow(ctr, 1, &ctr))
 			return -ERANGE;
 	}
 	return ctr;
