@@ -288,7 +288,7 @@ scmi_perf_domain_attributes_get(const struct scmi_protocol_handle *ph,
 	if (!ret && PROTOCOL_REV_MAJOR(version) >= 0x3 &&
 	    SUPPORTS_EXTENDED_NAMES(flags))
 		ph->hops->extended_name_get(ph, PERF_DOMAIN_NAME_GET,
-					    dom_info->id, dom_info->info.name,
+					    dom_info->id, NULL, dom_info->info.name,
 					    SCMI_MAX_STR_SIZE);
 
 	if (dom_info->level_indexing_mode) {
@@ -504,6 +504,9 @@ static int scmi_perf_limits_set(const struct scmi_protocol_handle *ph,
 	if (IS_ERR(dom))
 		return PTR_ERR(dom);
 
+	if (!dom->set_limits)
+		return -EOPNOTSUPP;
+
 	if (PROTOCOL_REV_MAJOR(pi->version) >= 0x3 && !max_perf && !min_perf)
 		return -EINVAL;
 
@@ -654,6 +657,9 @@ static int scmi_perf_level_set(const struct scmi_protocol_handle *ph,
 	if (IS_ERR(dom))
 		return PTR_ERR(dom);
 
+	if (!dom->info.set_perf)
+		return -EOPNOTSUPP;
+
 	if (dom->level_indexing_mode) {
 		struct scmi_opp *opp;
 
@@ -756,28 +762,35 @@ static void scmi_perf_domain_init_fc(const struct scmi_protocol_handle *ph,
 				     u32 domain, struct scmi_fc_info **p_fc)
 {
 	struct scmi_fc_info *fc;
+	struct perf_dom_info *dom;
+
+	dom = scmi_perf_domain_lookup(ph, domain);
+	if (IS_ERR(dom))
+		return;
 
 	fc = devm_kcalloc(ph->dev, PERF_FC_MAX, sizeof(*fc), GFP_KERNEL);
 	if (!fc)
 		return;
 
 	ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
-				   PERF_LEVEL_SET, 4, domain,
-				   &fc[PERF_FC_LEVEL].set_addr,
-				   &fc[PERF_FC_LEVEL].set_db);
-
-	ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
 				   PERF_LEVEL_GET, 4, domain,
 				   &fc[PERF_FC_LEVEL].get_addr, NULL);
 
 	ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
-				   PERF_LIMITS_SET, 8, domain,
-				   &fc[PERF_FC_LIMIT].set_addr,
-				   &fc[PERF_FC_LIMIT].set_db);
-
-	ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
 				   PERF_LIMITS_GET, 8, domain,
 				   &fc[PERF_FC_LIMIT].get_addr, NULL);
+
+	if (dom->info.set_perf)
+		ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
+					   PERF_LEVEL_SET, 4, domain,
+					   &fc[PERF_FC_LEVEL].set_addr,
+					   &fc[PERF_FC_LEVEL].set_db);
+
+	if (dom->set_limits)
+		ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
+					   PERF_LIMITS_SET, 8, domain,
+					   &fc[PERF_FC_LIMIT].set_addr,
+					   &fc[PERF_FC_LIMIT].set_db);
 
 	*p_fc = fc;
 }
