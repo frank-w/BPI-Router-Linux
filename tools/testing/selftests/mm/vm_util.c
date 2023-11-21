@@ -75,7 +75,7 @@ static bool pagemap_scan_supported(int fd, char *start)
 	/* Provide an invalid address in order to trigger EFAULT. */
 	ret = __pagemap_scan_get_categories(fd, start, (struct page_region *) ~0UL);
 	if (ret == 0)
-		ksft_exit_fail_msg("PAGEMAP_SCAN succedded unexpectedly\n");
+		ksft_exit_fail_msg("PAGEMAP_SCAN succeeded unexpectedly\n");
 
 	supported = errno == EFAULT;
 
