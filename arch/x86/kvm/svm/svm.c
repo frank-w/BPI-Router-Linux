@@ -531,8 +531,6 @@ static bool __kvm_is_svm_supported(void)
 	int cpu = smp_processor_id();
 	struct cpuinfo_x86 *c = &cpu_data(cpu);
 
-	u64 vm_cr;
-
 	if (c->x86_vendor != X86_VENDOR_AMD &&
 	    c->x86_vendor != X86_VENDOR_HYGON) {
 		pr_err("CPU %d isn't AMD or Hygon\n", cpu);
@@ -546,12 +544,6 @@ static bool __kvm_is_svm_supported(void)
 
 	if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT)) {
 		pr_info("KVM is unsupported when running as an SEV guest\n");
-		return false;
-	}
-
-	rdmsrl(MSR_VM_CR, vm_cr);
-	if (vm_cr & (1 << SVM_VM_CR_SVM_DISABLE)) {
-		pr_err("SVM disabled (by BIOS) in MSR_VM_CR on CPU %d\n", cpu);
 		return false;
 	}
 
@@ -691,7 +683,7 @@ static int svm_hardware_enable(void)
 	 */
 	if (boot_cpu_has(X86_FEATURE_V_TSC_AUX)) {
 		struct sev_es_save_area *hostsa;
-		u32 msr_hi;
+		u32 __maybe_unused msr_hi;
 
 		hostsa = (struct sev_es_save_area *)(page_address(sd->save_area) + 0x400);
 
@@ -913,8 +905,7 @@ void svm_set_x2apic_msr_interception(struct vcpu_svm *svm, bool intercept)
 	if (intercept == svm->x2avic_msrs_intercepted)
 		return;
 
-	if (!x2avic_enabled ||
-	    !apic_x2apic_mode(svm->vcpu.arch.apic))
+	if (!x2avic_enabled)
 		return;
 
 	for (i = 0; i < MAX_DIRECT_ACCESS_MSRS; i++) {

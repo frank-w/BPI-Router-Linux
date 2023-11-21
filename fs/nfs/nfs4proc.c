@@ -8870,8 +8870,6 @@ static int _nfs4_proc_exchange_id(struct nfs_client *clp, const struct cred *cre
 	/* Save the EXCHANGE_ID verifier session trunk tests */
 	memcpy(clp->cl_confirm.data, argp->verifier.data,
 	       sizeof(clp->cl_confirm.data));
-	if (resp->flags & EXCHGID4_FLAG_USE_PNFS_DS)
-		set_bit(NFS_CS_DS, &clp->cl_flags);
 out:
 	trace_nfs4_exchange_id(clp, status);
 	rpc_put_task(task);
@@ -10739,7 +10737,7 @@ static const struct xattr_handler nfs4_xattr_nfs4_user_handler = {
 };
 #endif
 
-const struct xattr_handler *nfs4_xattr_handlers[] = {
+const struct xattr_handler * const nfs4_xattr_handlers[] = {
 	&nfs4_xattr_nfs4_acl_handler,
 #if defined(CONFIG_NFS_V4_1)
 	&nfs4_xattr_nfs4_dacl_handler,
