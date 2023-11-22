@@ -5012,15 +5012,16 @@ static struct mount *listmnt_next(struct mount *curr, struct mount *root, bool r
 	return NULL;
 }
 
-static long do_listmount(struct vfsmount *mnt, u64 __user *buf, size_t bufsize,
-			 const struct path *root, unsigned int flags)
+static ssize_t do_listmount(struct vfsmount *mnt, u64 __user *buf,
+			    size_t bufsize, const struct path *root,
+			    unsigned int flags)
 {
 	struct mount *r, *m = real_mount(mnt);
 	struct path rootmnt = {
 		.mnt = root->mnt,
 		.dentry = root->mnt->mnt_root
 	};
-	long ctr = 0;
+	ssize_t ctr;
 	bool reachable_only = true;
 	bool recurse = flags & LISTMOUNT_RECURSIVE;
 	int err;
@@ -5038,7 +5039,7 @@ static long do_listmount(struct vfsmount *mnt, u64 __user *buf, size_t bufsize,
 	if (err)
 		return err;
 
-	for (r = listmnt_first(m); r; r = listmnt_next(r, m, recurse)) {
+	for (ctr = 0, r = listmnt_first(m); r; r = listmnt_next(r, m, recurse)) {
 		if (reachable_only &&
 		    !is_path_reachable(r, r->mnt.mnt_root, root))
 			continue;
@@ -5061,7 +5062,7 @@ SYSCALL_DEFINE4(listmount, const struct mnt_id_req __user *, req,
 	struct vfsmount *mnt;
 	struct path root;
 	u64 mnt_id;
-	long err;
+	ssize_t ret;
 
 	if (flags & ~(LISTMOUNT_UNREACHABLE | LISTMOUNT_RECURSIVE))
 		return -EINVAL;
@@ -5077,19 +5078,19 @@ SYSCALL_DEFINE4(listmount, const struct mnt_id_req __user *, req,
 		mnt = &current->nsproxy->mnt_ns->root->mnt;
 	else
 		mnt = lookup_mnt_in_ns(mnt_id, current->nsproxy->mnt_ns);
-
-	err = -ENOENT;
-	if (mnt) {
-		get_fs_root(current->fs, &root);
-		/* Skip unreachable for LSMT_ROOT */
-		if (mnt_id == LSMT_ROOT && !(flags & LISTMOUNT_UNREACHABLE))
-			mnt = root.mnt;
-		err = do_listmount(mnt, buf, bufsize, &root, flags);
-		path_put(&root);
+	if (!mnt) {
+		up_read(&namespace_sem);
+		return -ENOENT;
 	}
-	up_read(&namespace_sem);
 
-	return err;
+	get_fs_root(current->fs, &root);
+	/* Skip unreachable for LSMT_ROOT */
+	if (mnt_id == LSMT_ROOT && !(flags & LISTMOUNT_UNREACHABLE))
+		mnt = root.mnt;
+	ret = do_listmount(mnt, buf, bufsize, &root, flags);
+	path_put(&root);
+	up_read(&namespace_sem);
+	return ret;
 }
 
 
