@@ -212,8 +212,6 @@ struct btrfs_root {
 
 	u64 last_trans;
 
-	u32 type;
-
 	u64 free_objectid;
 
 	struct btrfs_key defrag_progress;
@@ -223,9 +221,6 @@ struct btrfs_root {
 	struct list_head dirty_list;
 
 	struct list_head root_list;
-
-	spinlock_t log_extents_lock[2];
-	struct list_head logged_list[2];
 
 	spinlock_t inode_lock;
 	/* red-black tree that keeps track of in-memory inodes */
@@ -561,9 +556,9 @@ int btrfs_copy_root(struct btrfs_trans_handle *trans,
 		      struct btrfs_root *root,
 		      struct extent_buffer *buf,
 		      struct extent_buffer **cow_ret, u64 new_root_objectid);
-int btrfs_block_can_be_shared(struct btrfs_trans_handle *trans,
-			      struct btrfs_root *root,
-			      struct extent_buffer *buf);
+bool btrfs_block_can_be_shared(struct btrfs_trans_handle *trans,
+			       struct btrfs_root *root,
+			       struct extent_buffer *buf);
 int btrfs_del_ptr(struct btrfs_trans_handle *trans, struct btrfs_root *root,
 		  struct btrfs_path *path, int level, int slot);
 void btrfs_extend_item(struct btrfs_trans_handle *trans,

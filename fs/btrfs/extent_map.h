@@ -9,8 +9,6 @@
 #define EXTENT_MAP_LAST_BYTE ((u64)-4)
 #define EXTENT_MAP_HOLE ((u64)-3)
 #define EXTENT_MAP_INLINE ((u64)-2)
-/* used only during fiemap calls */
-#define EXTENT_MAP_DELALLOC ((u64)-1)
 
 /* bits for the extent_map::flags field */
 enum {
@@ -23,8 +21,6 @@ enum {
 	EXTENT_FLAG_LOGGING,
 	/* Filling in a preallocated extent */
 	EXTENT_FLAG_FILLING,
-	/* filesystem extent mapping type */
-	EXTENT_FLAG_FS_MAPPING,
 	/* This em is merged from two or more physically adjacent ems */
 	EXTENT_FLAG_MERGED,
 };
@@ -50,8 +46,6 @@ struct extent_map {
 	 */
 	u64 generation;
 	unsigned long flags;
-	/* Used for chunk mappings, flag EXTENT_FLAG_FS_MAPPING must be set */
-	struct map_lookup *map_lookup;
 	refcount_t refs;
 	unsigned int compress_type;
 	struct list_head list;
@@ -75,13 +69,6 @@ static inline u64 extent_map_end(struct extent_map *em)
 	if (em->start + em->len < em->start)
 		return (u64)-1;
 	return em->start + em->len;
-}
-
-static inline u64 extent_map_block_end(struct extent_map *em)
-{
-	if (em->block_start + em->block_len < em->block_start)
-		return (u64)-1;
-	return em->block_start + em->block_len;
 }
 
 void extent_map_tree_init(struct extent_map_tree *tree);
