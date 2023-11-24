@@ -62,7 +62,8 @@
 #define MTK_QRX_OFFSET		0x10
 
 #define MTK_MAX_RX_RING_NUM	4
-#define MTK_HW_LRO_DMA_SIZE	8
+#define MTK_MAX_RX_RING_NUM_V2	8
+#define MTK_HW_LRO_DMA_SIZE	512
 
 #define	MTK_MAX_LRO_RX_LENGTH		(4096 * 3)
 #define	MTK_MAX_LRO_IP_CNT		2
@@ -167,6 +168,7 @@
 
 /* PDMA HW LRO Control Registers */
 #define MTK_PDMA_LRO_CTRL_DW0	0x980
+#define MTK_PDMA_LRO_CTRL_DW0_V2	(PDMA_BASE_V2 + 0x408)
 #define MTK_LRO_EN			BIT(0)
 #define MTK_L3_CKS_UPD_EN		BIT(7)
 #define MTK_L3_CKS_UPD_EN_V2		BIT(19)
@@ -176,9 +178,23 @@
 #define MTK_LRO_RING_RELINQUISH_DONE	(0x7 << 29)
 #define MTK_LRO_RING_RELINQUISH_DONE_V2	(0xf << 28)
 
+#define PDMA_BASE			0x4000
+#define PDMA_BASE_V2			0x6000
+#define MTK_HW_LRO_RING_NUM		(3)
+#define MTK_HW_LRO_RING_NUM_V2		(4)
+#define IS_HW_LRO_RING(ring_no)		(((ring_no) > 0) && ((ring_no) < 4))
+#define IS_HW_LRO_RING_V2(ring_no)	(((ring_no) > 3) && ((ring_no) < 8))
+
+#define MTK_LRO_ALT_SCORE_DELTA		(PDMA_BASE + 0x24c)
+#define MTK_LRO_ALT_SCORE_DELTA_V2	(PDMA_BASE_V2 + 0x41c)
+
+#define MTK_LRO_CRSN_BNW		BIT(6)
+#define MTK_LRO_CRSN_BNW_V2		BIT(22)
+
 #define MTK_PDMA_LRO_CTRL_DW1	0x984
 #define MTK_PDMA_LRO_CTRL_DW2	0x988
 #define MTK_PDMA_LRO_CTRL_DW3	0x98c
+
 #define MTK_ADMA_MODE		BIT(15)
 #define MTK_LRO_MIN_RXD_SDL	(MTK_HW_LRO_SDL_REMAIN_ROOM << 16)
 
@@ -220,6 +236,11 @@
 #define MTK_LRO_RX_RING0_CTRL_DW1	0xb28
 #define MTK_LRO_RX_RING0_CTRL_DW2	0xb2c
 #define MTK_LRO_RX_RING0_CTRL_DW3	0xb30
+
+#define MTK_LRO_RX_RING0_CTRL_DW1_V2	(0x6000 + 0x438)
+#define MTK_LRO_RX_RING0_CTRL_DW2_V2	(0x6000 + 0x43c)
+#define MTK_LRO_RX_RING0_CTRL_DW3_V2	(0x6000 + 0x440)
+
 #define MTK_LRO_CTRL_DW1_CFG(x)		(MTK_LRO_RX_RING0_CTRL_DW1 + (x * 0x40))
 #define MTK_LRO_CTRL_DW2_CFG(x)		(MTK_LRO_RX_RING0_CTRL_DW2 + (x * 0x40))
 #define MTK_LRO_CTRL_DW3_CFG(x)		(MTK_LRO_RX_RING0_CTRL_DW3 + (x * 0x40))
