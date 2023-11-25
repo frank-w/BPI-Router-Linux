@@ -3687,6 +3687,7 @@ static void phylink_sfp_set_config(struct phylink *pl, unsigned long *supported,
 	    pl->link_config.interface != state->interface) {
 		pl->req_link_an_mode = mode;
 		pl->link_config.interface = state->interface;
+		pl->phy_state.interface = state->interface;
 
 		changed = true;
 
