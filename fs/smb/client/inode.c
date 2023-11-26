@@ -214,6 +214,7 @@ cifs_fattr_to_inode(struct inode *inode, struct cifs_fattr *fattr)
 		cifs_i->symlink_target = fattr->cf_symlink_target;
 		fattr->cf_symlink_target = NULL;
 	}
+	cifs_i->reparse = !!(fattr->cf_cifsattrs & ATTR_REPARSE);
 	spin_unlock(&inode->i_lock);
 
 	if (fattr->cf_flags & CIFS_FATTR_JUNCTION)
@@ -2242,7 +2243,8 @@ cifs_do_rename(const unsigned int xid, struct dentry *from_dentry,
 		return -ENOSYS;
 
 	/* try path-based rename first */
-	rc = server->ops->rename(xid, tcon, from_path, to_path, cifs_sb);
+	rc = server->ops->rename(xid, tcon, from_dentry,
+				 from_path, to_path, cifs_sb);
 
 	/*
 	 * Don't bother with rename by filehandle unless file is busy and
