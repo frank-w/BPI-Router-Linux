@@ -1,0 +1,131 @@
+/dts-v1/;
+
+/ {
+	description = "U-Boot fitImage for bpi-r4 aarch64 kernel";
+	#address-cells = <1>;
+
+	images {
+		kernel-1 {
+			description = "Linux Kernel %version%";
+			data = /incbin/("./arch/arm64/boot/Image.gz");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+			load = <0x44000000>;
+			entry = <0x44000000>;
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		fdt-base {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			load = <0x47000000>;
+			compression = "none";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		fdt-ov-sd {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-sd.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-emmc {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-emmc.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-wifi {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-wifi-mt7996a.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-sata {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-sata.dtbo");
+			type = "flat_dt";
+		};
+/*		fdt-ov-nand{
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-nand.dtbo");
+			type = "flat_dt";
+			arch = "arm64";
+		};*/
+/*		ramdisk-1 {
+			description = "ramdisk";
+			data = /incbin/("./rootfs_arm64.cpio.gz");
+			type = "ramdisk";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+			hash-1 {
+				algo = "sha1";
+			};
+		};*/
+	};
+	configurations {
+		default = "conf-sd";
+		conf-base {
+			description = "Boot Linux kernel with base FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-sd {
+			description = "Boot Linux kernel with SD FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base", "fdt-ov-sd";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-emmc {
+			description = "Boot Linux kernel with EMMC FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base", "fdt-ov-emmc";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		wifi {
+			description = "WIFI FDT Overlay";
+			fdt = "fdt-ov-wifi";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-sd-wifi {
+			description = "Boot Linux kernel with SD + WIFI FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-wifi";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		sata {
+			description = "SATA FDT overlay";
+			fdt = "fdt-ov-sata";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-sd-sata {
+			description = "Boot Linux kernel with SD + SATA FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base", "fdt-ov-sd", "fdt-ov-sata";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+	};
+};
