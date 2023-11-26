@@ -667,7 +667,6 @@ int smb2_query_path_info(const unsigned int xid,
 	int rc, rc2;
 
 	data->adjust_tz = false;
-	data->reparse_point = false;
 
 	if (strcmp(full_path, ""))
 		rc = -ENOENT;
@@ -688,6 +687,9 @@ int smb2_query_path_info(const unsigned int xid,
 	in_iov[0].iov_base = data;
 	in_iov[0].iov_len = sizeof(*data);
 	in_iov[1] = in_iov[0];
+
+	if (data->reparse_point)
+		goto open_reparse;
 
 	cifs_get_readable_path(tcon, full_path, &cfile);
 	rc = smb2_compound_op(xid, tcon, cifs_sb, full_path,
@@ -714,6 +716,7 @@ int smb2_query_path_info(const unsigned int xid,
 			/* symlink already parsed in create response */
 			num_cmds = 1;
 		} else {
+open_reparse:
 			cmds[1] = SMB2_OP_GET_REPARSE;
 			num_cmds = 2;
 		}
@@ -766,8 +769,6 @@ int smb311_posix_query_path_info(const unsigned int xid,
 	int i, num_cmds;
 
 	data->adjust_tz = false;
-	data->reparse_point = false;
-
 	/*
 	 * BB TODO: Add support for using the cached root handle.
 	 * Create SMB2_query_posix_info worker function to do non-compounded query
@@ -777,6 +778,9 @@ int smb311_posix_query_path_info(const unsigned int xid,
 	in_iov[0].iov_base = data;
 	in_iov[0].iov_len = sizeof(*data);
 	in_iov[1] = in_iov[0];
+
+	if (data->reparse_point)
+		goto open_reparse;
 
 	cifs_get_readable_path(tcon, full_path, &cfile);
 	rc = smb2_compound_op(xid, tcon, cifs_sb, full_path,
@@ -802,6 +806,7 @@ int smb311_posix_query_path_info(const unsigned int xid,
 			/* symlink already parsed in create response */
 			num_cmds = 1;
 		} else {
+open_reparse:
 			cmds[1] = SMB2_OP_GET_REPARSE;
 			num_cmds = 2;
 		}

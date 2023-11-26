@@ -1142,6 +1142,8 @@ static int cifs_get_fattr(struct cifs_open_info_data *data,
 	 */
 
 	if (!data) {
+		if (*inode && CIFS_I(*inode)->reparse)
+			tmp_data.reparse_point = true;
 		rc = server->ops->query_path_info(xid, tcon, cifs_sb,
 						  full_path, &tmp_data);
 		data = &tmp_data;
@@ -1301,6 +1303,7 @@ out:
 
 static int smb311_posix_get_fattr(struct cifs_open_info_data *data,
 				  struct cifs_fattr *fattr,
+				  struct inode **inode,
 				  const char *full_path,
 				  struct super_block *sb,
 				  const unsigned int xid)
@@ -1322,6 +1325,8 @@ static int smb311_posix_get_fattr(struct cifs_open_info_data *data,
 	 * 1. Fetch file metadata if not provided (data)
 	 */
 	if (!data) {
+		if (*inode && CIFS_I(*inode)->reparse)
+			tmp_data.reparse_point = true;
 		rc = smb311_posix_query_path_info(xid, tcon, cifs_sb,
 						  full_path, &tmp_data,
 						  &owner, &group);
@@ -1390,7 +1395,7 @@ int smb311_posix_get_inode_info(struct inode **inode,
 		return 0;
 	}
 
-	rc = smb311_posix_get_fattr(data, &fattr, full_path, sb, xid);
+	rc = smb311_posix_get_fattr(data, &fattr, inode, full_path, sb, xid);
 	if (rc)
 		goto out;
 
@@ -1537,10 +1542,12 @@ struct inode *cifs_root_iget(struct super_block *sb)
 	}
 
 	convert_delimiter(path, CIFS_DIR_SEP(cifs_sb));
-	if (tcon->posix_extensions)
-		rc = smb311_posix_get_fattr(NULL, &fattr, path, sb, xid);
-	else
+	if (tcon->posix_extensions) {
+		rc = smb311_posix_get_fattr(NULL, &fattr, &inode,
+					    path, sb, xid);
+	} else {
 		rc = cifs_get_fattr(NULL, sb, xid, NULL, &fattr, &inode, path);
+	}
 
 iget_root:
 	if (!rc) {
