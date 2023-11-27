@@ -301,6 +301,10 @@ static int drm_getcap(struct drm_device *dev, void *data, struct drm_file *file_
 	case DRM_CAP_CRTC_IN_VBLANK_EVENT:
 		req->value = 1;
 		break;
+	case DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP:
+		req->value = drm_core_check_feature(dev, DRIVER_ATOMIC) &&
+			     dev->mode_config.async_page_flip;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -360,6 +364,15 @@ drm_setclientcap(struct drm_device *dev, void *data, struct drm_file *file_priv)
 		if (req->value > 1)
 			return -EINVAL;
 		file_priv->writeback_connectors = req->value;
+		break;
+	case DRM_CLIENT_CAP_CURSOR_PLANE_HOTSPOT:
+		if (!drm_core_check_feature(dev, DRIVER_CURSOR_HOTSPOT))
+			return -EOPNOTSUPP;
+		if (!file_priv->atomic)
+			return -EINVAL;
+		if (req->value > 1)
+			return -EINVAL;
+		file_priv->supports_virtualized_cursor_plane = req->value;
 		break;
 	default:
 		return -EINVAL;
