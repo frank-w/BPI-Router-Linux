@@ -13,9 +13,10 @@
 #define OCTEP_64BYTE_INSTR  64
 
 /* Tx Queue: maximum descriptors per ring */
+/* This needs to be a power of 2 */
 #define OCTEP_IQ_MAX_DESCRIPTORS    1024
 /* Minimum input (Tx) requests to be enqueued to ring doorbell */
-#define OCTEP_DB_MIN                1
+#define OCTEP_DB_MIN                8
 /* Packet threshold for Tx queue interrupt */
 #define OCTEP_IQ_INTR_THRESHOLD     0x0
 
@@ -44,8 +45,6 @@
 
 /* Minimum MTU supported by Octeon network interface */
 #define OCTEP_MIN_MTU        ETH_MIN_MTU
-/* Maximum MTU supported by Octeon interface*/
-#define OCTEP_MAX_MTU        (10000 - (ETH_HLEN + ETH_FCS_LEN))
 /* Default MTU */
 #define OCTEP_DEFAULT_MTU    1500
 

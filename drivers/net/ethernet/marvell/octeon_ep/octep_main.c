@@ -24,6 +24,10 @@ struct workqueue_struct *octep_wq;
 static const struct pci_device_id octep_pci_id_tbl[] = {
 	{PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, OCTEP_PCI_DEVICE_ID_CN93_PF)},
 	{PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, OCTEP_PCI_DEVICE_ID_CNF95N_PF)},
+	{PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, OCTEP_PCI_DEVICE_ID_CN10KA_PF)},
+	{PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, OCTEP_PCI_DEVICE_ID_CNF10KA_PF)},
+	{PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, OCTEP_PCI_DEVICE_ID_CNF10KB_PF)},
+	{PCI_DEVICE(PCI_VENDOR_ID_CAVIUM, OCTEP_PCI_DEVICE_ID_CN10KB_PF)},
 	{0, },
 };
 MODULE_DEVICE_TABLE(pci, octep_pci_id_tbl);
@@ -777,17 +781,24 @@ static int octep_stop(struct net_device *netdev)
  */
 static inline int octep_iq_full_check(struct octep_iq *iq)
 {
-	if (likely((iq->max_count - atomic_read(&iq->instr_pending)) >=
+	if (likely((IQ_INSTR_SPACE(iq)) >
 		   OCTEP_WAKE_QUEUE_THRESHOLD))
 		return 0;
 
 	/* Stop the queue if unable to send */
 	netif_stop_subqueue(iq->netdev, iq->q_no);
 
+	/* Allow for pending updates in write index
+	 * from iq_process_completion in other cpus
+	 * to reflect, in case queue gets free
+	 * entries.
+	 */
+	smp_mb();
+
 	/* check again and restart the queue, in case NAPI has just freed
 	 * enough Tx ring entries.
 	 */
-	if (unlikely((iq->max_count - atomic_read(&iq->instr_pending)) >=
+	if (unlikely(IQ_INSTR_SPACE(iq) >
 		     OCTEP_WAKE_QUEUE_THRESHOLD)) {
 		netif_start_subqueue(iq->netdev, iq->q_no);
 		iq->stats.restart_cnt++;
@@ -818,7 +829,11 @@ static netdev_tx_t octep_start_xmit(struct sk_buff *skb,
 	struct octep_iq *iq;
 	skb_frag_t *frag;
 	u16 nr_frags, si;
+	int xmit_more;
 	u16 q_no, wi;
+
+	if (skb_put_padto(skb, ETH_ZLEN))
+		return NETDEV_TX_OK;
 
 	q_no = skb_get_queue_mapping(skb);
 	if (q_no >= oct->num_iqs) {
@@ -827,10 +842,6 @@ static netdev_tx_t octep_start_xmit(struct sk_buff *skb,
 	}
 
 	iq = oct->iq[q_no];
-	if (octep_iq_full_check(iq)) {
-		iq->stats.tx_busy++;
-		return NETDEV_TX_BUSY;
-	}
 
 	shinfo = skb_shinfo(skb);
 	nr_frags = shinfo->nr_frags;
@@ -869,9 +880,6 @@ static netdev_tx_t octep_start_xmit(struct sk_buff *skb,
 		if (dma_mapping_error(iq->dev, dma))
 			goto dma_map_err;
 
-		dma_sync_single_for_cpu(iq->dev, tx_buffer->sglist_dma,
-					OCTEP_SGLIST_SIZE_PER_PKT,
-					DMA_TO_DEVICE);
 		memset(sglist, 0, OCTEP_SGLIST_SIZE_PER_PKT);
 		sglist[0].len[3] = len;
 		sglist[0].dma_ptr[0] = dma;
@@ -891,26 +899,33 @@ static netdev_tx_t octep_start_xmit(struct sk_buff *skb,
 			frag++;
 			si++;
 		}
-		dma_sync_single_for_device(iq->dev, tx_buffer->sglist_dma,
-					   OCTEP_SGLIST_SIZE_PER_PKT,
-					   DMA_TO_DEVICE);
-
 		hw_desc->dptr = tx_buffer->sglist_dma;
 	}
 
-	netdev_tx_sent_queue(iq->netdev_q, skb->len);
+	xmit_more = netdev_xmit_more();
+
+	__netdev_tx_sent_queue(iq->netdev_q, skb->len, xmit_more);
+
 	skb_tx_timestamp(skb);
-	atomic_inc(&iq->instr_pending);
+	iq->fill_cnt++;
 	wi++;
-	if (wi == iq->max_count)
-		wi = 0;
-	iq->host_write_index = wi;
+	iq->host_write_index = wi & iq->ring_size_mask;
+
+	/* octep_iq_full_check stops the queue and returns
+	 * true if so, in case the queue has become full
+	 * by inserting current packet. If so, we can
+	 * go ahead and ring doorbell.
+	 */
+	if (!octep_iq_full_check(iq) && xmit_more &&
+	    iq->fill_cnt < iq->fill_threshold)
+		return NETDEV_TX_OK;
+
 	/* Flush the hw descriptor before writing to doorbell */
 	wmb();
-
-	/* Ring Doorbell to notify the NIC there is a new packet */
-	writel(1, iq->doorbell_reg);
-	iq->stats.instr_posted++;
+	/* Ring Doorbell to notify the NIC of new packets */
+	writel(iq->fill_cnt, iq->doorbell_reg);
+	iq->stats.instr_posted += iq->fill_cnt;
+	iq->fill_cnt = 0;
 	return NETDEV_TX_OK;
 
 dma_map_sg_err:
@@ -1136,6 +1151,14 @@ static const char *octep_devid_to_str(struct octep_device *oct)
 		return "CN93XX";
 	case OCTEP_PCI_DEVICE_ID_CNF95N_PF:
 		return "CNF95N";
+	case OCTEP_PCI_DEVICE_ID_CN10KA_PF:
+		return "CN10KA";
+	case OCTEP_PCI_DEVICE_ID_CNF10KA_PF:
+		return "CNF10KA";
+	case OCTEP_PCI_DEVICE_ID_CNF10KB_PF:
+		return "CNF10KB";
+	case OCTEP_PCI_DEVICE_ID_CN10KB_PF:
+		return "CN10KB";
 	default:
 		return "Unsupported";
 	}
@@ -1180,6 +1203,14 @@ int octep_device_setup(struct octep_device *oct)
 			 octep_devid_to_str(oct), OCTEP_MAJOR_REV(oct),
 			 OCTEP_MINOR_REV(oct));
 		octep_device_setup_cn93_pf(oct);
+		break;
+	case OCTEP_PCI_DEVICE_ID_CNF10KA_PF:
+	case OCTEP_PCI_DEVICE_ID_CN10KA_PF:
+	case OCTEP_PCI_DEVICE_ID_CNF10KB_PF:
+	case OCTEP_PCI_DEVICE_ID_CN10KB_PF:
+		dev_info(&pdev->dev, "Setting up OCTEON %s PF PASS%d.%d\n",
+			 octep_devid_to_str(oct), OCTEP_MAJOR_REV(oct), OCTEP_MINOR_REV(oct));
+		octep_device_setup_cnxk_pf(oct);
 		break;
 	default:
 		dev_err(&pdev->dev,
@@ -1276,6 +1307,7 @@ static int octep_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct octep_device *octep_dev = NULL;
 	struct net_device *netdev;
+	int max_rx_pktlen;
 	int err;
 
 	err = pci_enable_device(pdev);
@@ -1346,8 +1378,15 @@ static int octep_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	netdev->hw_features = NETIF_F_SG;
 	netdev->features |= netdev->hw_features;
+
+	max_rx_pktlen = octep_ctrl_net_get_mtu(octep_dev, OCTEP_CTRL_NET_INVALID_VFID);
+	if (max_rx_pktlen < 0) {
+		dev_err(&octep_dev->pdev->dev,
+			"Failed to get max receive packet size; err = %d\n", max_rx_pktlen);
+		goto register_dev_err;
+	}
 	netdev->min_mtu = OCTEP_MIN_MTU;
-	netdev->max_mtu = OCTEP_MAX_MTU;
+	netdev->max_mtu = max_rx_pktlen - (ETH_HLEN + ETH_FCS_LEN);
 	netdev->mtu = OCTEP_DEFAULT_MTU;
 
 	err = octep_ctrl_net_get_mac_addr(octep_dev, OCTEP_CTRL_NET_INVALID_VFID,

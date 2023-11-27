@@ -511,7 +511,7 @@ static int bnxt_get_num_tpa_ring_stats(struct bnxt *bp)
 {
 	if (BNXT_SUPPORTS_TPA(bp)) {
 		if (bp->max_tpa_v2) {
-			if (BNXT_CHIP_P5_THOR(bp))
+			if (BNXT_CHIP_P5(bp))
 				return BNXT_NUM_TPA_RING_STATS_P5;
 			return BNXT_NUM_TPA_RING_STATS_P5_SR2;
 		}
@@ -528,7 +528,8 @@ static int bnxt_get_num_ring_stats(struct bnxt *bp)
 	     bnxt_get_num_tpa_ring_stats(bp);
 	tx = NUM_RING_TX_HW_STATS;
 	cmn = NUM_RING_CMN_SW_STATS;
-	return rx * bp->rx_nr_rings + tx * bp->tx_nr_rings +
+	return rx * bp->rx_nr_rings +
+	       tx * (bp->tx_nr_rings_xdp + bp->tx_nr_rings_per_tc) +
 	       cmn * bp->cp_nr_rings;
 }
 
@@ -923,6 +924,7 @@ static int bnxt_set_channels(struct net_device *dev,
 	bool sh = false;
 	int tx_xdp = 0;
 	int rc = 0;
+	int tx_cp;
 
 	if (channel->other_count)
 		return -EINVAL;
@@ -994,8 +996,9 @@ static int bnxt_set_channels(struct net_device *dev,
 	if (tcs > 1)
 		bp->tx_nr_rings = bp->tx_nr_rings_per_tc * tcs + tx_xdp;
 
-	bp->cp_nr_rings = sh ? max_t(int, bp->tx_nr_rings, bp->rx_nr_rings) :
-			       bp->tx_nr_rings + bp->rx_nr_rings;
+	tx_cp = bnxt_num_tx_to_cp(bp, bp->tx_nr_rings);
+	bp->cp_nr_rings = sh ? max_t(int, tx_cp, bp->rx_nr_rings) :
+			       tx_cp + bp->rx_nr_rings;
 
 	/* After changing number of rx channels, update NTUPLE feature. */
 	netdev_update_features(dev);
@@ -1319,7 +1322,7 @@ u32 bnxt_get_rxfh_indir_size(struct net_device *dev)
 {
 	struct bnxt *bp = netdev_priv(dev);
 
-	if (bp->flags & BNXT_FLAG_CHIP_P5)
+	if (bp->flags & BNXT_FLAG_CHIP_P5_PLUS)
 		return ALIGN(bp->rx_nr_rings, BNXT_RSS_TABLE_ENTRIES_P5);
 	return HW_HASH_INDEX_SIZE;
 }
@@ -3940,8 +3943,8 @@ static int bnxt_run_loopback(struct bnxt *bp)
 	int rc;
 
 	cpr = &rxr->bnapi->cp_ring;
-	if (bp->flags & BNXT_FLAG_CHIP_P5)
-		cpr = cpr->cp_ring_arr[BNXT_RX_HDL];
+	if (bp->flags & BNXT_FLAG_CHIP_P5_PLUS)
+		cpr = rxr->rx_cpr;
 	pkt_size = min(bp->dev->mtu + ETH_HLEN, bp->rx_copy_thresh);
 	skb = netdev_alloc_skb(bp->dev, pkt_size);
 	if (!skb)
