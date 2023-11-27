@@ -670,7 +670,7 @@ static void call_rtas_display_status_delay(char c)
 	static int pending_newline = 0;  /* did last write end with unprinted newline? */
 	static int width = 16;
 
-	if (c == '\n') {	
+	if (c == '\n') {
 		while (width-- > 0)
 			call_rtas_display_status(' ');
 		width = 16;
@@ -680,7 +680,7 @@ static void call_rtas_display_status_delay(char c)
 		if (pending_newline) {
 			call_rtas_display_status('\r');
 			call_rtas_display_status('\n');
-		} 
+		}
 		pending_newline = 0;
 		if (width--) {
 			call_rtas_display_status(c);
@@ -820,7 +820,7 @@ void rtas_progress(char *s, unsigned short hex)
 		else
 			rtas_call(display_character, 1, 1, NULL, '\r');
 	}
- 
+
 	if (row_width)
 		width = row_width[current_line];
 	else
@@ -840,9 +840,9 @@ void rtas_progress(char *s, unsigned short hex)
 				spin_unlock(&progress_lock);
 				return;
 			}
- 
+
 			/* RTAS wants CR-LF, not just LF */
- 
+
 			if (*os == '\n') {
 				rtas_call(display_character, 1, 1, NULL, '\r');
 				rtas_call(display_character, 1, 1, NULL, '\n');
@@ -852,7 +852,7 @@ void rtas_progress(char *s, unsigned short hex)
 				 */
 				rtas_call(display_character, 1, 1, NULL, *os);
 			}
- 
+
 			if (row_width)
 				width = row_width[current_line];
 			else
@@ -861,15 +861,15 @@ void rtas_progress(char *s, unsigned short hex)
 			width--;
 			rtas_call(display_character, 1, 1, NULL, *os);
 		}
- 
+
 		os++;
- 
+
 		/* if we overwrite the screen length */
 		if (width <= 0)
 			while ((*os != 0) && (*os != '\n') && (*os != '\r'))
 				os++;
 	}
- 
+
 	spin_unlock(&progress_lock);
 }
 EXPORT_SYMBOL_GPL(rtas_progress);		/* needed by rtas_flash module */
@@ -899,11 +899,6 @@ int rtas_token(const char *service)
 	return tokp ? be32_to_cpu(*tokp) : RTAS_UNKNOWN_SERVICE;
 }
 EXPORT_SYMBOL_GPL(rtas_token);
-
-int rtas_service_present(const char *service)
-{
-	return rtas_token(service) != RTAS_UNKNOWN_SERVICE;
-}
 
 #ifdef CONFIG_RTAS_ERROR_LOGGING
 
