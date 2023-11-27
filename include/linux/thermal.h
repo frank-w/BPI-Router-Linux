@@ -57,12 +57,14 @@ enum thermal_notify_event {
  * struct thermal_trip - representation of a point in temperature domain
  * @temperature: temperature value in miliCelsius
  * @hysteresis: relative hysteresis in miliCelsius
+ * @threshold: trip crossing notification threshold miliCelsius
  * @type: trip point type
  * @priv: pointer to driver data associated with this trip
  */
 struct thermal_trip {
 	int temperature;
 	int hysteresis;
+	int threshold;
 	enum thermal_trip_type type;
 	void *priv;
 };
@@ -293,13 +295,6 @@ int thermal_zone_for_each_trip(struct thermal_zone_device *tz,
 int thermal_zone_get_num_trips(struct thermal_zone_device *tz);
 
 int thermal_zone_get_crit_temp(struct thermal_zone_device *tz, int *temp);
-
-#ifdef CONFIG_THERMAL_ACPI
-int thermal_acpi_active_trip_temp(struct acpi_device *adev, int id, int *ret_temp);
-int thermal_acpi_passive_trip_temp(struct acpi_device *adev, int *ret_temp);
-int thermal_acpi_hot_trip_temp(struct acpi_device *adev, int *ret_temp);
-int thermal_acpi_critical_trip_temp(struct acpi_device *adev, int *ret_temp);
-#endif
 
 #ifdef CONFIG_THERMAL
 struct thermal_zone_device *thermal_zone_device_register_with_trips(
