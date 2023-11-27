@@ -1551,10 +1551,14 @@ bool amdgpu_device_seamless_boot_supported(struct amdgpu_device *adev)
  * https://edc.intel.com/content/www/us/en/design/products/platforms/details/raptor-lake-s/13th-generation-core-processors-datasheet-volume-1-of-2/005/pci-express-support/
  * https://gitlab.freedesktop.org/drm/amd/-/issues/2663
  */
-static bool amdgpu_device_pcie_dynamic_switching_supported(void)
+static bool amdgpu_device_pcie_dynamic_switching_supported(struct amdgpu_device *adev)
 {
 #if IS_ENABLED(CONFIG_X86)
 	struct cpuinfo_x86 *c = &cpu_data(0);
+
+	/* eGPU change speeds based on USB4 fabric conditions */
+	if (dev_is_removable(adev->dev))
+		return true;
 
 	if (c->x86_vendor == X86_VENDOR_INTEL)
 		return false;
@@ -2395,7 +2399,7 @@ static int amdgpu_device_ip_early_init(struct amdgpu_device *adev)
 		adev->pm.pp_feature &= ~PP_GFXOFF_MASK;
 	if (amdgpu_sriov_vf(adev) && adev->asic_type == CHIP_SIENNA_CICHLID)
 		adev->pm.pp_feature &= ~PP_OVERDRIVE_MASK;
-	if (!amdgpu_device_pcie_dynamic_switching_supported())
+	if (!amdgpu_device_pcie_dynamic_switching_supported(adev))
 		adev->pm.pp_feature &= ~PP_PCIE_DPM_MASK;
 
 	total = true;
@@ -2675,6 +2679,12 @@ static int amdgpu_device_ip_init(struct amdgpu_device *adev)
 					DRM_ERROR("allocate CSA failed %d\n", r);
 					goto init_failed;
 				}
+			}
+
+			r = amdgpu_seq64_init(adev);
+			if (r) {
+				DRM_ERROR("allocate seq64 failed %d\n", r);
+				goto init_failed;
 			}
 		}
 	}
@@ -3138,6 +3148,7 @@ static int amdgpu_device_ip_fini(struct amdgpu_device *adev)
 			amdgpu_device_wb_fini(adev);
 			amdgpu_device_mem_scratch_fini(adev);
 			amdgpu_ib_pool_fini(adev);
+			amdgpu_seq64_fini(adev);
 		}
 
 		r = adev->ip_blocks[i].version->funcs->sw_fini((void *)adev);
@@ -5731,6 +5742,39 @@ recover_end:
 }
 
 /**
+ * amdgpu_device_partner_bandwidth - find the bandwidth of appropriate partner
+ *
+ * @adev: amdgpu_device pointer
+ * @speed: pointer to the speed of the link
+ * @width: pointer to the width of the link
+ *
+ * Evaluate the hierarchy to find the speed and bandwidth capabilities of the
+ * first physical partner to an AMD dGPU.
+ * This will exclude any virtual switches and links.
+ */
+static void amdgpu_device_partner_bandwidth(struct amdgpu_device *adev,
+					    enum pci_bus_speed *speed,
+					    enum pcie_link_width *width)
+{
+	struct pci_dev *parent = adev->pdev;
+
+	if (!speed || !width)
+		return;
+
+	*speed = PCI_SPEED_UNKNOWN;
+	*width = PCIE_LNK_WIDTH_UNKNOWN;
+
+	while ((parent = pci_upstream_bridge(parent))) {
+		/* skip upstream/downstream switches internal to dGPU*/
+		if (parent->vendor == PCI_VENDOR_ID_ATI)
+			continue;
+		*speed = pcie_get_speed_cap(parent);
+		*width = pcie_get_width_cap(parent);
+		break;
+	}
+}
+
+/**
  * amdgpu_device_get_pcie_info - fence pcie info about the PCIE slot
  *
  * @adev: amdgpu_device pointer
@@ -5763,8 +5807,8 @@ static void amdgpu_device_get_pcie_info(struct amdgpu_device *adev)
 	if (adev->pm.pcie_gen_mask && adev->pm.pcie_mlw_mask)
 		return;
 
-	pcie_bandwidth_available(adev->pdev, NULL,
-				 &platform_speed_cap, &platform_link_width);
+	amdgpu_device_partner_bandwidth(adev, &platform_speed_cap,
+					&platform_link_width);
 
 	if (adev->pm.pcie_gen_mask == 0) {
 		/* asic caps */

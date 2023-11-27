@@ -818,18 +818,54 @@ enum dmub_gpint_command {
 	 * RETURN: Lower 32-bit mask.
 	 */
 	DMUB_GPINT__UPDATE_TRACE_BUFFER_MASK = 101,
+
 	/**
-	 * DESC: Updates the trace buffer lower 32-bit mask.
+	 * DESC: Updates the trace buffer mask bit0~bit15.
 	 * ARGS: The new mask
 	 * RETURN: Lower 32-bit mask.
 	 */
 	DMUB_GPINT__SET_TRACE_BUFFER_MASK_WORD0 = 102,
+
 	/**
-	 * DESC: Updates the trace buffer mask bi0~bit15.
+	 * DESC: Updates the trace buffer mask bit16~bit31.
 	 * ARGS: The new mask
 	 * RETURN: Lower 32-bit mask.
 	 */
 	DMUB_GPINT__SET_TRACE_BUFFER_MASK_WORD1 = 103,
+
+	/**
+	 * DESC: Updates the trace buffer mask bit32~bit47.
+	 * ARGS: The new mask
+	 * RETURN: Lower 32-bit mask.
+	 */
+	DMUB_GPINT__SET_TRACE_BUFFER_MASK_WORD2 = 114,
+
+	/**
+	 * DESC: Updates the trace buffer mask bit48~bit63.
+	 * ARGS: The new mask
+	 * RETURN: Lower 32-bit mask.
+	 */
+	DMUB_GPINT__SET_TRACE_BUFFER_MASK_WORD3 = 115,
+
+	/**
+	 * DESC: Read the trace buffer mask bi0~bit15.
+	 */
+	DMUB_GPINT__GET_TRACE_BUFFER_MASK_WORD0 = 116,
+
+	/**
+	 * DESC: Read the trace buffer mask bit16~bit31.
+	 */
+	DMUB_GPINT__GET_TRACE_BUFFER_MASK_WORD1 = 117,
+
+	/**
+	 * DESC: Read the trace buffer mask bi32~bit47.
+	 */
+	DMUB_GPINT__GET_TRACE_BUFFER_MASK_WORD2 = 118,
+
+	/**
+	 * DESC: Updates the trace buffer mask bit32~bit63.
+	 */
+	DMUB_GPINT__GET_TRACE_BUFFER_MASK_WORD3 = 119,
 };
 
 /**
@@ -2840,6 +2876,10 @@ enum dmub_cmd_replay_type {
 	 * Set power opt and coasting vtotal.
 	 */
 	DMUB_CMD__REPLAY_SET_POWER_OPT_AND_COASTING_VTOTAL	= 4,
+	/**
+	 * Set disabled iiming sync.
+	 */
+	DMUB_CMD__REPLAY_SET_TIMING_SYNC_SUPPORTED	= 5,
 };
 
 /**
@@ -3003,6 +3043,27 @@ struct dmub_cmd_replay_set_power_opt_data {
 };
 
 /**
+ * Data passed from driver to FW in a DMUB_CMD__REPLAY_SET_TIMING_SYNC_SUPPORTED command.
+ */
+struct dmub_cmd_replay_set_timing_sync_data {
+	/**
+	 * Panel Instance.
+	 * Panel isntance to identify which replay_state to use
+	 * Currently the support is only for 0 or 1
+	 */
+	uint8_t panel_inst;
+
+	/**
+	 * Explicit padding to 4 byte boundary.
+	 */
+	uint8_t pad[3];
+	/**
+	 * REPLAY set_timing_sync
+	 */
+	bool timing_sync_supported;
+};
+
+/**
  * Definition of a DMUB_CMD__SET_REPLAY_POWER_OPT command.
  */
 struct dmub_rb_cmd_replay_set_power_opt {
@@ -3066,6 +3127,20 @@ struct dmub_rb_cmd_replay_set_power_opt_and_coasting_vtotal {
 	 * Definition of a DMUB_CMD__REPLAY_SET_COASTING_VTOTAL command.
 	 */
 	struct dmub_cmd_replay_set_coasting_vtotal_data replay_set_coasting_vtotal_data;
+};
+
+/**
+ * Definition of a DMUB_CMD__REPLAY_SET_TIMING_SYNC_SUPPORTED command.
+ */
+struct dmub_rb_cmd_replay_set_timing_sync {
+	/**
+	 * Command header.
+	 */
+	struct dmub_cmd_header header;
+	/**
+	 * Definition of DMUB_CMD__REPLAY_SET_TIMING_SYNC_SUPPORTED command.
+	 */
+	struct dmub_cmd_replay_set_timing_sync_data replay_set_timing_sync_data;
 };
 
 /**
@@ -4201,6 +4276,8 @@ union dmub_rb_cmd {
 	 * Definition of a DMUB_CMD__REPLAY_SET_POWER_OPT_AND_COASTING_VTOTAL command.
 	 */
 	struct dmub_rb_cmd_replay_set_power_opt_and_coasting_vtotal replay_set_power_opt_and_coasting_vtotal;
+
+	struct dmub_rb_cmd_replay_set_timing_sync replay_set_timing_sync;
 };
 
 /**

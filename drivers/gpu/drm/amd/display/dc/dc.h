@@ -49,7 +49,7 @@ struct aux_payload;
 struct set_config_cmd_payload;
 struct dmub_notification;
 
-#define DC_VER "3.2.259"
+#define DC_VER "3.2.260"
 
 #define MAX_SURFACES 3
 #define MAX_PLANES 6
@@ -978,6 +978,7 @@ struct dc_debug_options {
 	bool psp_disabled_wa;
 	unsigned int ips2_eval_delay_us;
 	unsigned int ips2_entry_delay_us;
+	bool disable_timeout;
 };
 
 struct gpu_info_soc_bounding_box_v1_0;
