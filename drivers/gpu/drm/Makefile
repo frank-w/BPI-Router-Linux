@@ -22,6 +22,7 @@ drm-y := \
 	drm_drv.o \
 	drm_dumb_buffers.o \
 	drm_edid.o \
+	drm_eld.o \
 	drm_encoder.o \
 	drm_file.o \
 	drm_fourcc.o \
@@ -198,3 +199,4 @@ obj-$(CONFIG_DRM_HYPERV) += hyperv/
 obj-y			+= solomon/
 obj-$(CONFIG_DRM_SPRD) += sprd/
 obj-$(CONFIG_DRM_LOONGSON) += loongson/
+obj-$(CONFIG_DRM_POWERVR) += imagination/
