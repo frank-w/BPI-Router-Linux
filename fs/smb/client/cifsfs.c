@@ -1307,12 +1307,15 @@ ssize_t cifs_file_copychunk_range(unsigned int xid,
 		goto unlock;
 
 	/* should we flush first and last page first */
-	truncate_inode_pages(&target_inode->i_data, 0);
+	truncate_inode_pages_range(&target_inode->i_data, destoff, destoff + len);
 
 	rc = file_modified(dst_file);
-	if (!rc)
+	if (!rc) {
 		rc = target_tcon->ses->server->ops->copychunk_range(xid,
 			smb_file_src, smb_file_target, off, len, destoff);
+		if (rc > 0 && destoff + rc > i_size_read(target_inode))
+			truncate_setsize(target_inode, destoff + rc);
+	}
 
 	file_accessed(src_file);
 
