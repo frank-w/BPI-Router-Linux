@@ -98,6 +98,11 @@ static int bch2_journal_replay_key(struct btree_trans *trans,
 	unsigned update_flags = BTREE_TRIGGER_NORUN;
 	int ret;
 
+	if (k->overwritten)
+		return 0;
+
+	trans->journal_res.seq = k->journal_seq;
+
 	/*
 	 * BTREE_UPDATE_KEY_CACHE_RECLAIM disables key cache lookup/update to
 	 * keep the key cache coherent with the underlying btree. Nothing
@@ -139,26 +144,13 @@ static int journal_sort_seq_cmp(const void *_l, const void *_r)
 static int bch2_journal_replay(struct bch_fs *c)
 {
 	struct journal_keys *keys = &c->journal_keys;
-	struct journal_key **keys_sorted, *k;
+	DARRAY(struct journal_key *) keys_sorted = { 0 };
+	struct journal_key **kp;
 	struct journal *j = &c->journal;
 	u64 start_seq	= c->journal_replay_seq_start;
 	u64 end_seq	= c->journal_replay_seq_start;
-	size_t i;
+	struct btree_trans *trans = bch2_trans_get(c);
 	int ret;
-
-	move_gap(keys->d, keys->nr, keys->size, keys->gap, keys->nr);
-	keys->gap = keys->nr;
-
-	keys_sorted = kvmalloc_array(keys->nr, sizeof(*keys_sorted), GFP_KERNEL);
-	if (!keys_sorted)
-		return -BCH_ERR_ENOMEM_journal_replay;
-
-	for (i = 0; i < keys->nr; i++)
-		keys_sorted[i] = &keys->d[i];
-
-	sort(keys_sorted, keys->nr,
-	     sizeof(keys_sorted[0]),
-	     journal_sort_seq_cmp, NULL);
 
 	if (keys->nr) {
 		ret = bch2_journal_log_msg(c, "Starting journal replay (%zu keys in entries %llu-%llu)",
@@ -167,41 +159,82 @@ static int bch2_journal_replay(struct bch_fs *c)
 			goto err;
 	}
 
-	for (i = 0; i < keys->nr; i++) {
-		k = keys_sorted[i];
+	BUG_ON(!atomic_read(&keys->ref));
 
+	/*
+	 * First, attempt to replay keys in sorted order. This is more
+	 * efficient - better locality of btree access -  but some might fail if
+	 * that would cause a journal deadlock.
+	 */
+	for (size_t i = 0; i < keys->nr; i++) {
 		cond_resched();
+
+		struct journal_key *k = keys->d + i;
+
+		ret = commit_do(trans, NULL, NULL,
+				BCH_TRANS_COMMIT_no_enospc|
+				BCH_TRANS_COMMIT_journal_reclaim|
+				(!k->allocated ? BCH_TRANS_COMMIT_no_journal_res : 0),
+			     bch2_journal_replay_key(trans, k));
+		BUG_ON(!ret && !k->overwritten);
+		if (ret) {
+			ret = darray_push(&keys_sorted, k);
+			if (ret)
+				goto err;
+		}
+	}
+
+	/*
+	 * Now, replay any remaining keys in the order in which they appear in
+	 * the journal, unpinning those journal entries as we go:
+	 */
+	sort(keys_sorted.data, keys_sorted.nr,
+	     sizeof(keys_sorted.data[0]),
+	     journal_sort_seq_cmp, NULL);
+
+	darray_for_each(keys_sorted, kp) {
+		cond_resched();
+
+		struct journal_key *k = *kp;
 
 		replay_now_at(j, k->journal_seq);
 
-		ret = bch2_trans_do(c, NULL, NULL,
-				    BTREE_INSERT_LAZY_RW|
-				    BTREE_INSERT_NOFAIL|
-				    (!k->allocated
-				     ? BTREE_INSERT_JOURNAL_REPLAY|BCH_WATERMARK_reclaim
-				     : 0),
+		ret = commit_do(trans, NULL, NULL,
+				BCH_TRANS_COMMIT_no_enospc|
+				(!k->allocated
+				 ? BCH_TRANS_COMMIT_no_journal_res|BCH_WATERMARK_reclaim
+				 : 0),
 			     bch2_journal_replay_key(trans, k));
-		if (ret) {
-			bch_err(c, "journal replay: error while replaying key at btree %s level %u: %s",
-				bch2_btree_id_str(k->btree_id), k->level, bch2_err_str(ret));
+		bch_err_msg(c, ret, "while replaying key at btree %s level %u:",
+			    bch2_btree_id_str(k->btree_id), k->level);
+		if (ret)
 			goto err;
-		}
+
+		BUG_ON(!k->overwritten);
 	}
+
+	/*
+	 * We need to put our btree_trans before calling flush_all_pins(), since
+	 * that will use a btree_trans internally
+	 */
+	bch2_trans_put(trans);
+	trans = NULL;
+
+	if (!c->opts.keep_journal)
+		bch2_journal_keys_put_initial(c);
 
 	replay_now_at(j, j->replay_journal_seq_end);
 	j->replay_journal_seq = 0;
 
 	bch2_journal_set_replay_done(j);
-	bch2_journal_flush_all_pins(j);
-	ret = bch2_journal_error(j);
 
-	if (keys->nr && !ret)
+	if (keys->nr)
 		bch2_journal_log_msg(c, "journal replay finished");
 err:
-	kvfree(keys_sorted);
-
-	if (ret)
-		bch_err_fn(c, ret);
+	if (trans)
+		bch2_trans_put(trans);
+	darray_exit(&keys_sorted);
+	bch_err_fn(c, ret);
 	return ret;
 }
 
@@ -268,8 +301,6 @@ static int journal_replay_entry_early(struct bch_fs *c,
 			container_of(entry, struct jset_entry_dev_usage, entry);
 		struct bch_dev *ca = bch_dev_bkey_exists(c, le32_to_cpu(u->dev));
 		unsigned i, nr_types = jset_entry_dev_usage_nr_types(u);
-
-		ca->usage_base->buckets_ec		= le64_to_cpu(u->buckets_ec);
 
 		for (i = 0; i < min_t(unsigned, nr_types, BCH_DATA_NR); i++) {
 			ca->usage_base->d[i].buckets	= le64_to_cpu(u->d[i].buckets);
@@ -468,7 +499,7 @@ err:
 noinline_for_stack
 static int bch2_fs_upgrade_for_subvolumes(struct bch_fs *c)
 {
-	int ret = bch2_trans_do(c, NULL, NULL, BTREE_INSERT_LAZY_RW,
+	int ret = bch2_trans_do(c, NULL, NULL, BCH_TRANS_COMMIT_lazy_rw,
 				__bch2_fs_upgrade_for_subvolumes(trans));
 	if (ret)
 		bch_err_fn(c, ret);
@@ -489,7 +520,19 @@ static int bch2_check_allocations(struct bch_fs *c)
 
 static int bch2_set_may_go_rw(struct bch_fs *c)
 {
-	set_bit(BCH_FS_MAY_GO_RW, &c->flags);
+	struct journal_keys *keys = &c->journal_keys;
+
+	/*
+	 * After we go RW, the journal keys buffer can't be modified (except for
+	 * setting journal_key->overwritten: it will be accessed by multiple
+	 * threads
+	 */
+	move_gap(keys->d, keys->nr, keys->size, keys->gap, keys->nr);
+	keys->gap = keys->nr;
+
+	set_bit(BCH_FS_may_go_rw, &c->flags);
+	if (keys->nr)
+		return bch2_fs_read_write_early(c);
 	return 0;
 }
 
@@ -833,11 +876,13 @@ use_clean:
 
 	/* If we fixed errors, verify that fs is actually clean now: */
 	if (IS_ENABLED(CONFIG_BCACHEFS_DEBUG) &&
-	    test_bit(BCH_FS_ERRORS_FIXED, &c->flags) &&
-	    !test_bit(BCH_FS_ERRORS_NOT_FIXED, &c->flags) &&
-	    !test_bit(BCH_FS_ERROR, &c->flags)) {
+	    test_bit(BCH_FS_errors_fixed, &c->flags) &&
+	    !test_bit(BCH_FS_errors_not_fixed, &c->flags) &&
+	    !test_bit(BCH_FS_error, &c->flags)) {
+		bch2_flush_fsck_errs(c);
+
 		bch_info(c, "Fixed errors, running fsck a second time to verify fs is clean");
-		clear_bit(BCH_FS_ERRORS_FIXED, &c->flags);
+		clear_bit(BCH_FS_errors_fixed, &c->flags);
 
 		c->curr_recovery_pass = BCH_RECOVERY_PASS_check_alloc_info;
 
@@ -845,13 +890,13 @@ use_clean:
 		if (ret)
 			goto err;
 
-		if (test_bit(BCH_FS_ERRORS_FIXED, &c->flags) ||
-		    test_bit(BCH_FS_ERRORS_NOT_FIXED, &c->flags)) {
+		if (test_bit(BCH_FS_errors_fixed, &c->flags) ||
+		    test_bit(BCH_FS_errors_not_fixed, &c->flags)) {
 			bch_err(c, "Second fsck run was not clean");
-			set_bit(BCH_FS_ERRORS_NOT_FIXED, &c->flags);
+			set_bit(BCH_FS_errors_not_fixed, &c->flags);
 		}
 
-		set_bit(BCH_FS_ERRORS_FIXED, &c->flags);
+		set_bit(BCH_FS_errors_fixed, &c->flags);
 	}
 
 	if (enabled_qtypes(c)) {
@@ -868,14 +913,14 @@ use_clean:
 		write_sb = true;
 	}
 
-	if (!test_bit(BCH_FS_ERROR, &c->flags)) {
+	if (!test_bit(BCH_FS_error, &c->flags)) {
 		c->disk_sb.sb->compat[0] |= cpu_to_le64(1ULL << BCH_COMPAT_alloc_info);
 		write_sb = true;
 	}
 
 	if (c->opts.fsck &&
-	    !test_bit(BCH_FS_ERROR, &c->flags) &&
-	    !test_bit(BCH_FS_ERRORS_NOT_FIXED, &c->flags)) {
+	    !test_bit(BCH_FS_error, &c->flags) &&
+	    !test_bit(BCH_FS_errors_not_fixed, &c->flags)) {
 		SET_BCH_SB_HAS_ERRORS(c->disk_sb.sb, 0);
 		SET_BCH_SB_HAS_TOPOLOGY_ERRORS(c->disk_sb.sb, 0);
 		write_sb = true;
@@ -891,8 +936,12 @@ use_clean:
 
 		bch2_move_stats_init(&stats, "recovery");
 
-		bch_info(c, "scanning for old btree nodes");
-		ret =   bch2_fs_read_write(c) ?:
+		struct printbuf buf = PRINTBUF;
+		bch2_version_to_text(&buf, c->sb.version_min);
+		bch_info(c, "scanning for old btree nodes: min_version %s", buf.buf);
+		printbuf_exit(&buf);
+
+		ret =   bch2_fs_read_write_early(c) ?:
 			bch2_scan_old_btree_nodes(c, &stats);
 		if (ret)
 			goto err;
@@ -905,17 +954,15 @@ use_clean:
 
 	ret = 0;
 out:
-	set_bit(BCH_FS_FSCK_DONE, &c->flags);
+	set_bit(BCH_FS_fsck_done, &c->flags);
 	bch2_flush_fsck_errs(c);
 
 	if (!c->opts.keep_journal &&
-	    test_bit(JOURNAL_REPLAY_DONE, &c->journal.flags)) {
-		bch2_journal_keys_free(&c->journal_keys);
-		bch2_journal_entries_free(c);
-	}
+	    test_bit(JOURNAL_REPLAY_DONE, &c->journal.flags))
+		bch2_journal_keys_put_initial(c);
 	kfree(clean);
 
-	if (!ret && test_bit(BCH_FS_NEED_DELETE_DEAD_SNAPSHOTS, &c->flags)) {
+	if (!ret && test_bit(BCH_FS_need_delete_dead_snapshots, &c->flags)) {
 		bch2_fs_read_write_early(c);
 		bch2_delete_dead_snapshots_async(c);
 	}
@@ -954,8 +1001,8 @@ int bch2_fs_initialize(struct bch_fs *c)
 	mutex_unlock(&c->sb_lock);
 
 	c->curr_recovery_pass = ARRAY_SIZE(recovery_pass_fns);
-	set_bit(BCH_FS_MAY_GO_RW, &c->flags);
-	set_bit(BCH_FS_FSCK_DONE, &c->flags);
+	set_bit(BCH_FS_may_go_rw, &c->flags);
+	set_bit(BCH_FS_fsck_done, &c->flags);
 
 	for (i = 0; i < BTREE_ID_NR; i++)
 		bch2_btree_root_alloc(c, i);

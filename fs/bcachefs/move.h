@@ -38,6 +38,25 @@ struct moving_context {
 	wait_queue_head_t	wait;
 };
 
+#define move_ctxt_wait_event_timeout(_ctxt, _cond, _timeout)			\
+({										\
+	int _ret = 0;								\
+	while (true) {								\
+		bool cond_finished = false;					\
+		bch2_moving_ctxt_do_pending_writes(_ctxt);			\
+										\
+		if (_cond)							\
+			break;							\
+		bch2_trans_unlock_long((_ctxt)->trans);				\
+		_ret = __wait_event_timeout((_ctxt)->wait,			\
+			     bch2_moving_ctxt_next_pending_write(_ctxt) ||	\
+			     (cond_finished = (_cond)), _timeout);		\
+		if (_ret || ( cond_finished))					\
+			break;							\
+	}									\
+	_ret;									\
+})
+
 #define move_ctxt_wait_event(_ctxt, _cond)				\
 do {									\
 	bool cond_finished = false;					\
@@ -55,6 +74,8 @@ do {									\
 
 typedef bool (*move_pred_fn)(struct bch_fs *, void *, struct bkey_s_c,
 			     struct bch_io_opts *, struct data_update_opts *);
+
+extern const char * const bch2_data_ops_strs[];
 
 void bch2_moving_ctxt_exit(struct moving_context *);
 void bch2_moving_ctxt_init(struct moving_context *, struct bch_fs *,
@@ -130,7 +151,7 @@ int bch2_data_job(struct bch_fs *,
 
 void bch2_move_stats_to_text(struct printbuf *, struct bch_move_stats *);
 void bch2_move_stats_exit(struct bch_move_stats *, struct bch_fs *);
-void bch2_move_stats_init(struct bch_move_stats *, char *);
+void bch2_move_stats_init(struct bch_move_stats *, const char *);
 
 void bch2_fs_moving_ctxts_to_text(struct printbuf *, struct bch_fs *);
 

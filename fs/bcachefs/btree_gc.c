@@ -108,7 +108,7 @@ static int bch2_gc_check_topology(struct bch_fs *c,
 				ret = bch2_run_explicit_recovery_pass(c, BCH_RECOVERY_PASS_check_topology);
 				goto err;
 			} else {
-				set_bit(BCH_FS_INITIAL_GC_UNFIXED, &c->flags);
+				set_bit(BCH_FS_initial_gc_unfixed, &c->flags);
 			}
 		}
 	}
@@ -134,7 +134,7 @@ static int bch2_gc_check_topology(struct bch_fs *c,
 			ret = bch2_run_explicit_recovery_pass(c, BCH_RECOVERY_PASS_check_topology);
 			goto err;
 		} else {
-			set_bit(BCH_FS_INITIAL_GC_UNFIXED, &c->flags);
+			set_bit(BCH_FS_initial_gc_unfixed, &c->flags);
 		}
 	}
 
@@ -619,7 +619,7 @@ static int bch2_check_fix_ptrs(struct btree_trans *trans, enum btree_id btree_id
 				g->data_type		= 0;
 				g->dirty_sectors	= 0;
 				g->cached_sectors	= 0;
-				set_bit(BCH_FS_NEED_ANOTHER_GC, &c->flags);
+				set_bit(BCH_FS_need_another_gc, &c->flags);
 			} else {
 				do_update = true;
 			}
@@ -664,7 +664,7 @@ static int bch2_check_fix_ptrs(struct btree_trans *trans, enum btree_id btree_id
 				 bch2_bkey_val_to_text(&buf, c, *k), buf.buf))) {
 			if (data_type == BCH_DATA_btree) {
 				g->data_type	= data_type;
-				set_bit(BCH_FS_NEED_ANOTHER_GC, &c->flags);
+				set_bit(BCH_FS_need_another_gc, &c->flags);
 			} else {
 				do_update = true;
 			}
@@ -996,7 +996,7 @@ static int bch2_gc_btree_init_recurse(struct btree_trans *trans, struct btree *b
 					/* Continue marking when opted to not
 					 * fix the error: */
 					ret = 0;
-					set_bit(BCH_FS_INITIAL_GC_UNFIXED, &c->flags);
+					set_bit(BCH_FS_initial_gc_unfixed, &c->flags);
 					continue;
 				}
 			} else if (ret) {
@@ -1251,9 +1251,6 @@ static int bch2_gc_done(struct bch_fs *c,
 			copy_dev_field(dev_usage_fragmented_wrong,
 				       d[i].fragmented,	"%s fragmented", bch2_data_types[i]);
 		}
-
-		copy_dev_field(dev_usage_buckets_ec_wrong,
-			       buckets_ec,		"buckets_ec");
 	}
 
 	{
@@ -1284,7 +1281,7 @@ static int bch2_gc_done(struct bch_fs *c,
 		}
 
 		for (i = 0; i < c->replicas.nr; i++) {
-			struct bch_replicas_entry *e =
+			struct bch_replicas_entry_v1 *e =
 				cpu_replicas_entry(&c->replicas, i);
 
 			if (metadata_only &&
@@ -1499,7 +1496,7 @@ static int bch2_gc_alloc_done(struct bch_fs *c, bool metadata_only)
 		ret = for_each_btree_key_commit(trans, iter, BTREE_ID_alloc,
 				POS(ca->dev_idx, ca->mi.first_bucket),
 				BTREE_ITER_SLOTS|BTREE_ITER_PREFETCH, k,
-				NULL, NULL, BTREE_INSERT_LAZY_RW,
+				NULL, NULL, BCH_TRANS_COMMIT_lazy_rw,
 			bch2_alloc_write_key(trans, &iter, k, metadata_only));
 
 		if (ret < 0) {
@@ -1656,7 +1653,7 @@ static int bch2_gc_reflink_done(struct bch_fs *c, bool metadata_only)
 	ret = for_each_btree_key_commit(trans, iter,
 			BTREE_ID_reflink, POS_MIN,
 			BTREE_ITER_PREFETCH, k,
-			NULL, NULL, BTREE_INSERT_NOFAIL,
+			NULL, NULL, BCH_TRANS_COMMIT_no_enospc,
 		bch2_gc_write_reflink_key(trans, &iter, k, &idx));
 
 	c->reflink_gc_nr = 0;
@@ -1780,7 +1777,7 @@ static int bch2_gc_stripes_done(struct bch_fs *c, bool metadata_only)
 	ret = for_each_btree_key_commit(trans, iter,
 			BTREE_ID_stripes, POS_MIN,
 			BTREE_ITER_PREFETCH, k,
-			NULL, NULL, BTREE_INSERT_NOFAIL,
+			NULL, NULL, BCH_TRANS_COMMIT_no_enospc,
 		bch2_gc_write_stripes_key(trans, &iter, k));
 
 	bch2_trans_put(trans);
@@ -1847,7 +1844,7 @@ again:
 #endif
 	c->gc_count++;
 
-	if (test_bit(BCH_FS_NEED_ANOTHER_GC, &c->flags) ||
+	if (test_bit(BCH_FS_need_another_gc, &c->flags) ||
 	    (!iter && bch2_test_restart_gc)) {
 		if (iter++ > 2) {
 			bch_info(c, "Unable to fix bucket gens, looping");
@@ -1859,7 +1856,7 @@ again:
 		 * XXX: make sure gens we fixed got saved
 		 */
 		bch_info(c, "Second GC pass needed, restarting:");
-		clear_bit(BCH_FS_NEED_ANOTHER_GC, &c->flags);
+		clear_bit(BCH_FS_need_another_gc, &c->flags);
 		__gc_pos_set(c, gc_phase(GC_PHASE_NOT_RUNNING));
 
 		bch2_gc_stripes_reset(c, metadata_only);
@@ -2016,7 +2013,7 @@ int bch2_gc_gens(struct bch_fs *c)
 					BTREE_ITER_PREFETCH|BTREE_ITER_ALL_SNAPSHOTS,
 					k,
 					NULL, NULL,
-					BTREE_INSERT_NOFAIL,
+					BCH_TRANS_COMMIT_no_enospc,
 				gc_btree_gens_key(trans, &iter, k));
 			if (ret && !bch2_err_matches(ret, EROFS))
 				bch_err_fn(c, ret);
@@ -2029,7 +2026,7 @@ int bch2_gc_gens(struct bch_fs *c)
 			BTREE_ITER_PREFETCH,
 			k,
 			NULL, NULL,
-			BTREE_INSERT_NOFAIL,
+			BCH_TRANS_COMMIT_no_enospc,
 		bch2_alloc_write_oldest_gen(trans, &iter, k));
 	if (ret && !bch2_err_matches(ret, EROFS))
 		bch_err_fn(c, ret);

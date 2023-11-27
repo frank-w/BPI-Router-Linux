@@ -401,7 +401,9 @@ BCH_DEBUG_PARAMS_DEBUG()
 	x(journal_flush_write)			\
 	x(journal_noflush_write)		\
 	x(journal_flush_seq)			\
-	x(blocked_journal)			\
+	x(blocked_journal_low_on_space)		\
+	x(blocked_journal_low_on_pin)		\
+	x(blocked_journal_max_in_flight)	\
 	x(blocked_allocate)			\
 	x(blocked_allocate_open_bucket)		\
 	x(nocow_lock_contended)
@@ -564,32 +566,38 @@ struct bch_dev {
 	struct io_count __percpu *io_done;
 };
 
-enum {
-	/* startup: */
-	BCH_FS_STARTED,
-	BCH_FS_MAY_GO_RW,
-	BCH_FS_RW,
-	BCH_FS_WAS_RW,
+/*
+ * fsck_done - kill?
+ *
+ * replace with something more general from enumated fsck passes/errors:
+ * initial_gc_unfixed
+ * error
+ * topology error
+ */
 
-	/* shutdown: */
-	BCH_FS_STOPPING,
-	BCH_FS_EMERGENCY_RO,
-	BCH_FS_GOING_RO,
-	BCH_FS_WRITE_DISABLE_COMPLETE,
-	BCH_FS_CLEAN_SHUTDOWN,
+#define BCH_FS_FLAGS()			\
+	x(started)			\
+	x(may_go_rw)			\
+	x(rw)				\
+	x(was_rw)			\
+	x(stopping)			\
+	x(emergency_ro)			\
+	x(going_ro)			\
+	x(write_disable_complete)	\
+	x(clean_shutdown)		\
+	x(fsck_done)			\
+	x(initial_gc_unfixed)		\
+	x(need_another_gc)		\
+	x(need_delete_dead_snapshots)	\
+	x(error)			\
+	x(topology_error)		\
+	x(errors_fixed)			\
+	x(errors_not_fixed)
 
-	/* fsck passes: */
-	BCH_FS_FSCK_DONE,
-	BCH_FS_INITIAL_GC_UNFIXED,	/* kill when we enumerate fsck errors */
-	BCH_FS_NEED_ANOTHER_GC,
-
-	BCH_FS_NEED_DELETE_DEAD_SNAPSHOTS,
-
-	/* errors: */
-	BCH_FS_ERROR,
-	BCH_FS_TOPOLOGY_ERROR,
-	BCH_FS_ERRORS_FIXED,
-	BCH_FS_ERRORS_NOT_FIXED,
+enum bch_fs_flags {
+#define x(n)		BCH_FS_##n,
+	BCH_FS_FLAGS()
+#undef x
 };
 
 struct btree_debug {
@@ -638,6 +646,8 @@ struct journal_keys {
 	size_t			gap;
 	size_t			nr;
 	size_t			size;
+	atomic_t		ref;
+	bool			initial_ref_held;
 };
 
 struct btree_trans_buf {
@@ -929,7 +939,7 @@ struct bch_fs {
 	mempool_t		compression_bounce[2];
 	mempool_t		compress_workspace[BCH_COMPRESSION_TYPE_NR];
 	mempool_t		decompress_workspace;
-	ZSTD_parameters		zstd_params;
+	size_t			zstd_workspace_size;
 
 	struct crypto_shash	*sha256;
 	struct crypto_sync_skcipher *chacha20;
@@ -1065,7 +1075,7 @@ static inline void bch2_write_ref_get(struct bch_fs *c, enum bch_write_ref ref)
 static inline bool bch2_write_ref_tryget(struct bch_fs *c, enum bch_write_ref ref)
 {
 #ifdef BCH_WRITE_REF_DEBUG
-	return !test_bit(BCH_FS_GOING_RO, &c->flags) &&
+	return !test_bit(BCH_FS_going_ro, &c->flags) &&
 		atomic_long_inc_not_zero(&c->writes[ref]);
 #else
 	return percpu_ref_tryget_live(&c->writes);
@@ -1084,7 +1094,7 @@ static inline void bch2_write_ref_put(struct bch_fs *c, enum bch_write_ref ref)
 		if (atomic_long_read(&c->writes[i]))
 			return;
 
-	set_bit(BCH_FS_WRITE_DISABLE_COMPLETE, &c->flags);
+	set_bit(BCH_FS_write_disable_complete, &c->flags);
 	wake_up(&bch2_read_only_wait);
 #else
 	percpu_ref_put(&c->writes);

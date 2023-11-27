@@ -803,7 +803,7 @@ static void ec_stripe_delete_work(struct work_struct *work)
 		if (!idx)
 			break;
 
-		ret = commit_do(trans, NULL, NULL, BTREE_INSERT_NOFAIL,
+		ret = commit_do(trans, NULL, NULL, BCH_TRANS_COMMIT_no_enospc,
 				ec_stripe_delete(trans, idx));
 		if (ret) {
 			bch_err_fn(c, ret);
@@ -983,8 +983,8 @@ static int ec_stripe_update_bucket(struct btree_trans *trans, struct ec_stripe_b
 
 	while (1) {
 		ret = commit_do(trans, NULL, NULL,
-				BTREE_INSERT_NOCHECK_RW|
-				BTREE_INSERT_NOFAIL,
+				BCH_TRANS_COMMIT_no_check_rw|
+				BCH_TRANS_COMMIT_no_enospc,
 			ec_stripe_update_extent(trans, bucket_pos, bucket.gen,
 						s, &bp_pos));
 		if (ret)
@@ -1121,8 +1121,8 @@ static void ec_stripe_create(struct ec_stripe_new *s)
 	}
 
 	ret = bch2_trans_do(c, &s->res, NULL,
-			    BTREE_INSERT_NOCHECK_RW|
-			    BTREE_INSERT_NOFAIL,
+			    BCH_TRANS_COMMIT_no_check_rw|
+			    BCH_TRANS_COMMIT_no_enospc,
 			    ec_stripe_key_update(trans,
 					bkey_i_to_stripe(&s->new_stripe.key),
 					!s->have_existing_stripe));
@@ -1415,7 +1415,7 @@ __bch2_ec_stripe_head_get(struct btree_trans *trans,
 	if (ret)
 		return ERR_PTR(ret);
 
-	if (test_bit(BCH_FS_GOING_RO, &c->flags)) {
+	if (test_bit(BCH_FS_going_ro, &c->flags)) {
 		h = ERR_PTR(-BCH_ERR_erofs_no_writes);
 		goto found;
 	}

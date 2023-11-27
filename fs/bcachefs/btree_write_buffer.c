@@ -11,6 +11,9 @@
 
 #include <linux/sort.h>
 
+static int bch2_btree_write_buffer_journal_flush(struct journal *,
+				struct journal_entry_pin *, u64);
+
 static int btree_write_buffered_key_cmp(const void *_l, const void *_r)
 {
 	const struct btree_write_buffered_key *l = _l;
@@ -45,6 +48,13 @@ static int bch2_btree_write_buffer_flush_one(struct btree_trans *trans,
 	if (ret)
 		return ret;
 
+	/*
+	 * We can't clone a path that has write locks: unshare it now, before
+	 * set_pos and traverse():
+	 */
+	if (iter->path->ref > 1)
+		iter->path = __bch2_btree_path_make_mut(trans, iter->path, true, _THIS_IP_);
+
 	path = iter->path;
 
 	if (!*write_locked) {
@@ -64,24 +74,18 @@ static int bch2_btree_write_buffer_flush_one(struct btree_trans *trans,
 
 	bch2_btree_insert_key_leaf(trans, path, &wb->k, wb->journal_seq);
 	(*fast)++;
-
-	if (path->ref > 1) {
-		/*
-		 * We can't clone a path that has write locks: if the path is
-		 * shared, unlock before set_pos(), traverse():
-		 */
-		bch2_btree_node_unlock_write(trans, path, path->l[0].b);
-		*write_locked = false;
-	}
 	return 0;
 trans_commit:
-	return  bch2_trans_update_seq(trans, wb->journal_seq, iter, &wb->k,
-				      BTREE_UPDATE_INTERNAL_SNAPSHOT_NODE) ?:
+	trans->journal_res.seq = wb->journal_seq;
+
+	return  bch2_trans_update(trans, iter, &wb->k,
+				  BTREE_UPDATE_INTERNAL_SNAPSHOT_NODE) ?:
 		bch2_trans_commit(trans, NULL, NULL,
 				  commit_flags|
-				  BTREE_INSERT_NOCHECK_RW|
-				  BTREE_INSERT_NOFAIL|
-				  BTREE_INSERT_JOURNAL_RECLAIM);
+				  BCH_TRANS_COMMIT_no_check_rw|
+				  BCH_TRANS_COMMIT_no_enospc|
+				  BCH_TRANS_COMMIT_no_journal_res|
+				  BCH_TRANS_COMMIT_journal_reclaim);
 }
 
 static union btree_write_buffer_state btree_write_buffer_switch(struct btree_write_buffer *wb)
@@ -124,9 +128,11 @@ btree_write_buffered_insert(struct btree_trans *trans,
 	bch2_trans_iter_init(trans, &iter, wb->btree, bkey_start_pos(&wb->k.k),
 			     BTREE_ITER_CACHED|BTREE_ITER_INTENT);
 
+	trans->journal_res.seq = wb->journal_seq;
+
 	ret   = bch2_btree_iter_traverse(&iter) ?:
-		bch2_trans_update_seq(trans, wb->journal_seq, &iter, &wb->k,
-				      BTREE_UPDATE_INTERNAL_SNAPSHOT_NODE);
+		bch2_trans_update(trans, &iter, &wb->k,
+				  BTREE_UPDATE_INTERNAL_SNAPSHOT_NODE);
 	bch2_trans_iter_exit(trans, &iter);
 	return ret;
 }
@@ -150,7 +156,8 @@ int __bch2_btree_write_buffer_flush(struct btree_trans *trans, unsigned commit_f
 	if (!locked && !mutex_trylock(&wb->flush_lock))
 		return 0;
 
-	bch2_journal_pin_copy(j, &pin, &wb->journal_pin, NULL);
+	bch2_journal_pin_copy(j, &pin, &wb->journal_pin,
+			      bch2_btree_write_buffer_journal_flush);
 	bch2_journal_pin_drop(j, &wb->journal_pin);
 
 	s = btree_write_buffer_switch(wb);
@@ -168,7 +175,7 @@ int __bch2_btree_write_buffer_flush(struct btree_trans *trans, unsigned commit_f
 	 * However, since we're not flushing in the order they appear in the
 	 * journal we won't be able to drop our journal pin until everything is
 	 * flushed - which means this could deadlock the journal if we weren't
-	 * passing BTREE_INSERT_JOURNAL_RECLAIM. This causes the update to fail
+	 * passing BCH_TRANS_COMMIT_journal_reclaim. This causes the update to fail
 	 * if it would block taking a journal reservation.
 	 *
 	 * If that happens, simply skip the key so we can optimistically insert
@@ -234,7 +241,7 @@ out:
 	mutex_unlock(&wb->flush_lock);
 	return ret;
 slowpath:
-	trace_write_buffer_flush_slowpath(trans, i - keys, nr);
+	trace_and_count(c, write_buffer_flush_slowpath, trans, slowpath, nr);
 
 	/*
 	 * Now sort the rest by journal seq and bump the journal pin as we go.
@@ -252,21 +259,14 @@ slowpath:
 		if (!i->journal_seq)
 			continue;
 
-		if (i->journal_seq > pin.seq) {
-			struct journal_entry_pin pin2;
-
-			memset(&pin2, 0, sizeof(pin2));
-
-			bch2_journal_pin_add(j, i->journal_seq, &pin2, NULL);
-			bch2_journal_pin_drop(j, &pin);
-			bch2_journal_pin_copy(j, &pin, &pin2, NULL);
-			bch2_journal_pin_drop(j, &pin2);
-		}
+		bch2_journal_pin_update(j, i->journal_seq, &pin,
+			      bch2_btree_write_buffer_journal_flush);
 
 		ret = commit_do(trans, NULL, NULL,
 				commit_flags|
-				BTREE_INSERT_NOFAIL|
-				BTREE_INSERT_JOURNAL_RECLAIM,
+				BCH_TRANS_COMMIT_no_enospc|
+				BCH_TRANS_COMMIT_no_journal_res|
+				BCH_TRANS_COMMIT_journal_reclaim,
 				btree_write_buffered_insert(trans, i));
 		if (bch2_fs_fatal_err_on(ret, c, "%s: insert error %s", __func__, bch2_err_str(ret)))
 			break;
@@ -277,8 +277,12 @@ slowpath:
 
 int bch2_btree_write_buffer_flush_sync(struct btree_trans *trans)
 {
+	struct bch_fs *c = trans->c;
+
+	trace_and_count(c, write_buffer_flush_sync, trans, _RET_IP_);
+
 	bch2_trans_unlock(trans);
-	mutex_lock(&trans->c->btree_write_buffer.flush_lock);
+	mutex_lock(&c->btree_write_buffer.flush_lock);
 	return __bch2_btree_write_buffer_flush(trans, 0, true);
 }
 
@@ -296,7 +300,7 @@ static int bch2_btree_write_buffer_journal_flush(struct journal *j,
 	mutex_lock(&wb->flush_lock);
 
 	return bch2_trans_run(c,
-			__bch2_btree_write_buffer_flush(trans, BTREE_INSERT_NOCHECK_RW, true));
+			__bch2_btree_write_buffer_flush(trans, BCH_TRANS_COMMIT_no_check_rw, true));
 }
 
 static inline u64 btree_write_buffer_ref(int idx)

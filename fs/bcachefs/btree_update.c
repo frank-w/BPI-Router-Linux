@@ -380,20 +380,11 @@ bch2_trans_update_by_path(struct btree_trans *trans, struct btree_path *path,
 {
 	struct bch_fs *c = trans->c;
 	struct btree_insert_entry *i, n;
-	u64 seq = 0;
 	int cmp;
 
 	EBUG_ON(!path->should_be_locked);
 	EBUG_ON(trans->nr_updates >= BTREE_ITER_MAX);
 	EBUG_ON(!bpos_eq(k->k.p, path->pos));
-
-	/*
-	 * The transaction journal res hasn't been allocated at this point.
-	 * That occurs at commit time. Reuse the seq field to pass in the seq
-	 * of a prejournaled key.
-	 */
-	if (flags & BTREE_UPDATE_PREJOURNAL)
-		seq = trans->journal_res.seq;
 
 	n = (struct btree_insert_entry) {
 		.flags		= flags,
@@ -403,7 +394,6 @@ bch2_trans_update_by_path(struct btree_trans *trans, struct btree_path *path,
 		.cached		= path->cached,
 		.path		= path,
 		.k		= k,
-		.seq		= seq,
 		.ip_allocated	= ip,
 	};
 
@@ -431,7 +421,6 @@ bch2_trans_update_by_path(struct btree_trans *trans, struct btree_path *path,
 		i->cached	= n.cached;
 		i->k		= n.k;
 		i->path		= n.path;
-		i->seq		= n.seq;
 		i->ip_allocated	= n.ip_allocated;
 	} else {
 		array_insert_item(trans->updates, trans->nr_updates,
@@ -540,18 +529,6 @@ int __must_check bch2_trans_update(struct btree_trans *trans, struct btree_iter 
 	}
 
 	return bch2_trans_update_by_path(trans, path, k, flags, _RET_IP_);
-}
-
-/*
- * Add a transaction update for a key that has already been journaled.
- */
-int __must_check bch2_trans_update_seq(struct btree_trans *trans, u64 seq,
-				       struct btree_iter *iter, struct bkey_i *k,
-				       enum btree_update_flags flags)
-{
-	trans->journal_res.seq = seq;
-	return bch2_trans_update(trans, iter, k, flags|BTREE_UPDATE_NOJOURNAL|
-						 BTREE_UPDATE_PREJOURNAL);
 }
 
 int __must_check bch2_trans_update_buffered(struct btree_trans *trans,
@@ -716,20 +693,6 @@ int bch2_btree_delete_at(struct btree_trans *trans,
 	return bch2_btree_delete_extent_at(trans, iter, 0, update_flags);
 }
 
-int bch2_btree_delete_at_buffered(struct btree_trans *trans,
-				  enum btree_id btree, struct bpos pos)
-{
-	struct bkey_i *k;
-
-	k = bch2_trans_kmalloc(trans, sizeof(*k));
-	if (IS_ERR(k))
-		return PTR_ERR(k);
-
-	bkey_init(&k->k);
-	k->k.p = pos;
-	return bch2_trans_update_buffered(trans, btree, k);
-}
-
 int bch2_btree_delete(struct btree_trans *trans,
 		      enum btree_id btree, struct bpos pos,
 		      unsigned update_flags)
@@ -792,7 +755,7 @@ int bch2_btree_delete_range_trans(struct btree_trans *trans, enum btree_id id,
 
 		ret   = bch2_trans_update(trans, &iter, &delete, update_flags) ?:
 			bch2_trans_commit(trans, &disk_res, journal_seq,
-					  BTREE_INSERT_NOFAIL);
+					  BCH_TRANS_COMMIT_no_enospc);
 		bch2_disk_reservation_put(trans->c, &disk_res);
 err:
 		/*
@@ -834,19 +797,13 @@ int bch2_btree_delete_range(struct bch_fs *c, enum btree_id id,
 int bch2_btree_bit_mod(struct btree_trans *trans, enum btree_id btree,
 		       struct bpos pos, bool set)
 {
-	struct bkey_i *k;
-	int ret = 0;
+	struct bkey_i k;
 
-	k = bch2_trans_kmalloc_nomemzero(trans, sizeof(*k));
-	ret = PTR_ERR_OR_ZERO(k);
-	if (unlikely(ret))
-		return ret;
+	bkey_init(&k.k);
+	k.k.type = set ? KEY_TYPE_set : KEY_TYPE_deleted;
+	k.k.p = pos;
 
-	bkey_init(&k->k);
-	k->k.type = set ? KEY_TYPE_set : KEY_TYPE_deleted;
-	k->k.p = pos;
-
-	return bch2_trans_update_buffered(trans, btree, k);
+	return bch2_trans_update_buffered(trans, btree, &k);
 }
 
 __printf(2, 0)
@@ -897,7 +854,7 @@ __bch2_fs_log_msg(struct bch_fs *c, unsigned commit_flags, const char *fmt,
 		ret = __bch2_trans_log_msg(&c->journal.early_journal_entries, fmt, args);
 	} else {
 		ret = bch2_trans_do(c, NULL, NULL,
-			BTREE_INSERT_LAZY_RW|commit_flags,
+			BCH_TRANS_COMMIT_lazy_rw|commit_flags,
 			__bch2_trans_log_msg(&trans->extra_journal_entries, fmt, args));
 	}
 

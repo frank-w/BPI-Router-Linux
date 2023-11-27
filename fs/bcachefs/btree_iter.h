@@ -348,8 +348,6 @@ struct btree *bch2_btree_iter_next_node(struct btree_iter *);
 struct bkey_s_c bch2_btree_iter_peek_upto(struct btree_iter *, struct bpos);
 struct bkey_s_c bch2_btree_iter_next(struct btree_iter *);
 
-struct bkey_s_c bch2_btree_iter_peek_all_levels(struct btree_iter *);
-
 static inline struct bkey_s_c bch2_btree_iter_peek(struct btree_iter *iter)
 {
 	return bch2_btree_iter_peek_upto(iter, SPOS_MAX);
@@ -408,9 +406,6 @@ static inline unsigned __bch2_btree_iter_flags(struct btree_trans *trans,
 					       unsigned btree_id,
 					       unsigned flags)
 {
-	if (flags & BTREE_ITER_ALL_LEVELS)
-		flags |= BTREE_ITER_ALL_SNAPSHOTS|__BTREE_ITER_ALL_SNAPSHOTS;
-
 	if (!(flags & (BTREE_ITER_ALL_SNAPSHOTS|BTREE_ITER_NOT_EXTENTS)) &&
 	    btree_id_is_extents(btree_id))
 		flags |= BTREE_ITER_IS_EXTENTS;
@@ -450,14 +445,16 @@ static inline void bch2_trans_iter_init_common(struct btree_trans *trans,
 					  unsigned flags,
 					  unsigned long ip)
 {
-	memset(iter, 0, sizeof(*iter));
-	iter->trans	= trans;
-	iter->btree_id	= btree_id;
-	iter->flags	= flags;
-	iter->snapshot	= pos.snapshot;
-	iter->pos	= pos;
-	iter->k.p	= pos;
-
+	iter->trans		= trans;
+	iter->update_path	= NULL;
+	iter->key_cache_path	= NULL;
+	iter->btree_id		= btree_id;
+	iter->min_depth		= 0;
+	iter->flags		= flags;
+	iter->snapshot		= pos.snapshot;
+	iter->pos		= pos;
+	iter->k			= POS_KEY(pos);
+	iter->journal_idx	= 0;
 #ifdef CONFIG_BCACHEFS_DEBUG
 	iter->ip_allocated = ip;
 #endif
@@ -606,8 +603,6 @@ u32 bch2_trans_begin(struct btree_trans *);
 static inline struct bkey_s_c bch2_btree_iter_peek_prev_type(struct btree_iter *iter,
 							     unsigned flags)
 {
-	BUG_ON(flags & BTREE_ITER_ALL_LEVELS);
-
 	return  flags & BTREE_ITER_SLOTS      ? bch2_btree_iter_peek_slot(iter) :
 						bch2_btree_iter_peek_prev(iter);
 }
@@ -615,8 +610,7 @@ static inline struct bkey_s_c bch2_btree_iter_peek_prev_type(struct btree_iter *
 static inline struct bkey_s_c bch2_btree_iter_peek_type(struct btree_iter *iter,
 							unsigned flags)
 {
-	return  flags & BTREE_ITER_ALL_LEVELS ? bch2_btree_iter_peek_all_levels(iter) :
-		flags & BTREE_ITER_SLOTS      ? bch2_btree_iter_peek_slot(iter) :
+	return  flags & BTREE_ITER_SLOTS      ? bch2_btree_iter_peek_slot(iter) :
 						bch2_btree_iter_peek(iter);
 }
 

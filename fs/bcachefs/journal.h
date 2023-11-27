@@ -119,7 +119,6 @@ static inline void journal_wake(struct journal *j)
 {
 	wake_up(&j->wait);
 	closure_wake_up(&j->async_wait);
-	closure_wake_up(&j->preres_wait);
 }
 
 static inline struct journal_buf *journal_cur_buf(struct journal *j)
@@ -136,9 +135,7 @@ static inline u64 journal_last_seq(struct journal *j)
 
 static inline u64 journal_cur_seq(struct journal *j)
 {
-	EBUG_ON(j->pin.back - 1 != atomic64_read(&j->seq));
-
-	return j->pin.back - 1;
+	return atomic64_read(&j->seq);
 }
 
 static inline u64 journal_last_unwritten_seq(struct journal *j)

@@ -151,7 +151,11 @@ struct bpos {
 #else
 #error edit for your odd byteorder.
 #endif
-} __packed __aligned(4);
+} __packed
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+__aligned(4)
+#endif
+;
 
 #define KEY_INODE_MAX			((__u64)~0ULL)
 #define KEY_OFFSET_MAX			((__u64)~0ULL)
@@ -302,6 +306,13 @@ struct bkey_i {
 	struct bkey	k;
 	struct bch_val	v;
 };
+
+#define POS_KEY(_pos)							\
+((struct bkey) {							\
+	.u64s		= BKEY_U64s,					\
+	.format		= KEY_FORMAT_CURRENT,				\
+	.p		= _pos,						\
+})
 
 #define KEY(_inode, _offset, _size)					\
 ((struct bkey) {							\
@@ -1436,7 +1447,7 @@ struct bch_sb_field_replicas_v0 {
 	struct bch_replicas_entry_v0 entries[];
 } __packed __aligned(8);
 
-struct bch_replicas_entry {
+struct bch_replicas_entry_v1 {
 	__u8			data_type;
 	__u8			nr_devs;
 	__u8			nr_required;
@@ -1448,7 +1459,7 @@ struct bch_replicas_entry {
 
 struct bch_sb_field_replicas {
 	struct bch_sb_field	field;
-	struct bch_replicas_entry entries[];
+	struct bch_replicas_entry_v1 entries[];
 } __packed __aligned(8);
 
 /* BCH_SB_FIELD_quota: */
@@ -1528,7 +1539,7 @@ struct bch_sb_field_disk_groups {
 	x(move_extent_write,				36)	\
 	x(move_extent_finish,				37)	\
 	x(move_extent_fail,				38)	\
-	x(move_extent_alloc_mem_fail,			39)	\
+	x(move_extent_start_fail,			39)	\
 	x(copygc,					40)	\
 	x(copygc_wait,					41)	\
 	x(gc_gens_end,					42)	\
@@ -1565,7 +1576,9 @@ struct bch_sb_field_disk_groups {
 	x(write_super,					73)	\
 	x(trans_restart_would_deadlock_recursion_limit,	74)	\
 	x(trans_restart_write_buffer_flush,		75)	\
-	x(trans_restart_split_race,			76)
+	x(trans_restart_split_race,			76)	\
+	x(write_buffer_flush_slowpath,			77)	\
+	x(write_buffer_flush_sync,			78)
 
 enum bch_persistent_counters {
 #define x(t, n, ...) BCH_COUNTER_##t,
@@ -2174,7 +2187,7 @@ struct jset_entry_usage {
 struct jset_entry_data_usage {
 	struct jset_entry	entry;
 	__le64			v;
-	struct bch_replicas_entry r;
+	struct bch_replicas_entry_v1 r;
 } __packed;
 
 struct jset_entry_clock {
@@ -2195,8 +2208,8 @@ struct jset_entry_dev_usage {
 	__le32			dev;
 	__u32			pad;
 
-	__le64			buckets_ec;
-	__le64			_buckets_unavailable; /* No longer used */
+	__le64			_buckets_ec;		/* No longer used */
+	__le64			_buckets_unavailable;	/* No longer used */
 
 	struct jset_entry_dev_usage_type d[];
 };

@@ -475,9 +475,6 @@ static int bch2_btree_reserve_get(struct btree_trans *trans,
 	/*
 	 * Protects reaping from the btree node cache and using the btree node
 	 * open bucket reserve:
-	 *
-	 * BTREE_INSERT_NOWAIT only applies to btree node allocation, not
-	 * blocking on this lock:
 	 */
 	ret = bch2_btree_cache_cannibalize_lock(c, cl);
 	if (ret)
@@ -487,9 +484,8 @@ static int bch2_btree_reserve_get(struct btree_trans *trans,
 		struct prealloc_nodes *p = as->prealloc_nodes + interior;
 
 		while (p->nr < nr_nodes[interior]) {
-			b = __bch2_btree_node_alloc(trans, &as->disk_res,
-					flags & BTREE_INSERT_NOWAIT ? NULL : cl,
-					interior, flags);
+			b = __bch2_btree_node_alloc(trans, &as->disk_res, cl,
+						    interior, flags);
 			if (IS_ERR(b)) {
 				ret = PTR_ERR(b);
 				goto err;
@@ -644,9 +640,9 @@ static void btree_update_nodes_written(struct btree_update *as)
 	 */
 	ret = commit_do(trans, &as->disk_res, &journal_seq,
 			BCH_WATERMARK_reclaim|
-			BTREE_INSERT_NOFAIL|
-			BTREE_INSERT_NOCHECK_RW|
-			BTREE_INSERT_JOURNAL_RECLAIM,
+			BCH_TRANS_COMMIT_no_enospc|
+			BCH_TRANS_COMMIT_no_check_rw|
+			BCH_TRANS_COMMIT_journal_reclaim,
 			btree_update_nodes_written_trans(trans, as));
 	bch2_trans_unlock(trans);
 
@@ -778,9 +774,9 @@ static void btree_interior_update_work(struct work_struct *work)
 	}
 }
 
-static void btree_update_set_nodes_written(struct closure *cl)
+static CLOSURE_CALLBACK(btree_update_set_nodes_written)
 {
-	struct btree_update *as = container_of(cl, struct btree_update, cl);
+	closure_type(as, struct btree_update, cl);
 	struct bch_fs *c = as->c;
 
 	mutex_lock(&c->btree_interior_update_lock);
@@ -814,6 +810,12 @@ static void btree_update_updated_node(struct btree_update *as, struct btree *b)
 	mutex_unlock(&c->btree_interior_update_lock);
 }
 
+static int bch2_update_reparent_journal_pin_flush(struct journal *j,
+				struct journal_entry_pin *_pin, u64 seq)
+{
+	return 0;
+}
+
 static void btree_update_reparent(struct btree_update *as,
 				  struct btree_update *child)
 {
@@ -824,7 +826,8 @@ static void btree_update_reparent(struct btree_update *as,
 	child->b = NULL;
 	child->mode = BTREE_INTERIOR_UPDATING_AS;
 
-	bch2_journal_pin_copy(&c->journal, &as->journal, &child->journal, NULL);
+	bch2_journal_pin_copy(&c->journal, &as->journal, &child->journal,
+			      bch2_update_reparent_journal_pin_flush);
 }
 
 static void btree_update_updated_root(struct btree_update *as, struct btree *b)
@@ -933,6 +936,12 @@ static void bch2_btree_update_get_open_buckets(struct btree_update *as, struct b
 			b->ob.v[--b->ob.nr];
 }
 
+static int bch2_btree_update_will_free_node_journal_pin_flush(struct journal *j,
+				struct journal_entry_pin *_pin, u64 seq)
+{
+	return 0;
+}
+
 /*
  * @b is being split/rewritten: it may have pointers to not-yet-written btree
  * nodes and thus outstanding btree_updates - redirect @b's
@@ -984,11 +993,13 @@ static void bch2_btree_interior_update_will_free_node(struct btree_update *as,
 	 * when the new nodes are persistent and reachable on disk:
 	 */
 	w = btree_current_write(b);
-	bch2_journal_pin_copy(&c->journal, &as->journal, &w->journal, NULL);
+	bch2_journal_pin_copy(&c->journal, &as->journal, &w->journal,
+			      bch2_btree_update_will_free_node_journal_pin_flush);
 	bch2_journal_pin_drop(&c->journal, &w->journal);
 
 	w = btree_prev_write(b);
-	bch2_journal_pin_copy(&c->journal, &as->journal, &w->journal, NULL);
+	bch2_journal_pin_copy(&c->journal, &as->journal, &w->journal,
+			      bch2_btree_update_will_free_node_journal_pin_flush);
 	bch2_journal_pin_drop(&c->journal, &w->journal);
 
 	mutex_unlock(&c->btree_interior_update_lock);
@@ -1038,7 +1049,7 @@ bch2_btree_update_start(struct btree_trans *trans, struct btree_path *path,
 	struct bch_fs *c = trans->c;
 	struct btree_update *as;
 	u64 start_time = local_clock();
-	int disk_res_flags = (flags & BTREE_INSERT_NOFAIL)
+	int disk_res_flags = (flags & BCH_TRANS_COMMIT_no_enospc)
 		? BCH_DISK_RESERVATION_NOFAIL : 0;
 	unsigned nr_nodes[2] = { 0, 0 };
 	unsigned update_level = level;
@@ -1071,16 +1082,18 @@ bch2_btree_update_start(struct btree_trans *trans, struct btree_path *path,
 			break;
 		}
 
+		/*
+		 * Always check for space for two keys, even if we won't have to
+		 * split at prior level - it might have been a merge instead:
+		 */
 		if (bch2_btree_node_insert_fits(c, path->l[update_level].b,
-					BKEY_BTREE_PTR_U64s_MAX * (1 + split)))
+						BKEY_BTREE_PTR_U64s_MAX * 2))
 			break;
 
 		split = path->l[update_level].b->nr.live_u64s > BTREE_SPLIT_THRESHOLD(c);
 	}
 
-	if (flags & BTREE_INSERT_GC_LOCK_HELD)
-		lockdep_assert_held(&c->gc_lock);
-	else if (!down_read_trylock(&c->gc_lock)) {
+	if (!down_read_trylock(&c->gc_lock)) {
 		ret = drop_locks_do(trans, (down_read(&c->gc_lock), 0));
 		if (ret) {
 			up_read(&c->gc_lock);
@@ -1094,7 +1107,7 @@ bch2_btree_update_start(struct btree_trans *trans, struct btree_path *path,
 	as->c		= c;
 	as->start_time	= start_time;
 	as->mode	= BTREE_INTERIOR_NO_UPDATE;
-	as->took_gc_lock = !(flags & BTREE_INSERT_GC_LOCK_HELD);
+	as->took_gc_lock = true;
 	as->btree_id	= path->btree_id;
 	as->update_level = update_level;
 	INIT_LIST_HEAD(&as->list);
@@ -1137,7 +1150,7 @@ bch2_btree_update_start(struct btree_trans *trans, struct btree_path *path,
 		 * flag
 		 */
 		if (bch2_err_matches(ret, ENOSPC) &&
-		    (flags & BTREE_INSERT_JOURNAL_RECLAIM) &&
+		    (flags & BCH_TRANS_COMMIT_journal_reclaim) &&
 		    watermark != BCH_WATERMARK_reclaim) {
 			ret = -BCH_ERR_journal_reclaim_would_deadlock;
 			goto err;
@@ -1825,7 +1838,7 @@ int __bch2_foreground_maybe_merge(struct btree_trans *trans,
 
 	parent = btree_node_parent(path, b);
 	as = bch2_btree_update_start(trans, path, level, false,
-				     BTREE_INSERT_NOFAIL|flags);
+				     BCH_TRANS_COMMIT_no_enospc|flags);
 	ret = PTR_ERR_OR_ZERO(as);
 	if (ret)
 		goto err;
@@ -1911,7 +1924,7 @@ int bch2_btree_node_rewrite(struct btree_trans *trans,
 	struct btree_update *as;
 	int ret;
 
-	flags |= BTREE_INSERT_NOFAIL;
+	flags |= BCH_TRANS_COMMIT_no_enospc;
 
 	parent = btree_node_parent(iter->path, b);
 	as = bch2_btree_update_start(trans, iter->path, b->c.level,
@@ -2043,7 +2056,7 @@ void bch2_btree_node_rewrite_async(struct bch_fs *c, struct btree *b)
 	a->seq		= b->data->keys.seq;
 	INIT_WORK(&a->work, async_btree_node_rewrite_work);
 
-	if (unlikely(!test_bit(BCH_FS_MAY_GO_RW, &c->flags))) {
+	if (unlikely(!test_bit(BCH_FS_may_go_rw, &c->flags))) {
 		mutex_lock(&c->pending_node_rewrites_lock);
 		list_add(&a->list, &c->pending_node_rewrites);
 		mutex_unlock(&c->pending_node_rewrites_lock);
@@ -2051,7 +2064,7 @@ void bch2_btree_node_rewrite_async(struct bch_fs *c, struct btree *b)
 	}
 
 	if (!bch2_write_ref_tryget(c, BCH_WRITE_REF_node_rewrite)) {
-		if (test_bit(BCH_FS_STARTED, &c->flags)) {
+		if (test_bit(BCH_FS_started, &c->flags)) {
 			bch_err(c, "%s: error getting c->writes ref", __func__);
 			kfree(a);
 			return;
