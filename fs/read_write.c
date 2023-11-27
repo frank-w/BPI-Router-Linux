@@ -773,34 +773,6 @@ static ssize_t do_loop_readv_writev(struct file *filp, struct iov_iter *iter,
 	return ret;
 }
 
-static ssize_t do_iter_read(struct file *file, struct iov_iter *iter,
-		loff_t *pos, rwf_t flags)
-{
-	size_t tot_len;
-	ssize_t ret = 0;
-
-	if (!(file->f_mode & FMODE_READ))
-		return -EBADF;
-	if (!(file->f_mode & FMODE_CAN_READ))
-		return -EINVAL;
-
-	tot_len = iov_iter_count(iter);
-	if (!tot_len)
-		goto out;
-	ret = rw_verify_area(READ, file, pos, tot_len);
-	if (ret < 0)
-		return ret;
-
-	if (file->f_op->read_iter)
-		ret = do_iter_readv_writev(file, iter, pos, READ, flags);
-	else
-		ret = do_loop_readv_writev(file, iter, pos, READ, flags);
-out:
-	if (ret >= 0)
-		fsnotify_access(file);
-	return ret;
-}
-
 ssize_t vfs_iocb_iter_read(struct file *file, struct kiocb *iocb,
 			   struct iov_iter *iter)
 {
@@ -830,41 +802,37 @@ out:
 EXPORT_SYMBOL(vfs_iocb_iter_read);
 
 ssize_t vfs_iter_read(struct file *file, struct iov_iter *iter, loff_t *ppos,
-		rwf_t flags)
-{
-	if (!file->f_op->read_iter)
-		return -EINVAL;
-	return do_iter_read(file, iter, ppos, flags);
-}
-EXPORT_SYMBOL(vfs_iter_read);
-
-static ssize_t do_iter_write(struct file *file, struct iov_iter *iter,
-		loff_t *pos, rwf_t flags)
+		      rwf_t flags)
 {
 	size_t tot_len;
 	ssize_t ret = 0;
 
-	if (!(file->f_mode & FMODE_WRITE))
+	if (!file->f_op->read_iter)
+		return -EINVAL;
+	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
-	if (!(file->f_mode & FMODE_CAN_WRITE))
+	if (!(file->f_mode & FMODE_CAN_READ))
 		return -EINVAL;
 
 	tot_len = iov_iter_count(iter);
 	if (!tot_len)
-		return 0;
-	ret = rw_verify_area(WRITE, file, pos, tot_len);
+		goto out;
+	ret = rw_verify_area(READ, file, ppos, tot_len);
 	if (ret < 0)
 		return ret;
 
-	if (file->f_op->write_iter)
-		ret = do_iter_readv_writev(file, iter, pos, WRITE, flags);
-	else
-		ret = do_loop_readv_writev(file, iter, pos, WRITE, flags);
-	if (ret > 0)
-		fsnotify_modify(file);
+	ret = do_iter_readv_writev(file, iter, ppos, READ, flags);
+out:
+	if (ret >= 0)
+		fsnotify_access(file);
 	return ret;
 }
+EXPORT_SYMBOL(vfs_iter_read);
 
+/*
+ * Caller is responsible for calling kiocb_end_write() on completion
+ * if async iocb was queued.
+ */
 ssize_t vfs_iocb_iter_write(struct file *file, struct kiocb *iocb,
 			    struct iov_iter *iter)
 {
@@ -885,7 +853,10 @@ ssize_t vfs_iocb_iter_write(struct file *file, struct kiocb *iocb,
 	if (ret < 0)
 		return ret;
 
+	kiocb_start_write(iocb);
 	ret = call_write_iter(file, iocb, iter);
+	if (ret != -EIOCBQUEUED)
+		kiocb_end_write(iocb);
 	if (ret > 0)
 		fsnotify_modify(file);
 
@@ -894,46 +865,111 @@ ssize_t vfs_iocb_iter_write(struct file *file, struct kiocb *iocb,
 EXPORT_SYMBOL(vfs_iocb_iter_write);
 
 ssize_t vfs_iter_write(struct file *file, struct iov_iter *iter, loff_t *ppos,
-		rwf_t flags)
+		       rwf_t flags)
 {
+	size_t tot_len;
+	ssize_t ret;
+
+	if (!(file->f_mode & FMODE_WRITE))
+		return -EBADF;
+	if (!(file->f_mode & FMODE_CAN_WRITE))
+		return -EINVAL;
 	if (!file->f_op->write_iter)
 		return -EINVAL;
-	return do_iter_write(file, iter, ppos, flags);
+
+	tot_len = iov_iter_count(iter);
+	if (!tot_len)
+		return 0;
+
+	ret = rw_verify_area(WRITE, file, ppos, tot_len);
+	if (ret < 0)
+		return ret;
+
+	file_start_write(file);
+	ret = do_iter_readv_writev(file, iter, ppos, WRITE, flags);
+	if (ret > 0)
+		fsnotify_modify(file);
+	file_end_write(file);
+
+	return ret;
 }
 EXPORT_SYMBOL(vfs_iter_write);
 
 static ssize_t vfs_readv(struct file *file, const struct iovec __user *vec,
-		  unsigned long vlen, loff_t *pos, rwf_t flags)
+			 unsigned long vlen, loff_t *pos, rwf_t flags)
 {
 	struct iovec iovstack[UIO_FASTIOV];
 	struct iovec *iov = iovstack;
 	struct iov_iter iter;
-	ssize_t ret;
+	size_t tot_len;
+	ssize_t ret = 0;
 
-	ret = import_iovec(ITER_DEST, vec, vlen, ARRAY_SIZE(iovstack), &iov, &iter);
-	if (ret >= 0) {
-		ret = do_iter_read(file, &iter, pos, flags);
-		kfree(iov);
-	}
+	if (!(file->f_mode & FMODE_READ))
+		return -EBADF;
+	if (!(file->f_mode & FMODE_CAN_READ))
+		return -EINVAL;
 
+	ret = import_iovec(ITER_DEST, vec, vlen, ARRAY_SIZE(iovstack), &iov,
+			   &iter);
+	if (ret < 0)
+		return ret;
+
+	tot_len = iov_iter_count(&iter);
+	if (!tot_len)
+		goto out;
+
+	ret = rw_verify_area(READ, file, pos, tot_len);
+	if (ret < 0)
+		goto out;
+
+	if (file->f_op->read_iter)
+		ret = do_iter_readv_writev(file, &iter, pos, READ, flags);
+	else
+		ret = do_loop_readv_writev(file, &iter, pos, READ, flags);
+out:
+	if (ret >= 0)
+		fsnotify_access(file);
+	kfree(iov);
 	return ret;
 }
 
 static ssize_t vfs_writev(struct file *file, const struct iovec __user *vec,
-		   unsigned long vlen, loff_t *pos, rwf_t flags)
+			  unsigned long vlen, loff_t *pos, rwf_t flags)
 {
 	struct iovec iovstack[UIO_FASTIOV];
 	struct iovec *iov = iovstack;
 	struct iov_iter iter;
-	ssize_t ret;
+	size_t tot_len;
+	ssize_t ret = 0;
 
-	ret = import_iovec(ITER_SOURCE, vec, vlen, ARRAY_SIZE(iovstack), &iov, &iter);
-	if (ret >= 0) {
-		file_start_write(file);
-		ret = do_iter_write(file, &iter, pos, flags);
-		file_end_write(file);
-		kfree(iov);
-	}
+	if (!(file->f_mode & FMODE_WRITE))
+		return -EBADF;
+	if (!(file->f_mode & FMODE_CAN_WRITE))
+		return -EINVAL;
+
+	ret = import_iovec(ITER_SOURCE, vec, vlen, ARRAY_SIZE(iovstack), &iov,
+			   &iter);
+	if (ret < 0)
+		return ret;
+
+	tot_len = iov_iter_count(&iter);
+	if (!tot_len)
+		goto out;
+
+	ret = rw_verify_area(WRITE, file, pos, tot_len);
+	if (ret < 0)
+		goto out;
+
+	file_start_write(file);
+	if (file->f_op->write_iter)
+		ret = do_iter_readv_writev(file, &iter, pos, WRITE, flags);
+	else
+		ret = do_loop_readv_writev(file, &iter, pos, WRITE, flags);
+	if (ret > 0)
+		fsnotify_modify(file);
+	file_end_write(file);
+out:
+	kfree(iov);
 	return ret;
 }
 
@@ -1387,7 +1423,7 @@ ssize_t generic_copy_file_range(struct file *file_in, loff_t pos_in,
 				struct file *file_out, loff_t pos_out,
 				size_t len, unsigned int flags)
 {
-	lockdep_assert(sb_write_started(file_inode(file_out)->i_sb));
+	lockdep_assert(file_write_started(file_out));
 
 	return do_splice_direct(file_in, &pos_in, file_out, &pos_out,
 				len > MAX_RW_COUNT ? MAX_RW_COUNT : len, 0);
