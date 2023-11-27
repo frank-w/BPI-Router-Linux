@@ -1220,7 +1220,7 @@ static int ov772x_set_fmt(struct v4l2_subdev *sd,
 	mf->xfer_func = V4L2_XFER_FUNC_DEFAULT;
 
 	if (format->which == V4L2_SUBDEV_FORMAT_TRY) {
-		sd_state->pads->try_fmt = *mf;
+		*v4l2_subdev_state_get_format(sd_state, 0) = *mf;
 		return 0;
 	}
 

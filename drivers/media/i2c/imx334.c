@@ -879,7 +879,7 @@ static int imx334_get_pad_format(struct v4l2_subdev *sd,
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 		struct v4l2_mbus_framefmt *framefmt;
 
-		framefmt = v4l2_subdev_get_try_format(sd, sd_state, fmt->pad);
+		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
 		fmt->format = *framefmt;
 	} else {
 		fmt->format.code = imx334->cur_code;
@@ -920,7 +920,7 @@ static int imx334_set_pad_format(struct v4l2_subdev *sd,
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 		struct v4l2_mbus_framefmt *framefmt;
 
-		framefmt = v4l2_subdev_get_try_format(sd, sd_state, fmt->pad);
+		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
 		*framefmt = fmt->format;
 	} else if (imx334->cur_mode != mode || imx334->cur_code != fmt->format.code) {
 		imx334->cur_code = fmt->format.code;
@@ -935,14 +935,14 @@ static int imx334_set_pad_format(struct v4l2_subdev *sd,
 }
 
 /**
- * imx334_init_pad_cfg() - Initialize sub-device pad configuration
+ * imx334_init_cfg() - Initialize sub-device state
  * @sd: pointer to imx334 V4L2 sub-device structure
  * @sd_state: V4L2 sub-device state
  *
  * Return: 0 if successful, error code otherwise.
  */
-static int imx334_init_pad_cfg(struct v4l2_subdev *sd,
-			       struct v4l2_subdev_state *sd_state)
+static int imx334_init_cfg(struct v4l2_subdev *sd,
+			   struct v4l2_subdev_state *sd_state)
 {
 	struct imx334 *imx334 = to_imx334(sd);
 	struct v4l2_subdev_format fmt = { 0 };
@@ -1190,7 +1190,7 @@ static const struct v4l2_subdev_video_ops imx334_video_ops = {
 };
 
 static const struct v4l2_subdev_pad_ops imx334_pad_ops = {
-	.init_cfg = imx334_init_pad_cfg,
+	.init_cfg = imx334_init_cfg,
 	.enum_mbus_code = imx334_enum_mbus_code,
 	.enum_frame_size = imx334_enum_frame_size,
 	.get_fmt = imx334_get_pad_format,
