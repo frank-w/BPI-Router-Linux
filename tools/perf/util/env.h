@@ -46,6 +46,9 @@ struct hybrid_node {
 struct pmu_caps {
 	int		nr_caps;
 	unsigned int    max_branches;
+	unsigned int	br_cntr_nr;
+	unsigned int	br_cntr_width;
+
 	char            **caps;
 	char            *pmu_name;
 };
@@ -62,6 +65,8 @@ struct perf_env {
 	unsigned long long	total_mem;
 	unsigned int		msr_pmu_type;
 	unsigned int		max_branches;
+	unsigned int		br_cntr_nr;
+	unsigned int		br_cntr_width;
 	int			kernel_is_64_bit;
 
 	int			nr_cmdline;
@@ -174,4 +179,6 @@ struct btf_node *perf_env__find_btf(struct perf_env *env, __u32 btf_id);
 int perf_env__numa_node(struct perf_env *env, struct perf_cpu cpu);
 char *perf_env__find_pmu_cap(struct perf_env *env, const char *pmu_name,
 			     const char *cap);
+
+bool perf_env__has_pmu_mapping(struct perf_env *env, const char *pmu_name);
 #endif /* __PERF_ENV_H */
