@@ -1144,6 +1144,11 @@ static int zswap_writeback_entry(struct zswap_entry *entry,
 	/* move it to the tail of the inactive list after end_writeback */
 	SetPageReclaim(page);
 
+	if (!PageLRU(page)) {
+		/* drain lru cache to help folio_rotate_reclaimable() */
+		lru_add_drain();
+	}
+
 	/* start writeback */
 	__swap_writepage(page, &wbc);
 	put_page(page);

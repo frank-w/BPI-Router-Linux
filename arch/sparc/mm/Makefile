@@ -3,7 +3,7 @@
 #
 
 asflags-y := -ansi
-ccflags-y := -Werror
+#ccflags-y := -Werror
 
 obj-$(CONFIG_SPARC64)   += ultra.o tlb.o tsb.o
 obj-y                   += fault_$(BITS).o
