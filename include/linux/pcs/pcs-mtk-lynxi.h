@@ -10,4 +10,5 @@ struct phylink_pcs *mtk_pcs_lynxi_create(struct device *dev,
 					 struct regmap *regmap,
 					 u32 ana_rgc3, u32 flags);
 void mtk_pcs_lynxi_destroy(struct phylink_pcs *pcs);
+struct phylink_pcs *mtk_pcs_lynxi_select_pcs(struct device_node *np, phy_interface_t mode);
 #endif
