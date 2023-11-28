@@ -261,7 +261,6 @@ static void _rtl92e_read_eeprom_info(struct net_device *dev)
 		priv->eeprom_customer_id = usValue & 0xff;
 		usValue = rtl92e_eeprom_read(dev,
 					     EEPROM_ICVersion_ChannelPlan >> 1);
-		priv->eeprom_chnl_plan = usValue & 0xff;
 		IC_Version = (usValue & 0xff00) >> 8;
 
 		ICVer8192 = IC_Version & 0xf;
@@ -283,7 +282,6 @@ static void _rtl92e_read_eeprom_info(struct net_device *dev)
 		priv->eeprom_vid = 0;
 		priv->eeprom_did = 0;
 		priv->eeprom_customer_id = 0;
-		priv->eeprom_chnl_plan = 0;
 	}
 
 	if (!priv->autoload_fail_flag) {
@@ -387,24 +385,14 @@ static void _rtl92e_read_eeprom_info(struct net_device *dev)
 
 	rtl92e_init_adaptive_rate(dev);
 
-	priv->chnl_plan = priv->eeprom_chnl_plan;
-
 	switch (priv->eeprom_customer_id) {
 	case EEPROM_CID_NetCore:
 		priv->customer_id = RT_CID_819X_NETCORE;
 		break;
 	case EEPROM_CID_TOSHIBA:
 		priv->customer_id = RT_CID_TOSHIBA;
-		if (priv->eeprom_chnl_plan & 0x80)
-			priv->chnl_plan = priv->eeprom_chnl_plan & 0x7f;
-		else
-			priv->chnl_plan = 0x0;
 		break;
 	}
-
-	if (priv->chnl_plan > CHANNEL_PLAN_LEN - 1)
-		priv->chnl_plan = 0;
-	priv->chnl_plan = COUNTRY_CODE_WORLD_WIDE_13;
 
 	if (priv->eeprom_vid == 0x1186 &&  priv->eeprom_did == 0x3304)
 		priv->rtllib->bSupportRemoteWakeUp = true;
@@ -1685,8 +1673,6 @@ bool rtl92e_get_rx_stats(struct net_device *dev, struct rtllib_rx_stats *stats,
 	stats->TimeStampLow = pDrvInfo->TSFL;
 	stats->TimeStampHigh = rtl92e_readl(dev, TSFR + 4);
 
-	rtl92e_update_rx_pkt_timestamp(dev, stats);
-
 	if ((stats->RxBufShift + stats->RxDrvInfoSize) > 0)
 		stats->bShift = 1;
 
@@ -1814,7 +1800,7 @@ rtl92e_init_variables(struct net_device  *dev)
 			    IMR_MGNTDOK | IMR_COMDOK | IMR_HIGHDOK |
 			    IMR_BDOK | IMR_RXCMDOK | IMR_TIMEOUT0 |
 			    IMR_RDU | IMR_RXFOVW | IMR_TXFOVW |
-			    IMR_BcnInt | IMR_TBDOK | IMR_TBDER);
+			    IMR_TBDOK | IMR_TBDER);
 
 	priv->bfirst_after_down = false;
 }

@@ -27,31 +27,31 @@ static u8 tx_ts_delete_ba(struct rtllib_device *ieee, struct tx_ts_record *pTxTs
 {
 	struct ba_record *admitted_ba = &pTxTs->TxAdmittedBARecord;
 	struct ba_record *pending_ba = &pTxTs->TxPendingBARecord;
-	u8 bSendDELBA = false;
+	u8 send_del_ba = false;
 
 	if (pending_ba->b_valid) {
 		deactivate_ba_entry(ieee, pending_ba);
-		bSendDELBA = true;
+		send_del_ba = true;
 	}
 
 	if (admitted_ba->b_valid) {
 		deactivate_ba_entry(ieee, admitted_ba);
-		bSendDELBA = true;
+		send_del_ba = true;
 	}
-	return bSendDELBA;
+	return send_del_ba;
 }
 
 static u8 rx_ts_delete_ba(struct rtllib_device *ieee, struct rx_ts_record *ts)
 {
 	struct ba_record *ba = &ts->rx_admitted_ba_record;
-	u8			bSendDELBA = false;
+	u8			send_del_ba = false;
 
 	if (ba->b_valid) {
 		deactivate_ba_entry(ieee, ba);
-		bSendDELBA = true;
+		send_del_ba = true;
 	}
 
-	return bSendDELBA;
+	return send_del_ba;
 }
 
 void rtllib_reset_ba_entry(struct ba_record *ba)
@@ -327,12 +327,12 @@ int rtllib_rx_ADDBARsp(struct rtllib_device *ieee, struct sk_buff *skb)
 
 	if (!ieee->current_network.qos_data.active ||
 	    !ieee->ht_info->current_ht_support ||
-	    !ieee->ht_info->bCurrentAMPDUEnable) {
+	    !ieee->ht_info->current_ampdu_enable) {
 		netdev_warn(ieee->dev,
 			    "reject to ADDBA_RSP as some capability is not ready(%d, %d, %d)\n",
 			    ieee->current_network.qos_data.active,
 			    ieee->ht_info->current_ht_support,
-			    ieee->ht_info->bCurrentAMPDUEnable);
+			    ieee->ht_info->current_ampdu_enable);
 		reason_code = DELBA_REASON_UNKNOWN_BA;
 		goto OnADDBARsp_Reject;
 	}
@@ -344,7 +344,7 @@ int rtllib_rx_ADDBARsp(struct rtllib_device *ieee, struct sk_buff *skb)
 		goto OnADDBARsp_Reject;
 	}
 
-	ts->bAddBaReqInProgress = false;
+	ts->add_ba_req_in_progress = false;
 	pending_ba = &ts->TxPendingBARecord;
 	pAdmittedBA = &ts->TxAdmittedBARecord;
 
@@ -368,7 +368,7 @@ int rtllib_rx_ADDBARsp(struct rtllib_device *ieee, struct sk_buff *skb)
 
 	if (*status_code == ADDBA_STATUS_SUCCESS) {
 		if (pBaParamSet->field.ba_policy == BA_POLICY_DELAYED) {
-			ts->bAddBaReqDelayed = true;
+			ts->add_ba_req_delayed = true;
 			deactivate_ba_entry(ieee, pAdmittedBA);
 			reason_code = DELBA_REASON_END_BA;
 			goto OnADDBARsp_Reject;
@@ -381,8 +381,8 @@ int rtllib_rx_ADDBARsp(struct rtllib_device *ieee, struct sk_buff *skb)
 		deactivate_ba_entry(ieee, pAdmittedBA);
 		activate_ba_entry(pAdmittedBA, *pBaTimeoutVal);
 	} else {
-		ts->bAddBaReqDelayed = true;
-		ts->bDisable_AddBa = true;
+		ts->add_ba_req_delayed = true;
+		ts->disable_add_ba = true;
 		reason_code = DELBA_REASON_END_BA;
 		goto OnADDBARsp_Reject;
 	}
@@ -452,9 +452,9 @@ int rtllib_rx_DELBA(struct rtllib_device *ieee, struct sk_buff *skb)
 			return -1;
 		}
 
-		pTxTs->bUsingBa = false;
-		pTxTs->bAddBaReqInProgress = false;
-		pTxTs->bAddBaReqDelayed = false;
+		pTxTs->using_ba = false;
+		pTxTs->add_ba_req_in_progress = false;
+		pTxTs->add_ba_req_delayed = false;
 		del_timer_sync(&pTxTs->TsAddBaTimer);
 		tx_ts_delete_ba(ieee, pTxTs);
 	}
@@ -462,11 +462,11 @@ int rtllib_rx_DELBA(struct rtllib_device *ieee, struct sk_buff *skb)
 }
 
 void rtllib_ts_init_add_ba(struct rtllib_device *ieee, struct tx_ts_record *ts,
-			   u8 policy, u8	bOverwritePending)
+			   u8 policy, u8	overwrite_pending)
 {
 	struct ba_record *ba = &ts->TxPendingBARecord;
 
-	if (ba->b_valid && !bOverwritePending)
+	if (ba->b_valid && !overwrite_pending)
 		return;
 
 	deactivate_ba_entry(ieee, ba);
@@ -513,8 +513,8 @@ void rtllib_ba_setup_timeout(struct timer_list *t)
 	struct tx_ts_record *pTxTs = from_timer(pTxTs, t,
 					      TxPendingBARecord.timer);
 
-	pTxTs->bAddBaReqInProgress = false;
-	pTxTs->bAddBaReqDelayed = true;
+	pTxTs->add_ba_req_in_progress = false;
+	pTxTs->add_ba_req_delayed = true;
 	pTxTs->TxPendingBARecord.b_valid = false;
 }
 

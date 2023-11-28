@@ -27,10 +27,10 @@ struct tx_ts_record {
 	u16				TxCurSeq;
 	struct ba_record TxPendingBARecord;
 	struct ba_record TxAdmittedBARecord;
-	u8				bAddBaReqInProgress;
-	u8				bAddBaReqDelayed;
-	u8				bUsingBa;
-	u8				bDisable_AddBa;
+	u8				add_ba_req_in_progress;
+	u8				add_ba_req_delayed;
+	u8				using_ba;
+	u8				disable_add_ba;
 	struct timer_list		TsAddBaTimer;
 	u8				num;
 };

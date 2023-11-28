@@ -101,10 +101,10 @@ static void ResetTxTsEntry(struct tx_ts_record *ts)
 {
 	ResetTsCommonInfo(&ts->TsCommonInfo);
 	ts->TxCurSeq = 0;
-	ts->bAddBaReqInProgress = false;
-	ts->bAddBaReqDelayed = false;
-	ts->bUsingBa = false;
-	ts->bDisable_AddBa = false;
+	ts->add_ba_req_in_progress = false;
+	ts->add_ba_req_delayed = false;
+	ts->using_ba = false;
+	ts->disable_add_ba = false;
 	rtllib_reset_ba_entry(&ts->TxAdmittedBARecord);
 	rtllib_reset_ba_entry(&ts->TxPendingBARecord);
 }
@@ -433,10 +433,10 @@ void RemoveAllTS(struct rtllib_device *ieee)
 
 void TsStartAddBaProcess(struct rtllib_device *ieee, struct tx_ts_record *pTxTS)
 {
-	if (pTxTS->bAddBaReqInProgress == false) {
-		pTxTS->bAddBaReqInProgress = true;
+	if (pTxTS->add_ba_req_in_progress == false) {
+		pTxTS->add_ba_req_in_progress = true;
 
-		if (pTxTS->bAddBaReqDelayed) {
+		if (pTxTS->add_ba_req_delayed) {
 			netdev_dbg(ieee->dev, "Start ADDBA after 60 sec!!\n");
 			mod_timer(&pTxTS->TsAddBaTimer, jiffies +
 				  msecs_to_jiffies(TS_ADDBA_DELAY));

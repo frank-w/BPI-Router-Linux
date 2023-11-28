@@ -288,7 +288,7 @@ static void rtllib_tx_query_agg_cap(struct rtllib_device *ieee,
 
 	if (!ieee->GetNmodeSupportBySecCfg(ieee->dev))
 		return;
-	if (ht_info->bCurrentAMPDUEnable) {
+	if (ht_info->current_ampdu_enable) {
 		if (!rtllib_get_ts(ieee, (struct ts_common_info **)(&pTxTs), hdr->addr1,
 			   skb->priority, TX_DIR, true)) {
 			netdev_info(ieee->dev, "%s: can't get TS\n", __func__);
@@ -300,14 +300,14 @@ static void rtllib_tx_query_agg_cap(struct rtllib_device *ieee,
 				;
 			} else if (tcb_desc->bdhcp == 1) {
 				;
-			} else if (!pTxTs->bDisable_AddBa) {
+			} else if (!pTxTs->disable_add_ba) {
 				TsStartAddBaProcess(ieee, pTxTs);
 			}
 			goto FORCED_AGG_SETTING;
-		} else if (!pTxTs->bUsingBa) {
+		} else if (!pTxTs->using_ba) {
 			if (SN_LESS(pTxTs->TxAdmittedBARecord.ba_start_seq_ctrl.field.seq_num,
 				    (pTxTs->TxCurSeq + 1) % 4096))
-				pTxTs->bUsingBa = true;
+				pTxTs->using_ba = true;
 			else
 				goto FORCED_AGG_SETTING;
 		}
