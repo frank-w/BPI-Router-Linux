@@ -92,4 +92,15 @@ int landlock_append_fs_rule(struct landlock_ruleset *const ruleset,
 			    const struct path *const path,
 			    access_mask_t access_hierarchy);
 
+/**
+ * landlock_expand_handled_access_fs() - add synthetic IOCTL access rights to an
+ * access mask of handled accesses.
+ *
+ * @handled: The handled accesses of a ruleset that is being created
+ *
+ * Returns: @handled, with the bits for the synthetic IOCTL access rights set,
+ * if %LANDLOCK_ACCESS_FS_IOCTL is handled
+ */
+access_mask_t landlock_expand_handled_access_fs(const access_mask_t handled);
+
 #endif /* _SECURITY_LANDLOCK_FS_H */

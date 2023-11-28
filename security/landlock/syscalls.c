@@ -137,7 +137,7 @@ static const struct file_operations ruleset_fops = {
 	.write = fop_dummy_write,
 };
 
-#define LANDLOCK_ABI_VERSION 4
+#define LANDLOCK_ABI_VERSION 5
 
 /**
  * sys_landlock_create_ruleset - Create a new ruleset
@@ -192,14 +192,18 @@ SYSCALL_DEFINE3(landlock_create_ruleset,
 		return err;
 
 	/* Checks content (and 32-bits cast). */
-	if ((ruleset_attr.handled_access_fs | LANDLOCK_MASK_ACCESS_FS) !=
-	    LANDLOCK_MASK_ACCESS_FS)
+	if ((ruleset_attr.handled_access_fs | LANDLOCK_MASK_PUBLIC_ACCESS_FS) !=
+	    LANDLOCK_MASK_PUBLIC_ACCESS_FS)
 		return -EINVAL;
 
 	/* Checks network content (and 32-bits cast). */
 	if ((ruleset_attr.handled_access_net | LANDLOCK_MASK_ACCESS_NET) !=
 	    LANDLOCK_MASK_ACCESS_NET)
 		return -EINVAL;
+
+	/* Expands synthetic IOCTL groups. */
+	ruleset_attr.handled_access_fs = landlock_expand_handled_access_fs(
+		ruleset_attr.handled_access_fs);
 
 	/* Checks arguments and transforms to kernel struct. */
 	ruleset = landlock_create_ruleset(ruleset_attr.handled_access_fs,
