@@ -1091,7 +1091,7 @@ static bool grow_buffers(struct block_device *bdev, sector_t block,
 	 * Check for a block which lies outside our maximum possible
 	 * pagecache index.
 	 */
-	if (check_mul_overflow(block, size, &pos) || pos > MAX_LFS_FILESIZE) {
+	if (check_mul_overflow(block, (sector_t)size, &pos) || pos > MAX_LFS_FILESIZE) {
 		printk(KERN_ERR "%s: requested out-of-range block %llu for device %pg\n",
 			__func__, (unsigned long long)block,
 			bdev);
