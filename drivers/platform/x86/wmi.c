@@ -106,6 +106,8 @@ MODULE_DEVICE_TABLE(acpi, wmi_device_ids);
 static const char * const allow_duplicates[] = {
 	"05901221-D566-11D1-B2F0-00A0C9062910",	/* wmi-bmof */
 	"8A42EA14-4F2A-FD45-6422-0087F7A7E608",	/* dell-wmi-ddv */
+	"44FADEB1-B204-40F2-8581-394BBDC1B651",	/* intel-wmi-sbl-fw-update */
+	"86CCFD48-205E-4A77-9C48-2021CBEDE341",	/* intel-wmi-thunderbolt */
 	NULL
 };
 
@@ -536,41 +538,50 @@ EXPORT_SYMBOL_GPL(wmidev_block_query);
  *
  * Return: acpi_status signaling success or error.
  */
-acpi_status wmi_set_block(const char *guid_string, u8 instance,
-			  const struct acpi_buffer *in)
+acpi_status wmi_set_block(const char *guid_string, u8 instance, const struct acpi_buffer *in)
 {
-	struct wmi_block *wblock;
-	struct guid_block *block;
 	struct wmi_device *wdev;
-	acpi_handle handle;
-	struct acpi_object_list input;
-	union acpi_object params[2];
-	char method[WMI_ACPI_METHOD_NAME_SIZE];
 	acpi_status status;
-
-	if (!in)
-		return AE_BAD_DATA;
 
 	wdev = wmi_find_device_by_guid(guid_string);
 	if (IS_ERR(wdev))
 		return AE_ERROR;
 
-	wblock = container_of(wdev, struct wmi_block, dev);
-	block = &wblock->gblock;
-	handle = wblock->acpi_device->handle;
+	status =  wmidev_block_set(wdev, instance, in);
+	wmi_device_put(wdev);
 
-	if (block->instance_count <= instance) {
-		status = AE_BAD_PARAMETER;
+	return status;
+}
+EXPORT_SYMBOL_GPL(wmi_set_block);
 
-		goto err_wdev_put;
-	}
+/**
+ * wmidev_block_set - Write to a WMI block
+ * @wdev: A wmi bus device from a driver
+ * @instance: Instance index
+ * @in: Buffer containing new values for the data block
+ *
+ * Write contents of the input buffer to an ACPI-WMI data block.
+ *
+ * Return: acpi_status signaling success or error.
+ */
+acpi_status wmidev_block_set(struct wmi_device *wdev, u8 instance, const struct acpi_buffer *in)
+{
+	struct wmi_block *wblock = container_of(wdev, struct wmi_block, dev);
+	acpi_handle handle = wblock->acpi_device->handle;
+	struct guid_block *block = &wblock->gblock;
+	char method[WMI_ACPI_METHOD_NAME_SIZE];
+	struct acpi_object_list input;
+	union acpi_object params[2];
+
+	if (!in)
+		return AE_BAD_DATA;
+
+	if (block->instance_count <= instance)
+		return AE_BAD_PARAMETER;
 
 	/* Check GUID is a data block */
-	if (block->flags & (ACPI_WMI_EVENT | ACPI_WMI_METHOD)) {
-		status = AE_ERROR;
-
-		goto err_wdev_put;
-	}
+	if (block->flags & (ACPI_WMI_EVENT | ACPI_WMI_METHOD))
+		return AE_ERROR;
 
 	input.count = 2;
 	input.pointer = params;
@@ -582,14 +593,9 @@ acpi_status wmi_set_block(const char *guid_string, u8 instance,
 
 	get_acpi_method_name(wblock, 'S', method);
 
-	status = acpi_evaluate_object(handle, method, &input, NULL);
-
-err_wdev_put:
-	wmi_device_put(wdev);
-
-	return status;
+	return acpi_evaluate_object(handle, method, &input, NULL);
 }
-EXPORT_SYMBOL_GPL(wmi_set_block);
+EXPORT_SYMBOL_GPL(wmidev_block_set);
 
 static void wmi_dump_wdg(const struct guid_block *g)
 {
