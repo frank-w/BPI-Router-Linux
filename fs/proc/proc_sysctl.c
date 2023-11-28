@@ -888,7 +888,8 @@ static const struct inode_operations proc_sys_dir_operations = {
 	.getattr	= proc_sys_getattr,
 };
 
-static int proc_sys_revalidate(struct dentry *dentry, unsigned int flags)
+static int proc_sys_revalidate(struct dentry *dentry, const struct qstr *name,
+			       unsigned int flags)
 {
 	if (flags & LOOKUP_RCU)
 		return -ECHILD;

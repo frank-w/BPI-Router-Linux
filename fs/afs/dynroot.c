@@ -247,7 +247,9 @@ const struct inode_operations afs_dynroot_inode_operations = {
 /*
  * Dirs in the dynamic root don't need revalidation.
  */
-static int afs_dynroot_d_revalidate(struct dentry *dentry, unsigned int flags)
+static int afs_dynroot_d_revalidate(struct dentry *dentry,
+				    const struct qstr *name,
+				    unsigned int flags)
 {
 	return 1;
 }

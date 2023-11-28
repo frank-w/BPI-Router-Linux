@@ -22,6 +22,7 @@
 /**
  * gfs2_drevalidate - Check directory lookup consistency
  * @dentry: the mapping to check
+ * @name: The name under lookup
  * @flags: lookup flags
  *
  * Check to make sure the lookup necessary to arrive at this inode from its
@@ -30,7 +31,8 @@
  * Returns: 1 if the dentry is ok, 0 if it isn't
  */
 
-static int gfs2_drevalidate(struct dentry *dentry, unsigned int flags)
+static int gfs2_drevalidate(struct dentry *dentry, const struct qstr *name,
+			    unsigned int flags)
 {
 	struct dentry *parent;
 	struct gfs2_sbd *sdp;

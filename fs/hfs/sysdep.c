@@ -13,7 +13,8 @@
 
 /* dentry case-handling: just lowercase everything */
 
-static int hfs_revalidate_dentry(struct dentry *dentry, unsigned int flags)
+static int hfs_revalidate_dentry(struct dentry *dentry,
+				 const struct qstr *name, unsigned int flags)
 {
 	struct inode *inode;
 	int diff;

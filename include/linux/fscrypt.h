@@ -368,7 +368,8 @@ int fscrypt_fname_disk_to_usr(const struct inode *inode,
 bool fscrypt_match_name(const struct fscrypt_name *fname,
 			const u8 *de_name, u32 de_name_len);
 u64 fscrypt_fname_siphash(const struct inode *dir, const struct qstr *name);
-int fscrypt_d_revalidate(struct dentry *dentry, unsigned int flags);
+int fscrypt_d_revalidate(struct dentry *dentry, const struct qstr *name,
+			 unsigned int flags);
 
 /* bio.c */
 bool fscrypt_decrypt_bio(struct bio *bio);
@@ -663,6 +664,7 @@ static inline u64 fscrypt_fname_siphash(const struct inode *dir,
 }
 
 static inline int fscrypt_d_revalidate(struct dentry *dentry,
+				       const struct qstr *name,
 				       unsigned int flags)
 {
 	return 1;

@@ -715,7 +715,8 @@ again:
 }
 
 static int
-cifs_d_revalidate(struct dentry *direntry, unsigned int flags)
+cifs_d_revalidate(struct dentry *direntry, const struct qstr *name,
+		  unsigned int flags)
 {
 	struct inode *inode;
 	int rc;
