@@ -145,7 +145,6 @@ static void qlink_free(struct qlist_node *qlink, struct kmem_cache *cache)
 	void *object = qlink_to_object(qlink, cache);
 	struct kasan_alloc_meta *alloc_meta = kasan_get_alloc_meta(cache, object);
 	struct kasan_free_meta *free_meta = kasan_get_free_meta(cache, object);
-	unsigned long flags;
 
 	if (alloc_meta) {
 		stack_depot_put(alloc_meta->alloc_track.stack);
@@ -176,13 +175,7 @@ static void qlink_free(struct qlist_node *qlink, struct kmem_cache *cache)
 	 */
 	*(u8 *)kasan_mem_to_shadow(object) = KASAN_SLAB_FREE;
 
-	if (IS_ENABLED(CONFIG_SLAB))
-		local_irq_save(flags);
-
 	___cache_free(cache, object, _THIS_IP_);
-
-	if (IS_ENABLED(CONFIG_SLAB))
-		local_irq_restore(flags);
 }
 
 static void qlist_free_all(struct qlist_head *q, struct kmem_cache *cache)
