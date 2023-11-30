@@ -18,8 +18,8 @@ struct phylink_pcs *mtk_usxgmii_select_pcs(struct device_node *np, phy_interface
 #else
 static inline struct phylink_pcs *mtk_usxgmii_select_pcs(struct device_node *np, phy_interface_t mode)
 {
-	return NULL
-};
+	return NULL;
+}
 #endif /* IS_ENABLED(CONFIG_PCS_MTK_USXGMII) */
 
 #endif /* __LINUX_PCS_MTK_USXGMII_H */
