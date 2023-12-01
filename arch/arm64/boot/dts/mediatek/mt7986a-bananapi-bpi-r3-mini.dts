@@ -197,6 +197,28 @@
 		phy-mode = "2500base-x";
 		full-duplex;
 		pause;
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			led@0 { /* en8811_a_gpio5 */
+				reg = <0>;
+				color = <LED_COLOR_ID_YELLOW>;
+				function = LED_FUNCTION_LAN;
+				function-enumerator = <1>;
+				default-state = "keep";
+				linux,default-trigger = "netdev";
+			};
+			led@1 { /* en8811_a_gpio4 */
+				reg = <1>;
+				color = <LED_COLOR_ID_GREEN>;
+				function = LED_FUNCTION_LAN;
+				function-enumerator = <2>;
+				default-state = "keep";
+				linux,default-trigger = "netdev";
+			};
+		};
 	};
 
 	phy15: ethernet-phy@15 {
@@ -208,6 +230,28 @@
 		phy-mode = "2500base-x";
 		full-duplex;
 		pause;
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			led@0 { /* en8811_b_gpio5 */
+				reg = <0>;
+				color = <LED_COLOR_ID_YELLOW>;
+				function = LED_FUNCTION_WAN;
+				function-enumerator = <1>;
+				default-state = "keep";
+				linux,default-trigger = "netdev";
+			};
+			led@1 { /* en8811_b_gpio4 */
+				reg = <1>;
+				color = <LED_COLOR_ID_GREEN>;
+				function = LED_FUNCTION_WAN;
+				function-enumerator = <2>;
+				default-state = "keep";
+				linux,default-trigger = "netdev";
+			};
+		};
 	};
 };
 
