@@ -80,7 +80,6 @@ char *str_get(struct gstr *gs);
 
 /* menu.c */
 void _menu_init(void);
-void menu_warn(struct menu *menu, const char *fmt, ...);
 struct menu *menu_add_menu(void);
 void menu_end_menu(void);
 void menu_add_entry(struct symbol *sym);
