@@ -749,21 +749,14 @@ static void do_flush_stats(struct mem_cgroup *memcg)
  */
 void mem_cgroup_flush_stats(struct mem_cgroup *memcg)
 {
-	static DEFINE_MUTEX(memcg_stats_flush_mutex);
-
 	if (mem_cgroup_disabled())
 		return;
 
 	if (!memcg)
 		memcg = root_mem_cgroup;
 
-	if (memcg_should_flush_stats(memcg)) {
-		mutex_lock(&memcg_stats_flush_mutex);
-		/* Check again after locking, another flush may have occurred */
-		if (memcg_should_flush_stats(memcg))
-			do_flush_stats(memcg);
-		mutex_unlock(&memcg_stats_flush_mutex);
-	}
+	if (memcg_should_flush_stats(memcg))
+		do_flush_stats(memcg);
 }
 
 void mem_cgroup_flush_stats_ratelimited(struct mem_cgroup *memcg)
