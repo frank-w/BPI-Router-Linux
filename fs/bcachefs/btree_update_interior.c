@@ -1937,9 +1937,9 @@ int bch2_btree_node_rewrite(struct btree_trans *trans,
 
 	flags |= BCH_TRANS_COMMIT_no_enospc;
 
-	parent = btree_node_parent(iter->path, b);
-	as = bch2_btree_update_start(trans, iter->path, b->c.level,
-				     false, flags);
+	struct btree_path *path = btree_iter_path(trans, iter);
+	parent = btree_node_parent(path, b);
+	as = bch2_btree_update_start(trans, path, b->c.level, false, flags);
 	ret = PTR_ERR_OR_ZERO(as);
 	if (ret)
 		goto out;
@@ -1961,20 +1961,20 @@ int bch2_btree_node_rewrite(struct btree_trans *trans,
 
 	if (parent) {
 		bch2_keylist_add(&as->parent_keys, &n->key);
-		ret = bch2_btree_insert_node(as, trans, iter->path, parent,
-					     &as->parent_keys, flags);
+		ret = bch2_btree_insert_node(as, trans, btree_iter_path(trans, iter),
+					     parent, &as->parent_keys, flags);
 		if (ret)
 			goto err;
 	} else {
-		bch2_btree_set_root(as, trans, iter->path, n);
+		bch2_btree_set_root(as, trans, btree_iter_path(trans, iter), n);
 	}
 
 	bch2_btree_update_get_open_buckets(as, n);
 	bch2_btree_node_write(c, n, SIX_LOCK_intent, 0);
 
-	bch2_btree_node_free_inmem(trans, iter->path, b);
+	bch2_btree_node_free_inmem(trans, btree_iter_path(trans, iter), b);
 
-	bch2_trans_node_add(trans, iter->path, n);
+	bch2_trans_node_add(trans, trans->paths + iter->path, n);
 	six_unlock_intent(&n->c.lock);
 
 	bch2_btree_update_done(as, trans);
@@ -2152,18 +2152,19 @@ static int __bch2_btree_node_update_key(struct btree_trans *trans,
 		BUG_ON(ret);
 	}
 
-	parent = btree_node_parent(iter->path, b);
+	parent = btree_node_parent(btree_iter_path(trans, iter), b);
 	if (parent) {
 		bch2_trans_copy_iter(&iter2, iter);
 
-		iter2.path = trans->paths + bch2_btree_path_make_mut(trans, iter2.path->idx,
+		iter2.path = bch2_btree_path_make_mut(trans, iter2.path,
 				iter2.flags & BTREE_ITER_INTENT,
 				_THIS_IP_);
 
-		BUG_ON(iter2.path->level != b->c.level);
-		BUG_ON(!bpos_eq(iter2.path->pos, new_key->k.p));
+		struct btree_path *path2 = btree_iter_path(trans, &iter2);
+		BUG_ON(path2->level != b->c.level);
+		BUG_ON(!bpos_eq(path2->pos, new_key->k.p));
 
-		btree_path_set_level_up(trans, iter2.path);
+		btree_path_set_level_up(trans, path2);
 
 		trans->paths_sorted = false;
 
@@ -2190,7 +2191,7 @@ static int __bch2_btree_node_update_key(struct btree_trans *trans,
 	if (ret)
 		goto err;
 
-	bch2_btree_node_lock_write_nofail(trans, iter->path, &b->c);
+	bch2_btree_node_lock_write_nofail(trans, btree_iter_path(trans, iter), &b->c);
 
 	if (new_hash) {
 		mutex_lock(&c->btree_cache.lock);
@@ -2205,7 +2206,7 @@ static int __bch2_btree_node_update_key(struct btree_trans *trans,
 		bkey_copy(&b->key, new_key);
 	}
 
-	bch2_btree_node_unlock_write(trans, iter->path, b);
+	bch2_btree_node_unlock_write(trans, btree_iter_path(trans, iter), b);
 out:
 	bch2_trans_iter_exit(trans, &iter2);
 	return ret;
@@ -2224,7 +2225,7 @@ int bch2_btree_node_update_key(struct btree_trans *trans, struct btree_iter *ite
 {
 	struct bch_fs *c = trans->c;
 	struct btree *new_hash = NULL;
-	struct btree_path *path = iter->path;
+	struct btree_path *path = btree_iter_path(trans, iter);
 	struct closure cl;
 	int ret = 0;
 
@@ -2282,7 +2283,7 @@ int bch2_btree_node_update_key_get_iter(struct btree_trans *trans,
 		goto out;
 
 	/* has node been freed? */
-	if (iter.path->l[b->c.level].b != b) {
+	if (btree_iter_path(trans, &iter)->l[b->c.level].b != b) {
 		/* node has been freed: */
 		BUG_ON(!btree_node_dying(b));
 		goto out;
