@@ -3481,7 +3481,7 @@ static int check_eb_alignment(struct btrfs_fs_info *fs_info, u64 start)
 
 /*
  * Return 0 if eb->pages[i] is attached to btree inode successfully.
- * Return >0 if there is already annother extent buffer for the range,
+ * Return >0 if there is already another extent buffer for the range,
  * and @found_eb_ret would be updated.
  */
 static int attach_eb_page_to_filemap(struct extent_buffer *eb, int i,
@@ -3706,7 +3706,7 @@ out:
 	}
 	/*
 	 * Now all pages of that extent buffer is unmapped, set UNMAPPED flag,
-	 * so it can be cleaned up without utlizing page->mapping.
+	 * so it can be cleaned up without utilizing page->mapping.
 	 */
 	set_bit(EXTENT_BUFFER_UNMAPPED, &eb->bflags);
 
@@ -4116,7 +4116,7 @@ void read_extent_buffer(const struct extent_buffer *eb, void *dstv,
 	if (check_eb_range(eb, start, len)) {
 		/*
 		 * Invalid range hit, reset the memory, so callers won't get
-		 * some random garbage for their uninitialzed memory.
+		 * some random garbage for their uninitialized memory.
 		 */
 		memset(dstv, 0, len);
 		return;
