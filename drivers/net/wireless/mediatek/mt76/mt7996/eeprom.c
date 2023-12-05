@@ -47,6 +47,8 @@ static char *mt7996_eeprom_name(struct mt7996_dev *dev)
 	case 0x7990:
 		if (dev->chip_sku == MT7996_SKU_404)
 			return MT7996_EEPROM_DEFAULT_404;
+		else if (dev->chip_sku == MT7996_SKU_233)
+			return MT7996_EEPROM_DEFAULT_233;
 		return MT7996_EEPROM_DEFAULT;
 	case 0x7992:
 		if (dev->chip_sku == MT7992_SKU_23) {
@@ -308,7 +310,7 @@ static int mt7996_apply_cal_free_data(struct mt7996_dev *dev)
 	case 0x7990:
 		adie_base = adie_base_7996;
 		/* adie 0 */
-		if (dev->fem_type == MT7996_FEM_INT)
+		if (dev->fem_type == MT7996_FEM_INT && dev->chip_sku != MT7996_SKU_233)
 			adie_id = ADIE_7975;
 		else
 			adie_id = ADIE_7976;
@@ -316,7 +318,7 @@ static int mt7996_apply_cal_free_data(struct mt7996_dev *dev)
 		eep_offs[0] = eep_offs_list[adie_id];
 
 		/* adie 1 */
-		if (dev->chip_sku != MT7996_SKU_404) {
+		if (dev->chip_sku == MT7996_SKU_444) {
 			adie_offs[1] = adie_offs_list[ADIE_7977];
 			eep_offs[1] = eep_offs_list[ADIE_7977];
 		}

@@ -22,6 +22,11 @@
 			_fw = MT7992_##name;			\
 		break;						\
 	case 0x7990:						\
+		if ((_dev)->chip_sku == MT7996_SKU_233)		\
+			_fw = MT7996_##name##_233;		\
+		else						\
+			_fw = MT7996_##name;			\
+		break;						\
 	default:						\
 		_fw = MT7996_##name;				\
 		break;						\

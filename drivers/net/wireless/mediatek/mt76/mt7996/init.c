@@ -896,6 +896,12 @@ int mt7996_get_chip_sku(struct mt7996_dev *dev)
 
 	switch (mt76_chip(&dev->mt76)) {
 	case 0x7990:
+		if (FIELD_GET(MT_PAD_GPIO_2ADIE_TBTC, val)) {
+			dev->chip_sku = MT7996_SKU_233;
+			dev->fem_type = MT7996_FEM_INT;
+			return 0;
+		}
+
 		adie_comb = FIELD_GET(MT_PAD_GPIO_ADIE_COMB, val);
 		if (adie_comb <= 1)
 			dev->chip_sku = MT7996_SKU_444;
