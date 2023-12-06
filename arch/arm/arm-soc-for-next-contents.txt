@@ -1,0 +1,44 @@
+soc/arm
+
+soc/dt
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dts-for-v6.8-tag1
+
+soc/drivers
+	asahi/soc
+		https://github.com/AsahiLinux/linux tags/asahi-soc-mailbox-6.8
+	drivers/bus-cleanup
+		https://git.pengutronix.de/git/ukl/linux tags/bus-platform-remove-void
+
+soc/defconfig
+	patch
+		ARM: multi_v7_defconfig: Add SCMI reset support
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v6.8-tag1
+
+soc/late
+
+arm/fixes
+	<no branch> (7269cba53d906cf257c139d3b3a53ad272176bca)
+		git://git.linaro.org:/people/jens.wiklander/linux-tee tags/optee-supplicant-fix-for-v6.7
+	<no branch> (5943b8f7449df9881b273db07bdde1e7120dccf0)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mediatek/linux tags/mtk-dts64-fixes-for-6.7
+	<no branch> (79997eda0d31bc68203c95ecb978773ee6ce7a1f)
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-fixes-for-v6.7-rc4
+	<no branch> (77f5032e94f244ba08db51e17ca8f37bd7ff9acb)
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-fixes-6.7
+	<no branch> (dc761f11af2e39119d3a7942e3d10615f3d900e7)
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.7/devicetree-fixes
+	patch
+		MAINTAINERS: change the S32G2 maintainer's email address.
+	<no branch> (f1ed48ef97e2d12dee21e42db4a6ebb895ed3a79)
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/ffa-fixes-6.7
+
+soc/dt-late
+	qcom/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-6.7-2
+	qcom/dt32-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-dts-for-6.7-2
+	patch
+		ARM: dts: usr8200: Fix phy registers
+
