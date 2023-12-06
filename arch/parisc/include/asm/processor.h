@@ -287,6 +287,7 @@ extern int _parisc_requires_coherency;
 #endif
 
 extern int running_on_qemu;
+extern int parisc_narrow_firmware;
 
 extern void __noreturn toc_intr(struct pt_regs *regs);
 extern void toc_handler(void);
@@ -310,6 +311,7 @@ extern void do_syscall_trace_exit(struct pt_regs *);
 struct seq_file;
 extern void early_trap_init(void);
 extern void collect_boot_cpu_data(void);
+extern void btlb_init_per_cpu(void);
 extern int show_cpuinfo (struct seq_file *m, void *v);
 
 /* driver code in driver/parisc */

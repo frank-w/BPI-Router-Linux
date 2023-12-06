@@ -3257,6 +3257,8 @@ int rt5645_set_jack_detect(struct snd_soc_component *component,
 				RT5645_GP1_PIN_IRQ, RT5645_GP1_PIN_IRQ);
 		regmap_update_bits(rt5645->regmap, RT5645_GEN_CTRL1,
 				RT5645_DIG_GATE_CTRL, RT5645_DIG_GATE_CTRL);
+		regmap_update_bits(rt5645->regmap, RT5645_DEPOP_M1,
+				RT5645_HP_CB_MASK, RT5645_HP_CB_PU);
 	}
 	rt5645_irq(0, rt5645);
 
@@ -3269,13 +3271,17 @@ static int rt5645_component_set_jack(struct snd_soc_component *component,
 {
 	struct snd_soc_jack *mic_jack = NULL;
 	struct snd_soc_jack *btn_jack = NULL;
-	int *type = (int *)data;
+	int type;
 
-	if (*type & SND_JACK_MICROPHONE)
-		mic_jack = hs_jack;
-	if (*type & (SND_JACK_BTN_0 | SND_JACK_BTN_1 |
-		SND_JACK_BTN_2 | SND_JACK_BTN_3))
-		btn_jack = hs_jack;
+	if (hs_jack) {
+		type = *(int *)data;
+
+		if (type & SND_JACK_MICROPHONE)
+			mic_jack = hs_jack;
+		if (type & (SND_JACK_BTN_0 | SND_JACK_BTN_1 |
+			SND_JACK_BTN_2 | SND_JACK_BTN_3))
+			btn_jack = hs_jack;
+	}
 
 	return rt5645_set_jack_detect(component, hs_jack, mic_jack, btn_jack);
 }
