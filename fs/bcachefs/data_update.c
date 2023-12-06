@@ -13,6 +13,7 @@
 #include "keylist.h"
 #include "move.h"
 #include "nocow_locking.h"
+#include "rebalance.h"
 #include "subvolume.h"
 #include "trace.h"
 
@@ -161,11 +162,7 @@ static int __bch2_data_update_index_update(struct btree_trans *trans,
 			if (((1U << i) & m->data_opts.rewrite_ptrs) &&
 			    (ptr = bch2_extent_has_ptr(old, p, bkey_i_to_s(insert))) &&
 			    !ptr->cached) {
-				bch2_bkey_drop_ptr_noerror(bkey_i_to_s(insert), ptr);
-				/*
-				 * See comment below:
 				bch2_extent_ptr_set_cached(bkey_i_to_s(insert), ptr);
-				*/
 				rewrites_found |= 1U << i;
 			}
 			i++;
@@ -211,14 +208,8 @@ restart_drop_extra_replicas:
 			if (!p.ptr.cached &&
 			    durability - ptr_durability >= m->op.opts.data_replicas) {
 				durability -= ptr_durability;
-				bch2_bkey_drop_ptr_noerror(bkey_i_to_s(insert), &entry->ptr);
-				/*
-				 * Currently, we're dropping unneeded replicas
-				 * instead of marking them as cached, since
-				 * cached data in stripe buckets prevents them
-				 * from being reused:
+
 				bch2_extent_ptr_set_cached(bkey_i_to_s(insert), &entry->ptr);
-				*/
 				goto restart_drop_extra_replicas;
 			}
 		}
@@ -248,14 +239,42 @@ restart_drop_extra_replicas:
 
 		next_pos = insert->k.p;
 
+		/*
+		 * Check for nonce offset inconsistency:
+		 * This is debug code - we've been seeing this bug rarely, and
+		 * it's been hard to reproduce, so this should give us some more
+		 * information when it does occur:
+		 */
+		struct printbuf err = PRINTBUF;
+		int invalid = bch2_bkey_invalid(c, bkey_i_to_s_c(insert), __btree_node_type(0, m->btree_id), 0, &err);
+		printbuf_exit(&err);
+
+		if (invalid) {
+			struct printbuf buf = PRINTBUF;
+
+			prt_str(&buf, "about to insert invalid key in data update path");
+			prt_str(&buf, "\nold: ");
+			bch2_bkey_val_to_text(&buf, c, old);
+			prt_str(&buf, "\nk:   ");
+			bch2_bkey_val_to_text(&buf, c, k);
+			prt_str(&buf, "\nnew: ");
+			bch2_bkey_val_to_text(&buf, c, bkey_i_to_s_c(insert));
+
+			bch2_print_string_as_lines(KERN_ERR, buf.buf);
+			printbuf_exit(&buf);
+
+			bch2_fatal_error(c);
+			goto out;
+		}
+
 		ret =   bch2_insert_snapshot_whiteouts(trans, m->btree_id,
 						k.k->p, bkey_start_pos(&insert->k)) ?:
 			bch2_insert_snapshot_whiteouts(trans, m->btree_id,
-						k.k->p, insert->k.p);
-		if (ret)
-			goto err;
-
-		ret   = bch2_trans_update(trans, &iter, insert,
+						k.k->p, insert->k.p) ?:
+			bch2_bkey_set_needs_rebalance(c, insert,
+						      op->opts.background_target,
+						      op->opts.background_compression) ?:
+			bch2_trans_update(trans, &iter, insert,
 				BTREE_UPDATE_INTERNAL_SNAPSHOT_NODE) ?:
 			bch2_trans_commit(trans, &op->res,
 				NULL,
@@ -281,11 +300,11 @@ next:
 		}
 		continue;
 nowork:
-		if (m->ctxt && m->ctxt->stats) {
+		if (m->stats && m->stats) {
 			BUG_ON(k.k->p.offset <= iter.pos.offset);
-			atomic64_inc(&m->ctxt->stats->keys_raced);
+			atomic64_inc(&m->stats->keys_raced);
 			atomic64_add(k.k->p.offset - iter.pos.offset,
-				     &m->ctxt->stats->sectors_raced);
+				     &m->stats->sectors_raced);
 		}
 
 		this_cpu_inc(c->counters[BCH_COUNTER_move_extent_fail]);
@@ -439,6 +458,8 @@ int bch2_data_update_init(struct btree_trans *trans,
 	bch2_bkey_buf_reassemble(&m->k, c, k);
 	m->btree_id	= btree_id;
 	m->data_opts	= data_opts;
+	m->ctxt		= ctxt;
+	m->stats	= ctxt ? ctxt->stats : NULL;
 
 	bch2_write_op_init(&m->op, c, io_opts);
 	m->op.pos	= bkey_start_pos(k.k);
@@ -487,7 +508,7 @@ int bch2_data_update_init(struct btree_trans *trans,
 
 		if (c->opts.nocow_enabled) {
 			if (ctxt) {
-				move_ctxt_wait_event(ctxt, trans,
+				move_ctxt_wait_event(ctxt,
 						(locked = bch2_bucket_nocow_trylock(&c->nocow_locks,
 									  PTR_BUCKET_POS(c, &p.ptr), 0)) ||
 						!atomic_read(&ctxt->read_sectors));

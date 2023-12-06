@@ -15,7 +15,7 @@
 /* Enums */
 static const char * const devlink_op_strmap[] = {
 	[3] = "get",
-	[7] = "port-get",
+	// skip "port-get", duplicate reply value
 	[DEVLINK_CMD_PORT_NEW] = "port-new",
 	[13] = "sb-get",
 	[17] = "sb-pool-get",
@@ -121,6 +121,8 @@ const char *devlink_port_fn_opstate_str(enum devlink_port_fn_opstate value)
 static const char * const devlink_port_fn_attr_cap_strmap[] = {
 	[0] = "roce-bit",
 	[1] = "migratable-bit",
+	[2] = "ipsec-crypto-bit",
+	[3] = "ipsec-packet-bit",
 };
 
 const char *devlink_port_fn_attr_cap_str(enum devlink_port_fn_attr_cap value)
