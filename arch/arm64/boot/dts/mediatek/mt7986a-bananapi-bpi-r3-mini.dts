@@ -190,7 +190,7 @@
 
 	phy14: ethernet-phy@14 {
 		reg = <14>;
-		interrupts-extended = <&pio 48 IRQ_TYPE_EDGE_RISING>; /* not yet working */
+		interrupts-extended = <&pio 48 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&pio 49 GPIO_ACTIVE_LOW>;
 		reset-assert-us = <10000>;
 		reset-deassert-us = <20000>;
@@ -223,7 +223,7 @@
 
 	phy15: ethernet-phy@15 {
 		reg = <15>;
-		interrupts-extended = <&pio 46 IRQ_TYPE_EDGE_RISING>; /* not yet working */
+		interrupts-extended = <&pio 46 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&pio 47 GPIO_ACTIVE_LOW>;
 		reset-assert-us = <10000>;
 		reset-deassert-us = <20000>;
