@@ -92,4 +92,6 @@ int landlock_append_fs_rule(struct landlock_ruleset *const ruleset,
 			    const struct path *const path,
 			    access_mask_t access_hierarchy);
 
+access_mask_t landlock_expand_handled_access_fs(const access_mask_t handled);
+
 #endif /* _SECURITY_LANDLOCK_FS_H */
