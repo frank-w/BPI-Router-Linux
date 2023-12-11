@@ -198,7 +198,7 @@ int bch2_trans_update_extent_overwrite(struct btree_trans *trans,
 	if (((front_split && back_split) ||
 	     ((front_split || back_split) && old.k->p.snapshot != new.k->p.snapshot)) &&
 	    (compressed_sectors = bch2_bkey_sectors_compressed(old)))
-		trans->extra_journal_res += compressed_sectors;
+		trans->extra_disk_res += compressed_sectors;
 
 	if (front_split) {
 		update = bch2_bkey_make_mut_noupdate(trans, old);
@@ -385,7 +385,7 @@ bch2_trans_update_by_path(struct btree_trans *trans, btree_path_idx_t path_idx,
 
 	struct btree_path *path = trans->paths + path_idx;
 	EBUG_ON(!path->should_be_locked);
-	EBUG_ON(trans->nr_updates >= BTREE_ITER_MAX);
+	EBUG_ON(trans->nr_updates >= ARRAY_SIZE(trans->updates));
 	EBUG_ON(!bpos_eq(k->k.p, path->pos));
 
 	n = (struct btree_insert_entry) {
