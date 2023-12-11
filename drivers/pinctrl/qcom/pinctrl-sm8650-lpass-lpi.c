@@ -33,6 +33,8 @@ enum lpass_lpi_functions {
 	LPI_MUX_i2s4_clk,
 	LPI_MUX_i2s4_data,
 	LPI_MUX_i2s4_ws,
+	LPI_MUX_qca_swr_clk,
+	LPI_MUX_qca_swr_data,
 	LPI_MUX_slimbus_clk,
 	LPI_MUX_slimbus_data,
 	LPI_MUX_swr_rx_clk,
@@ -52,7 +54,7 @@ enum lpass_lpi_functions {
 	LPI_MUX__,
 };
 
-static const struct pinctrl_pin_desc sm8550_lpi_pins[] = {
+static const struct pinctrl_pin_desc sm8650_lpi_pins[] = {
 	PINCTRL_PIN(0, "gpio0"),
 	PINCTRL_PIN(1, "gpio1"),
 	PINCTRL_PIN(2, "gpio2"),
@@ -108,6 +110,8 @@ static const char * const i2s3_data_groups[] = { "gpio17", "gpio18" };
 static const char * const i2s4_clk_groups[] = { "gpio19"};
 static const char * const i2s4_ws_groups[] = { "gpio20"};
 static const char * const i2s4_data_groups[] = { "gpio21", "gpio22"};
+static const char * const qca_swr_clk_groups[] = { "gpio19" };
+static const char * const qca_swr_data_groups[] = { "gpio20" };
 static const char * const slimbus_clk_groups[] = { "gpio19"};
 static const char * const slimbus_data_groups[] = { "gpio20"};
 static const char * const swr_tx_clk_groups[] = { "gpio0" };
@@ -124,33 +128,33 @@ static const char * const ext_mclk1_a_groups[] = { "gpio13" };
 static const char * const ext_mclk1_d_groups[] = { "gpio14" };
 static const char * const ext_mclk1_e_groups[] = { "gpio22" };
 
-static const struct lpi_pingroup sm8550_groups[] = {
-	LPI_PINGROUP(0, 0, swr_tx_clk, i2s0_clk, _, _),
-	LPI_PINGROUP(1, 2, swr_tx_data, i2s0_ws, _, _),
-	LPI_PINGROUP(2, 4, swr_tx_data, i2s0_data, _, _),
-	LPI_PINGROUP(3, 8, swr_rx_clk, i2s0_data, _, _),
-	LPI_PINGROUP(4, 10, swr_rx_data, i2s0_data, _, _),
-	LPI_PINGROUP(5, 12, swr_rx_data, ext_mclk1_c, i2s0_data, _),
+static const struct lpi_pingroup sm8650_groups[] = {
+	LPI_PINGROUP(0, 11, swr_tx_clk, i2s0_clk, _, _),
+	LPI_PINGROUP(1, 11, swr_tx_data, i2s0_ws, _, _),
+	LPI_PINGROUP(2, 11, swr_tx_data, i2s0_data, _, _),
+	LPI_PINGROUP(3, 11, swr_rx_clk, i2s0_data, _, _),
+	LPI_PINGROUP(4, 11, swr_rx_data, i2s0_data, _, _),
+	LPI_PINGROUP(5, 11, swr_rx_data, ext_mclk1_c, i2s0_data, _),
 	LPI_PINGROUP(6, LPI_NO_SLEW, dmic1_clk, i2s1_clk, _,  _),
 	LPI_PINGROUP(7, LPI_NO_SLEW, dmic1_data, i2s1_ws, _, _),
 	LPI_PINGROUP(8, LPI_NO_SLEW, dmic2_clk, i2s1_data, _, _),
 	LPI_PINGROUP(9, LPI_NO_SLEW, dmic2_data, i2s1_data, ext_mclk1_b, _),
-	LPI_PINGROUP(10, 16, i2s2_clk, wsa_swr_clk, _, _),
-	LPI_PINGROUP(11, 18, i2s2_ws, wsa_swr_data, _, _),
+	LPI_PINGROUP(10, 11, i2s2_clk, wsa_swr_clk, _, _),
+	LPI_PINGROUP(11, 11, i2s2_ws, wsa_swr_data, _, _),
 	LPI_PINGROUP(12, LPI_NO_SLEW, dmic3_clk, i2s3_clk, _, _),
 	LPI_PINGROUP(13, LPI_NO_SLEW, dmic3_data, i2s3_ws, ext_mclk1_a, _),
-	LPI_PINGROUP(14, 6, swr_tx_data, ext_mclk1_d, _, _),
-	LPI_PINGROUP(15, 20, i2s2_data, wsa2_swr_clk, _, _),
-	LPI_PINGROUP(16, 22, i2s2_data, wsa2_swr_data, _, _),
+	LPI_PINGROUP(14, 11, swr_tx_data, ext_mclk1_d, _, _),
+	LPI_PINGROUP(15, 11, i2s2_data, wsa2_swr_clk, _, _),
+	LPI_PINGROUP(16, 11, i2s2_data, wsa2_swr_data, _, _),
 	LPI_PINGROUP(17, LPI_NO_SLEW, dmic4_clk, i2s3_data, _, _),
 	LPI_PINGROUP(18, LPI_NO_SLEW, dmic4_data, i2s3_data, _, _),
-	LPI_PINGROUP(19, LPI_NO_SLEW, i2s4_clk, slimbus_clk, _, _),
-	LPI_PINGROUP(20, LPI_NO_SLEW, i2s4_ws, slimbus_data, _, _),
+	LPI_PINGROUP(19, 11, i2s4_clk, slimbus_clk, qca_swr_clk, _),
+	LPI_PINGROUP(20, 11, i2s4_ws, slimbus_data, qca_swr_data, _),
 	LPI_PINGROUP(21, LPI_NO_SLEW, i2s4_data, _, _, _),
 	LPI_PINGROUP(22, LPI_NO_SLEW, i2s4_data, ext_mclk1_e, _, _),
 };
 
-static const struct lpi_function sm8550_functions[] = {
+static const struct lpi_function sm8650_functions[] = {
 	LPI_FUNCTION(gpio),
 	LPI_FUNCTION(dmic1_clk),
 	LPI_FUNCTION(dmic1_data),
@@ -175,6 +179,8 @@ static const struct lpi_function sm8550_functions[] = {
 	LPI_FUNCTION(i2s4_clk),
 	LPI_FUNCTION(i2s4_data),
 	LPI_FUNCTION(i2s4_ws),
+	LPI_FUNCTION(qca_swr_clk),
+	LPI_FUNCTION(qca_swr_data),
 	LPI_FUNCTION(slimbus_clk),
 	LPI_FUNCTION(slimbus_data),
 	LPI_FUNCTION(swr_rx_clk),
@@ -192,19 +198,20 @@ static const struct lpi_function sm8550_functions[] = {
 	LPI_FUNCTION(ext_mclk1_e),
 };
 
-static const struct lpi_pinctrl_variant_data sm8550_lpi_data = {
-	.pins = sm8550_lpi_pins,
-	.npins = ARRAY_SIZE(sm8550_lpi_pins),
-	.groups = sm8550_groups,
-	.ngroups = ARRAY_SIZE(sm8550_groups),
-	.functions = sm8550_functions,
-	.nfunctions = ARRAY_SIZE(sm8550_functions),
+static const struct lpi_pinctrl_variant_data sm8650_lpi_data = {
+	.pins = sm8650_lpi_pins,
+	.npins = ARRAY_SIZE(sm8650_lpi_pins),
+	.groups = sm8650_groups,
+	.ngroups = ARRAY_SIZE(sm8650_groups),
+	.functions = sm8650_functions,
+	.nfunctions = ARRAY_SIZE(sm8650_functions),
+	.flags = LPI_FLAG_SLEW_RATE_SAME_REG,
 };
 
 static const struct of_device_id lpi_pinctrl_of_match[] = {
 	{
-	       .compatible = "qcom,sm8550-lpass-lpi-pinctrl",
-	       .data = &sm8550_lpi_data,
+	       .compatible = "qcom,sm8650-lpass-lpi-pinctrl",
+	       .data = &sm8650_lpi_data,
 	},
 	{ }
 };
@@ -212,7 +219,7 @@ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
 
 static struct platform_driver lpi_pinctrl_driver = {
 	.driver = {
-		   .name = "qcom-sm8550-lpass-lpi-pinctrl",
+		   .name = "qcom-sm8650-lpass-lpi-pinctrl",
 		   .of_match_table = lpi_pinctrl_of_match,
 	},
 	.probe = lpi_pinctrl_probe,
@@ -220,5 +227,5 @@ static struct platform_driver lpi_pinctrl_driver = {
 };
 
 module_platform_driver(lpi_pinctrl_driver);
-MODULE_DESCRIPTION("Qualcomm SM8550 LPI GPIO pin control driver");
+MODULE_DESCRIPTION("Qualcomm SM8650 LPI GPIO pin control driver");
 MODULE_LICENSE("GPL");
