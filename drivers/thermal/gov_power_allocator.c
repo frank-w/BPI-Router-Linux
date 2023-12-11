@@ -59,9 +59,8 @@ static inline s64 div_frac(s64 x, s64 y)
  *			governor switches on when this trip point is crossed.
  *			If the thermal zone only has one passive trip point,
  *			@trip_switch_on should be NULL.
- * @trip_max_desired_temperature:	last passive trip point of the thermal
- *					zone.  The temperature we are
- *					controlling for.
+ * @trip_max:		last passive trip point of the thermal zone. The
+ *			temperature we are controlling for.
  */
 struct power_allocator_params {
 	bool allocated_tzp;
@@ -69,7 +68,7 @@ struct power_allocator_params {
 	s32 prev_err;
 	u32 sustainable_power;
 	const struct thermal_trip *trip_switch_on;
-	const struct thermal_trip *trip_max_desired_temperature;
+	const struct thermal_trip *trip_max;
 };
 
 /**
@@ -85,15 +84,16 @@ struct power_allocator_params {
  */
 static u32 estimate_sustainable_power(struct thermal_zone_device *tz)
 {
-	u32 sustainable_power = 0;
-	struct thermal_instance *instance;
 	struct power_allocator_params *params = tz->governor_data;
+	struct thermal_cooling_device *cdev;
+	struct thermal_instance *instance;
+	u32 sustainable_power = 0;
+	u32 min_power;
 
 	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		struct thermal_cooling_device *cdev = instance->cdev;
-		u32 min_power;
+		cdev = instance->cdev;
 
-		if (instance->trip != params->trip_max_desired_temperature)
+		if (instance->trip != params->trip_max)
 			continue;
 
 		if (!cdev_is_power_actor(cdev))
@@ -212,10 +212,10 @@ static u32 pid_controller(struct thermal_zone_device *tz,
 			  int control_temp,
 			  u32 max_allocatable_power)
 {
+	struct power_allocator_params *params = tz->governor_data;
 	s64 p, i, d, power_range;
 	s32 err, max_power_frac;
 	u32 sustainable_power;
-	struct power_allocator_params *params = tz->governor_data;
 
 	max_power_frac = int_to_frac(max_allocatable_power);
 
@@ -374,23 +374,24 @@ static void divvy_up_power(u32 *req_power, u32 *max_power, int num_actors,
 		}
 }
 
-static int allocate_power(struct thermal_zone_device *tz,
-			  int control_temp)
+static int allocate_power(struct thermal_zone_device *tz, int control_temp)
 {
-	struct thermal_instance *instance;
-	struct power_allocator_params *params = tz->governor_data;
-	const struct thermal_trip *trip_max_desired_temperature =
-					params->trip_max_desired_temperature;
 	u32 *req_power, *max_power, *granted_power, *extra_actor_power;
+	struct power_allocator_params *params = tz->governor_data;
+	struct thermal_cooling_device *cdev;
+	struct thermal_instance *instance;
+	u32 total_weighted_req_power = 0;
+	u32 max_allocatable_power = 0;
+	u32 total_granted_power = 0;
+	u32 total_req_power = 0;
 	u32 *weighted_req_power;
-	u32 total_req_power, max_allocatable_power, total_weighted_req_power;
-	u32 total_granted_power, power_range;
-	int i, num_actors, total_weight, ret = 0;
+	u32 power_range, weight;
+	int total_weight = 0;
+	int num_actors = 0;
+	int i = 0;
 
-	num_actors = 0;
-	total_weight = 0;
 	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		if ((instance->trip == trip_max_desired_temperature) &&
+		if ((instance->trip == params->trip_max) &&
 		    cdev_is_power_actor(instance->cdev)) {
 			num_actors++;
 			total_weight += instance->weight;
@@ -420,16 +421,10 @@ static int allocate_power(struct thermal_zone_device *tz,
 	extra_actor_power = &req_power[3 * num_actors];
 	weighted_req_power = &req_power[4 * num_actors];
 
-	i = 0;
-	total_weighted_req_power = 0;
-	total_req_power = 0;
-	max_allocatable_power = 0;
-
 	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		int weight;
-		struct thermal_cooling_device *cdev = instance->cdev;
+		cdev = instance->cdev;
 
-		if (instance->trip != trip_max_desired_temperature)
+		if (instance->trip != params->trip_max)
 			continue;
 
 		if (!cdev_is_power_actor(cdev))
@@ -462,10 +457,9 @@ static int allocate_power(struct thermal_zone_device *tz,
 		       total_weighted_req_power, power_range, granted_power,
 		       extra_actor_power);
 
-	total_granted_power = 0;
 	i = 0;
 	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		if (instance->trip != trip_max_desired_temperature)
+		if (instance->trip != params->trip_max)
 			continue;
 
 		if (!cdev_is_power_actor(instance->cdev))
@@ -486,7 +480,7 @@ static int allocate_power(struct thermal_zone_device *tz,
 
 	kfree(req_power);
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -531,13 +525,13 @@ static void get_governor_trips(struct thermal_zone_device *tz,
 
 	if (last_passive) {
 		params->trip_switch_on = first_passive;
-		params->trip_max_desired_temperature = last_passive;
+		params->trip_max = last_passive;
 	} else if (first_passive) {
 		params->trip_switch_on = NULL;
-		params->trip_max_desired_temperature = first_passive;
+		params->trip_max = first_passive;
 	} else {
 		params->trip_switch_on = NULL;
-		params->trip_max_desired_temperature = last_active;
+		params->trip_max = last_active;
 	}
 }
 
@@ -549,19 +543,20 @@ static void reset_pid_controller(struct power_allocator_params *params)
 
 static void allow_maximum_power(struct thermal_zone_device *tz, bool update)
 {
-	struct thermal_instance *instance;
 	struct power_allocator_params *params = tz->governor_data;
+	struct thermal_cooling_device *cdev;
+	struct thermal_instance *instance;
 	u32 req_power;
 
 	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		struct thermal_cooling_device *cdev = instance->cdev;
+		cdev = instance->cdev;
 
-		if (instance->trip != params->trip_max_desired_temperature ||
-		    (!cdev_is_power_actor(instance->cdev)))
+		if (instance->trip != params->trip_max ||
+		    !cdev_is_power_actor(instance->cdev))
 			continue;
 
 		instance->target = 0;
-		mutex_lock(&instance->cdev->lock);
+		mutex_lock(&cdev->lock);
 		/*
 		 * Call for updating the cooling devices local stats and avoid
 		 * periods of dozen of seconds when those have not been
@@ -570,9 +565,9 @@ static void allow_maximum_power(struct thermal_zone_device *tz, bool update)
 		cdev->ops->get_requested_power(cdev, &req_power);
 
 		if (update)
-			__thermal_cdev_update(instance->cdev);
+			__thermal_cdev_update(cdev);
 
-		mutex_unlock(&instance->cdev->lock);
+		mutex_unlock(&cdev->lock);
 	}
 }
 
@@ -580,6 +575,7 @@ static void allow_maximum_power(struct thermal_zone_device *tz, bool update)
  * check_power_actors() - Check all cooling devices and warn when they are
  *			not power actors
  * @tz:		thermal zone to operate on
+ * @params:	power allocator private data
  *
  * Check all cooling devices in the @tz and warn every time they are missing
  * power actor API. The warning should help to investigate the issue, which
@@ -588,12 +584,16 @@ static void allow_maximum_power(struct thermal_zone_device *tz, bool update)
  * Return: 0 on success, -EINVAL if any cooling device does not implement
  * the power actor API.
  */
-static int check_power_actors(struct thermal_zone_device *tz)
+static int check_power_actors(struct thermal_zone_device *tz,
+			      struct power_allocator_params *params)
 {
 	struct thermal_instance *instance;
 	int ret = 0;
 
 	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
+		if (instance->trip != params->trip_max)
+			continue;
+
 		if (!cdev_is_power_actor(instance->cdev)) {
 			dev_warn(&tz->device, "power_allocator: %s is not a power actor\n",
 				 instance->cdev->type);
@@ -616,16 +616,26 @@ static int check_power_actors(struct thermal_zone_device *tz)
  */
 static int power_allocator_bind(struct thermal_zone_device *tz)
 {
-	int ret;
 	struct power_allocator_params *params;
-
-	ret = check_power_actors(tz);
-	if (ret)
-		return ret;
+	int ret;
 
 	params = kzalloc(sizeof(*params), GFP_KERNEL);
 	if (!params)
 		return -ENOMEM;
+
+	get_governor_trips(tz, params);
+	if (!params->trip_max) {
+		dev_warn(&tz->device, "power_allocator: missing trip_max\n");
+		kfree(params);
+		return -EINVAL;
+	}
+
+	ret = check_power_actors(tz, params);
+	if (ret) {
+		dev_warn(&tz->device, "power_allocator: binding failed\n");
+		kfree(params);
+		return ret;
+	}
 
 	if (!tz->tzp) {
 		tz->tzp = kzalloc(sizeof(*tz->tzp), GFP_KERNEL);
@@ -640,14 +650,9 @@ static int power_allocator_bind(struct thermal_zone_device *tz)
 	if (!tz->tzp->sustainable_power)
 		dev_warn(&tz->device, "power_allocator: sustainable_power will be estimated\n");
 
-	get_governor_trips(tz, params);
-
-	if (params->trip_max_desired_temperature) {
-		int temp = params->trip_max_desired_temperature->temperature;
-
-		estimate_pid_constants(tz, tz->tzp->sustainable_power,
-				       params->trip_switch_on, temp);
-	}
+	estimate_pid_constants(tz, tz->tzp->sustainable_power,
+			       params->trip_switch_on,
+			       params->trip_max->temperature);
 
 	reset_pid_controller(params);
 
@@ -688,7 +693,7 @@ static int power_allocator_throttle(struct thermal_zone_device *tz,
 	 * We get called for every trip point but we only need to do
 	 * our calculations once
 	 */
-	if (trip != params->trip_max_desired_temperature)
+	if (trip != params->trip_max)
 		return 0;
 
 	trip = params->trip_switch_on;
@@ -702,7 +707,7 @@ static int power_allocator_throttle(struct thermal_zone_device *tz,
 
 	tz->passive = 1;
 
-	return allocate_power(tz, params->trip_max_desired_temperature->temperature);
+	return allocate_power(tz, params->trip_max->temperature);
 }
 
 static struct thermal_governor thermal_gov_power_allocator = {
