@@ -274,15 +274,9 @@ static const struct attribute_group *ali_drw_pmu_attr_groups[] = {
 static int ali_drw_get_counter_idx(struct perf_event *event)
 {
 	struct ali_drw_pmu *drw_pmu = to_ali_drw_pmu(event->pmu);
-	int idx;
+	int idx = find_and_set_bit(drw_pmu->used_mask, ALI_DRW_PMU_COMMON_MAX_COUNTERS);
 
-	for (idx = 0; idx < ALI_DRW_PMU_COMMON_MAX_COUNTERS; ++idx) {
-		if (!test_and_set_bit(idx, drw_pmu->used_mask))
-			return idx;
-	}
-
-	/* The counters are all in use. */
-	return -EBUSY;
+	return idx < ALI_DRW_PMU_COMMON_MAX_COUNTERS ? idx : -EBUSY;
 }
 
 static u64 ali_drw_pmu_read_counter(struct perf_event *event)
