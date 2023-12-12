@@ -825,13 +825,9 @@ static irqreturn_t armv8pmu_handle_irq(struct arm_pmu *cpu_pmu)
 static int armv8pmu_get_single_idx(struct pmu_hw_events *cpuc,
 				    struct arm_pmu *cpu_pmu)
 {
-	int idx;
+	int idx = find_and_set_next_bit(cpuc->used_mask, cpu_pmu->num_events, ARMV8_IDX_COUNTER0);
 
-	for (idx = ARMV8_IDX_COUNTER0; idx < cpu_pmu->num_events; idx++) {
-		if (!test_and_set_bit(idx, cpuc->used_mask))
-			return idx;
-	}
-	return -EAGAIN;
+	return idx < cpu_pmu->num_events ? idx : -EAGAIN;
 }
 
 static int armv8pmu_get_chain_idx(struct pmu_hw_events *cpuc,
