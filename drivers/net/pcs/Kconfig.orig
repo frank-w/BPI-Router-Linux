@@ -5,19 +5,12 @@
 
 menu "PCS device drivers"
 
-config FWNODE_PCS
+config OF_PCS
 	tristate
-	depends on (ACPI || OF)
+	depends on OF
 	depends on PHYLINK
 	help
-		Firmware node PCS accessors
-
-config PCS_AIROHA
-	select FWNODE_PCS
-	tristate "Airoha PCS driver"
-	help
-	  This module provides helper to phylink for managing the Airoha
-	  PCS for SoC Ethernet Serdes and PCS.
+		OpenFirmware PCS accessors
 
 config PCS_XPCS
 	tristate "Synopsys DesignWare Ethernet XPCS"
@@ -41,15 +34,15 @@ config PCS_MTK_LYNXI
 
 config PCS_MTK_USXGMII
 	tristate "MediaTek USXGMII PCS"
-	select FWNODE_PCS
+	select OF_PCS
 	select PCS_MTK_LYNXI
+	select PHY_MTK_PEXTP
 	select PHYLINK
-	imply PHY_MTK_PEXTP
 	help
 	  This module provides a driver for MediaTek's USXGMII PCS supporting
 	  10GBase-R, 5GBase-R and USXGMII interface modes.
 	  1000Base-X, 2500Base-X and Cisco SGMII are supported on the same
-	  differential pairs via an embedded LynxI PCS.
+	  differential pairs via an embedded LynxI PHY.
 
 config PCS_RZN1_MIIC
 	tristate "Renesas RZ/N1 MII converter"
