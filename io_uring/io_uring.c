@@ -70,6 +70,7 @@
 #include <linux/fadvise.h>
 #include <linux/task_work.h>
 #include <linux/io_uring.h>
+#include <linux/io_uring/cmd.h>
 #include <linux/audit.h>
 #include <linux/security.h>
 #include <asm/shmparam.h>
@@ -1898,14 +1899,19 @@ static int io_issue_sqe(struct io_kiocb *req, unsigned int issue_flags)
 			io_req_complete_defer(req);
 		else
 			io_req_complete_post(req, issue_flags);
-	} else if (ret != IOU_ISSUE_SKIP_COMPLETE)
-		return ret;
 
-	/* If the op doesn't have a file, we're not polling for it */
-	if ((req->ctx->flags & IORING_SETUP_IOPOLL) && def->iopoll_queue)
-		io_iopoll_req_issued(req, issue_flags);
+		return 0;
+	}
 
-	return 0;
+	if (ret == IOU_ISSUE_SKIP_COMPLETE) {
+		ret = 0;
+		io_arm_ltimeout(req);
+
+		/* If the op doesn't have a file, we're not polling for it */
+		if ((req->ctx->flags & IORING_SETUP_IOPOLL) && def->iopoll_queue)
+			io_iopoll_req_issued(req, issue_flags);
+	}
+	return ret;
 }
 
 int io_poll_issue(struct io_kiocb *req, struct io_tw_state *ts)
@@ -2076,9 +2082,7 @@ static inline void io_queue_sqe(struct io_kiocb *req)
 	 * We async punt it if the file wasn't marked NOWAIT, or if the file
 	 * doesn't support non-blocking read/write attempts
 	 */
-	if (likely(!ret))
-		io_arm_ltimeout(req);
-	else
+	if (unlikely(ret))
 		io_queue_async(req, ret);
 }
 
