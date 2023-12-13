@@ -1623,7 +1623,7 @@ EXPORT_SYMBOL_GPL(__folio_lock_killable);
 static int __folio_lock_async(struct folio *folio, struct wait_page_queue *wait)
 {
 	struct wait_queue_head *q = folio_waitqueue(folio);
-	int ret = 0;
+	int ret;
 
 	wait->folio = folio;
 	wait->bit_nr = PG_locked;
@@ -2173,7 +2173,7 @@ update_start:
 
 	if (nr) {
 		folio = fbatch->folios[nr - 1];
-		*start = folio->index + folio_nr_pages(folio);
+		*start = folio_next_index(folio);
 	}
 out:
 	rcu_read_unlock();
