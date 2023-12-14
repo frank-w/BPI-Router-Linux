@@ -78,11 +78,7 @@ struct xfs_item_ops {
 	xfs_lsn_t (*iop_committed)(struct xfs_log_item *, xfs_lsn_t);
 	uint (*iop_push)(struct xfs_log_item *, struct list_head *);
 	void (*iop_release)(struct xfs_log_item *);
-	int (*iop_recover)(struct xfs_log_item *lip,
-			   struct list_head *capture_list);
 	bool (*iop_match)(struct xfs_log_item *item, uint64_t id);
-	struct xfs_log_item *(*iop_relog)(struct xfs_log_item *intent,
-			struct xfs_trans *tp);
 	struct xfs_log_item *(*iop_intent)(struct xfs_log_item *intent_done);
 };
 
@@ -246,14 +242,6 @@ void		xfs_trans_buf_copy_type(struct xfs_buf *dst_bp,
 					struct xfs_buf *src_bp);
 
 extern struct kmem_cache	*xfs_trans_cache;
-
-static inline struct xfs_log_item *
-xfs_trans_item_relog(
-	struct xfs_log_item	*lip,
-	struct xfs_trans	*tp)
-{
-	return lip->li_ops->iop_relog(lip, tp);
-}
 
 struct xfs_dquot;
 
