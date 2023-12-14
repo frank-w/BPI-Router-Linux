@@ -65,7 +65,7 @@
 	x(btree_node_bkey_out_of_order,				57)	\
 	x(btree_root_bkey_invalid,				58)	\
 	x(btree_root_read_error,				59)	\
-	x(btree_root_bad_min_key,				50)	\
+	x(btree_root_bad_min_key,				60)	\
 	x(btree_root_bad_max_key,				61)	\
 	x(btree_node_read_error,				62)	\
 	x(btree_node_topology_bad_min_key,			63)	\
@@ -248,7 +248,8 @@
 	x(root_inode_not_dir,					240)	\
 	x(dir_loop,						241)	\
 	x(hash_table_key_duplicate,				242)	\
-	x(hash_table_key_wrong_offset,				243)
+	x(hash_table_key_wrong_offset,				243)	\
+	x(unlinked_inode_not_on_deleted_list,			244)
 
 enum bch_sb_error_id {
 #define x(t, n) BCH_FSCK_ERR_##t = n,

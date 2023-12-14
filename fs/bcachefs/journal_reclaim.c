@@ -3,6 +3,7 @@
 #include "bcachefs.h"
 #include "btree_key_cache.h"
 #include "btree_update.h"
+#include "btree_write_buffer.h"
 #include "buckets.h"
 #include "errcode.h"
 #include "error.h"
@@ -50,17 +51,24 @@ unsigned bch2_journal_dev_buckets_available(struct journal *j,
 	return available;
 }
 
-static inline void journal_set_watermark(struct journal *j, bool low_on_space)
+void bch2_journal_set_watermark(struct journal *j)
 {
-	unsigned watermark = BCH_WATERMARK_stripe;
+	struct bch_fs *c = container_of(j, struct bch_fs, journal);
+	bool low_on_space = j->space[journal_space_clean].total * 4 <=
+		j->space[journal_space_total].total;
+	bool low_on_pin = fifo_free(&j->pin) < j->pin.size / 4;
+	bool low_on_wb = bch2_btree_write_buffer_must_wait(c);
+	unsigned watermark = low_on_space || low_on_pin || low_on_wb
+		? BCH_WATERMARK_reclaim
+		: BCH_WATERMARK_stripe;
 
-	if (low_on_space)
-		watermark = max_t(unsigned, watermark, BCH_WATERMARK_reclaim);
-	if (fifo_free(&j->pin) < j->pin.size / 4)
-		watermark = max_t(unsigned, watermark, BCH_WATERMARK_reclaim);
-
-	if (watermark == j->watermark)
-		return;
+	if (track_event_change(&c->times[BCH_TIME_blocked_journal_low_on_space],
+			       &j->low_on_space_start, low_on_space) ||
+	    track_event_change(&c->times[BCH_TIME_blocked_journal_low_on_pin],
+			       &j->low_on_pin_start, low_on_pin) ||
+	    track_event_change(&c->times[BCH_TIME_blocked_write_buffer_full],
+			       &j->write_buffer_full_start, low_on_wb))
+		trace_and_count(c, journal_full, c);
 
 	swap(watermark, j->watermark);
 	if (watermark > j->watermark)
@@ -226,7 +234,7 @@ void bch2_journal_space_available(struct journal *j)
 	else
 		clear_bit(JOURNAL_MAY_SKIP_FLUSH, &j->flags);
 
-	journal_set_watermark(j, clean * 4 <= total);
+	bch2_journal_set_watermark(j);
 out:
 	j->cur_entry_sectors	= !ret ? j->space[journal_space_discarded].next_entry : 0;
 	j->cur_entry_error	= ret;
@@ -299,6 +307,7 @@ void bch2_journal_reclaim_fast(struct journal *j)
 	 * all btree nodes got written out
 	 */
 	while (!fifo_empty(&j->pin) &&
+	       j->pin.front <= j->seq_ondisk &&
 	       !atomic_read(&fifo_peek_front(&j->pin).count)) {
 		j->pin.front++;
 		popped = true;
@@ -367,14 +376,35 @@ static enum journal_pin_type journal_pin_type(journal_pin_flush_fn fn)
 		return JOURNAL_PIN_other;
 }
 
-void bch2_journal_pin_set(struct journal *j, u64 seq,
+static inline void bch2_journal_pin_set_locked(struct journal *j, u64 seq,
 			  struct journal_entry_pin *pin,
-			  journal_pin_flush_fn flush_fn)
+			  journal_pin_flush_fn flush_fn,
+			  enum journal_pin_type type)
 {
-	struct journal_entry_pin_list *pin_list;
+	struct journal_entry_pin_list *pin_list = journal_seq_pin(j, seq);
+
+	/*
+	 * flush_fn is how we identify journal pins in debugfs, so must always
+	 * exist, even if it doesn't do anything:
+	 */
+	BUG_ON(!flush_fn);
+
+	atomic_inc(&pin_list->count);
+	pin->seq	= seq;
+	pin->flush	= flush_fn;
+	list_add(&pin->list, &pin_list->list[type]);
+}
+
+void bch2_journal_pin_copy(struct journal *j,
+			   struct journal_entry_pin *dst,
+			   struct journal_entry_pin *src,
+			   journal_pin_flush_fn flush_fn)
+{
 	bool reclaim;
 
 	spin_lock(&j->lock);
+
+	u64 seq = READ_ONCE(src->seq);
 
 	if (seq < journal_last_seq(j)) {
 		/*
@@ -387,18 +417,34 @@ void bch2_journal_pin_set(struct journal *j, u64 seq,
 		return;
 	}
 
-	pin_list = journal_seq_pin(j, seq);
+	reclaim = __journal_pin_drop(j, dst);
+
+	bch2_journal_pin_set_locked(j, seq, dst, flush_fn, journal_pin_type(flush_fn));
+
+	if (reclaim)
+		bch2_journal_reclaim_fast(j);
+	spin_unlock(&j->lock);
+
+	/*
+	 * If the journal is currently full,  we might want to call flush_fn
+	 * immediately:
+	 */
+	journal_wake(j);
+}
+
+void bch2_journal_pin_set(struct journal *j, u64 seq,
+			  struct journal_entry_pin *pin,
+			  journal_pin_flush_fn flush_fn)
+{
+	bool reclaim;
+
+	spin_lock(&j->lock);
+
+	BUG_ON(seq < journal_last_seq(j));
 
 	reclaim = __journal_pin_drop(j, pin);
 
-	atomic_inc(&pin_list->count);
-	pin->seq	= seq;
-	pin->flush	= flush_fn;
-
-	if (flush_fn)
-		list_add(&pin->list, &pin_list->list[journal_pin_type(flush_fn)]);
-	else
-		list_add(&pin->list, &pin_list->flushed);
+	bch2_journal_pin_set_locked(j, seq, pin, flush_fn, journal_pin_type(flush_fn));
 
 	if (reclaim)
 		bch2_journal_reclaim_fast(j);
@@ -796,6 +842,7 @@ static int journal_flush_done(struct journal *j, u64 seq_to_flush,
 
 bool bch2_journal_flush_pins(struct journal *j, u64 seq_to_flush)
 {
+	/* time_stats this */
 	bool did_work = false;
 
 	if (!test_bit(JOURNAL_STARTED, &j->flags))

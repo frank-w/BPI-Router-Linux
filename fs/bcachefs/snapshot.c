@@ -123,7 +123,7 @@ bool __bch2_snapshot_is_ancestor(struct bch_fs *c, u32 id, u32 ancestor)
 	struct snapshot_table *t;
 	bool ret;
 
-	EBUG_ON(c->curr_recovery_pass <= BCH_RECOVERY_PASS_check_snapshots);
+	EBUG_ON(c->recovery_pass_done <= BCH_RECOVERY_PASS_check_snapshots);
 
 	rcu_read_lock();
 	t = rcu_dereference(c->snapshots);
@@ -318,7 +318,7 @@ int bch2_mark_snapshot(struct btree_trans *trans,
 		__set_is_ancestor_bitmap(c, id);
 
 		if (BCH_SNAPSHOT_DELETED(s.v)) {
-			set_bit(BCH_FS_NEED_DELETE_DEAD_SNAPSHOTS, &c->flags);
+			set_bit(BCH_FS_need_delete_dead_snapshots, &c->flags);
 			if (c->curr_recovery_pass > BCH_RECOVERY_PASS_delete_dead_snapshots)
 				bch2_delete_dead_snapshots_async(c);
 		}
@@ -590,7 +590,7 @@ int bch2_check_snapshot_trees(struct bch_fs *c)
 		for_each_btree_key_commit(trans, iter,
 			BTREE_ID_snapshot_trees, POS_MIN,
 			BTREE_ITER_PREFETCH, k,
-			NULL, NULL, BTREE_INSERT_LAZY_RW|BTREE_INSERT_NOFAIL,
+			NULL, NULL, BCH_TRANS_COMMIT_no_enospc,
 		check_snapshot_tree(trans, &iter, k)));
 
 	if (ret)
@@ -868,7 +868,7 @@ int bch2_check_snapshots(struct bch_fs *c)
 		for_each_btree_key_reverse_commit(trans, iter,
 			BTREE_ID_snapshots, POS_MAX,
 			BTREE_ITER_PREFETCH, k,
-			NULL, NULL, BTREE_INSERT_LAZY_RW|BTREE_INSERT_NOFAIL,
+			NULL, NULL, BCH_TRANS_COMMIT_no_enospc,
 		check_snapshot(trans, &iter, k)));
 	if (ret)
 		bch_err_fn(c, ret);
@@ -1376,10 +1376,10 @@ int bch2_delete_dead_snapshots(struct bch_fs *c)
 	u32 *i, id;
 	int ret = 0;
 
-	if (!test_and_clear_bit(BCH_FS_NEED_DELETE_DEAD_SNAPSHOTS, &c->flags))
+	if (!test_and_clear_bit(BCH_FS_need_delete_dead_snapshots, &c->flags))
 		return 0;
 
-	if (!test_bit(BCH_FS_STARTED, &c->flags)) {
+	if (!test_bit(BCH_FS_started, &c->flags)) {
 		ret = bch2_fs_read_write_early(c);
 		if (ret) {
 			bch_err_msg(c, ret, "deleting dead snapshots: error going rw");
@@ -1402,27 +1402,24 @@ int bch2_delete_dead_snapshots(struct bch_fs *c)
 		goto err;
 	}
 
-	ret = for_each_btree_key2(trans, iter, BTREE_ID_snapshots,
-				  POS_MIN, 0, k,
+	ret = for_each_btree_key(trans, iter, BTREE_ID_snapshots,
+				 POS_MIN, 0, k,
 		bch2_snapshot_set_equiv(trans, k));
 	if (ret) {
 		bch_err_msg(c, ret, "in bch2_snapshots_set_equiv");
 		goto err;
 	}
 
-	for_each_btree_key(trans, iter, BTREE_ID_snapshots,
-			   POS_MIN, 0, k, ret) {
+	ret = for_each_btree_key(trans, iter, BTREE_ID_snapshots,
+				 POS_MIN, 0, k, ({
 		if (k.k->type != KEY_TYPE_snapshot)
 			continue;
 
 		snap = bkey_s_c_to_snapshot(k);
-		if (BCH_SNAPSHOT_DELETED(snap.v)) {
-			ret = snapshot_list_add(c, &deleted, k.k->p.offset);
-			if (ret)
-				break;
-		}
-	}
-	bch2_trans_iter_exit(trans, &iter);
+		BCH_SNAPSHOT_DELETED(snap.v)
+			? snapshot_list_add(c, &deleted, k.k->p.offset)
+			: 0;
+	}));
 
 	if (ret) {
 		bch_err_msg(c, ret, "walking snapshots");
@@ -1449,12 +1446,12 @@ int bch2_delete_dead_snapshots(struct bch_fs *c)
 		ret = for_each_btree_key_commit(trans, iter,
 				id, POS_MIN,
 				BTREE_ITER_PREFETCH|BTREE_ITER_ALL_SNAPSHOTS, k,
-				&res, NULL, BTREE_INSERT_NOFAIL,
+				&res, NULL, BCH_TRANS_COMMIT_no_enospc,
 			snapshot_delete_key(trans, &iter, k, &deleted, &equiv_seen, &last_pos)) ?:
 		      for_each_btree_key_commit(trans, iter,
 				id, POS_MIN,
 				BTREE_ITER_PREFETCH|BTREE_ITER_ALL_SNAPSHOTS, k,
-				&res, NULL, BTREE_INSERT_NOFAIL,
+				&res, NULL, BCH_TRANS_COMMIT_no_enospc,
 			move_key_to_correct_snapshot(trans, &iter, k));
 
 		bch2_disk_reservation_put(c, &res);
@@ -1469,18 +1466,20 @@ int bch2_delete_dead_snapshots(struct bch_fs *c)
 	bch2_trans_unlock(trans);
 	down_write(&c->snapshot_create_lock);
 
-	for_each_btree_key(trans, iter, BTREE_ID_snapshots,
-			   POS_MIN, 0, k, ret) {
+	ret = for_each_btree_key(trans, iter, BTREE_ID_snapshots,
+				 POS_MIN, 0, k, ({
 		u32 snapshot = k.k->p.offset;
 		u32 equiv = bch2_snapshot_equiv(c, snapshot);
 
-		if (equiv != snapshot)
-			snapshot_list_add(c, &deleted_interior, snapshot);
-	}
-	bch2_trans_iter_exit(trans, &iter);
+		equiv != snapshot
+			? snapshot_list_add(c, &deleted_interior, snapshot)
+			: 0;
+	}));
 
-	if (ret)
+	if (ret) {
+		bch_err_msg(c, ret, "walking snapshots");
 		goto err_create_lock;
+	}
 
 	/*
 	 * Fixing children of deleted snapshots can't be done completely
@@ -1489,7 +1488,7 @@ int bch2_delete_dead_snapshots(struct bch_fs *c)
 	 */
 	ret = for_each_btree_key_commit(trans, iter, BTREE_ID_snapshots, POS_MIN,
 				  BTREE_ITER_INTENT, k,
-				  NULL, NULL, BTREE_INSERT_NOFAIL,
+				  NULL, NULL, BCH_TRANS_COMMIT_no_enospc,
 		bch2_fix_child_of_deleted_snapshot(trans, &iter, k, &deleted_interior));
 	if (ret)
 		goto err_create_lock;
@@ -1680,7 +1679,7 @@ static int bch2_check_snapshot_needs_deletion(struct btree_trans *trans, struct 
 	if (BCH_SNAPSHOT_DELETED(snap.v) ||
 	    bch2_snapshot_equiv(c, k.k->p.offset) != k.k->p.offset ||
 	    (ret = bch2_snapshot_needs_delete(trans, k)) > 0) {
-		set_bit(BCH_FS_NEED_DELETE_DEAD_SNAPSHOTS, &c->flags);
+		set_bit(BCH_FS_need_delete_dead_snapshots, &c->flags);
 		return 0;
 	}
 
@@ -1694,13 +1693,13 @@ int bch2_snapshots_read(struct bch_fs *c)
 	int ret = 0;
 
 	ret = bch2_trans_run(c,
-		for_each_btree_key2(trans, iter, BTREE_ID_snapshots,
-			   POS_MIN, 0, k,
+		for_each_btree_key(trans, iter, BTREE_ID_snapshots,
+				   POS_MIN, 0, k,
 			bch2_mark_snapshot(trans, BTREE_ID_snapshots, 0, bkey_s_c_null, k, 0) ?:
 			bch2_snapshot_set_equiv(trans, k) ?:
 			bch2_check_snapshot_needs_deletion(trans, k)) ?:
-		for_each_btree_key2(trans, iter, BTREE_ID_snapshots,
-			   POS_MIN, 0, k,
+		for_each_btree_key(trans, iter, BTREE_ID_snapshots,
+				   POS_MIN, 0, k,
 			   (set_is_ancestor_bitmap(c, k.k->p.offset), 0)));
 	if (ret)
 		bch_err_fn(c, ret);

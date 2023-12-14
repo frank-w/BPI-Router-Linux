@@ -267,6 +267,20 @@ restart_drop_extra_replicas:
 			goto out;
 		}
 
+		if (trace_data_update_enabled()) {
+			struct printbuf buf = PRINTBUF;
+
+			prt_str(&buf, "\nold: ");
+			bch2_bkey_val_to_text(&buf, c, old);
+			prt_str(&buf, "\nk:   ");
+			bch2_bkey_val_to_text(&buf, c, k);
+			prt_str(&buf, "\nnew: ");
+			bch2_bkey_val_to_text(&buf, c, bkey_i_to_s_c(insert));
+
+			trace_data_update(c, buf.buf);
+			printbuf_exit(&buf);
+		}
+
 		ret =   bch2_insert_snapshot_whiteouts(trans, m->btree_id,
 						k.k->p, bkey_start_pos(&insert->k)) ?:
 			bch2_insert_snapshot_whiteouts(trans, m->btree_id,
@@ -278,8 +292,8 @@ restart_drop_extra_replicas:
 				BTREE_UPDATE_INTERNAL_SNAPSHOT_NODE) ?:
 			bch2_trans_commit(trans, &op->res,
 				NULL,
-				BTREE_INSERT_NOCHECK_RW|
-				BTREE_INSERT_NOFAIL|
+				BCH_TRANS_COMMIT_no_check_rw|
+				BCH_TRANS_COMMIT_no_enospc|
 				m->data_opts.btree_insert_flags);
 		if (!ret) {
 			bch2_btree_iter_set_pos(&iter, next_pos);
@@ -300,14 +314,14 @@ next:
 		}
 		continue;
 nowork:
-		if (m->stats && m->stats) {
+		if (m->stats) {
 			BUG_ON(k.k->p.offset <= iter.pos.offset);
 			atomic64_inc(&m->stats->keys_raced);
 			atomic64_add(k.k->p.offset - iter.pos.offset,
 				     &m->stats->sectors_raced);
 		}
 
-		this_cpu_inc(c->counters[BCH_COUNTER_move_extent_fail]);
+		count_event(c, move_extent_fail);
 
 		bch2_btree_iter_advance(&iter);
 		goto next;
@@ -476,7 +490,7 @@ int bch2_extent_drop_ptrs(struct btree_trans *trans,
 
 	return bch2_trans_relock(trans) ?:
 		bch2_trans_update(trans, iter, n, BTREE_UPDATE_INTERNAL_SNAPSHOT_NODE) ?:
-		bch2_trans_commit(trans, NULL, NULL, BTREE_INSERT_NOFAIL);
+		bch2_trans_commit(trans, NULL, NULL, BCH_TRANS_COMMIT_no_enospc);
 }
 
 int bch2_data_update_init(struct btree_trans *trans,
@@ -560,7 +574,8 @@ int bch2_data_update_init(struct btree_trans *trans,
 				move_ctxt_wait_event(ctxt,
 						(locked = bch2_bucket_nocow_trylock(&c->nocow_locks,
 									  PTR_BUCKET_POS(c, &p.ptr), 0)) ||
-						!atomic_read(&ctxt->read_sectors));
+						(!atomic_read(&ctxt->read_sectors) &&
+						 !atomic_read(&ctxt->write_sectors)));
 
 				if (!locked)
 					bch2_bucket_nocow_lock(&c->nocow_locks,

@@ -658,12 +658,13 @@ reread:
 	return 0;
 }
 
-int bch2_read_super(const char *path, struct bch_opts *opts,
-		    struct bch_sb_handle *sb)
+static int __bch2_read_super(const char *path, struct bch_opts *opts,
+		    struct bch_sb_handle *sb, bool ignore_notbchfs_msg)
 {
 	u64 offset = opt_get(*opts, sb);
 	struct bch_sb_layout layout;
 	struct printbuf err = PRINTBUF;
+	struct printbuf err2 = PRINTBUF;
 	__le64 *i;
 	int ret;
 #ifndef __KERNEL__
@@ -726,8 +727,14 @@ retry:
 	if (opt_defined(*opts, sb))
 		goto err;
 
-	printk(KERN_ERR "bcachefs (%s): error reading default superblock: %s\n",
+	prt_printf(&err2, "bcachefs (%s): error reading default superblock: %s\n",
 	       path, err.buf);
+	if (ret == -BCH_ERR_invalid_sb_magic && ignore_notbchfs_msg)
+		printk(KERN_INFO "%s", err2.buf);
+	else
+		printk(KERN_ERR "%s", err2.buf);
+
+	printbuf_exit(&err2);
 	printbuf_reset(&err);
 
 	/*
@@ -801,6 +808,20 @@ err:
 err_no_print:
 	bch2_free_super(sb);
 	goto out;
+}
+
+int bch2_read_super(const char *path, struct bch_opts *opts,
+		    struct bch_sb_handle *sb)
+{
+	return __bch2_read_super(path, opts, sb, false);
+}
+
+/* provide a silenced version for mount.bcachefs */
+
+int bch2_read_super_silent(const char *path, struct bch_opts *opts,
+		    struct bch_sb_handle *sb)
+{
+	return __bch2_read_super(path, opts, sb, true);
 }
 
 /* write superblock: */
@@ -895,9 +916,9 @@ int bch2_write_super(struct bch_fs *c)
 
 	le64_add_cpu(&c->disk_sb.sb->seq, 1);
 
-	if (test_bit(BCH_FS_ERROR, &c->flags))
+	if (test_bit(BCH_FS_error, &c->flags))
 		SET_BCH_SB_HAS_ERRORS(c->disk_sb.sb, 1);
-	if (test_bit(BCH_FS_TOPOLOGY_ERROR, &c->flags))
+	if (test_bit(BCH_FS_topology_error, &c->flags))
 		SET_BCH_SB_HAS_TOPOLOGY_ERRORS(c->disk_sb.sb, 1);
 
 	SET_BCH_SB_BIG_ENDIAN(c->disk_sb.sb, CPU_BIG_ENDIAN);

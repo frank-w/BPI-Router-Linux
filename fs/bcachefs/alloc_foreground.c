@@ -239,9 +239,8 @@ static struct open_bucket *__try_alloc_bucket(struct bch_fs *c, struct bch_dev *
 		if (cl)
 			closure_wait(&c->open_buckets_wait, cl);
 
-		if (!c->blocked_allocate_open_bucket)
-			c->blocked_allocate_open_bucket = local_clock();
-
+		track_event_change(&c->times[BCH_TIME_blocked_allocate_open_bucket],
+				   &c->blocked_allocate_open_bucket, true);
 		spin_unlock(&c->freelist_lock);
 		return ERR_PTR(-BCH_ERR_open_buckets_empty);
 	}
@@ -267,19 +266,11 @@ static struct open_bucket *__try_alloc_bucket(struct bch_fs *c, struct bch_dev *
 	ca->nr_open_buckets++;
 	bch2_open_bucket_hash_add(c, ob);
 
-	if (c->blocked_allocate_open_bucket) {
-		bch2_time_stats_update(
-			&c->times[BCH_TIME_blocked_allocate_open_bucket],
-			c->blocked_allocate_open_bucket);
-		c->blocked_allocate_open_bucket = 0;
-	}
+	track_event_change(&c->times[BCH_TIME_blocked_allocate_open_bucket],
+			   &c->blocked_allocate_open_bucket, false);
 
-	if (c->blocked_allocate) {
-		bch2_time_stats_update(
-			&c->times[BCH_TIME_blocked_allocate],
-			c->blocked_allocate);
-		c->blocked_allocate = 0;
-	}
+	track_event_change(&c->times[BCH_TIME_blocked_allocate],
+			   &c->blocked_allocate, false);
 
 	spin_unlock(&c->freelist_lock);
 	return ob;
@@ -377,9 +368,9 @@ static struct open_bucket *try_alloc_bucket(struct btree_trans *trans, struct bc
 
 	ob = __try_alloc_bucket(c, ca, b, watermark, a, s, cl);
 	if (!ob)
-		iter.path->preserve = false;
+		set_btree_iter_dontneed(&iter);
 err:
-	if (iter.trans && iter.path)
+	if (iter.path)
 		set_btree_iter_dontneed(&iter);
 	bch2_trans_iter_exit(trans, &iter);
 	printbuf_exit(&buf);
@@ -447,7 +438,7 @@ again:
 
 		ob = __try_alloc_bucket(trans->c, ca, k.k->p.offset, watermark, a, s, cl);
 next:
-		citer.path->preserve = false;
+		set_btree_iter_dontneed(&citer);
 		bch2_trans_iter_exit(trans, &citer);
 		if (ob)
 			break;
@@ -502,7 +493,7 @@ again:
 			ob = try_alloc_bucket(trans, ca, watermark,
 					      alloc_cursor, s, k, cl);
 			if (ob) {
-				iter.path->preserve = false;
+				set_btree_iter_dontneed(&iter);
 				break;
 			}
 		}
@@ -567,8 +558,8 @@ again:
 			goto again;
 		}
 
-		if (!c->blocked_allocate)
-			c->blocked_allocate = local_clock();
+		track_event_change(&c->times[BCH_TIME_blocked_allocate],
+				   &c->blocked_allocate, true);
 
 		ob = ERR_PTR(-BCH_ERR_freelist_empty);
 		goto err;
@@ -697,11 +688,9 @@ static int add_new_bucket(struct bch_fs *c,
 		bch_dev_bkey_exists(c, ob->dev)->mi.durability;
 
 	BUG_ON(*nr_effective >= nr_replicas);
-	BUG_ON(flags & BCH_WRITE_ONLY_SPECIFIED_DEVS);
 
 	__clear_bit(ob->dev, devs_may_alloc->d);
-	*nr_effective	+= (flags & BCH_WRITE_ONLY_SPECIFIED_DEVS)
-		? durability : 1;
+	*nr_effective	+= durability;
 	*have_cache	|= !durability;
 
 	ob_push(c, ptrs, ob);

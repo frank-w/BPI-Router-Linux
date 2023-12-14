@@ -203,6 +203,7 @@ static inline struct bch_dev_usage bch2_dev_usage_read(struct bch_dev *ca)
 }
 
 void bch2_dev_usage_init(struct bch_dev *);
+void bch2_dev_usage_to_text(struct printbuf *, struct bch_dev_usage *);
 
 static inline u64 bch2_dev_buckets_reserved(struct bch_dev *ca, enum bch_watermark watermark)
 {
@@ -315,6 +316,9 @@ static inline struct bch_fs_usage *fs_usage_ptr(struct bch_fs *c,
 			    : c->usage[journal_seq & JOURNAL_BUF_MASK]);
 }
 
+int bch2_update_replicas_list(struct btree_trans *,
+			 struct bch_replicas_entry_v1 *, s64);
+int bch2_update_cached_sectors_list(struct btree_trans *, unsigned, s64);
 int bch2_replicas_deltas_realloc(struct btree_trans *, unsigned);
 
 void bch2_fs_usage_initialize(struct bch_fs *);
@@ -331,14 +335,10 @@ int bch2_mark_stripe(struct btree_trans *, enum btree_id, unsigned,
 		     struct bkey_s_c, struct bkey_s_c, unsigned);
 int bch2_mark_reservation(struct btree_trans *, enum btree_id, unsigned,
 			  struct bkey_s_c, struct bkey_s_c, unsigned);
-int bch2_mark_reflink_p(struct btree_trans *, enum btree_id, unsigned,
-			struct bkey_s_c, struct bkey_s_c, unsigned);
 
 int bch2_trans_mark_extent(struct btree_trans *, enum btree_id, unsigned, struct bkey_s_c, struct bkey_i *, unsigned);
 int bch2_trans_mark_stripe(struct btree_trans *, enum btree_id, unsigned, struct bkey_s_c, struct bkey_i *, unsigned);
 int bch2_trans_mark_reservation(struct btree_trans *, enum btree_id, unsigned, struct bkey_s_c, struct bkey_i *, unsigned);
-int bch2_trans_mark_reflink_p(struct btree_trans *, enum btree_id, unsigned, struct bkey_s_c, struct bkey_i *, unsigned);
-
 #define mem_trigger_run_overwrite_then_insert(_fn, _trans, _btree_id, _level, _old, _new, _flags)\
 ({												\
 	int ret = 0;										\

@@ -91,7 +91,7 @@ static int bch2_bucket_is_movable(struct btree_trans *trans,
 
 	a = bch2_alloc_to_v4(k, &_a);
 	b->k.gen	= a->gen;
-	b->sectors	= a->dirty_sectors;
+	b->sectors	= bch2_bucket_sectors_dirty(*a);
 
 	ret = data_type_movable(a->data_type) &&
 		a->fragmentation_lru &&
@@ -153,8 +153,11 @@ static int bch2_copygc_get_buckets(struct moving_context *ctxt,
 
 	move_buckets_wait(ctxt, buckets_in_flight, false);
 
-	ret = bch2_btree_write_buffer_flush(trans);
-	if (bch2_fs_fatal_err_on(ret, c, "%s: error %s from bch2_btree_write_buffer_flush()",
+	ret = bch2_btree_write_buffer_tryflush(trans);
+	if (bch2_err_matches(ret, EROFS))
+		return ret;
+
+	if (bch2_fs_fatal_err_on(ret, c, "%s: error %s from bch2_btree_write_buffer_tryflush()",
 				 __func__, bch2_err_str(ret)))
 		return ret;
 
@@ -167,15 +170,23 @@ static int bch2_copygc_get_buckets(struct moving_context *ctxt,
 
 		saw++;
 
-		if (!bch2_bucket_is_movable(trans, &b, lru_pos_time(k.k->p)))
+		ret2 = bch2_bucket_is_movable(trans, &b, lru_pos_time(k.k->p));
+		if (ret2 < 0)
+			goto err;
+
+		if (!ret2)
 			not_movable++;
 		else if (bucket_in_flight(buckets_in_flight, b.k))
 			in_flight++;
 		else {
-			ret2 = darray_push(buckets, b) ?: buckets->nr >= nr_to_get;
-			if (ret2 >= 0)
-				sectors += b.sectors;
+			ret2 = darray_push(buckets, b);
+			if (ret2)
+				goto err;
+			sectors += b.sectors;
 		}
+
+		ret2 = buckets->nr >= nr_to_get;
+err:
 		ret2;
 	}));
 
@@ -221,7 +232,7 @@ static int bch2_copygc(struct moving_context *ctxt,
 			break;
 		}
 
-		ret = __bch2_evacuate_bucket(ctxt, f, f->bucket.k.bucket,
+		ret = bch2_evacuate_bucket(ctxt, f, f->bucket.k.bucket,
 					     f->bucket.k.gen, data_opts);
 		if (ret)
 			goto err;
@@ -334,7 +345,8 @@ static int bch2_copygc_thread(void *arg)
 
 		if (!c->copy_gc_enabled) {
 			move_buckets_wait(&ctxt, buckets, true);
-			kthread_wait_freezable(c->copy_gc_enabled);
+			kthread_wait_freezable(c->copy_gc_enabled ||
+					       kthread_should_stop());
 		}
 
 		if (unlikely(freezing(current))) {

@@ -7,6 +7,7 @@
 #include "chardev.h"
 #include "journal.h"
 #include "move.h"
+#include "recovery.h"
 #include "replicas.h"
 #include "super.h"
 #include "super-io.h"
@@ -19,9 +20,75 @@
 #include <linux/ioctl.h>
 #include <linux/kthread.h>
 #include <linux/major.h>
+#include <linux/poll.h>
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+
+__must_check
+static int copy_to_user_errcode(void __user *to, const void *from, unsigned long n)
+{
+	return copy_to_user(to, from, n) ? -EFAULT : 0;
+}
+
+struct thread_with_file {
+	struct task_struct	*task;
+	int			ret;
+	bool			done;
+};
+
+static void thread_with_file_exit(struct thread_with_file *thr)
+{
+	if (thr->task) {
+		kthread_stop(thr->task);
+		put_task_struct(thr->task);
+	}
+}
+
+__printf(4, 0)
+static int run_thread_with_file(struct thread_with_file *thr,
+				const struct file_operations *fops,
+				int (*fn)(void *), const char *fmt, ...)
+{
+	va_list args;
+	struct file *file = NULL;
+	int ret, fd = -1;
+	struct printbuf name = PRINTBUF;
+	unsigned fd_flags = O_RDONLY|O_CLOEXEC|O_NONBLOCK;
+
+	va_start(args, fmt);
+	prt_vprintf(&name, fmt, args);
+	va_end(args);
+
+	thr->ret = 0;
+	thr->task = kthread_create(fn, thr, name.buf);
+	ret = PTR_ERR_OR_ZERO(thr->task);
+	if (ret)
+		goto err;
+
+	ret = get_unused_fd_flags(fd_flags);
+	if (ret < 0)
+		goto err_stop_task;
+	fd = ret;
+
+	file = anon_inode_getfile(name.buf, fops, thr, fd_flags);
+	ret = PTR_ERR_OR_ZERO(file);
+	if (ret)
+		goto err_put_fd;
+
+	fd_install(fd, file);
+	get_task_struct(thr->task);
+	wake_up_process(thr->task);
+	printbuf_exit(&name);
+	return fd;
+err_put_fd:
+	put_unused_fd(fd);
+err_stop_task:
+	kthread_stop(thr->task);
+err:
+	printbuf_exit(&name);
+	return ret;
+}
 
 /* returns with ref on ca->ref */
 static struct bch_dev *bch2_device_lookup(struct bch_fs *c, u64 dev,
@@ -132,8 +199,210 @@ static long bch2_ioctl_incremental(struct bch_ioctl_incremental __user *user_arg
 }
 #endif
 
+struct fsck_thread {
+	struct thread_with_file	thr;
+	struct printbuf		buf;
+	struct bch_fs		*c;
+	char			**devs;
+	size_t			nr_devs;
+	struct bch_opts		opts;
+
+	struct log_output	output;
+	DARRAY(char)		output2;
+};
+
+static void bch2_fsck_thread_free(struct fsck_thread *thr)
+{
+	thread_with_file_exit(&thr->thr);
+	if (thr->devs)
+		for (size_t i = 0; i < thr->nr_devs; i++)
+			kfree(thr->devs[i]);
+	darray_exit(&thr->output2);
+	printbuf_exit(&thr->output.buf);
+	kfree(thr->devs);
+	kfree(thr);
+}
+
+static int bch2_fsck_thread_release(struct inode *inode, struct file *file)
+{
+	struct fsck_thread *thr = container_of(file->private_data, struct fsck_thread, thr);
+
+	bch2_fsck_thread_free(thr);
+	return 0;
+}
+
+static bool fsck_thread_ready(struct fsck_thread *thr)
+{
+	return thr->output.buf.pos ||
+		thr->output2.nr ||
+		thr->thr.done;
+}
+
+static ssize_t bch2_fsck_thread_read(struct file *file, char __user *buf,
+				     size_t len, loff_t *ppos)
+{
+	struct fsck_thread *thr = container_of(file->private_data, struct fsck_thread, thr);
+	size_t copied = 0, b;
+	int ret = 0;
+
+	if ((file->f_flags & O_NONBLOCK) &&
+	    !fsck_thread_ready(thr))
+		return -EAGAIN;
+
+	ret = wait_event_interruptible(thr->output.wait,
+			fsck_thread_ready(thr));
+	if (ret)
+		return ret;
+
+	if (thr->thr.done)
+		return 0;
+
+	while (len) {
+		ret = darray_make_room(&thr->output2, thr->output.buf.pos);
+		if (ret)
+			break;
+
+		spin_lock_irq(&thr->output.lock);
+		b = min_t(size_t, darray_room(thr->output2), thr->output.buf.pos);
+
+		memcpy(&darray_top(thr->output2), thr->output.buf.buf, b);
+		memmove(thr->output.buf.buf,
+			thr->output.buf.buf + b,
+			thr->output.buf.pos - b);
+
+		thr->output2.nr += b;
+		thr->output.buf.pos -= b;
+		spin_unlock_irq(&thr->output.lock);
+
+		b = min(len, thr->output2.nr);
+		if (!b)
+			break;
+
+		b -= copy_to_user(buf, thr->output2.data, b);
+		if (!b) {
+			ret = -EFAULT;
+			break;
+		}
+
+		copied	+= b;
+		buf	+= b;
+		len	-= b;
+
+		memmove(thr->output2.data,
+			thr->output2.data + b,
+			thr->output2.nr - b);
+		thr->output2.nr -= b;
+	}
+
+	return copied ?: ret;
+}
+
+static __poll_t bch2_fsck_thread_poll(struct file *file, struct poll_table_struct *wait)
+{
+	struct fsck_thread *thr = container_of(file->private_data, struct fsck_thread, thr);
+
+	poll_wait(file, &thr->output.wait, wait);
+
+	return fsck_thread_ready(thr)
+		? EPOLLIN|EPOLLHUP
+		: 0;
+}
+
+static const struct file_operations fsck_thread_ops = {
+	.release	= bch2_fsck_thread_release,
+	.read		= bch2_fsck_thread_read,
+	.poll		= bch2_fsck_thread_poll,
+	.llseek		= no_llseek,
+};
+
+static int bch2_fsck_offline_thread_fn(void *arg)
+{
+	struct fsck_thread *thr = container_of(arg, struct fsck_thread, thr);
+	struct bch_fs *c = bch2_fs_open(thr->devs, thr->nr_devs, thr->opts);
+
+	thr->thr.ret = PTR_ERR_OR_ZERO(c);
+	if (!thr->thr.ret)
+		bch2_fs_stop(c);
+
+	thr->thr.done = true;
+	wake_up(&thr->output.wait);
+	return 0;
+}
+
+static long bch2_ioctl_fsck_offline(struct bch_ioctl_fsck_offline __user *user_arg)
+{
+	struct bch_ioctl_fsck_offline arg;
+	struct fsck_thread *thr = NULL;
+	u64 *devs = NULL;
+	long ret = 0;
+
+	if (copy_from_user(&arg, user_arg, sizeof(arg)))
+		return -EFAULT;
+
+	if (arg.flags)
+		return -EINVAL;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (!(devs = kcalloc(arg.nr_devs, sizeof(*devs), GFP_KERNEL)) ||
+	    !(thr = kzalloc(sizeof(*thr), GFP_KERNEL)) ||
+	    !(thr->devs = kcalloc(arg.nr_devs, sizeof(*thr->devs), GFP_KERNEL))) {
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	thr->opts = bch2_opts_empty();
+	thr->nr_devs = arg.nr_devs;
+	thr->output.buf	= PRINTBUF;
+	thr->output.buf.atomic++;
+	spin_lock_init(&thr->output.lock);
+	init_waitqueue_head(&thr->output.wait);
+	darray_init(&thr->output2);
+
+	if (copy_from_user(devs, &user_arg->devs[0], sizeof(user_arg->devs[0]) * arg.nr_devs)) {
+		ret = -EINVAL;
+		goto err;
+	}
+
+	for (size_t i = 0; i < arg.nr_devs; i++) {
+		thr->devs[i] = strndup_user((char __user *)(unsigned long) devs[i], PATH_MAX);
+		ret = PTR_ERR_OR_ZERO(thr->devs[i]);
+		if (ret)
+			goto err;
+	}
+
+	if (arg.opts) {
+		char *optstr = strndup_user((char __user *)(unsigned long) arg.opts, 1 << 16);
+
+		ret =   PTR_ERR_OR_ZERO(optstr) ?:
+			bch2_parse_mount_opts(NULL, &thr->opts, optstr);
+		kfree(optstr);
+
+		if (ret)
+			goto err;
+	}
+
+	opt_set(thr->opts, log_output, (u64)(unsigned long)&thr->output);
+
+	ret = run_thread_with_file(&thr->thr,
+				   &fsck_thread_ops,
+				   bch2_fsck_offline_thread_fn,
+				   "bch-fsck");
+err:
+	if (ret < 0) {
+		if (thr)
+			bch2_fsck_thread_free(thr);
+		pr_err("ret %s", bch2_err_str(ret));
+	}
+	kfree(devs);
+	return ret;
+}
+
 static long bch2_global_ioctl(unsigned cmd, void __user *arg)
 {
+	long ret;
+
 	switch (cmd) {
 #if 0
 	case BCH_IOCTL_ASSEMBLE:
@@ -141,18 +410,25 @@ static long bch2_global_ioctl(unsigned cmd, void __user *arg)
 	case BCH_IOCTL_INCREMENTAL:
 		return bch2_ioctl_incremental(arg);
 #endif
-	default:
-		return -ENOTTY;
+	case BCH_IOCTL_FSCK_OFFLINE: {
+		ret = bch2_ioctl_fsck_offline(arg);
+		break;
 	}
+	default:
+		ret = -ENOTTY;
+		break;
+	}
+
+	if (ret < 0)
+		ret = bch2_err_class(ret);
+	return ret;
 }
 
 static long bch2_ioctl_query_uuid(struct bch_fs *c,
 			struct bch_ioctl_query_uuid __user *user_arg)
 {
-	if (copy_to_user(&user_arg->uuid, &c->sb.user_uuid,
-			 sizeof(c->sb.user_uuid)))
-		return -EFAULT;
-	return 0;
+	return copy_to_user_errcode(&user_arg->uuid, &c->sb.user_uuid,
+				    sizeof(c->sb.user_uuid));
 }
 
 #if 0
@@ -295,31 +571,27 @@ static long bch2_ioctl_disk_set_state(struct bch_fs *c,
 }
 
 struct bch_data_ctx {
+	struct thread_with_file		thr;
+
 	struct bch_fs			*c;
 	struct bch_ioctl_data		arg;
 	struct bch_move_stats		stats;
-
-	int				ret;
-
-	struct task_struct		*thread;
 };
 
 static int bch2_data_thread(void *arg)
 {
-	struct bch_data_ctx *ctx = arg;
+	struct bch_data_ctx *ctx = container_of(arg, struct bch_data_ctx, thr);
 
-	ctx->ret = bch2_data_job(ctx->c, &ctx->stats, ctx->arg);
-
+	ctx->thr.ret = bch2_data_job(ctx->c, &ctx->stats, ctx->arg);
 	ctx->stats.data_type = U8_MAX;
 	return 0;
 }
 
 static int bch2_data_job_release(struct inode *inode, struct file *file)
 {
-	struct bch_data_ctx *ctx = file->private_data;
+	struct bch_data_ctx *ctx = container_of(file->private_data, struct bch_data_ctx, thr);
 
-	kthread_stop(ctx->thread);
-	put_task_struct(ctx->thread);
+	thread_with_file_exit(&ctx->thr);
 	kfree(ctx);
 	return 0;
 }
@@ -327,7 +599,7 @@ static int bch2_data_job_release(struct inode *inode, struct file *file)
 static ssize_t bch2_data_job_read(struct file *file, char __user *buf,
 				  size_t len, loff_t *ppos)
 {
-	struct bch_data_ctx *ctx = file->private_data;
+	struct bch_data_ctx *ctx = container_of(file->private_data, struct bch_data_ctx, thr);
 	struct bch_fs *c = ctx->c;
 	struct bch_ioctl_data_event e = {
 		.type			= BCH_DATA_EVENT_PROGRESS,
@@ -341,10 +613,7 @@ static ssize_t bch2_data_job_read(struct file *file, char __user *buf,
 	if (len < sizeof(e))
 		return -EINVAL;
 
-	if (copy_to_user(buf, &e, sizeof(e)))
-		return -EFAULT;
-
-	return sizeof(e);
+	return copy_to_user_errcode(buf, &e, sizeof(e)) ?: sizeof(e);
 }
 
 static const struct file_operations bcachefs_data_ops = {
@@ -356,10 +625,8 @@ static const struct file_operations bcachefs_data_ops = {
 static long bch2_ioctl_data(struct bch_fs *c,
 			    struct bch_ioctl_data arg)
 {
-	struct bch_data_ctx *ctx = NULL;
-	struct file *file = NULL;
-	unsigned flags = O_RDONLY|O_CLOEXEC|O_NONBLOCK;
-	int ret, fd = -1;
+	struct bch_data_ctx *ctx;
+	int ret;
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
@@ -374,36 +641,12 @@ static long bch2_ioctl_data(struct bch_fs *c,
 	ctx->c = c;
 	ctx->arg = arg;
 
-	ctx->thread = kthread_create(bch2_data_thread, ctx,
-				     "bch-data/%s", c->name);
-	if (IS_ERR(ctx->thread)) {
-		ret = PTR_ERR(ctx->thread);
-		goto err;
-	}
-
-	ret = get_unused_fd_flags(flags);
+	ret = run_thread_with_file(&ctx->thr,
+				   &bcachefs_data_ops,
+				   bch2_data_thread,
+				   "bch-data/%s", c->name);
 	if (ret < 0)
-		goto err;
-	fd = ret;
-
-	file = anon_inode_getfile("[bcachefs]", &bcachefs_data_ops, ctx, flags);
-	if (IS_ERR(file)) {
-		ret = PTR_ERR(file);
-		goto err;
-	}
-
-	fd_install(fd, file);
-
-	get_task_struct(ctx->thread);
-	wake_up_process(ctx->thread);
-
-	return fd;
-err:
-	if (fd >= 0)
-		put_unused_fd(fd);
-	if (!IS_ERR_OR_NULL(ctx->thread))
-		kthread_stop(ctx->thread);
-	kfree(ctx);
+		kfree(ctx);
 	return ret;
 }
 
@@ -417,7 +660,7 @@ static long bch2_ioctl_fs_usage(struct bch_fs *c,
 	unsigned i;
 	int ret = 0;
 
-	if (!test_bit(BCH_FS_STARTED, &c->flags))
+	if (!test_bit(BCH_FS_started, &c->flags))
 		return -EINVAL;
 
 	if (get_user(replica_entries_bytes, &user_arg->replica_entries_bytes))
@@ -444,7 +687,7 @@ static long bch2_ioctl_fs_usage(struct bch_fs *c,
 	dst_end = (void *) arg->replicas + replica_entries_bytes;
 
 	for (i = 0; i < c->replicas.nr; i++) {
-		struct bch_replicas_entry *src_e =
+		struct bch_replicas_entry_v1 *src_e =
 			cpu_replicas_entry(&c->replicas, i);
 
 		/* check that we have enough space for one replicas entry */
@@ -474,14 +717,15 @@ static long bch2_ioctl_fs_usage(struct bch_fs *c,
 
 	if (ret)
 		goto err;
-	if (copy_to_user(user_arg, arg,
-			 sizeof(*arg) + arg->replica_entries_bytes))
-		ret = -EFAULT;
+
+	ret = copy_to_user_errcode(user_arg, arg,
+			sizeof(*arg) + arg->replica_entries_bytes);
 err:
 	kfree(arg);
 	return ret;
 }
 
+/* obsolete, didn't allow for new data types: */
 static long bch2_ioctl_dev_usage(struct bch_fs *c,
 				 struct bch_ioctl_dev_usage __user *user_arg)
 {
@@ -490,7 +734,7 @@ static long bch2_ioctl_dev_usage(struct bch_fs *c,
 	struct bch_dev *ca;
 	unsigned i;
 
-	if (!test_bit(BCH_FS_STARTED, &c->flags))
+	if (!test_bit(BCH_FS_started, &c->flags))
 		return -EINVAL;
 
 	if (copy_from_user(&arg, user_arg, sizeof(arg)))
@@ -511,7 +755,6 @@ static long bch2_ioctl_dev_usage(struct bch_fs *c,
 	arg.state		= ca->mi.state;
 	arg.bucket_size		= ca->mi.bucket_size;
 	arg.nr_buckets		= ca->mi.nbuckets - ca->mi.first_bucket;
-	arg.buckets_ec		= src.buckets_ec;
 
 	for (i = 0; i < BCH_DATA_NR; i++) {
 		arg.d[i].buckets	= src.d[i].buckets;
@@ -521,10 +764,58 @@ static long bch2_ioctl_dev_usage(struct bch_fs *c,
 
 	percpu_ref_put(&ca->ref);
 
-	if (copy_to_user(user_arg, &arg, sizeof(arg)))
+	return copy_to_user_errcode(user_arg, &arg, sizeof(arg));
+}
+
+static long bch2_ioctl_dev_usage_v2(struct bch_fs *c,
+				 struct bch_ioctl_dev_usage_v2 __user *user_arg)
+{
+	struct bch_ioctl_dev_usage_v2 arg;
+	struct bch_dev_usage src;
+	struct bch_dev *ca;
+	int ret = 0;
+
+	if (!test_bit(BCH_FS_started, &c->flags))
+		return -EINVAL;
+
+	if (copy_from_user(&arg, user_arg, sizeof(arg)))
 		return -EFAULT;
 
-	return 0;
+	if ((arg.flags & ~BCH_BY_INDEX) ||
+	    arg.pad[0] ||
+	    arg.pad[1] ||
+	    arg.pad[2])
+		return -EINVAL;
+
+	ca = bch2_device_lookup(c, arg.dev, arg.flags);
+	if (IS_ERR(ca))
+		return PTR_ERR(ca);
+
+	src = bch2_dev_usage_read(ca);
+
+	arg.state		= ca->mi.state;
+	arg.bucket_size		= ca->mi.bucket_size;
+	arg.nr_data_types	= min(arg.nr_data_types, BCH_DATA_NR);
+	arg.nr_buckets		= ca->mi.nbuckets - ca->mi.first_bucket;
+
+	ret = copy_to_user_errcode(user_arg, &arg, sizeof(arg));
+	if (ret)
+		goto err;
+
+	for (unsigned i = 0; i < arg.nr_data_types; i++) {
+		struct bch_ioctl_dev_usage_type t = {
+			.buckets	= src.d[i].buckets,
+			.sectors	= src.d[i].sectors,
+			.fragmented	= src.d[i].fragmented,
+		};
+
+		ret = copy_to_user_errcode(&user_arg->d[i], &t, sizeof(t));
+		if (ret)
+			goto err;
+	}
+err:
+	percpu_ref_put(&ca->ref);
+	return ret;
 }
 
 static long bch2_ioctl_read_super(struct bch_fs *c,
@@ -561,9 +852,8 @@ static long bch2_ioctl_read_super(struct bch_fs *c,
 		goto err;
 	}
 
-	if (copy_to_user((void __user *)(unsigned long)arg.sb, sb,
-			 vstruct_bytes(sb)))
-		ret = -EFAULT;
+	ret = copy_to_user_errcode((void __user *)(unsigned long)arg.sb, sb,
+				   vstruct_bytes(sb));
 err:
 	if (!IS_ERR_OR_NULL(ca))
 		percpu_ref_put(&ca->ref);
@@ -642,6 +932,95 @@ static long bch2_ioctl_disk_resize_journal(struct bch_fs *c,
 	return ret;
 }
 
+static int bch2_fsck_online_thread_fn(void *arg)
+{
+	struct fsck_thread *thr = container_of(arg, struct fsck_thread, thr);
+	struct bch_fs *c = thr->c;
+
+	c->output_filter = current;
+	c->output = &thr->output;
+
+	/*
+	 * XXX: can we figure out a way to do this without mucking with c->opts?
+	 */
+	if (opt_defined(thr->opts, fix_errors))
+		c->opts.fix_errors = thr->opts.fix_errors;
+	c->opts.fsck = true;
+
+	c->curr_recovery_pass = BCH_RECOVERY_PASS_check_alloc_info;
+	bch2_run_online_recovery_passes(c);
+
+	c->output = NULL;
+	c->output_filter = NULL;
+
+	thr->thr.done = true;
+	wake_up(&thr->output.wait);
+
+	up(&c->online_fsck_mutex);
+	bch2_ro_ref_put(c);
+	return 0;
+}
+
+static long bch2_ioctl_fsck_online(struct bch_fs *c,
+				   struct bch_ioctl_fsck_online arg)
+{
+	struct fsck_thread *thr = NULL;
+	long ret = 0;
+
+	if (arg.flags)
+		return -EINVAL;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (!bch2_ro_ref_tryget(c))
+		return -EROFS;
+
+	if (down_trylock(&c->online_fsck_mutex)) {
+		bch2_ro_ref_put(c);
+		return -EAGAIN;
+	}
+
+	thr = kzalloc(sizeof(*thr), GFP_KERNEL);
+	if (!thr) {
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	thr->c = c;
+	thr->opts = bch2_opts_empty();
+	thr->output.buf	= PRINTBUF;
+	thr->output.buf.atomic++;
+	spin_lock_init(&thr->output.lock);
+	init_waitqueue_head(&thr->output.wait);
+	darray_init(&thr->output2);
+
+	if (arg.opts) {
+		char *optstr = strndup_user((char __user *)(unsigned long) arg.opts, 1 << 16);
+
+		ret =   PTR_ERR_OR_ZERO(optstr) ?:
+			bch2_parse_mount_opts(c, &thr->opts, optstr);
+		kfree(optstr);
+
+		if (ret)
+			goto err;
+	}
+
+	ret = run_thread_with_file(&thr->thr,
+				   &fsck_thread_ops,
+				   bch2_fsck_online_thread_fn,
+				   "bch-fsck");
+err:
+	if (ret < 0) {
+		bch_err_fn(c, ret);
+		if (thr)
+			bch2_fsck_thread_free(thr);
+		up(&c->online_fsck_mutex);
+		bch2_ro_ref_put(c);
+	}
+	return ret;
+}
+
 #define BCH_IOCTL(_name, _argtype)					\
 do {									\
 	_argtype i;							\
@@ -663,6 +1042,8 @@ long bch2_fs_ioctl(struct bch_fs *c, unsigned cmd, void __user *arg)
 		return bch2_ioctl_fs_usage(c, arg);
 	case BCH_IOCTL_DEV_USAGE:
 		return bch2_ioctl_dev_usage(c, arg);
+	case BCH_IOCTL_DEV_USAGE_V2:
+		return bch2_ioctl_dev_usage_v2(c, arg);
 #if 0
 	case BCH_IOCTL_START:
 		BCH_IOCTL(start, struct bch_ioctl_start);
@@ -675,7 +1056,7 @@ long bch2_fs_ioctl(struct bch_fs *c, unsigned cmd, void __user *arg)
 		BCH_IOCTL(disk_get_idx, struct bch_ioctl_disk_get_idx);
 	}
 
-	if (!test_bit(BCH_FS_STARTED, &c->flags))
+	if (!test_bit(BCH_FS_started, &c->flags))
 		return -EINVAL;
 
 	switch (cmd) {
@@ -695,7 +1076,8 @@ long bch2_fs_ioctl(struct bch_fs *c, unsigned cmd, void __user *arg)
 		BCH_IOCTL(disk_resize, struct bch_ioctl_disk_resize);
 	case BCH_IOCTL_DISK_RESIZE_JOURNAL:
 		BCH_IOCTL(disk_resize_journal, struct bch_ioctl_disk_resize_journal);
-
+	case BCH_IOCTL_FSCK_ONLINE:
+		BCH_IOCTL(fsck_online, struct bch_ioctl_fsck_online);
 	default:
 		return -ENOTTY;
 	}

@@ -72,6 +72,45 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kent Overstreet <kent.overstreet@gmail.com>");
 MODULE_DESCRIPTION("bcachefs filesystem");
+MODULE_SOFTDEP("pre: crc32c");
+MODULE_SOFTDEP("pre: crc64");
+MODULE_SOFTDEP("pre: sha256");
+MODULE_SOFTDEP("pre: chacha20");
+MODULE_SOFTDEP("pre: poly1305");
+MODULE_SOFTDEP("pre: xxhash");
+
+const char * const bch2_fs_flag_strs[] = {
+#define x(n)		#n,
+	BCH_FS_FLAGS()
+#undef x
+	NULL
+};
+
+void __bch2_print(struct bch_fs *c, const char *fmt, ...)
+{
+	struct log_output *output = c->output;
+	va_list args;
+
+	if (c->output_filter && c->output_filter != current)
+		output = NULL;
+
+	va_start(args, fmt);
+	if (likely(!output)) {
+		vprintk(fmt, args);
+	} else {
+		unsigned long flags;
+
+		if (fmt[0] == KERN_SOH[0])
+			fmt += 2;
+
+		spin_lock_irqsave(&output->lock, flags);
+		prt_vprintf(&output->buf, fmt, args);
+		spin_unlock_irqrestore(&output->lock, flags);
+
+		wake_up(&output->wait);
+	}
+	va_end(args);
+}
 
 #define KTYPE(type)							\
 static const struct attribute_group type ## _group = {			\
@@ -240,8 +279,8 @@ static void __bch2_fs_read_only(struct bch_fs *c)
 		    journal_cur_seq(&c->journal));
 
 	if (test_bit(JOURNAL_REPLAY_DONE, &c->journal.flags) &&
-	    !test_bit(BCH_FS_EMERGENCY_RO, &c->flags))
-		set_bit(BCH_FS_CLEAN_SHUTDOWN, &c->flags);
+	    !test_bit(BCH_FS_emergency_ro, &c->flags))
+		set_bit(BCH_FS_clean_shutdown, &c->flags);
 	bch2_fs_journal_stop(&c->journal);
 
 	/*
@@ -256,25 +295,27 @@ static void bch2_writes_disabled(struct percpu_ref *writes)
 {
 	struct bch_fs *c = container_of(writes, struct bch_fs, writes);
 
-	set_bit(BCH_FS_WRITE_DISABLE_COMPLETE, &c->flags);
+	set_bit(BCH_FS_write_disable_complete, &c->flags);
 	wake_up(&bch2_read_only_wait);
 }
 #endif
 
 void bch2_fs_read_only(struct bch_fs *c)
 {
-	if (!test_bit(BCH_FS_RW, &c->flags)) {
+	if (!test_bit(BCH_FS_rw, &c->flags)) {
 		bch2_journal_reclaim_stop(&c->journal);
 		return;
 	}
 
-	BUG_ON(test_bit(BCH_FS_WRITE_DISABLE_COMPLETE, &c->flags));
+	BUG_ON(test_bit(BCH_FS_write_disable_complete, &c->flags));
+
+	bch_verbose(c, "going read-only");
 
 	/*
 	 * Block new foreground-end write operations from starting - any new
 	 * writes will return -EROFS:
 	 */
-	set_bit(BCH_FS_GOING_RO, &c->flags);
+	set_bit(BCH_FS_going_ro, &c->flags);
 #ifndef BCH_WRITE_REF_DEBUG
 	percpu_ref_kill(&c->writes);
 #else
@@ -294,33 +335,42 @@ void bch2_fs_read_only(struct bch_fs *c)
 	 * that going RO is complete:
 	 */
 	wait_event(bch2_read_only_wait,
-		   test_bit(BCH_FS_WRITE_DISABLE_COMPLETE, &c->flags) ||
-		   test_bit(BCH_FS_EMERGENCY_RO, &c->flags));
+		   test_bit(BCH_FS_write_disable_complete, &c->flags) ||
+		   test_bit(BCH_FS_emergency_ro, &c->flags));
+
+	bool writes_disabled = test_bit(BCH_FS_write_disable_complete, &c->flags);
+	if (writes_disabled)
+		bch_verbose(c, "finished waiting for writes to stop");
 
 	__bch2_fs_read_only(c);
 
 	wait_event(bch2_read_only_wait,
-		   test_bit(BCH_FS_WRITE_DISABLE_COMPLETE, &c->flags));
+		   test_bit(BCH_FS_write_disable_complete, &c->flags));
 
-	clear_bit(BCH_FS_WRITE_DISABLE_COMPLETE, &c->flags);
-	clear_bit(BCH_FS_GOING_RO, &c->flags);
+	if (!writes_disabled)
+		bch_verbose(c, "finished waiting for writes to stop");
+
+	clear_bit(BCH_FS_write_disable_complete, &c->flags);
+	clear_bit(BCH_FS_going_ro, &c->flags);
+	clear_bit(BCH_FS_rw, &c->flags);
 
 	if (!bch2_journal_error(&c->journal) &&
-	    !test_bit(BCH_FS_ERROR, &c->flags) &&
-	    !test_bit(BCH_FS_EMERGENCY_RO, &c->flags) &&
-	    test_bit(BCH_FS_STARTED, &c->flags) &&
-	    test_bit(BCH_FS_CLEAN_SHUTDOWN, &c->flags) &&
+	    !test_bit(BCH_FS_error, &c->flags) &&
+	    !test_bit(BCH_FS_emergency_ro, &c->flags) &&
+	    test_bit(BCH_FS_started, &c->flags) &&
+	    test_bit(BCH_FS_clean_shutdown, &c->flags) &&
 	    !c->opts.norecovery) {
 		BUG_ON(c->journal.last_empty_seq != journal_cur_seq(&c->journal));
 		BUG_ON(atomic_read(&c->btree_cache.dirty));
 		BUG_ON(atomic_long_read(&c->btree_key_cache.nr_dirty));
-		BUG_ON(c->btree_write_buffer.state.nr);
+		BUG_ON(c->btree_write_buffer.inc.keys.nr);
+		BUG_ON(c->btree_write_buffer.flushing.keys.nr);
 
 		bch_verbose(c, "marking filesystem clean");
 		bch2_fs_mark_clean(c);
+	} else {
+		bch_verbose(c, "done going read-only, filesystem not clean");
 	}
-
-	clear_bit(BCH_FS_RW, &c->flags);
 }
 
 static void bch2_fs_read_only_work(struct work_struct *work)
@@ -340,7 +390,7 @@ static void bch2_fs_read_only_async(struct bch_fs *c)
 
 bool bch2_fs_emergency_read_only(struct bch_fs *c)
 {
-	bool ret = !test_and_set_bit(BCH_FS_EMERGENCY_RO, &c->flags);
+	bool ret = !test_and_set_bit(BCH_FS_emergency_ro, &c->flags);
 
 	bch2_journal_halt(&c->journal);
 	bch2_fs_read_only_async(c);
@@ -381,12 +431,12 @@ static int __bch2_fs_read_write(struct bch_fs *c, bool early)
 	unsigned i;
 	int ret;
 
-	if (test_bit(BCH_FS_INITIAL_GC_UNFIXED, &c->flags)) {
+	if (test_bit(BCH_FS_initial_gc_unfixed, &c->flags)) {
 		bch_err(c, "cannot go rw, unfixed btree errors");
 		return -BCH_ERR_erofs_unfixed_errors;
 	}
 
-	if (test_bit(BCH_FS_RW, &c->flags))
+	if (test_bit(BCH_FS_rw, &c->flags))
 		return 0;
 
 	if (c->opts.norecovery)
@@ -409,7 +459,7 @@ static int __bch2_fs_read_write(struct bch_fs *c, bool early)
 	if (ret)
 		goto err;
 
-	clear_bit(BCH_FS_CLEAN_SHUTDOWN, &c->flags);
+	clear_bit(BCH_FS_clean_shutdown, &c->flags);
 
 	/*
 	 * First journal write must be a flush write: after a clean shutdown we
@@ -423,8 +473,8 @@ static int __bch2_fs_read_write(struct bch_fs *c, bool early)
 		bch2_dev_allocator_add(c, ca);
 	bch2_recalc_capacity(c);
 
-	set_bit(BCH_FS_RW, &c->flags);
-	set_bit(BCH_FS_WAS_RW, &c->flags);
+	set_bit(BCH_FS_rw, &c->flags);
+	set_bit(BCH_FS_was_rw, &c->flags);
 
 #ifndef BCH_WRITE_REF_DEBUG
 	percpu_ref_reinit(&c->writes);
@@ -457,7 +507,7 @@ static int __bch2_fs_read_write(struct bch_fs *c, bool early)
 	bch2_do_pending_node_rewrites(c);
 	return 0;
 err:
-	if (test_bit(BCH_FS_RW, &c->flags))
+	if (test_bit(BCH_FS_rw, &c->flags))
 		bch2_fs_read_only(c);
 	else
 		__bch2_fs_read_only(c);
@@ -557,7 +607,7 @@ void __bch2_fs_stop(struct bch_fs *c)
 
 	bch_verbose(c, "shutting down");
 
-	set_bit(BCH_FS_STOPPING, &c->flags);
+	set_bit(BCH_FS_stopping, &c->flags);
 
 	cancel_work_sync(&c->journal_seq_blacklist_gc_work);
 
@@ -575,6 +625,9 @@ void __bch2_fs_stop(struct bch_fs *c)
 
 	bch2_fs_debug_exit(c);
 	bch2_fs_chardev_exit(c);
+
+	bch2_ro_ref_put(c);
+	wait_event(c->ro_ref_wait, !refcount_read(&c->ro_ref));
 
 	kobject_put(&c->counters_kobj);
 	kobject_put(&c->time_stats);
@@ -645,7 +698,9 @@ static int bch2_fs_online(struct bch_fs *c)
 	ret = kobject_add(&c->kobj, NULL, "%pU", c->sb.user_uuid.b) ?:
 	    kobject_add(&c->internal, &c->kobj, "internal") ?:
 	    kobject_add(&c->opts_dir, &c->kobj, "options") ?:
+#ifndef CONFIG_BCACHEFS_NO_LATENCY_ACCT
 	    kobject_add(&c->time_stats, &c->kobj, "time_stats") ?:
+#endif
 	    kobject_add(&c->counters_kobj, &c->kobj, "counters") ?:
 	    bch2_opts_create_sysfs_files(&c->opts_dir);
 	if (ret) {
@@ -684,6 +739,8 @@ static struct bch_fs *bch2_fs_alloc(struct bch_sb *sb, struct bch_opts opts)
 		goto out;
 	}
 
+	c->output = (void *)(unsigned long) opts.log_output;
+
 	__module_get(THIS_MODULE);
 
 	closure_init(&c->cl, NULL);
@@ -704,6 +761,10 @@ static struct bch_fs *bch2_fs_alloc(struct bch_sb *sb, struct bch_opts opts)
 	mutex_init(&c->btree_root_lock);
 	INIT_WORK(&c->read_only_work, bch2_fs_read_only_work);
 
+	refcount_set(&c->ro_ref, 1);
+	init_waitqueue_head(&c->ro_ref_wait);
+	sema_init(&c->online_fsck_mutex, 1);
+
 	init_rwsem(&c->gc_lock);
 	mutex_init(&c->gc_gens_lock);
 	atomic_set(&c->journal_keys.ref, 1);
@@ -714,6 +775,7 @@ static struct bch_fs *bch2_fs_alloc(struct bch_sb *sb, struct bch_opts opts)
 
 	bch2_fs_copygc_init(c);
 	bch2_fs_btree_key_cache_init_early(&c->btree_key_cache);
+	bch2_fs_btree_iter_init_early(c);
 	bch2_fs_btree_interior_update_init_early(c);
 	bch2_fs_allocator_background_init(c);
 	bch2_fs_allocator_foreground_init(c);
@@ -756,7 +818,6 @@ static struct bch_fs *bch2_fs_alloc(struct bch_sb *sb, struct bch_opts opts)
 
 	c->journal.flush_write_time	= &c->times[BCH_TIME_journal_flush_write];
 	c->journal.noflush_write_time	= &c->times[BCH_TIME_journal_noflush_write];
-	c->journal.blocked_time		= &c->times[BCH_TIME_blocked_journal];
 	c->journal.flush_seq_time	= &c->times[BCH_TIME_journal_flush_seq];
 
 	bch2_fs_btree_cache_init_early(&c->btree_cache);
@@ -948,7 +1009,7 @@ int bch2_fs_start(struct bch_fs *c)
 
 	down_write(&c->state_lock);
 
-	BUG_ON(test_bit(BCH_FS_STARTED, &c->flags));
+	BUG_ON(test_bit(BCH_FS_started, &c->flags));
 
 	mutex_lock(&c->sb_lock);
 
@@ -983,12 +1044,12 @@ int bch2_fs_start(struct bch_fs *c)
 		goto err;
 	}
 
-	set_bit(BCH_FS_STARTED, &c->flags);
+	set_bit(BCH_FS_started, &c->flags);
 
 	if (c->opts.read_only || c->opts.nochanges) {
 		bch2_fs_read_only(c);
 	} else {
-		ret = !test_bit(BCH_FS_RW, &c->flags)
+		ret = !test_bit(BCH_FS_rw, &c->flags)
 			? bch2_fs_read_write(c)
 			: bch2_fs_read_write_late(c);
 		if (ret)

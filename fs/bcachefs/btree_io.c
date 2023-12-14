@@ -968,12 +968,20 @@ int bch2_btree_node_read_done(struct bch_fs *c, struct bch_dev *ca,
 		struct bch_btree_ptr_v2 *bp =
 			&bkey_i_to_btree_ptr_v2(&b->key)->v;
 
+		bch2_bpos_to_text(&buf, b->data->min_key);
+		prt_str(&buf, "-");
+		bch2_bpos_to_text(&buf, b->data->max_key);
+
 		btree_err_on(b->data->keys.seq != bp->seq,
 			     -BCH_ERR_btree_node_read_err_must_retry,
 			     c, ca, b, NULL,
 			     btree_node_bad_seq,
-			     "got wrong btree node (seq %llx want %llx)",
-			     b->data->keys.seq, bp->seq);
+			     "got wrong btree node (want %llx got %llx)\n"
+			     "got btree %s level %llu pos %s",
+			     bp->seq, b->data->keys.seq,
+			     bch2_btree_id_str(BTREE_NODE_ID(b->data)),
+			     BTREE_NODE_LEVEL(b->data),
+			     buf.buf);
 	} else {
 		btree_err_on(!b->data->keys.seq,
 			     -BCH_ERR_btree_node_read_err_must_retry,
@@ -1575,16 +1583,17 @@ static int btree_node_read_all_replicas(struct bch_fs *c, struct btree *b, bool 
 	return 0;
 }
 
-void bch2_btree_node_read(struct bch_fs *c, struct btree *b,
+void bch2_btree_node_read(struct btree_trans *trans, struct btree *b,
 			  bool sync)
 {
+	struct bch_fs *c = trans->c;
 	struct extent_ptr_decoded pick;
 	struct btree_read_bio *rb;
 	struct bch_dev *ca;
 	struct bio *bio;
 	int ret;
 
-	trace_and_count(c, btree_node_read, c, b);
+	trace_and_count(c, btree_node_read, trans, b);
 
 	if (bch2_verify_all_btree_replicas &&
 	    !btree_node_read_all_replicas(c, b, sync))
@@ -1663,12 +1672,12 @@ static int __bch2_btree_root_read(struct btree_trans *trans, enum btree_id id,
 	closure_init_stack(&cl);
 
 	do {
-		ret = bch2_btree_cache_cannibalize_lock(c, &cl);
+		ret = bch2_btree_cache_cannibalize_lock(trans, &cl);
 		closure_sync(&cl);
 	} while (ret);
 
 	b = bch2_btree_node_mem_alloc(trans, level != 0);
-	bch2_btree_cache_cannibalize_unlock(c);
+	bch2_btree_cache_cannibalize_unlock(trans);
 
 	BUG_ON(IS_ERR(b));
 
@@ -1677,7 +1686,7 @@ static int __bch2_btree_root_read(struct btree_trans *trans, enum btree_id id,
 
 	set_btree_node_read_in_flight(b);
 
-	bch2_btree_node_read(c, b, true);
+	bch2_btree_node_read(trans, b, true);
 
 	if (btree_node_read_error(b)) {
 		bch2_btree_node_hash_remove(&c->btree_cache, b);
@@ -1800,9 +1809,9 @@ static void btree_node_write_work(struct work_struct *work)
 		ret = bch2_trans_do(c, NULL, NULL, 0,
 			bch2_btree_node_update_key_get_iter(trans, b, &wbio->key,
 					BCH_WATERMARK_reclaim|
-					BTREE_INSERT_JOURNAL_RECLAIM|
-					BTREE_INSERT_NOFAIL|
-					BTREE_INSERT_NOCHECK_RW,
+					BCH_TRANS_COMMIT_journal_reclaim|
+					BCH_TRANS_COMMIT_no_enospc|
+					BCH_TRANS_COMMIT_no_check_rw,
 					!wbio->wbio.failed.nr));
 		if (ret)
 			goto err;
@@ -2005,6 +2014,29 @@ do_write:
 
 	/* buffer must be a multiple of the block size */
 	bytes = round_up(bytes, block_bytes(c));
+
+	if (bytes > btree_bytes(c)) {
+		struct printbuf buf = PRINTBUF;
+
+		prt_printf(&buf, "btree node write bounce buffer overrun: %u > %zu\n",
+			   bytes, btree_bytes(c));
+
+		prt_printf(&buf, "header: %zu\n", b->written
+			   ? sizeof(struct btree_node)
+			   : sizeof(struct btree_node_entry));
+		prt_printf(&buf, "unwritten: %zu\n", b->whiteout_u64s * sizeof(u64));
+
+		for_each_bset(b, t) {
+			i = bset(b, t);
+
+			if (bset_written(b, i))
+				continue;
+			prt_printf(&buf, "bset %zu: %zu\n", t - b->set, le16_to_cpu(i->u64s) * sizeof(u64));
+		}
+
+		panic("%s", buf.buf);
+		printbuf_exit(&buf);
+	}
 
 	data = btree_bounce_alloc(c, bytes, &used_mempool);
 

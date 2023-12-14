@@ -80,7 +80,7 @@ struct promote_op {
 	struct bpos		pos;
 
 	struct data_update	write;
-	struct bio_vec		bi_inline_vecs[0]; /* must be last */
+	struct bio_vec		bi_inline_vecs[]; /* must be last */
 };
 
 static const struct rhashtable_params bch_promote_params = {
@@ -526,7 +526,7 @@ out:
 
 static noinline void bch2_rbio_narrow_crcs(struct bch_read_bio *rbio)
 {
-	bch2_trans_do(rbio->c, NULL, NULL, BTREE_INSERT_NOFAIL,
+	bch2_trans_do(rbio->c, NULL, NULL, BCH_TRANS_COMMIT_no_enospc,
 		      __bch2_rbio_narrow_crcs(trans, rbio));
 }
 
