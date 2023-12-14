@@ -18,10 +18,16 @@
 #define  OCTEP_PCIID_CN93_PF  0xB200177d
 #define  OCTEP_PCIID_CN93_VF  0xB203177d
 
+#define  OCTEP_PCI_DEVICE_ID_CN98_PF 0xB100
 #define  OCTEP_PCI_DEVICE_ID_CN93_PF 0xB200
 #define  OCTEP_PCI_DEVICE_ID_CN93_VF 0xB203
 
 #define  OCTEP_PCI_DEVICE_ID_CNF95N_PF 0xB400    //95N PF
+
+#define  OCTEP_PCI_DEVICE_ID_CN10KA_PF  0xB900   //CN10KA PF
+#define  OCTEP_PCI_DEVICE_ID_CNF10KA_PF 0xBA00   //CNF10KA PF
+#define  OCTEP_PCI_DEVICE_ID_CNF10KB_PF 0xBC00   //CNF10KB PF
+#define  OCTEP_PCI_DEVICE_ID_CN10KB_PF  0xBD00   //CN10KB PF
 
 #define  OCTEP_MAX_QUEUES   63
 #define  OCTEP_MAX_IQ       OCTEP_MAX_QUEUES
@@ -40,6 +46,15 @@
 #define  OCTEP_OQ_INTR_RESEND_BIT  59
 
 #define  OCTEP_MMIO_REGIONS     3
+
+#define  IQ_INSTR_PENDING(iq)  ({ typeof(iq) iq__ = (iq); \
+				  ((iq__)->host_write_index - (iq__)->flush_index) & \
+				  (iq__)->ring_size_mask; \
+				})
+#define  IQ_INSTR_SPACE(iq)    ({ typeof(iq) iq_ = (iq); \
+				  (iq_)->max_count - IQ_INSTR_PENDING(iq_); \
+				})
+
 /* PCI address space mapping information.
  * Each of the 3 address spaces given by BAR0, BAR2 and BAR4 of
  * Octeon gets mapped to different physical address spaces in
@@ -232,8 +247,7 @@ struct octep_device {
 
 	/* Tx queues (IQ: Instruction Queue) */
 	u16 num_iqs;
-	/* pkind value to be used in every Tx hardware descriptor */
-	u8 pkind;
+
 	/* Pointers to Octeon Tx queues */
 	struct octep_iq *iq[OCTEP_MAX_IQ];
 
@@ -377,6 +391,7 @@ int octep_setup_oqs(struct octep_device *oct);
 void octep_free_oqs(struct octep_device *oct);
 void octep_oq_dbell_init(struct octep_device *oct);
 void octep_device_setup_cn93_pf(struct octep_device *oct);
+void octep_device_setup_cnxk_pf(struct octep_device *oct);
 int octep_iq_process_completions(struct octep_iq *iq, u16 budget);
 int octep_oq_process_rx(struct octep_oq *oq, int budget);
 void octep_set_ethtool_ops(struct net_device *netdev);

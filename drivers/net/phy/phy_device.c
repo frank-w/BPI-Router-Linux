@@ -654,6 +654,7 @@ struct phy_device *phy_device_create(struct mii_bus *bus, int addr, u32 phy_id,
 	mdiodev->flags = MDIO_DEVICE_FLAG_PHY;
 	mdiodev->device_free = phy_mdio_device_free;
 	mdiodev->device_remove = phy_mdio_device_remove;
+	mdiodev->reset_state = -1;
 
 	dev->speed = SPEED_UNKNOWN;
 	dev->duplex = DUPLEX_UNKNOWN;
@@ -1235,17 +1236,18 @@ int phy_init_hw(struct phy_device *phydev)
 
 	if (phydev->drv->soft_reset) {
 		ret = phydev->drv->soft_reset(phydev);
-		/* see comment in genphy_soft_reset for an explanation */
-		if (!ret)
-			phydev->suspended = 0;
-	}
+		if (ret < 0)
+			return ret;
 
-	if (ret < 0)
-		return ret;
+		/* see comment in genphy_soft_reset for an explanation */
+		phydev->suspended = 0;
+	}
 
 	ret = phy_scan_fixups(phydev);
 	if (ret < 0)
 		return ret;
+
+	phy_interface_zero(phydev->possible_interfaces);
 
 	if (phydev->drv->config_init) {
 		ret = phydev->drv->config_init(phydev);

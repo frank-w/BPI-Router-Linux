@@ -605,6 +605,8 @@ struct macsec_ops;
  * @irq_rerun: Flag indicating interrupts occurred while PHY was suspended,
  *             requiring a rerun of the interrupt handler after resume
  * @interface: enum phy_interface_t value
+ * @possible_interfaces: bitmap if interface modes that the attached PHY
+ *			 will switch between depending on media speed.
  * @skb: Netlink message for cable diagnostics
  * @nest: Netlink nest used for cable diagnostics
  * @ehdr: nNtlink header for cable diagnostics
@@ -674,6 +676,7 @@ struct phy_device {
 	u32 dev_flags;
 
 	phy_interface_t interface;
+	DECLARE_PHY_INTERFACE_MASK(possible_interfaces);
 
 	/*
 	 * forced speed & duplex (no autoneg)
@@ -1560,9 +1563,11 @@ static inline bool phy_has_txtstamp(struct phy_device *phydev)
 	return phydev && phydev->mii_ts && phydev->mii_ts->txtstamp;
 }
 
-static inline int phy_hwtstamp(struct phy_device *phydev, struct ifreq *ifr)
+static inline int phy_hwtstamp(struct phy_device *phydev,
+			       struct kernel_hwtstamp_config *cfg,
+			       struct netlink_ext_ack *extack)
 {
-	return phydev->mii_ts->hwtstamp(phydev->mii_ts, ifr);
+	return phydev->mii_ts->hwtstamp(phydev->mii_ts, cfg, extack);
 }
 
 static inline bool phy_rxtstamp(struct phy_device *phydev, struct sk_buff *skb,
@@ -1861,6 +1866,7 @@ int genphy_c45_an_config_aneg(struct phy_device *phydev);
 int genphy_c45_an_disable_aneg(struct phy_device *phydev);
 int genphy_c45_read_mdix(struct phy_device *phydev);
 int genphy_c45_pma_read_abilities(struct phy_device *phydev);
+int genphy_c45_pma_read_ext_abilities(struct phy_device *phydev);
 int genphy_c45_pma_baset1_read_abilities(struct phy_device *phydev);
 int genphy_c45_read_eee_abilities(struct phy_device *phydev);
 int genphy_c45_pma_baset1_read_master_slave(struct phy_device *phydev);
