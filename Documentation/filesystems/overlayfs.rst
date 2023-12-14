@@ -39,7 +39,7 @@ objects in the original filesystem.
 On 64bit systems, even if all overlay layers are not on the same
 underlying filesystem, the same compliant behavior could be achieved
 with the "xino" feature.  The "xino" feature composes a unique object
-identifier from the real object st_ino and an underlying fsid index.
+identifier from the real object st_ino and an underlying fsid number.
 The "xino" feature uses the high inode number bits for fsid, because the
 underlying filesystems rarely use the high inode number bits.  In case
 the underlying inode number does overflow into the high xino bits, overlay
@@ -118,7 +118,7 @@ Where both upper and lower objects are directories, a merged directory
 is formed.
 
 At mount time, the two directories given as mount options "lowerdir" and
-"upperdir" are combined into a merged directory:
+"upperdir" are combined into a merged directory::
 
   mount -t overlay overlay -olowerdir=/lower,upperdir=/upper,\
   workdir=/work /merged
@@ -174,10 +174,10 @@ programs.
 seek offsets are assigned sequentially when the directories are read.
 Thus if
 
-  - read part of a directory
-  - remember an offset, and close the directory
-  - re-open the directory some time later
-  - seek to the remembered offset
+- read part of a directory
+- remember an offset, and close the directory
+- re-open the directory some time later
+- seek to the remembered offset
 
 there may be little correlation between the old and new locations in
 the list of filenames, particularly if anything has changed in the
@@ -285,21 +285,21 @@ Permission model
 
 Permission checking in the overlay filesystem follows these principles:
 
- 1) permission check SHOULD return the same result before and after copy up
+1) permission check SHOULD return the same result before and after copy up
 
- 2) task creating the overlay mount MUST NOT gain additional privileges
+2) task creating the overlay mount MUST NOT gain additional privileges
 
- 3) non-mounting task MAY gain additional privileges through the overlay,
- compared to direct access on underlying lower or upper filesystems
+3) non-mounting task MAY gain additional privileges through the overlay,
+   compared to direct access on underlying lower or upper filesystems
 
-This is achieved by performing two permission checks on each access
+This is achieved by performing two permission checks on each access:
 
- a) check if current task is allowed access based on local DAC (owner,
-    group, mode and posix acl), as well as MAC checks
+a) check if current task is allowed access based on local DAC (owner,
+group, mode and posix acl), as well as MAC checks
 
- b) check if mounting task would be allowed real operation on lower or
-    upper layer based on underlying filesystem permissions, again including
-    MAC checks
+b) check if mounting task would be allowed real operation on lower or
+upper layer based on underlying filesystem permissions, again including
+MAC checks
 
 Check (a) ensures consistency (1) since owner, group, mode and posix acls
 are copied up.  On the other hand it can result in server enforced
@@ -311,11 +311,11 @@ to create setups where the consistency rule (1) does not hold; normally,
 however, the mounting task will have sufficient privileges to perform all
 operations.
 
-Another way to demonstrate this model is drawing parallels between
+Another way to demonstrate this model is drawing parallels between::
 
   mount -t overlay overlay -olowerdir=/lower,upperdir=/upper,... /merged
 
-and
+and::
 
   cp -a /lower /upper
   mount --bind /upper /merged
@@ -328,7 +328,7 @@ Multiple lower layers
 ---------------------
 
 Multiple lower layers can now be given using the colon (":") as a
-separator character between the directory names.  For example:
+separator character between the directory names.  For example::
 
   mount -t overlay overlay -olowerdir=/lower1:/lower2:/lower3 /merged
 
@@ -340,13 +340,13 @@ rightmost one and going left.  In the above example lower1 will be the
 top, lower2 the middle and lower3 the bottom layer.
 
 Note: directory names containing colons can be provided as lower layer by
-escaping the colons with a single backslash.  For example:
+escaping the colons with a single backslash.  For example::
 
   mount -t overlay overlay -olowerdir=/a\:lower\:\:dir /merged
 
 Since kernel version v6.8, directory names containing colons can also
 be configured as lower layer using the "lowerdir+" mount options and the
-fsconfig syscall from new mount api.  For example:
+fsconfig syscall from new mount api.  For example::
 
   fsconfig(fs_fd, FSCONFIG_SET_STRING, "lowerdir+", "/a:lower::dir", 0);
 
@@ -356,7 +356,7 @@ as an octal characters (\072) when displayed in /proc/self/mountinfo.
 Metadata only copy up
 ---------------------
 
-When metadata only copy up feature is enabled, overlayfs will only copy
+When the "metacopy" feature is enabled, overlayfs will only copy
 up metadata (as opposed to whole file), when a metadata specific operation
 like chown/chmod is performed. Full file will be copied up later when
 file is opened for WRITE operation.
@@ -390,11 +390,11 @@ Data-only lower layers
 With "metacopy" feature enabled, an overlayfs regular file may be a composition
 of information from up to three different layers:
 
- 1) metadata from a file in the upper layer
+1) metadata from a file in the upper layer
 
- 2) st_ino and st_dev object identifier from a file in a lower layer
+2) st_ino and st_dev object identifier from a file in a lower layer
 
- 3) data from a file in another lower layer (further below)
+3) data from a file in another lower layer (further below)
 
 The "lower data" file can be on any lower layer, except from the top most
 lower layer.
@@ -405,7 +405,7 @@ A normal lower layer is not allowed to be below a data-only layer, so single
 colon separators are not allowed to the right of double colon ("::") separators.
 
 
-For example:
+For example::
 
   mount -t overlay overlay -olowerdir=/l1:/l2:/l3::/do1::/do2 /merged
 
@@ -419,7 +419,7 @@ to the absolute path of the "lower data" file in the "data-only" lower layer.
 
 Since kernel version v6.8, "data-only" lower layers can also be added using
 the "datadir+" mount options and the fsconfig syscall from new mount api.
-For example:
+For example::
 
   fsconfig(fs_fd, FSCONFIG_SET_STRING, "lowerdir+", "/l1", 0);
   fsconfig(fs_fd, FSCONFIG_SET_STRING, "lowerdir+", "/l2", 0);
@@ -429,7 +429,7 @@ For example:
 
 
 fs-verity support
-----------------------
+-----------------
 
 During metadata copy up of a lower file, if the source file has
 fs-verity enabled and overlay verity support is enabled, then the
@@ -492,27 +492,27 @@ though it will not result in a crash or deadlock.
 
 Mounting an overlay using an upper layer path, where the upper layer path
 was previously used by another mounted overlay in combination with a
-different lower layer path, is allowed, unless the "inodes index" feature
-or "metadata only copy up" feature is enabled.
+different lower layer path, is allowed, unless the "index" or "metacopy"
+features are enabled.
 
-With the "inodes index" feature, on the first time mount, an NFS file
+With the "index" feature, on the first time mount, an NFS file
 handle of the lower layer root directory, along with the UUID of the lower
 filesystem, are encoded and stored in the "trusted.overlay.origin" extended
 attribute on the upper layer root directory.  On subsequent mount attempts,
 the lower root directory file handle and lower filesystem UUID are compared
 to the stored origin in upper root directory.  On failure to verify the
 lower root origin, mount will fail with ESTALE.  An overlayfs mount with
-"inodes index" enabled will fail with EOPNOTSUPP if the lower filesystem
+"index" enabled will fail with EOPNOTSUPP if the lower filesystem
 does not support NFS export, lower filesystem does not have a valid UUID or
 if the upper filesystem does not support extended attributes.
 
-For "metadata only copy up" feature there is no verification mechanism at
+For the "metacopy" feature, there is no verification mechanism at
 mount time. So if same upper is mounted with different set of lower, mount
 probably will succeed but expect the unexpected later on. So don't do it.
 
 It is quite a common practice to copy overlay layers to a different
 directory tree on the same or different underlying filesystem, and even
-to a different machine.  With the "inodes index" feature, trying to mount
+to a different machine.  With the "index" feature, trying to mount
 the copied layers will fail the verification of the lower root file handle.
 
 Nesting overlayfs mounts
@@ -560,7 +560,8 @@ file for write or truncating the file will not be denied with ETXTBSY.
 The following options allow overlayfs to act more like a standards
 compliant filesystem:
 
-1) "redirect_dir"
+redirect_dir
+````````````
 
 Enabled with the mount option or module option: "redirect_dir=on" or with
 the kernel config option CONFIG_OVERLAY_FS_REDIRECT_DIR=y.
@@ -568,7 +569,8 @@ the kernel config option CONFIG_OVERLAY_FS_REDIRECT_DIR=y.
 If this feature is disabled, then rename(2) on a lower or merged directory
 will fail with EXDEV ("Invalid cross-device link").
 
-2) "inode index"
+index
+`````
 
 Enabled with the mount option or module option "index=on" or with the
 kernel config option CONFIG_OVERLAY_FS_INDEX=y.
@@ -577,7 +579,8 @@ If this feature is disabled and a file with multiple hard links is copied
 up, then this will "break" the link.  Changes will not be propagated to
 other names referring to the same inode.
 
-3) "xino"
+xino
+````
 
 Enabled with the mount option "xino=auto" or "xino=on", with the module
 option "xino_auto=on" or with the kernel config option
@@ -604,7 +607,7 @@ a crash or deadlock.
 
 Offline changes, when the overlay is not mounted, are allowed to the
 upper tree.  Offline changes to the lower tree are only allowed if the
-"metadata only copy up", "inode index", "xino" and "redirect_dir" features
+"metacopy", "index", "xino" and "redirect_dir" features
 have not been used.  If the lower tree is modified and any of these
 features has been used, the behavior of the overlay is undefined,
 though it will not result in a crash or deadlock.
@@ -650,9 +653,10 @@ following rules apply:
    encode an upper file handle from upper inode
 
 The encoded overlay file handle includes:
- - Header including path type information (e.g. lower/upper)
- - UUID of the underlying filesystem
- - Underlying filesystem encoding of underlying inode
+
+- Header including path type information (e.g. lower/upper)
+- UUID of the underlying filesystem
+- Underlying filesystem encoding of underlying inode
 
 This encoding format is identical to the encoding format file handles that
 are stored in extended attribute "trusted.overlay.origin".
@@ -770,9 +774,9 @@ Testsuite
 There's a testsuite originally developed by David Howells and currently
 maintained by Amir Goldstein at:
 
-  https://github.com/amir73il/unionmount-testsuite.git
+https://github.com/amir73il/unionmount-testsuite.git
 
-Run as root:
+Run as root::
 
   # cd unionmount-testsuite
   # ./run --ov --verify
