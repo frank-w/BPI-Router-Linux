@@ -45,7 +45,6 @@
 struct perf_annotate {
 	struct perf_tool tool;
 	struct perf_session *session;
-	struct annotation_options opts;
 #ifdef HAVE_SLANG_SUPPORT
 	bool	   use_tui;
 #endif
@@ -94,6 +93,7 @@ static void process_basic_block(struct addr_map_symbol *start,
 	struct annotation *notes = sym ? symbol__annotation(sym) : NULL;
 	struct block_range_iter iter;
 	struct block_range *entry;
+	struct annotated_branch *branch;
 
 	/*
 	 * Sanity; NULL isn't executable and the CPU cannot execute backwards
@@ -104,6 +104,8 @@ static void process_basic_block(struct addr_map_symbol *start,
 	iter = block_range__create(start->addr, end->addr);
 	if (!block_range_iter__valid(&iter))
 		return;
+
+	branch = annotation__get_branch(notes);
 
 	/*
 	 * First block in range is a branch target.
@@ -118,8 +120,8 @@ static void process_basic_block(struct addr_map_symbol *start,
 		entry->coverage++;
 		entry->sym = sym;
 
-		if (notes)
-			notes->max_coverage = max(notes->max_coverage, entry->coverage);
+		if (branch)
+			branch->max_coverage = max(branch->max_coverage, entry->coverage);
 
 	} while (block_range_iter__next(&iter));
 
@@ -315,9 +317,9 @@ static int hist_entry__tty_annotate(struct hist_entry *he,
 				    struct perf_annotate *ann)
 {
 	if (!ann->use_stdio2)
-		return symbol__tty_annotate(&he->ms, evsel, &ann->opts);
+		return symbol__tty_annotate(&he->ms, evsel);
 
-	return symbol__tty_annotate2(&he->ms, evsel, &ann->opts);
+	return symbol__tty_annotate2(&he->ms, evsel);
 }
 
 static void hists__find_annotations(struct hists *hists,
@@ -363,7 +365,6 @@ find_next:
 			int ret;
 			int (*annotate)(struct hist_entry *he,
 					struct evsel *evsel,
-					struct annotation_options *options,
 					struct hist_browser_timer *hbt);
 
 			annotate = dlsym(perf_gtk_handle,
@@ -373,14 +374,14 @@ find_next:
 				return;
 			}
 
-			ret = annotate(he, evsel, &ann->opts, NULL);
+			ret = annotate(he, evsel, NULL);
 			if (!ret || !ann->skip_missing)
 				return;
 
 			/* skip missing symbols */
 			nd = rb_next(nd);
 		} else if (use_browser == 1) {
-			key = hist_entry__tui_annotate(he, evsel, NULL, &ann->opts);
+			key = hist_entry__tui_annotate(he, evsel, NULL);
 
 			switch (key) {
 			case -1:
@@ -422,9 +423,9 @@ static int __cmd_annotate(struct perf_annotate *ann)
 			goto out;
 	}
 
-	if (!ann->opts.objdump_path) {
+	if (!annotate_opts.objdump_path) {
 		ret = perf_env__lookup_objdump(&session->header.env,
-					       &ann->opts.objdump_path);
+					       &annotate_opts.objdump_path);
 		if (ret)
 			goto out;
 	}
@@ -558,9 +559,9 @@ int cmd_annotate(int argc, const char **argv)
 		   "file", "vmlinux pathname"),
 	OPT_BOOLEAN('m', "modules", &symbol_conf.use_modules,
 		    "load module symbols - WARNING: use only with -k and LIVE kernel"),
-	OPT_BOOLEAN('l', "print-line", &annotate.opts.print_lines,
+	OPT_BOOLEAN('l', "print-line", &annotate_opts.print_lines,
 		    "print matching source lines (may be slow)"),
-	OPT_BOOLEAN('P', "full-paths", &annotate.opts.full_path,
+	OPT_BOOLEAN('P', "full-paths", &annotate_opts.full_path,
 		    "Don't shorten the displayed pathnames"),
 	OPT_BOOLEAN(0, "skip-missing", &annotate.skip_missing,
 		    "Skip symbols that cannot be annotated"),
@@ -571,15 +572,15 @@ int cmd_annotate(int argc, const char **argv)
 	OPT_CALLBACK(0, "symfs", NULL, "directory",
 		     "Look for files with symbols relative to this directory",
 		     symbol__config_symfs),
-	OPT_BOOLEAN(0, "source", &annotate.opts.annotate_src,
+	OPT_BOOLEAN(0, "source", &annotate_opts.annotate_src,
 		    "Interleave source code with assembly code (default)"),
-	OPT_BOOLEAN(0, "asm-raw", &annotate.opts.show_asm_raw,
+	OPT_BOOLEAN(0, "asm-raw", &annotate_opts.show_asm_raw,
 		    "Display raw encoding of assembly instructions (default)"),
 	OPT_STRING('M', "disassembler-style", &disassembler_style, "disassembler style",
 		   "Specify disassembler style (e.g. -M intel for intel syntax)"),
-	OPT_STRING(0, "prefix", &annotate.opts.prefix, "prefix",
+	OPT_STRING(0, "prefix", &annotate_opts.prefix, "prefix",
 		    "Add prefix to source file path names in programs (with --prefix-strip)"),
-	OPT_STRING(0, "prefix-strip", &annotate.opts.prefix_strip, "N",
+	OPT_STRING(0, "prefix-strip", &annotate_opts.prefix_strip, "N",
 		    "Strip first N entries of source file path name in programs (with --prefix)"),
 	OPT_STRING(0, "objdump", &objdump_path, "path",
 		   "objdump binary to use for disassembly and annotations"),
@@ -598,7 +599,7 @@ int cmd_annotate(int argc, const char **argv)
 	OPT_CALLBACK_DEFAULT(0, "stdio-color", NULL, "mode",
 			     "'always' (default), 'never' or 'auto' only applicable to --stdio mode",
 			     stdio__config_color, "always"),
-	OPT_CALLBACK(0, "percent-type", &annotate.opts, "local-period",
+	OPT_CALLBACK(0, "percent-type", &annotate_opts, "local-period",
 		     "Set percent type local/global-period/hits",
 		     annotate_parse_percent_type),
 	OPT_CALLBACK(0, "percent-limit", &annotate, "percent",
@@ -614,13 +615,13 @@ int cmd_annotate(int argc, const char **argv)
 	set_option_flag(options, 0, "show-total-period", PARSE_OPT_EXCLUSIVE);
 	set_option_flag(options, 0, "show-nr-samples", PARSE_OPT_EXCLUSIVE);
 
-	annotation_options__init(&annotate.opts);
+	annotation_options__init();
 
 	ret = hists__init();
 	if (ret < 0)
 		return ret;
 
-	annotation_config__init(&annotate.opts);
+	annotation_config__init();
 
 	argc = parse_options(argc, argv, options, annotate_usage, 0);
 	if (argc) {
@@ -635,13 +636,13 @@ int cmd_annotate(int argc, const char **argv)
 	}
 
 	if (disassembler_style) {
-		annotate.opts.disassembler_style = strdup(disassembler_style);
-		if (!annotate.opts.disassembler_style)
+		annotate_opts.disassembler_style = strdup(disassembler_style);
+		if (!annotate_opts.disassembler_style)
 			return -ENOMEM;
 	}
 	if (objdump_path) {
-		annotate.opts.objdump_path = strdup(objdump_path);
-		if (!annotate.opts.objdump_path)
+		annotate_opts.objdump_path = strdup(objdump_path);
+		if (!annotate_opts.objdump_path)
 			return -ENOMEM;
 	}
 	if (addr2line_path) {
@@ -650,7 +651,7 @@ int cmd_annotate(int argc, const char **argv)
 			return -ENOMEM;
 	}
 
-	if (annotate_check_args(&annotate.opts) < 0)
+	if (annotate_check_args() < 0)
 		return -EINVAL;
 
 #ifdef HAVE_GTK2_SUPPORT
@@ -731,7 +732,7 @@ out_delete:
 #ifndef NDEBUG
 	perf_session__delete(annotate.session);
 #endif
-	annotation_options__exit(&annotate.opts);
+	annotation_options__exit();
 
 	return ret;
 }
