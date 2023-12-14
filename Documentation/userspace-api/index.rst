@@ -9,11 +9,8 @@ While much of the kernel's user-space API is documented elsewhere
 also be found in the kernel tree itself.  This manual is intended to be the
 place where this information is gathered.
 
-.. class:: toc-title
-
-	   Table of contents
-
 .. toctree::
+   :caption: Table of contents
    :maxdepth: 2
 
    no_new_privs
@@ -33,6 +30,7 @@ place where this information is gathered.
    sysfs-platform_profile
    vduse
    futex2
+   tee
 
 .. only::  subproject and html
 
