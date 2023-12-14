@@ -453,6 +453,7 @@ static const struct __fw_feat_cfg fw_feat_tbl[] = {
 	__CFG_FW_FEAT(RTL8852C, ge, 0, 27, 36, 0, SCAN_OFFLOAD),
 	__CFG_FW_FEAT(RTL8852C, ge, 0, 27, 40, 0, CRASH_TRIGGER),
 	__CFG_FW_FEAT(RTL8852C, ge, 0, 27, 56, 10, BEACON_FILTER),
+	__CFG_FW_FEAT(RTL8922A, ge, 0, 34, 30, 0, CRASH_TRIGGER),
 };
 
 static void rtw89_fw_iterate_feature_cfg(struct rtw89_fw_info *fw,
@@ -956,16 +957,24 @@ static int rtw89_fw_download_main(struct rtw89_dev *rtwdev,
 
 static void rtw89_fw_prog_cnt_dump(struct rtw89_dev *rtwdev)
 {
+	enum rtw89_chip_gen chip_gen = rtwdev->chip->chip_gen;
+	u32 addr = R_AX_DBG_PORT_SEL;
 	u32 val32;
 	u16 index;
+
+	if (chip_gen == RTW89_CHIP_BE) {
+		addr = R_BE_WLCPU_PORT_PC;
+		goto dump;
+	}
 
 	rtw89_write32(rtwdev, R_AX_DBG_CTRL,
 		      FIELD_PREP(B_AX_DBG_SEL0, FW_PROG_CNTR_DBG_SEL) |
 		      FIELD_PREP(B_AX_DBG_SEL1, FW_PROG_CNTR_DBG_SEL));
 	rtw89_write32_mask(rtwdev, R_AX_SYS_STATUS1, B_AX_SEL_0XC0_MASK, MAC_DBG_SEL);
 
+dump:
 	for (index = 0; index < 15; index++) {
-		val32 = rtw89_read32(rtwdev, R_AX_DBG_PORT_SEL);
+		val32 = rtw89_read32(rtwdev, addr);
 		rtw89_err(rtwdev, "[ERR]fw PC = 0x%x\n", val32);
 		fsleep(10);
 	}
@@ -3867,6 +3876,8 @@ static void rtw89_hw_scan_add_chan(struct rtw89_dev *rtwdev, int chan_type,
 			if (info->channel_6ghz &&
 			    ch_info->pri_ch != info->channel_6ghz)
 				continue;
+			else if (info->channel_6ghz && probe_count != 0)
+				ch_info->period += RTW89_CHANNEL_TIME_6G;
 			ch_info->pkt_id[probe_count++] = info->id;
 			if (probe_count >= RTW89_SCANOFLD_MAX_SSID)
 				break;
@@ -4043,6 +4054,7 @@ void rtw89_hw_scan_complete(struct rtw89_dev *rtwdev, struct ieee80211_vif *vif,
 	rtw89_core_scan_complete(rtwdev, vif, true);
 	ieee80211_scan_completed(rtwdev->hw, &info);
 	ieee80211_wake_queues(rtwdev->hw);
+	rtw89_mac_enable_beacon_for_ap_vifs(rtwdev, true);
 
 	rtw89_release_pkt_list(rtwdev);
 	rtwvif = (struct rtw89_vif *)vif->drv_priv;
@@ -4060,6 +4072,19 @@ void rtw89_hw_scan_abort(struct rtw89_dev *rtwdev, struct ieee80211_vif *vif)
 	rtw89_hw_scan_complete(rtwdev, vif, true);
 }
 
+static bool rtw89_is_any_vif_connected_or_connecting(struct rtw89_dev *rtwdev)
+{
+	struct rtw89_vif *rtwvif;
+
+	rtw89_for_each_rtwvif(rtwdev, rtwvif) {
+		/* This variable implies connected or during attempt to connect */
+		if (!is_zero_ether_addr(rtwvif->bssid))
+			return true;
+	}
+
+	return false;
+}
+
 int rtw89_hw_scan_offload(struct rtw89_dev *rtwdev, struct ieee80211_vif *vif,
 			  bool enable)
 {
@@ -4072,8 +4097,7 @@ int rtw89_hw_scan_offload(struct rtw89_dev *rtwdev, struct ieee80211_vif *vif,
 	if (!rtwvif)
 		return -EINVAL;
 
-	/* This variable implies connected or during attempt to connect */
-	connected = !is_zero_ether_addr(rtwvif->bssid);
+	connected = rtw89_is_any_vif_connected_or_connecting(rtwdev);
 	opt.enable = enable;
 	opt.target_ch_mode = connected;
 	if (enable) {
