@@ -120,7 +120,7 @@ static int isp_enum_mbus_code(struct v4l2_subdev *sd,
 	const struct stf_isp_format_table *formats;
 
 	if (code->pad == STF_ISP_PAD_SINK) {
-		if (code->index > ARRAY_SIZE(isp_formats_sink))
+		if (code->index >= ARRAY_SIZE(isp_formats_sink))
 			return -EINVAL;
 
 		formats = &isp_dev->formats[SINK_FORMATS_INDEX];
@@ -128,7 +128,7 @@ static int isp_enum_mbus_code(struct v4l2_subdev *sd,
 	} else {
 		struct v4l2_mbus_framefmt *sink_fmt;
 
-		if (code->index > ARRAY_SIZE(isp_formats_source))
+		if (code->index >= ARRAY_SIZE(isp_formats_source))
 			return -EINVAL;
 
 		sink_fmt = v4l2_subdev_state_get_format(state,
@@ -311,7 +311,6 @@ static const struct v4l2_subdev_video_ops isp_video_ops = {
 };
 
 static const struct v4l2_subdev_pad_ops isp_pad_ops = {
-	.init_cfg = isp_init_formats,
 	.enum_mbus_code = isp_enum_mbus_code,
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = isp_set_format,
@@ -322,6 +321,10 @@ static const struct v4l2_subdev_pad_ops isp_pad_ops = {
 static const struct v4l2_subdev_ops isp_v4l2_ops = {
 	.video = &isp_video_ops,
 	.pad = &isp_pad_ops,
+};
+
+static const struct v4l2_subdev_internal_ops isp_internal_ops = {
+	.init_state = isp_init_formats,
 };
 
 static const struct media_entity_operations isp_media_ops = {
@@ -335,6 +338,7 @@ int stf_isp_register(struct stf_isp_dev *isp_dev, struct v4l2_device *v4l2_dev)
 	int ret;
 
 	v4l2_subdev_init(sd, &isp_v4l2_ops);
+	sd->internal_ops = &isp_internal_ops;
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	snprintf(sd->name, ARRAY_SIZE(sd->name), "stf_isp");
 	v4l2_set_subdevdata(sd, isp_dev);

@@ -25,8 +25,9 @@
 #include <linux/slab.h>
 #include <linux/smiapp.h>
 #include <linux/v4l2-mediabus.h>
-#include <media/v4l2-fwnode.h>
+#include <media/v4l2-cci.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-fwnode.h>
 #include <uapi/linux/ccs.h>
 
 #include "ccs.h"
@@ -98,7 +99,7 @@ static int ccs_limit_ptr(struct ccs_sensor *sensor, unsigned int limit,
 	linfo = &ccs_limits[ccs_limit_offsets[limit].info];
 
 	if (WARN_ON(!sensor->ccs_limits) ||
-	    WARN_ON(offset + ccs_reg_width(linfo->reg) >
+	    WARN_ON(offset + CCI_REG_WIDTH_BYTES(linfo->reg) >
 		    ccs_limit_offsets[limit + 1].lim))
 		return -EINVAL;
 
@@ -124,7 +125,7 @@ void ccs_replace_limit(struct ccs_sensor *sensor,
 	dev_dbg(&client->dev, "quirk: 0x%8.8x \"%s\" %u = %u, 0x%x\n",
 		linfo->reg, linfo->name, offset, val, val);
 
-	ccs_assign_limit(ptr, ccs_reg_width(linfo->reg), val);
+	ccs_assign_limit(ptr, CCI_REG_WIDTH_BYTES(linfo->reg), val);
 }
 
 u32 ccs_get_limit(struct ccs_sensor *sensor, unsigned int limit,
@@ -138,7 +139,7 @@ u32 ccs_get_limit(struct ccs_sensor *sensor, unsigned int limit,
 	if (ret)
 		return 0;
 
-	switch (ccs_reg_width(ccs_limits[ccs_limit_offsets[limit].info].reg)) {
+	switch (CCI_REG_WIDTH_BYTES(ccs_limits[ccs_limit_offsets[limit].info].reg)) {
 	case sizeof(u8):
 		val = *(u8 *)ptr;
 		break;
@@ -172,9 +173,11 @@ static int ccs_read_all_limits(struct ccs_sensor *sensor)
 
 	end = alloc + ccs_limit_offsets[CCS_L_LAST].lim;
 
+	sensor->ccs_limits = alloc;
+
 	for (i = 0, l = 0, ptr = alloc; ccs_limits[i].size; i++) {
 		u32 reg = ccs_limits[i].reg;
-		unsigned int width = ccs_reg_width(reg);
+		unsigned int width = CCI_REG_WIDTH_BYTES(reg);
 		unsigned int j;
 
 		if (l == CCS_L_LAST) {
@@ -186,6 +189,7 @@ static int ccs_read_all_limits(struct ccs_sensor *sensor)
 
 		for (j = 0; j < ccs_limits[i].size / width;
 		     j++, reg += width, ptr += width) {
+			char str[16] = "";
 			u32 val;
 
 			ret = ccs_read_addr_noconv(sensor, reg, &val);
@@ -204,8 +208,15 @@ static int ccs_read_all_limits(struct ccs_sensor *sensor)
 
 			ccs_assign_limit(ptr, width, val);
 
-			dev_dbg(&client->dev, "0x%8.8x \"%s\" = %u, 0x%x\n",
-				reg, ccs_limits[i].name, val, val);
+#ifdef CONFIG_DYNAMIC_DEBUG
+			if (reg & (CCS_FL_FLOAT_IREAL | CCS_FL_IREAL))
+				snprintf(str, sizeof(str), ", %u",
+					 ccs_reg_conv(sensor, reg, val));
+#endif
+
+			dev_dbg(&client->dev,
+				"0x%8.8x \"%s\" = %u, 0x%x%s\n",
+				reg, ccs_limits[i].name, val, val, str);
 		}
 
 		if (ccs_limits[i].flags & CCS_L_FL_SAME_REG)
@@ -222,14 +233,13 @@ static int ccs_read_all_limits(struct ccs_sensor *sensor)
 		goto out_err;
 	}
 
-	sensor->ccs_limits = alloc;
-
 	if (CCS_LIM(sensor, SCALER_N_MIN) < 16)
 		ccs_replace_limit(sensor, CCS_L_SCALER_N_MIN, 0, 16);
 
 	return 0;
 
 out_err:
+	sensor->ccs_limits = NULL;
 	kfree(alloc);
 
 	return ret;
@@ -2716,66 +2726,54 @@ static int ccs_identify_module(struct ccs_sensor *sensor)
 	rval = ccs_read(sensor, MODULE_MANUFACTURER_ID,
 			&minfo->mipi_manufacturer_id);
 	if (!rval && !minfo->mipi_manufacturer_id)
-		rval = ccs_read_addr_8only(sensor,
-					   SMIAPP_REG_U8_MANUFACTURER_ID,
-					   &minfo->smia_manufacturer_id);
+		rval = ccs_read_addr(sensor, SMIAPP_REG_U8_MANUFACTURER_ID,
+				     &minfo->smia_manufacturer_id);
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor, CCS_R_MODULE_MODEL_ID,
-					   &minfo->model_id);
+		rval = ccs_read(sensor, MODULE_MODEL_ID, &minfo->model_id);
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor,
-					   CCS_R_MODULE_REVISION_NUMBER_MAJOR,
-					   &rev);
+		rval = ccs_read(sensor, MODULE_REVISION_NUMBER_MAJOR, &rev);
 	if (!rval) {
-		rval = ccs_read_addr_8only(sensor,
-					   CCS_R_MODULE_REVISION_NUMBER_MINOR,
-					   &minfo->revision_number);
+		rval = ccs_read(sensor, MODULE_REVISION_NUMBER_MINOR,
+				&minfo->revision_number);
 		minfo->revision_number |= rev << 8;
 	}
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor, CCS_R_MODULE_DATE_YEAR,
-					   &minfo->module_year);
+		rval = ccs_read(sensor, MODULE_DATE_YEAR, &minfo->module_year);
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor, CCS_R_MODULE_DATE_MONTH,
-					   &minfo->module_month);
+		rval = ccs_read(sensor, MODULE_DATE_MONTH,
+				&minfo->module_month);
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor, CCS_R_MODULE_DATE_DAY,
-					   &minfo->module_day);
+		rval = ccs_read(sensor, MODULE_DATE_DAY, &minfo->module_day);
 
 	/* Sensor info */
 	if (!rval)
 		rval = ccs_read(sensor, SENSOR_MANUFACTURER_ID,
 				&minfo->sensor_mipi_manufacturer_id);
 	if (!rval && !minfo->sensor_mipi_manufacturer_id)
-		rval = ccs_read_addr_8only(sensor,
-					   CCS_R_SENSOR_MANUFACTURER_ID,
-					   &minfo->sensor_smia_manufacturer_id);
+		rval = ccs_read(sensor, SENSOR_MANUFACTURER_ID,
+				&minfo->sensor_smia_manufacturer_id);
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor,
-					   CCS_R_SENSOR_MODEL_ID,
-					   &minfo->sensor_model_id);
+		rval = ccs_read(sensor, SENSOR_MODEL_ID,
+				&minfo->sensor_model_id);
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor,
-					   CCS_R_SENSOR_REVISION_NUMBER,
-					   &minfo->sensor_revision_number);
+		rval = ccs_read(sensor, SENSOR_REVISION_NUMBER,
+				&minfo->sensor_revision_number);
 	if (!rval && !minfo->sensor_revision_number)
-		rval = ccs_read_addr_8only(sensor,
-					   CCS_R_SENSOR_REVISION_NUMBER_16,
-					   &minfo->sensor_revision_number);
+		rval = ccs_read(sensor, SENSOR_REVISION_NUMBER_16,
+				&minfo->sensor_revision_number);
 	if (!rval)
-		rval = ccs_read_addr_8only(sensor,
-					   CCS_R_SENSOR_FIRMWARE_VERSION,
-					   &minfo->sensor_firmware_version);
+		rval = ccs_read(sensor, SENSOR_FIRMWARE_VERSION,
+				&minfo->sensor_firmware_version);
 
 	/* SMIA */
 	if (!rval)
 		rval = ccs_read(sensor, MIPI_CCS_VERSION, &minfo->ccs_version);
 	if (!rval && !minfo->ccs_version)
-		rval = ccs_read_addr_8only(sensor, SMIAPP_REG_U8_SMIA_VERSION,
-					   &minfo->smia_version);
+		rval = ccs_read_addr(sensor, SMIAPP_REG_U8_SMIA_VERSION,
+				     &minfo->smia_version);
 	if (!rval && !minfo->ccs_version)
-		rval = ccs_read_addr_8only(sensor, SMIAPP_REG_U8_SMIAPP_VERSION,
-					   &minfo->smiapp_version);
+		rval = ccs_read_addr(sensor, SMIAPP_REG_U8_SMIAPP_VERSION,
+				     &minfo->smiapp_version);
 
 	if (rval) {
 		dev_err(&client->dev, "sensor detection failed\n");
@@ -3006,8 +3004,8 @@ static int ccs_init_subdev(struct ccs_sensor *sensor,
 	return 0;
 }
 
-static int ccs_init_cfg(struct v4l2_subdev *sd,
-			struct v4l2_subdev_state *sd_state)
+static int ccs_init_state(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_state *sd_state)
 {
 	struct ccs_subdev *ssd = to_ccs_subdev(sd);
 	struct ccs_sensor *sensor = ssd->sensor;
@@ -3055,7 +3053,6 @@ static const struct v4l2_subdev_video_ops ccs_video_ops = {
 };
 
 static const struct v4l2_subdev_pad_ops ccs_pad_ops = {
-	.init_cfg = ccs_init_cfg,
 	.enum_mbus_code = ccs_enum_mbus_code,
 	.get_fmt = ccs_get_format,
 	.set_fmt = ccs_set_format,
@@ -3079,6 +3076,7 @@ static const struct media_entity_operations ccs_entity_ops = {
 };
 
 static const struct v4l2_subdev_internal_ops ccs_internal_src_ops = {
+	.init_state = ccs_init_state,
 	.registered = ccs_registered,
 	.unregistered = ccs_unregistered,
 };
@@ -3308,6 +3306,13 @@ static int ccs_probe(struct i2c_client *client)
 							    GPIOD_OUT_LOW);
 	if (IS_ERR(sensor->xshutdown))
 		return PTR_ERR(sensor->xshutdown);
+
+	sensor->regmap = devm_cci_regmap_init_i2c(client, 16);
+	if (IS_ERR(sensor->regmap)) {
+		dev_err(&client->dev, "can't initialise CCI (%ld)\n",
+			PTR_ERR(sensor->regmap));
+		return PTR_ERR(sensor->regmap);
+	}
 
 	rval = ccs_power_on(&client->dev);
 	if (rval < 0)
@@ -3639,12 +3644,16 @@ static int ccs_module_init(void)
 {
 	unsigned int i, l;
 
+	CCS_BUILD_BUG;
+
 	for (i = 0, l = 0; ccs_limits[i].size && l < CCS_L_LAST; i++) {
 		if (!(ccs_limits[i].flags & CCS_L_FL_SAME_REG)) {
 			ccs_limit_offsets[l + 1].lim =
 				ALIGN(ccs_limit_offsets[l].lim +
 				      ccs_limits[i].size,
-				      ccs_reg_width(ccs_limits[i + 1].reg));
+				      ccs_limits[i + 1].reg ?
+				      CCI_REG_WIDTH_BYTES(ccs_limits[i + 1].reg) :
+				      1U);
 			ccs_limit_offsets[l].info = i;
 			l++;
 		} else {

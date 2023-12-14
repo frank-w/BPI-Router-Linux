@@ -3,31 +3,46 @@
  * V4L2 Capture CSI Subdev for Freescale i.MX6UL/L / i.MX7 SOC
  *
  * Copyright (c) 2019 Linaro Ltd
- *
  */
 
 #include <linux/clk.h>
+#include <linux/completion.h>
+#include <linux/container_of.h>
 #include <linux/delay.h>
+#include <linux/device.h>
+#include <linux/dma-mapping.h>
+#include <linux/err.h>
 #include <linux/interrupt.h>
+#include <linux/io.h>
+#include <linux/jiffies.h>
+#include <linux/kernel.h>
+#include <linux/list.h>
 #include <linux/math.h>
-#include <linux/mfd/syscon.h>
 #include <linux/minmax.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
-#include <linux/of_graph.h>
-#include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
-#include <linux/regmap.h>
+#include <linux/property.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/string.h>
+#include <linux/timekeeping.h>
 #include <linux/types.h>
 
+#include <media/media-device.h>
+#include <media/media-entity.h>
+#include <media/v4l2-async.h>
+#include <media/v4l2-common.h>
+#include <media/v4l2-dev.h>
 #include <media/v4l2-device.h>
-#include <media/v4l2-fwnode.h>
+#include <media/v4l2-fh.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mc.h>
 #include <media/v4l2-subdev.h>
+#include <media/videobuf2-core.h>
 #include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-v4l2.h>
 
 #define IMX7_CSI_PAD_SINK		0
 #define IMX7_CSI_PAD_SRC		1
@@ -1729,8 +1744,8 @@ out_unlock:
 	return ret;
 }
 
-static int imx7_csi_init_cfg(struct v4l2_subdev *sd,
-			     struct v4l2_subdev_state *sd_state)
+static int imx7_csi_init_state(struct v4l2_subdev *sd,
+			       struct v4l2_subdev_state *sd_state)
 {
 	const struct imx7_csi_pixfmt *cc;
 	int i;
@@ -2006,7 +2021,6 @@ static const struct v4l2_subdev_video_ops imx7_csi_video_ops = {
 };
 
 static const struct v4l2_subdev_pad_ops imx7_csi_pad_ops = {
-	.init_cfg	= imx7_csi_init_cfg,
 	.enum_mbus_code	= imx7_csi_enum_mbus_code,
 	.get_fmt	= v4l2_subdev_get_fmt,
 	.set_fmt	= imx7_csi_set_fmt,
@@ -2019,6 +2033,7 @@ static const struct v4l2_subdev_ops imx7_csi_subdev_ops = {
 };
 
 static const struct v4l2_subdev_internal_ops imx7_csi_internal_ops = {
+	.init_state	= imx7_csi_init_state,
 	.registered	= imx7_csi_registered,
 	.unregistered	= imx7_csi_unregistered,
 };

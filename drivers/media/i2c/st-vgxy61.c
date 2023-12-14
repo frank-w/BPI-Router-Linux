@@ -21,6 +21,7 @@
 #include <media/v4l2-async.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
@@ -1322,8 +1323,8 @@ out:
 	return ret;
 }
 
-static int vgxy61_init_cfg(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_state *sd_state)
+static int vgxy61_init_state(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_state *sd_state)
 {
 	struct vgxy61_dev *sensor = to_vgxy61_dev(sd);
 	struct v4l2_subdev_format fmt = { 0 };
@@ -1402,6 +1403,7 @@ static int vgxy61_init_controls(struct vgxy61_dev *sensor)
 	const struct v4l2_ctrl_ops *ops = &vgxy61_ctrl_ops;
 	struct v4l2_ctrl_handler *hdl = &sensor->ctrl_handler;
 	const struct vgxy61_mode_info *cur_mode = sensor->current_mode;
+	struct v4l2_fwnode_device_properties props;
 	struct v4l2_ctrl *ctrl;
 	int ret;
 
@@ -1456,6 +1458,14 @@ static int vgxy61_init_controls(struct vgxy61_dev *sensor)
 		goto free_ctrls;
 	}
 
+	ret = v4l2_fwnode_device_parse(&sensor->i2c_client->dev, &props);
+	if (ret)
+		goto free_ctrls;
+
+	ret = v4l2_ctrl_new_fwnode_properties(hdl, ops, &props);
+	if (ret)
+		goto free_ctrls;
+
 	sensor->sd.ctrl_handler = hdl;
 	return 0;
 
@@ -1464,12 +1474,16 @@ free_ctrls:
 	return ret;
 }
 
+static const struct v4l2_subdev_core_ops vgxy61_core_ops = {
+	.subscribe_event = v4l2_ctrl_subdev_subscribe_event,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
+};
+
 static const struct v4l2_subdev_video_ops vgxy61_video_ops = {
 	.s_stream = vgxy61_s_stream,
 };
 
 static const struct v4l2_subdev_pad_ops vgxy61_pad_ops = {
-	.init_cfg = vgxy61_init_cfg,
 	.enum_mbus_code = vgxy61_enum_mbus_code,
 	.get_fmt = vgxy61_get_fmt,
 	.set_fmt = vgxy61_set_fmt,
@@ -1478,8 +1492,13 @@ static const struct v4l2_subdev_pad_ops vgxy61_pad_ops = {
 };
 
 static const struct v4l2_subdev_ops vgxy61_subdev_ops = {
+	.core = &vgxy61_core_ops,
 	.video = &vgxy61_video_ops,
 	.pad = &vgxy61_pad_ops,
+};
+
+static const struct v4l2_subdev_internal_ops vgxy61_internal_ops = {
+	.init_state = vgxy61_init_state,
 };
 
 static const struct media_entity_operations vgxy61_subdev_entity_ops = {
@@ -1842,7 +1861,9 @@ static int vgxy61_probe(struct i2c_client *client)
 		device_property_read_bool(dev, "st,strobe-gpios-polarity");
 
 	v4l2_i2c_subdev_init(&sensor->sd, client, &vgxy61_subdev_ops);
-	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	sensor->sd.internal_ops = &vgxy61_internal_ops;
+	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE |
+			    V4L2_SUBDEV_FL_HAS_EVENTS;
 	sensor->pad.flags = MEDIA_PAD_FL_SOURCE;
 	sensor->sd.entity.ops = &vgxy61_subdev_entity_ops;
 	sensor->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;

@@ -254,11 +254,25 @@ static void rkisp1_isp_stop(struct rkisp1_isp *isp)
 	 * ISP(mi) stop in mi frame end -> Stop ISP(mipi) ->
 	 * Stop ISP(isp) ->wait for ISP isp off
 	 */
-	/* stop and clear MI and ISP interrupts */
-	rkisp1_write(rkisp1, RKISP1_CIF_ISP_IMSC, 0);
-	rkisp1_write(rkisp1, RKISP1_CIF_ISP_ICR, ~0);
 
+	/* Mask MI and ISP interrupts */
+	rkisp1_write(rkisp1, RKISP1_CIF_ISP_IMSC, 0);
 	rkisp1_write(rkisp1, RKISP1_CIF_MI_IMSC, 0);
+
+	/* Flush posted writes */
+	rkisp1_read(rkisp1, RKISP1_CIF_MI_IMSC);
+
+	/*
+	 * Wait until the IRQ handler has ended. The IRQ handler may get called
+	 * even after this, but it will return immediately as the MI and ISP
+	 * interrupts have been masked.
+	 */
+	synchronize_irq(rkisp1->irqs[RKISP1_IRQ_ISP]);
+	if (rkisp1->irqs[RKISP1_IRQ_ISP] != rkisp1->irqs[RKISP1_IRQ_MI])
+		synchronize_irq(rkisp1->irqs[RKISP1_IRQ_MI]);
+
+	/* Clear MI and ISP interrupt status */
+	rkisp1_write(rkisp1, RKISP1_CIF_ISP_ICR, ~0);
 	rkisp1_write(rkisp1, RKISP1_CIF_MI_ICR, ~0);
 
 	/* stop ISP */
@@ -409,8 +423,8 @@ static int rkisp1_isp_enum_frame_size(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int rkisp1_isp_init_config(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_state *sd_state)
+static int rkisp1_isp_init_state(struct v4l2_subdev *sd,
+				 struct v4l2_subdev_state *sd_state)
 {
 	struct v4l2_mbus_framefmt *sink_fmt, *src_fmt;
 	struct v4l2_rect *sink_crop, *src_crop;
@@ -769,7 +783,6 @@ static const struct v4l2_subdev_pad_ops rkisp1_isp_pad_ops = {
 	.enum_frame_size = rkisp1_isp_enum_frame_size,
 	.get_selection = rkisp1_isp_get_selection,
 	.set_selection = rkisp1_isp_set_selection,
-	.init_cfg = rkisp1_isp_init_config,
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = rkisp1_isp_set_fmt,
 	.link_validate = v4l2_subdev_link_validate_default,
@@ -880,6 +893,10 @@ static const struct v4l2_subdev_ops rkisp1_isp_ops = {
 	.pad = &rkisp1_isp_pad_ops,
 };
 
+static const struct v4l2_subdev_internal_ops rkisp1_isp_internal_ops = {
+	.init_state = rkisp1_isp_init_state,
+};
+
 int rkisp1_isp_register(struct rkisp1_device *rkisp1)
 {
 	struct rkisp1_isp *isp = &rkisp1->isp;
@@ -890,6 +907,7 @@ int rkisp1_isp_register(struct rkisp1_device *rkisp1)
 	isp->rkisp1 = rkisp1;
 
 	v4l2_subdev_init(sd, &rkisp1_isp_ops);
+	sd->internal_ops = &rkisp1_isp_internal_ops;
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
 	sd->entity.ops = &rkisp1_isp_media_ops;
 	sd->entity.function = MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER;
@@ -934,6 +952,7 @@ void rkisp1_isp_unregister(struct rkisp1_device *rkisp1)
 		return;
 
 	v4l2_device_unregister_subdev(&isp->sd);
+	v4l2_subdev_cleanup(&isp->sd);
 	media_entity_cleanup(&isp->sd.entity);
 }
 
@@ -989,6 +1008,8 @@ irqreturn_t rkisp1_isp_isr(int irq, void *ctx)
 
 	if (status & RKISP1_CIF_ISP_FRAME) {
 		u32 isp_ris;
+
+		rkisp1->debug.complete_frames++;
 
 		/* New frame from the sensor received */
 		isp_ris = rkisp1_read(rkisp1, RKISP1_CIF_ISP_RIS);
