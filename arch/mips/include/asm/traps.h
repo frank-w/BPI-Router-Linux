@@ -62,5 +62,7 @@ asmlinkage void do_daddi_ov(struct pt_regs *regs);
 asmlinkage void cache_parity_error(void);
 asmlinkage void ejtag_exception_handler(struct pt_regs *regs);
 asmlinkage void __noreturn nmi_exception_handler(struct pt_regs *regs);
+asmlinkage void do_page_fault(struct pt_regs *regs,
+	unsigned long write, unsigned long address);
 
 #endif /* _ASM_TRAPS_H */
