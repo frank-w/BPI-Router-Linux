@@ -156,6 +156,7 @@ svc_rdma_recv_ctxt_alloc(struct svcxprt_rdma *rdma)
 	ctxt->rc_recv_sge.length = rdma->sc_max_req_size;
 	ctxt->rc_recv_sge.lkey = rdma->sc_pd->local_dma_lkey;
 	ctxt->rc_recv_buf = buffer;
+	svc_rdma_cc_init(rdma, &ctxt->rc_cc);
 	return ctxt;
 
 fail2:
@@ -204,18 +205,11 @@ struct svc_rdma_recv_ctxt *svc_rdma_recv_ctxt_get(struct svcxprt_rdma *rdma)
 
 	node = llist_del_first(&rdma->sc_recv_ctxts);
 	if (!node)
-		goto out_empty;
-	ctxt = llist_entry(node, struct svc_rdma_recv_ctxt, rc_node);
+		return NULL;
 
-out:
+	ctxt = llist_entry(node, struct svc_rdma_recv_ctxt, rc_node);
 	ctxt->rc_page_count = 0;
 	return ctxt;
-
-out_empty:
-	ctxt = svc_rdma_recv_ctxt_alloc(rdma);
-	if (!ctxt)
-		return NULL;
-	goto out;
 }
 
 /**
@@ -271,13 +265,13 @@ static bool svc_rdma_refresh_recvs(struct svcxprt_rdma *rdma,
 		if (!ctxt)
 			break;
 
-		trace_svcrdma_post_recv(ctxt);
+		trace_svcrdma_post_recv(&ctxt->rc_cid);
 		ctxt->rc_recv_wr.next = recv_chain;
 		recv_chain = &ctxt->rc_recv_wr;
 		rdma->sc_pending_recvs++;
 	}
 	if (!recv_chain)
-		return false;
+		return true;
 
 	ret = ib_post_recv(rdma->sc_qp, recv_chain, &bad_wr);
 	if (ret)
@@ -301,10 +295,27 @@ err_free:
  * svc_rdma_post_recvs - Post initial set of Recv WRs
  * @rdma: fresh svcxprt_rdma
  *
- * Returns true if successful, otherwise false.
+ * Return values:
+ *   %true: Receive Queue initialization successful
+ *   %false: memory allocation or DMA error
  */
 bool svc_rdma_post_recvs(struct svcxprt_rdma *rdma)
 {
+	unsigned int total;
+
+	/* For each credit, allocate enough recv_ctxts for one
+	 * posted Receive and one RPC in process.
+	 */
+	total = (rdma->sc_max_requests * 2) + rdma->sc_recv_batch;
+	while (total--) {
+		struct svc_rdma_recv_ctxt *ctxt;
+
+		ctxt = svc_rdma_recv_ctxt_alloc(rdma);
+		if (!ctxt)
+			return false;
+		llist_add(&ctxt->rc_node, &rdma->sc_recv_ctxts);
+	}
+
 	return svc_rdma_refresh_recvs(rdma, rdma->sc_max_requests);
 }
 
