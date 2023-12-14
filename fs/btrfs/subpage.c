@@ -197,7 +197,7 @@ void btrfs_folio_inc_eb_refs(const struct btrfs_fs_info *fs_info, struct folio *
 		return;
 
 	ASSERT(folio_test_private(folio) && folio->mapping);
-	lockdep_assert_held(&folio->mapping->private_lock);
+	lockdep_assert_held(&folio->mapping->i_private_lock);
 
 	subpage = folio_get_private(folio);
 	atomic_inc(&subpage->eb_refs);
@@ -211,7 +211,7 @@ void btrfs_folio_dec_eb_refs(const struct btrfs_fs_info *fs_info, struct folio *
 		return;
 
 	ASSERT(folio_test_private(folio) && folio->mapping);
-	lockdep_assert_held(&folio->mapping->private_lock);
+	lockdep_assert_held(&folio->mapping->i_private_lock);
 
 	subpage = folio_get_private(folio);
 	ASSERT(atomic_read(&subpage->eb_refs));

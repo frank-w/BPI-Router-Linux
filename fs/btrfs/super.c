@@ -296,6 +296,7 @@ static int btrfs_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	case Opt_device: {
 		struct btrfs_device *device;
 		blk_mode_t mode = sb_open_mode(fc->sb_flags);
+		mode &= ~BLK_OPEN_RESTRICT_WRITES;
 
 		mutex_lock(&uuid_mutex);
 		device = btrfs_scan_one_device(param->string, mode, false);
@@ -1788,6 +1789,8 @@ static int btrfs_get_tree_super(struct fs_context *fc)
 	struct super_block *sb;
 	blk_mode_t mode = sb_open_mode(fc->sb_flags);
 	int ret;
+
+	mode &= ~BLK_OPEN_RESTRICT_WRITES;
 
 	btrfs_ctx_to_info(fs_info, ctx);
 	mutex_lock(&uuid_mutex);
