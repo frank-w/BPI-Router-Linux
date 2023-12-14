@@ -558,6 +558,9 @@ struct vb2_buf_ops {
  * @dma_dir:	DMA mapping direction.
  * @bufs:	videobuf2 buffer structures
  * @num_buffers: number of allocated/used buffers
+ * @max_num_buffers: upper limit of number of allocated/used buffers.
+ *		     If set to 0 v4l2 core will change it VB2_MAX_FRAME
+ *		     for backward compatibility.
  * @queued_list: list of buffers currently queued from userspace
  * @queued_count: number of buffers queued and ready for streaming.
  * @owned_by_drv_count: number of buffers owned by the driver
@@ -619,8 +622,9 @@ struct vb2_queue {
 	struct mutex			mmap_lock;
 	unsigned int			memory;
 	enum dma_data_direction		dma_dir;
-	struct vb2_buffer		*bufs[VB2_MAX_FRAME];
+	struct vb2_buffer		**bufs;
 	unsigned int			num_buffers;
+	unsigned int			max_num_buffers;
 
 	struct list_head		queued_list;
 	unsigned int			queued_count;
@@ -747,7 +751,7 @@ int vb2_wait_for_all_buffers(struct vb2_queue *q);
 /**
  * vb2_core_querybuf() - query video buffer information.
  * @q:		pointer to &struct vb2_queue with videobuf2 queue.
- * @index:	id number of the buffer.
+ * @vb:		pointer to struct &vb2_buffer.
  * @pb:		buffer struct passed from userspace.
  *
  * Videobuf2 core helper to implement VIDIOC_QUERYBUF() operation. It is called
@@ -759,7 +763,7 @@ int vb2_wait_for_all_buffers(struct vb2_queue *q);
  *
  * Return: returns zero on success; an error code otherwise.
  */
-void vb2_core_querybuf(struct vb2_queue *q, unsigned int index, void *pb);
+void vb2_core_querybuf(struct vb2_queue *q, struct vb2_buffer *vb, void *pb);
 
 /**
  * vb2_core_reqbufs() - Initiate streaming.
@@ -823,7 +827,7 @@ int vb2_core_create_bufs(struct vb2_queue *q, enum vb2_memory memory,
  * vb2_core_prepare_buf() - Pass ownership of a buffer from userspace
  *			to the kernel.
  * @q:		pointer to &struct vb2_queue with videobuf2 queue.
- * @index:	id number of the buffer.
+ * @vb:		pointer to struct &vb2_buffer.
  * @pb:		buffer structure passed from userspace to
  *		&v4l2_ioctl_ops->vidioc_prepare_buf handler in driver.
  *
@@ -839,13 +843,13 @@ int vb2_core_create_bufs(struct vb2_queue *q, enum vb2_memory memory,
  *
  * Return: returns zero on success; an error code otherwise.
  */
-int vb2_core_prepare_buf(struct vb2_queue *q, unsigned int index, void *pb);
+int vb2_core_prepare_buf(struct vb2_queue *q, struct vb2_buffer *vb, void *pb);
 
 /**
  * vb2_core_qbuf() - Queue a buffer from userspace
  *
  * @q:		pointer to &struct vb2_queue with videobuf2 queue.
- * @index:	id number of the buffer
+ * @vb:		pointer to struct &vb2_buffer.
  * @pb:		buffer structure passed from userspace to
  *		v4l2_ioctl_ops->vidioc_qbuf handler in driver
  * @req:	pointer to &struct media_request, may be NULL.
@@ -867,7 +871,7 @@ int vb2_core_prepare_buf(struct vb2_queue *q, unsigned int index, void *pb);
  *
  * Return: returns zero on success; an error code otherwise.
  */
-int vb2_core_qbuf(struct vb2_queue *q, unsigned int index, void *pb,
+int vb2_core_qbuf(struct vb2_queue *q, struct vb2_buffer *vb, void *pb,
 		  struct media_request *req);
 
 /**
@@ -931,7 +935,7 @@ int vb2_core_streamoff(struct vb2_queue *q, unsigned int type);
  * @fd:		pointer to the file descriptor associated with DMABUF
  *		(set by driver).
  * @type:	buffer type.
- * @index:	id number of the buffer.
+ * @vb:		pointer to struct &vb2_buffer.
  * @plane:	index of the plane to be exported, 0 for single plane queues
  * @flags:	file flags for newly created file, as defined at
  *		include/uapi/asm-generic/fcntl.h.
@@ -945,7 +949,7 @@ int vb2_core_streamoff(struct vb2_queue *q, unsigned int type);
  * Return: returns zero on success; an error code otherwise.
  */
 int vb2_core_expbuf(struct vb2_queue *q, int *fd, unsigned int type,
-		unsigned int index, unsigned int plane, unsigned int flags);
+		    struct vb2_buffer *vb, unsigned int plane, unsigned int flags);
 
 /**
  * vb2_core_queue_init() - initialize a videobuf2 queue
@@ -1140,6 +1144,15 @@ static inline bool vb2_fileio_is_active(struct vb2_queue *q)
 }
 
 /**
+ * vb2_get_num_buffers() - get the number of buffer in a queue
+ * @q:		pointer to &struct vb2_queue with videobuf2 queue.
+ */
+static inline unsigned int vb2_get_num_buffers(struct vb2_queue *q)
+{
+	return q->num_buffers;
+}
+
+/**
  * vb2_is_busy() - return busy status of the queue.
  * @q:		pointer to &struct vb2_queue with videobuf2 queue.
  *
@@ -1147,7 +1160,7 @@ static inline bool vb2_fileio_is_active(struct vb2_queue *q)
  */
 static inline bool vb2_is_busy(struct vb2_queue *q)
 {
-	return (q->num_buffers > 0);
+	return vb2_get_num_buffers(q) > 0;
 }
 
 /**
@@ -1239,6 +1252,12 @@ static inline void vb2_clear_last_buffer_dequeued(struct vb2_queue *q)
 static inline struct vb2_buffer *vb2_get_buffer(struct vb2_queue *q,
 						unsigned int index)
 {
+	if (!q->bufs)
+		return NULL;
+
+	if (index >= q->max_num_buffers)
+		return NULL;
+
 	if (index < q->num_buffers)
 		return q->bufs[index];
 	return NULL;

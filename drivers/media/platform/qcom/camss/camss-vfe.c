@@ -815,7 +815,7 @@ static int vfe_set_stream(struct v4l2_subdev *sd, int enable)
 /*
  * __vfe_get_format - Get pointer to format structure
  * @line: VFE line
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @pad: pad from which format is requested
  * @which: TRY or ACTIVE format
  *
@@ -828,8 +828,7 @@ __vfe_get_format(struct vfe_line *line,
 		 enum v4l2_subdev_format_whence which)
 {
 	if (which == V4L2_SUBDEV_FORMAT_TRY)
-		return v4l2_subdev_get_try_format(&line->subdev, sd_state,
-						  pad);
+		return v4l2_subdev_state_get_format(sd_state, pad);
 
 	return &line->fmt[pad];
 }
@@ -837,7 +836,7 @@ __vfe_get_format(struct vfe_line *line,
 /*
  * __vfe_get_compose - Get pointer to compose selection structure
  * @line: VFE line
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @which: TRY or ACTIVE format
  *
  * Return pointer to TRY or ACTIVE compose rectangle structure
@@ -848,8 +847,8 @@ __vfe_get_compose(struct vfe_line *line,
 		  enum v4l2_subdev_format_whence which)
 {
 	if (which == V4L2_SUBDEV_FORMAT_TRY)
-		return v4l2_subdev_get_try_compose(&line->subdev, sd_state,
-						   MSM_VFE_PAD_SINK);
+		return v4l2_subdev_state_get_compose(sd_state,
+						     MSM_VFE_PAD_SINK);
 
 	return &line->compose;
 }
@@ -857,7 +856,7 @@ __vfe_get_compose(struct vfe_line *line,
 /*
  * __vfe_get_crop - Get pointer to crop selection structure
  * @line: VFE line
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @which: TRY or ACTIVE format
  *
  * Return pointer to TRY or ACTIVE crop rectangle structure
@@ -868,8 +867,7 @@ __vfe_get_crop(struct vfe_line *line,
 	       enum v4l2_subdev_format_whence which)
 {
 	if (which == V4L2_SUBDEV_FORMAT_TRY)
-		return v4l2_subdev_get_try_crop(&line->subdev, sd_state,
-						MSM_VFE_PAD_SRC);
+		return v4l2_subdev_state_get_crop(sd_state, MSM_VFE_PAD_SRC);
 
 	return &line->crop;
 }
@@ -877,7 +875,7 @@ __vfe_get_crop(struct vfe_line *line,
 /*
  * vfe_try_format - Handle try format by pad subdev method
  * @line: VFE line
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @pad: pad on which format is requested
  * @fmt: pointer to v4l2 format structure
  * @which: wanted subdev format
@@ -938,7 +936,7 @@ static void vfe_try_format(struct vfe_line *line,
 /*
  * vfe_try_compose - Handle try compose selection by pad subdev method
  * @line: VFE line
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @rect: pointer to v4l2 rect structure
  * @which: wanted subdev format
  */
@@ -977,7 +975,7 @@ static void vfe_try_compose(struct vfe_line *line,
 /*
  * vfe_try_crop - Handle try crop selection by pad subdev method
  * @line: VFE line
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @rect: pointer to v4l2 rect structure
  * @which: wanted subdev format
  */
@@ -1020,7 +1018,7 @@ static void vfe_try_crop(struct vfe_line *line,
 /*
  * vfe_enum_mbus_code - Handle pixel format enumeration
  * @sd: VFE V4L2 subdevice
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @code: pointer to v4l2_subdev_mbus_code_enum structure
  *
  * return -EINVAL or zero on success
@@ -1054,7 +1052,7 @@ static int vfe_enum_mbus_code(struct v4l2_subdev *sd,
 /*
  * vfe_enum_frame_size - Handle frame size enumeration
  * @sd: VFE V4L2 subdevice
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @fse: pointer to v4l2_subdev_frame_size_enum structure
  *
  * Return -EINVAL or zero on success
@@ -1092,7 +1090,7 @@ static int vfe_enum_frame_size(struct v4l2_subdev *sd,
 /*
  * vfe_get_format - Handle get format by pads subdev method
  * @sd: VFE V4L2 subdevice
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @fmt: pointer to v4l2 subdev format structure
  *
  * Return -EINVAL or zero on success
@@ -1120,7 +1118,7 @@ static int vfe_set_selection(struct v4l2_subdev *sd,
 /*
  * vfe_set_format - Handle set format by pads subdev method
  * @sd: VFE V4L2 subdevice
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @fmt: pointer to v4l2 subdev format structure
  *
  * Return -EINVAL or zero on success
@@ -1171,7 +1169,7 @@ static int vfe_set_format(struct v4l2_subdev *sd,
 /*
  * vfe_get_selection - Handle get selection by pads subdev method
  * @sd: VFE V4L2 subdevice
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @sel: pointer to v4l2 subdev selection structure
  *
  * Return -EINVAL or zero on success
@@ -1241,7 +1239,7 @@ static int vfe_get_selection(struct v4l2_subdev *sd,
 /*
  * vfe_set_selection - Handle set selection by pads subdev method
  * @sd: VFE V4L2 subdevice
- * @cfg: V4L2 subdev pad configuration
+ * @sd_state: V4L2 subdev state
  * @sel: pointer to v4l2 subdev selection structure
  *
  * Return -EINVAL or zero on success
