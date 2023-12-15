@@ -513,8 +513,6 @@ static void tb_port_unconfigure_xdomain(struct tb_port *port)
 		usb4_port_unconfigure_xdomain(port);
 	else
 		tb_lc_unconfigure_xdomain(port);
-
-	tb_port_enable(port->dual_link_port);
 }
 
 static void tb_scan_xdomain(struct tb_port *port)
@@ -1087,15 +1085,14 @@ static int tb_configure_asym(struct tb *tb, struct tb_port *src_port,
 			     struct tb_port *dst_port, int requested_up,
 			     int requested_down)
 {
+	bool clx = false, clx_disabled = false, downstream;
 	struct tb_switch *sw;
-	bool clx, downstream;
 	struct tb_port *up;
 	int ret = 0;
 
 	if (!asym_threshold)
 		return 0;
 
-	/* Disable CL states before doing any transitions */
 	downstream = tb_port_path_direction_downstream(src_port, dst_port);
 	/* Pick up router deepest in the hierarchy */
 	if (downstream)
@@ -1103,11 +1100,10 @@ static int tb_configure_asym(struct tb *tb, struct tb_port *src_port,
 	else
 		sw = src_port->sw;
 
-	clx = tb_disable_clx(sw);
-
 	tb_for_each_upstream_port_on_path(src_port, dst_port, up) {
+		struct tb_port *down = tb_switch_downstream_port(up->sw);
+		enum tb_link_width width_up, width_down;
 		int consumed_up, consumed_down;
-		enum tb_link_width width;
 
 		ret = tb_consumed_dp_bandwidth(tb, src_port, dst_port, up,
 					       &consumed_up, &consumed_down);
@@ -1128,7 +1124,8 @@ static int tb_configure_asym(struct tb *tb, struct tb_port *src_port,
 			if (consumed_down + requested_down < asym_threshold)
 				continue;
 
-			width = TB_LINK_WIDTH_ASYM_RX;
+			width_up = TB_LINK_WIDTH_ASYM_RX;
+			width_down = TB_LINK_WIDTH_ASYM_TX;
 		} else {
 			/* Upstream, the opposite of above */
 			if (consumed_down + requested_down >= TB_ASYM_MIN) {
@@ -1138,14 +1135,26 @@ static int tb_configure_asym(struct tb *tb, struct tb_port *src_port,
 			if (consumed_up + requested_up < asym_threshold)
 				continue;
 
-			width = TB_LINK_WIDTH_ASYM_TX;
+			width_up = TB_LINK_WIDTH_ASYM_TX;
+			width_down = TB_LINK_WIDTH_ASYM_RX;
 		}
 
-		if (up->sw->link_width == width)
+		if (up->sw->link_width == width_up)
 			continue;
 
-		if (!tb_port_width_supported(up, width))
+		if (!tb_port_width_supported(up, width_up) ||
+		    !tb_port_width_supported(down, width_down))
 			continue;
+
+		/*
+		 * Disable CL states before doing any transitions. We
+		 * delayed it until now that we know there is a real
+		 * transition taking place.
+		 */
+		if (!clx_disabled) {
+			clx = tb_disable_clx(sw);
+			clx_disabled = true;
+		}
 
 		tb_sw_dbg(up->sw, "configuring asymmetric link\n");
 
@@ -1153,7 +1162,7 @@ static int tb_configure_asym(struct tb *tb, struct tb_port *src_port,
 		 * Here requested + consumed > threshold so we need to
 		 * transtion the link into asymmetric now.
 		 */
-		ret = tb_switch_set_link_width(up->sw, width);
+		ret = tb_switch_set_link_width(up->sw, width_up);
 		if (ret) {
 			tb_sw_warn(up->sw, "failed to set link width\n");
 			break;
@@ -1183,23 +1192,20 @@ static int tb_configure_sym(struct tb *tb, struct tb_port *src_port,
 			    struct tb_port *dst_port, int requested_up,
 			    int requested_down)
 {
+	bool clx = false, clx_disabled = false, downstream;
 	struct tb_switch *sw;
-	bool clx, downstream;
 	struct tb_port *up;
 	int ret = 0;
 
 	if (!asym_threshold)
 		return 0;
 
-	/* Disable CL states before doing any transitions */
 	downstream = tb_port_path_direction_downstream(src_port, dst_port);
 	/* Pick up router deepest in the hierarchy */
 	if (downstream)
 		sw = dst_port->sw;
 	else
 		sw = src_port->sw;
-
-	clx = tb_disable_clx(sw);
 
 	tb_for_each_upstream_port_on_path(src_port, dst_port, up) {
 		int consumed_up, consumed_down;
@@ -1232,6 +1238,12 @@ static int tb_configure_sym(struct tb *tb, struct tb_port *src_port,
 
 		if (up->sw->link_width == TB_LINK_WIDTH_DUAL)
 			continue;
+
+		/* Disable CL states before doing any transitions */
+		if (!clx_disabled) {
+			clx = tb_disable_clx(sw);
+			clx_disabled = true;
+		}
 
 		tb_sw_dbg(up->sw, "configuring symmetric link\n");
 
@@ -1901,7 +1913,7 @@ static void tb_dp_resource_available(struct tb *tb, struct tb_port *port)
 			return;
 	}
 
-	tb_port_dbg(port, "DP %s resource available\n",
+	tb_port_dbg(port, "DP %s resource available after hotplug\n",
 		    tb_port_is_dpin(port) ? "IN" : "OUT");
 	list_add_tail(&port->list, &tcm->dp_resources);
 
