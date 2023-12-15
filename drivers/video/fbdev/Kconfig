@@ -116,24 +116,6 @@ config FB_PM2_FIFO_DISCONNECT
 	help
 	  Support the Permedia2 FIFO disconnect feature.
 
-config FB_ARMCLCD
-	tristate "ARM PrimeCell PL110 support"
-	depends on ARM || ARM64 || COMPILE_TEST
-	depends on FB && ARM_AMBA && HAS_IOMEM
-	select FB_IOMEM_HELPERS
-	select FB_MODE_HELPERS if OF
-	select VIDEOMODE_HELPERS if OF
-	select BACKLIGHT_CLASS_DEVICE if OF
-	help
-	  This framebuffer device driver is for the ARM PrimeCell PL110
-	  Colour LCD controller.  ARM PrimeCells provide the building
-	  blocks for System on a Chip devices.
-
-	  If you want to compile this as a module (=code which can be
-	  inserted into and removed from the running kernel), say M
-	  here and read <file:Documentation/kbuild/modules.rst>.  The module
-	  will be called amba-clcd.
-
 config FB_ACORN
 	bool "Acorn VIDC support"
 	depends on (FB = y) && ARM && ARCH_ACORN
@@ -838,21 +820,6 @@ config FB_I810_I2C
 	  display information, especially for monitors with fickle timings.
 
 	  If unsure, say Y.
-
-config FB_LE80578
-	tristate "Intel LE80578 (Vermilion) support"
-	depends on FB && PCI && X86
-	select FB_IOMEM_HELPERS
-	select FB_MODE_HELPERS
-	select VIDEO_NOMODESET
-	help
-	  This driver supports the LE80578 (Vermilion Range) chipset
-
-config FB_CARILLO_RANCH
-	tristate "Intel Carillo Ranch support"
-	depends on FB_LE80578 && FB && PCI && X86
-	help
-	  This driver supports the LE80578 (Carillo Ranch) board
 
 config FB_INTEL
 	tristate "Intel 830M/845G/852GM/855GM/865G/915G/945G/945GM/965G/965GM support"
