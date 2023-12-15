@@ -18,7 +18,7 @@
 			pinctrl-names = "default", "state_uhs";
 			pinctrl-0 = <&mmc0_pins_sdcard>;
 			pinctrl-1 = <&mmc0_pins_sdcard>;
-			cd-gpios = <&pio 69 GPIO_ACTIVE_LOW>;
+			cd-gpios = <&pio 12 GPIO_ACTIVE_LOW>;
 			bus-width = <4>;
 			max-frequency = <52000000>;
 			cap-sd-highspeed;
