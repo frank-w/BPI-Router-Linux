@@ -79,7 +79,6 @@ struct pwm_device {
 	const char *label;
 	unsigned long flags;
 	unsigned int hwpwm;
-	unsigned int pwm;
 	struct pwm_chip *chip;
 
 	struct pwm_args args;
@@ -282,18 +281,17 @@ struct pwm_ops {
  * @dev: device providing the PWMs
  * @ops: callbacks for this PWM controller
  * @owner: module providing this chip
- * @base: number of first PWM controlled by this chip
+ * @id: unique number of this PWM chip
  * @npwm: number of PWMs controlled by this chip
  * @of_xlate: request a PWM device given a device tree PWM specifier
  * @of_pwm_n_cells: number of cells expected in the device tree PWM specifier
- * @list: list node for internal use
  * @pwms: array of PWM devices allocated by the framework
  */
 struct pwm_chip {
 	struct device *dev;
 	const struct pwm_ops *ops;
 	struct module *owner;
-	int base;
+	unsigned int id;
 	unsigned int npwm;
 
 	struct pwm_device * (*of_xlate)(struct pwm_chip *chip,
@@ -301,7 +299,6 @@ struct pwm_chip {
 	unsigned int of_pwm_n_cells;
 
 	/* only used internally by the PWM framework */
-	struct list_head list;
 	struct pwm_device *pwms;
 };
 
