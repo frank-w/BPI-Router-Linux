@@ -46,6 +46,7 @@ ENTRY(phys_startup_64)
 #endif
 
 jiffies = jiffies_64;
+const_pcpu_hot = pcpu_hot;
 
 #if defined(CONFIG_X86_64)
 /*
@@ -266,19 +267,6 @@ SECTIONS
 		__x86_intel_mid_dev_end = .;
 	}
 #endif
-
-	/*
-	 * start address and size of operations which during runtime
-	 * can be patched with virtualization friendly instructions or
-	 * baremetal native ones. Think page table operations.
-	 * Details in paravirt_types.h
-	 */
-	. = ALIGN(8);
-	.parainstructions : AT(ADDR(.parainstructions) - LOAD_OFFSET) {
-		__parainstructions = .;
-		*(.parainstructions)
-		__parainstructions_end = .;
-	}
 
 #ifdef CONFIG_RETPOLINE
 	/*
