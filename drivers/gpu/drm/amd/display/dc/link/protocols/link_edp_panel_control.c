@@ -287,8 +287,8 @@ bool set_default_brightness_aux(struct dc_link *link)
 	if (link && link->dpcd_sink_ext_caps.bits.oled == 1) {
 		if (!read_default_bl_aux(link, &default_backlight))
 			default_backlight = 150000;
-		// if > 5000, it might be wrong readback
-		if (default_backlight > 5000000)
+		// if < 1 nits or > 5000, it might be wrong readback
+		if (default_backlight < 1000 || default_backlight > 5000000)
 			default_backlight = 150000;
 
 		return edp_set_backlight_level_nits(link, true,
@@ -994,6 +994,36 @@ bool edp_setup_replay(struct dc_link *link, const struct dc_stream_state *stream
 			&alpm_config.raw,
 			sizeof(alpm_config.raw));
 	}
+	return true;
+}
+
+/*
+ * This is general Interface for Replay to set an 32 bit variable to dmub
+ * replay_FW_Message_type: Indicates which instruction or variable pass to DMUB
+ * cmd_data: Value of the config.
+ */
+bool edp_send_replay_cmd(struct dc_link *link,
+			enum replay_FW_Message_type msg,
+			union dmub_replay_cmd_set *cmd_data)
+{
+	struct dc *dc = link->ctx->dc;
+	struct dmub_replay *replay = dc->res_pool->replay;
+	unsigned int panel_inst;
+
+	if (!replay)
+		return false;
+
+	DC_LOGGER_INIT(link->ctx->logger);
+
+	if (dc_get_edp_link_panel_inst(dc, link, &panel_inst))
+		cmd_data->panel_inst = panel_inst;
+	else {
+		DC_LOG_DC("%s(): get edp panel inst fail ", __func__);
+		return false;
+	}
+
+	replay->funcs->replay_send_cmd(replay, msg, cmd_data);
+
 	return true;
 }
 
