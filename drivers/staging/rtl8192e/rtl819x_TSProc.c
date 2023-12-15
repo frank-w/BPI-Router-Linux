@@ -82,31 +82,31 @@ static void RxPktPendingTimeout(struct timer_list *t)
 
 static void TsAddBaProcess(struct timer_list *t)
 {
-	struct tx_ts_record *pTxTs = from_timer(pTxTs, t, TsAddBaTimer);
-	u8 num = pTxTs->num;
-	struct rtllib_device *ieee = container_of(pTxTs, struct rtllib_device,
+	struct tx_ts_record *ts = from_timer(ts, t, ts_add_ba_timer);
+	u8 num = ts->num;
+	struct rtllib_device *ieee = container_of(ts, struct rtllib_device,
 				     TxTsRecord[num]);
 
-	rtllib_ts_init_add_ba(ieee, pTxTs, BA_POLICY_IMMEDIATE, false);
+	rtllib_ts_init_add_ba(ieee, ts, BA_POLICY_IMMEDIATE, false);
 	netdev_dbg(ieee->dev, "%s(): ADDBA Req is started\n", __func__);
 }
 
-static void ResetTsCommonInfo(struct ts_common_info *pTsCommonInfo)
+static void ResetTsCommonInfo(struct ts_common_info *ts_common_info)
 {
-	eth_zero_addr(pTsCommonInfo->addr);
-	memset(&pTsCommonInfo->TSpec, 0, sizeof(struct qos_tsinfo));
+	eth_zero_addr(ts_common_info->addr);
+	memset(&ts_common_info->tspec, 0, sizeof(struct qos_tsinfo));
 }
 
 static void ResetTxTsEntry(struct tx_ts_record *ts)
 {
-	ResetTsCommonInfo(&ts->TsCommonInfo);
-	ts->TxCurSeq = 0;
-	ts->bAddBaReqInProgress = false;
-	ts->bAddBaReqDelayed = false;
-	ts->bUsingBa = false;
-	ts->bDisable_AddBa = false;
-	rtllib_reset_ba_entry(&ts->TxAdmittedBARecord);
-	rtllib_reset_ba_entry(&ts->TxPendingBARecord);
+	ResetTsCommonInfo(&ts->ts_common_info);
+	ts->tx_cur_seq = 0;
+	ts->add_ba_req_in_progress = false;
+	ts->add_ba_req_delayed = false;
+	ts->using_ba = false;
+	ts->disable_add_ba = false;
+	rtllib_reset_ba_entry(&ts->tx_admitted_ba_record);
+	rtllib_reset_ba_entry(&ts->tx_pending_ba_record);
 }
 
 static void ResetRxTsEntry(struct rx_ts_record *ts)
@@ -130,15 +130,15 @@ void rtllib_ts_init(struct rtllib_device *ieee)
 
 	for (count = 0; count < TOTAL_TS_NUM; count++) {
 		pTxTS->num = count;
-		timer_setup(&pTxTS->TsAddBaTimer, TsAddBaProcess, 0);
+		timer_setup(&pTxTS->ts_add_ba_timer, TsAddBaProcess, 0);
 
-		timer_setup(&pTxTS->TxPendingBARecord.timer, rtllib_ba_setup_timeout,
+		timer_setup(&pTxTS->tx_pending_ba_record.timer, rtllib_ba_setup_timeout,
 			    0);
-		timer_setup(&pTxTS->TxAdmittedBARecord.timer,
+		timer_setup(&pTxTS->tx_admitted_ba_record.timer,
 			    rtllib_tx_ba_inact_timeout, 0);
 
 		ResetTxTsEntry(pTxTS);
-		list_add_tail(&pTxTS->TsCommonInfo.List,
+		list_add_tail(&pTxTS->ts_common_info.List,
 				&ieee->Tx_TS_Unused_List);
 		pTxTS++;
 	}
@@ -198,8 +198,8 @@ static struct ts_common_info *SearchAdmitTRStream(struct rtllib_device *ieee,
 			continue;
 		list_for_each_entry(pRet, psearch_list, List) {
 			if (memcmp(pRet->addr, addr, 6) == 0 &&
-			    pRet->TSpec.ucTSID == TID &&
-			    pRet->TSpec.ucDirection == dir)
+			    pRet->tspec.ucTSID == TID &&
+			    pRet->tspec.ucDirection == dir)
 				break;
 		}
 		if (&pRet->List  != psearch_list)
@@ -211,16 +211,16 @@ static struct ts_common_info *SearchAdmitTRStream(struct rtllib_device *ieee,
 	return NULL;
 }
 
-static void MakeTSEntry(struct ts_common_info *pTsCommonInfo, u8 *addr,
+static void MakeTSEntry(struct ts_common_info *ts_common_info, u8 *addr,
 			struct qos_tsinfo *pTSPEC)
 {
-	if (!pTsCommonInfo)
+	if (!ts_common_info)
 		return;
 
-	memcpy(pTsCommonInfo->addr, addr, 6);
+	memcpy(ts_common_info->addr, addr, 6);
 
 	if (pTSPEC)
-		memcpy((u8 *)(&(pTsCommonInfo->TSpec)), (u8 *)pTSPEC,
+		memcpy((u8 *)(&(ts_common_info->tspec)), (u8 *)pTSPEC,
 			sizeof(struct qos_tsinfo));
 }
 
@@ -228,8 +228,8 @@ bool rtllib_get_ts(struct rtllib_device *ieee, struct ts_common_info **ppTS,
 	   u8 *addr, u8 TID, enum tr_select TxRxSelect, bool bAddNewTs)
 {
 	u8	UP = 0;
-	struct qos_tsinfo TSpec;
-	struct qos_tsinfo *ts_info = &TSpec;
+	struct qos_tsinfo tspec;
+	struct qos_tsinfo *ts_info = &tspec;
 	struct list_head *pUnusedList;
 	struct list_head *pAddmitList;
 	enum direction_value Dir;
@@ -292,7 +292,7 @@ bool rtllib_get_ts(struct rtllib_device *ieee, struct ts_common_info **ppTS,
 			struct tx_ts_record *tmp =
 				container_of(*ppTS,
 				struct tx_ts_record,
-				TsCommonInfo);
+				ts_common_info);
 			ResetTxTsEntry(tmp);
 		} else {
 			struct rx_ts_record *ts =
@@ -308,7 +308,7 @@ bool rtllib_get_ts(struct rtllib_device *ieee, struct ts_common_info **ppTS,
 		ts_info->ucTSID = UP;
 		ts_info->ucDirection = Dir;
 
-		MakeTSEntry(*ppTS, addr, &TSpec);
+		MakeTSEntry(*ppTS, addr, &tspec);
 		list_add_tail(&((*ppTS)->List), pAddmitList);
 
 		return true;
@@ -356,7 +356,7 @@ static void RemoveTsEntry(struct rtllib_device *ieee,
 	} else {
 		struct tx_ts_record *pTxTS = (struct tx_ts_record *)pTs;
 
-		del_timer_sync(&pTxTS->TsAddBaTimer);
+		del_timer_sync(&pTxTS->ts_add_ba_timer);
 	}
 }
 
@@ -433,16 +433,16 @@ void RemoveAllTS(struct rtllib_device *ieee)
 
 void TsStartAddBaProcess(struct rtllib_device *ieee, struct tx_ts_record *pTxTS)
 {
-	if (pTxTS->bAddBaReqInProgress == false) {
-		pTxTS->bAddBaReqInProgress = true;
+	if (pTxTS->add_ba_req_in_progress == false) {
+		pTxTS->add_ba_req_in_progress = true;
 
-		if (pTxTS->bAddBaReqDelayed) {
+		if (pTxTS->add_ba_req_delayed) {
 			netdev_dbg(ieee->dev, "Start ADDBA after 60 sec!!\n");
-			mod_timer(&pTxTS->TsAddBaTimer, jiffies +
+			mod_timer(&pTxTS->ts_add_ba_timer, jiffies +
 				  msecs_to_jiffies(TS_ADDBA_DELAY));
 		} else {
 			netdev_dbg(ieee->dev, "Immediately Start ADDBA\n");
-			mod_timer(&pTxTS->TsAddBaTimer, jiffies + 10);
+			mod_timer(&pTxTS->ts_add_ba_timer, jiffies + 10);
 		}
 	} else {
 		netdev_dbg(ieee->dev, "BA timer is already added\n");
