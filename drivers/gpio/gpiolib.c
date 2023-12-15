@@ -255,6 +255,20 @@ int gpio_device_get_base(struct gpio_device *gdev)
 EXPORT_SYMBOL_GPL(gpio_device_get_base);
 
 /**
+ * gpio_device_get_label() - Get the label of this GPIO device
+ * @gdev: GPIO device
+ *
+ * Returns:
+ * Pointer to the string containing the GPIO device label. The string's
+ * lifetime is tied to that of the underlying GPIO device.
+ */
+const char *gpio_device_get_label(struct gpio_device *gdev)
+{
+	return gdev->label;
+}
+EXPORT_SYMBOL(gpio_device_get_label);
+
+/**
  * gpio_device_get_chip() - Get the gpio_chip implementation of this GPIO device
  * @gdev: GPIO device
  *
@@ -1071,7 +1085,7 @@ void gpiochip_remove(struct gpio_chip *gc)
 
 	spin_lock_irqsave(&gpio_lock, flags);
 	for (i = 0; i < gdev->ngpio; i++) {
-		if (gpiochip_is_requested(gc, i))
+		if (test_bit(FLAG_REQUESTED, &gdev->descs[i].flags))
 			break;
 	}
 	spin_unlock_irqrestore(&gpio_lock, flags);
@@ -2360,31 +2374,38 @@ void gpiod_free(struct gpio_desc *desc)
 }
 
 /**
- * gpiochip_is_requested - return string iff signal was requested
- * @gc: controller managing the signal
- * @offset: of signal within controller's 0..(ngpio - 1) range
+ * gpiochip_dup_line_label - Get a copy of the consumer label.
+ * @gc: GPIO chip controlling this line.
+ * @offset: Hardware offset of the line.
  *
- * Returns NULL if the GPIO is not currently requested, else a string.
- * The string returned is the label passed to gpio_request(); if none has been
- * passed it is a meaningless, non-NULL constant.
+ * Returns:
+ * Pointer to a copy of the consumer label if the line is requested or NULL
+ * if it's not. If a valid pointer was returned, it must be freed using
+ * kfree(). In case of a memory allocation error, the function returns %ENOMEM.
  *
- * This function is for use by GPIO controller drivers.  The label can
- * help with diagnostics, and knowing that the signal is used as a GPIO
- * can help avoid accidentally multiplexing it to another controller.
+ * Must not be called from atomic context.
  */
-const char *gpiochip_is_requested(struct gpio_chip *gc, unsigned int offset)
+char *gpiochip_dup_line_label(struct gpio_chip *gc, unsigned int offset)
 {
 	struct gpio_desc *desc;
+	char *label;
 
 	desc = gpiochip_get_desc(gc, offset);
 	if (IS_ERR(desc))
 		return NULL;
 
-	if (test_bit(FLAG_REQUESTED, &desc->flags) == 0)
+	guard(spinlock_irqsave)(&gpio_lock);
+
+	if (!test_bit(FLAG_REQUESTED, &desc->flags))
 		return NULL;
-	return desc->label;
+
+	label = kstrdup(desc->label, GFP_KERNEL);
+	if (!label)
+		return ERR_PTR(-ENOMEM);
+
+	return label;
 }
-EXPORT_SYMBOL_GPL(gpiochip_is_requested);
+EXPORT_SYMBOL_GPL(gpiochip_dup_line_label);
 
 /**
  * gpiochip_request_own_desc - Allow GPIO chip to request its own descriptor
