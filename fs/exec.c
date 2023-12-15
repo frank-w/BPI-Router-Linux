@@ -1894,6 +1894,19 @@ static int do_execveat_common(int fd, struct filename *filename,
 		return PTR_ERR(filename);
 
 	/*
+	 * Fast-fail the ENOENT case for $PATH walk failures, avoiding the
+	 * allocation of bprm, mm, etc, and before parsing arguments.
+	 */
+	if (fd == AT_FDCWD && flags == 0 && filename->name[0] == '/') {
+		struct path path;
+		retval = filename_lookup(AT_FDCWD, filename, 0, &path, NULL);
+		if (retval < 0)
+			goto out_ret;
+		/* This isn't a ToCToU because we'll do a full open later. */
+		path_put(&path);
+	}
+
+	/*
 	 * We move the actual failure in case of RLIMIT_NPROC excess from
 	 * set*uid() to execve() because too many poorly written programs
 	 * don't check setuid() return code.  Here we additionally recheck
