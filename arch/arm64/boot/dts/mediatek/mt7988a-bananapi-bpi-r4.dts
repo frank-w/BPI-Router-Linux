@@ -34,24 +34,26 @@
 		reg = <0x00 0x40000000 0x00 0x10000000>;
 	};
 
-	/* left SFP cage (wan) */
-	sfp0: sfp1-wan {
+	/* SFP1 cage (WAN) */
+	sfp1: sfp1 {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp1>;
+		los-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
 		mod-def0-gpios = <&pio 82 GPIO_ACTIVE_LOW>;
-		los-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
 		tx-disable-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
-		rate-select0-gpios = <&pio 54 GPIO_ACTIVE_LOW>;
+		tx-fault-gpios = <&pio 69 GPIO_ACTIVE_HIGH>;
+		rate-select0-gpios = <&pio 21 GPIO_ACTIVE_LOW>;
 		maximum-power-milliwatt = <3000>;
 	};
 
-	/* right SFP cage (lan) */
-	sfp1: sfp2-lan {
+	/* SFP2 cage (LAN) */
+	sfp2: sfp2 {
 		compatible = "sff,sfp";
 		i2c-bus = <&i2c_sfp2>;
-		mod-def0-gpios = <&pio 83 GPIO_ACTIVE_LOW>;
 		los-gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
+		mod-def0-gpios = <&pio 83 GPIO_ACTIVE_LOW>;
 		tx-disable-gpios = <&pio 0 GPIO_ACTIVE_HIGH>;
+		tx-fault-gpios = <&pio 1 GPIO_ACTIVE_HIGH>;
 		rate-select0-gpios = <&pio 3 GPIO_ACTIVE_LOW>;
 		maximum-power-milliwatt = <3000>;
 	};
@@ -59,15 +61,9 @@
 	gpio-keys {
 		compatible = "gpio-keys";
 
-		factory {
-			label = "RST";
-			linux,code = <KEY_RESTART>;
-			gpios = <&pio 13 GPIO_ACTIVE_LOW>;
-		};
-
 		wps {
 			label = "WPS";
-			linux,code = <KEY_WPS_BUTTON>;
+			linux,code = <KEY_RESTART>;
 			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
 		};
 	};
@@ -76,7 +72,6 @@
 		compatible = "gpio-leds";
 
 		led_green: led-green {
-			label = "status:green";
 			function = LED_FUNCTION_STATUS;
 			color = <LED_COLOR_ID_GREEN>;
 			gpios = <&pio 79 GPIO_ACTIVE_HIGH>;
@@ -84,7 +79,6 @@
 		};
 
 		led_blue: led-blue {
-			label = "wps:blue";
 			function = LED_FUNCTION_WPS;
 			color = <LED_COLOR_ID_BLUE>;
 			gpios = <&pio 63 GPIO_ACTIVE_HIGH>;
@@ -102,14 +96,14 @@
 };
 
 &gmac1 {
-	sfp = <&sfp1>;
+	sfp = <&sfp2>;
 	managed = "in-band-status";
 	phy-mode = "usxgmii";
 	status = "okay";
 };
 
 &gmac2 {
-	sfp = <&sfp0>;
+	sfp = <&sfp1>;
 	managed = "in-band-status";
 	phy-mode = "usxgmii";
 	status = "okay";
@@ -309,22 +303,28 @@
 	};
 };
 
+/* mPCIe SIM2 */
 &pcie0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie0_pins>;
 	status = "okay";
 };
 
+/* mPCIe SIM3 */
 &pcie1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie1_pins>;
 	status = "okay";
 };
 
+/* M.2 key-B SIM1 */
 &pcie2 {
-	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie2_pins>;
+	status = "okay";
 };
 
+/* M.2 key-M SSD */
 &pcie3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie3_pins>;
