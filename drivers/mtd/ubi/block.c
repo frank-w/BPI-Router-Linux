@@ -74,7 +74,7 @@ struct ubiblock {
 	struct ubi_volume_desc *desc;
 	int ubi_num;
 	int vol_id;
-	int refcnt;
+	refcount_t refcnt;
 	int leb_size;
 
 	struct gendisk *gd;
@@ -232,24 +232,25 @@ static int ubiblock_open(struct gendisk *disk, blk_mode_t mode)
 	struct ubiblock *dev = disk->private_data;
 	int ret;
 
-	mutex_lock(&dev->dev_mutex);
-	if (dev->refcnt > 0) {
-		/*
-		 * The volume is already open, just increase the reference
-		 * counter.
-		 */
-		goto out_done;
-	}
-
 	/*
 	 * We want users to be aware they should only mount us as read-only.
 	 * It's just a paranoid check, as write requests will get rejected
 	 * in any case.
 	 */
-	if (mode & BLK_OPEN_WRITE) {
-		ret = -EROFS;
-		goto out_unlock;
-	}
+	if (mode & BLK_OPEN_WRITE)
+		return -EROFS;
+
+	if (!refcount_inc_not_zero(&dev->refcnt))
+		return -ENODEV;
+
+	if (refcount_read(&dev->refcnt) > 2)
+		/*
+		 * The volume is already open, just increase the reference
+		 * counter.
+		 */
+		return 0;
+
+	mutex_lock(&dev->dev_mutex);
 	dev->desc = ubi_open_volume(dev->ubi_num, dev->vol_id, UBI_READONLY);
 	if (IS_ERR(dev->desc)) {
 		dev_err(disk_to_dev(dev->gd), "failed to open ubi volume %d_%d",
@@ -259,13 +260,12 @@ static int ubiblock_open(struct gendisk *disk, blk_mode_t mode)
 		goto out_unlock;
 	}
 
-out_done:
-	dev->refcnt++;
 	mutex_unlock(&dev->dev_mutex);
 	return 0;
 
 out_unlock:
 	mutex_unlock(&dev->dev_mutex);
+	refcount_dec(&dev->refcnt);
 	return ret;
 }
 
@@ -274,11 +274,15 @@ static void ubiblock_release(struct gendisk *gd)
 	struct ubiblock *dev = gd->private_data;
 
 	mutex_lock(&dev->dev_mutex);
-	dev->refcnt--;
-	if (dev->refcnt == 0) {
+	if (!refcount_dec_not_one(&dev->refcnt))
+		goto out_unlock;
+
+	if (refcount_read(&dev->refcnt) == 1) {
 		ubi_close_volume(dev->desc);
 		dev->desc = NULL;
 	}
+
+out_unlock:
 	mutex_unlock(&dev->dev_mutex);
 }
 
@@ -427,6 +431,7 @@ int ubiblock_create(struct ubi_volume_info *vi)
 
 	dev_info(disk_to_dev(dev->gd), "created from ubi%d:%d(%s)",
 		 dev->ubi_num, dev->vol_id, vi->name);
+	refcount_set(&dev->refcnt, 1);
 	mutex_unlock(&devices_mutex);
 	return 0;
 
@@ -470,24 +475,20 @@ int ubiblock_remove(struct ubi_volume_info *vi)
 		goto out_unlock;
 	}
 
-	/* Found a device, let's lock it so we can check if it's busy */
-	mutex_lock(&dev->dev_mutex);
-	if (dev->refcnt > 0) {
+	/* Found a device, let's check if it's busy */
+	if (!refcount_dec_if_one(&dev->refcnt)) {
 		ret = -EBUSY;
-		goto out_unlock_dev;
+		goto out_unlock;
 	}
 
 	/* Remove from device list */
 	list_del(&dev->list);
 	ubiblock_cleanup(dev);
-	mutex_unlock(&dev->dev_mutex);
 	mutex_unlock(&devices_mutex);
 
 	kfree(dev);
 	return 0;
 
-out_unlock_dev:
-	mutex_unlock(&dev->dev_mutex);
 out_unlock:
 	mutex_unlock(&devices_mutex);
 	return ret;
