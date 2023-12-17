@@ -68,6 +68,11 @@ config SFP
 
 comment "MII PHY device drivers"
 
+config AIR_EN8811H_PHY
+	tristate "Airoha EN8811H 2.5 Gigabit PHY"
+	help
+	  Currently supports the Airoha EN8811H PHY.
+
 config AMD_PHY
 	tristate "AMD PHYs"
 	help
@@ -408,11 +413,6 @@ config XILINX_GMII2RGMII
 	  This driver support xilinx GMII to RGMII IP core it provides
 	  the Reduced Gigabit Media Independent Interface(RGMII) between
 	  Ethernet physical media devices and the Gigabit Ethernet controller.
-
-config AIR_EN8811H_PHY
-	tristate "Drivers for Airoha EN8811H 2.5 Gigabit PHY"
-	help
-	  Currently supports the Airoha EN8811H PHY.
 
 endif # PHYLIB
 

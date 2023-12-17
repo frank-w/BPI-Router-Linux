@@ -16,6 +16,7 @@
 #include <linux/phy.h>
 #include <linux/firmware.h>
 #include <linux/property.h>
+#include <asm/unaligned.h>
 
 #define EN8811H_PHY_ID		0x03a2a411
 
@@ -25,13 +26,10 @@
 #define AIR_FW_ADDR_DM	0x00000000
 #define AIR_FW_ADDR_DSP	0x00100000
 
-/* u16 (WORD) component macros */
-#define MAKEWORD(lo, hi) ((u16)((u8)(lo) | ((u16)(u8)(hi) << 8)))
 
 /* u32 (DWORD) component macros */
 #define LOWORD(d) ((u16)(u32)(d))
 #define HIWORD(d) ((u16)(((u32)(d)) >> 16))
-#define MAKEDWORD(lo, hi) ((u32)((u16)(lo) | ((u32)(u16)(hi) << 16)))
 
 /* MII Registers */
 #define AIR_EXT_PAGE_ACCESS		0x1f
@@ -200,14 +198,20 @@ static const unsigned long en8811h_led_trig = (BIT(TRIGGER_NETDEV_FULL_DUPLEX) |
 					       BIT(TRIGGER_NETDEV_RX)          |
 					       BIT(TRIGGER_NETDEV_TX));
 
+static int air_phy_read_page(struct phy_device *phydev)
+{
+	return __phy_read(phydev, AIR_EXT_PAGE_ACCESS);
+}
+
+static int air_phy_write_page(struct phy_device *phydev, int page)
+{
+	return __phy_write(phydev, AIR_EXT_PAGE_ACCESS, page);
+}
+
 static int __air_buckpbus_reg_write(struct phy_device *phydev,
 				    u32 pbus_address, u32 pbus_data)
 {
 	int ret;
-
-	ret = __phy_write(phydev, AIR_EXT_PAGE_ACCESS, AIR_PHY_PAGE_EXTENDED_4);
-	if (ret < 0)
-		return ret;
 
 	ret = __phy_write(phydev, AIR_PBUS_MODE, AIR_PBUS_MODE_ADDR_KEEP);
 	if (ret < 0)
@@ -229,27 +233,23 @@ static int __air_buckpbus_reg_write(struct phy_device *phydev,
 	if (ret < 0)
 		return ret;
 
-	ret = __phy_write(phydev, AIR_EXT_PAGE_ACCESS, AIR_PHY_PAGE_STANDARD);
-	if (ret < 0)
-		return ret;
-
 	return 0;
 }
 
 static int air_buckpbus_reg_write(struct phy_device *phydev,
 				  u32 pbus_address, u32 pbus_data)
 {
-	int ret;
+	int ret, saved_page;
 
-	phy_lock_mdio_bus(phydev);
+	saved_page = phy_select_page(phydev, AIR_PHY_PAGE_EXTENDED_4);
+
 	ret = __air_buckpbus_reg_write(phydev, pbus_address, pbus_data);
-	phy_unlock_mdio_bus(phydev);
-
 	if (ret < 0)
 		phydev_err(phydev, "%s 0x%08x failed: %d\n", __func__,
 			   pbus_address, ret);
 
-	return ret;
+	return phy_restore_page(phydev, saved_page, ret);
+;
 }
 
 static int __air_buckpbus_reg_read(struct phy_device *phydev,
@@ -257,10 +257,6 @@ static int __air_buckpbus_reg_read(struct phy_device *phydev,
 {
 	int pbus_data_low, pbus_data_high;
 	int ret;
-
-	ret = __phy_write(phydev, AIR_EXT_PAGE_ACCESS, AIR_PHY_PAGE_EXTENDED_4);
-	if (ret < 0)
-		return ret;
 
 	ret = __phy_write(phydev, AIR_PBUS_MODE, AIR_PBUS_MODE_ADDR_KEEP);
 	if (ret < 0)
@@ -282,28 +278,23 @@ static int __air_buckpbus_reg_read(struct phy_device *phydev,
 	if (pbus_data_low < 0)
 		return ret;
 
-	ret = __phy_write(phydev, AIR_EXT_PAGE_ACCESS, AIR_PHY_PAGE_STANDARD);
-	if (ret < 0)
-		return ret;
-
-	*pbus_data = MAKEDWORD(pbus_data_low, pbus_data_high);
+	*pbus_data = (u16)pbus_data_low | ((u32)(u16)pbus_data_high << 16);
 	return 0;
 }
 
 static int air_buckpbus_reg_read(struct phy_device *phydev,
 				 u32 pbus_address, u32 *pbus_data)
 {
-	int ret;
+	int ret, saved_page;
 
-	phy_lock_mdio_bus(phydev);
+	saved_page = phy_select_page(phydev, AIR_PHY_PAGE_EXTENDED_4);
+
 	ret = __air_buckpbus_reg_read(phydev, pbus_address, pbus_data);
-	phy_unlock_mdio_bus(phydev);
-
 	if (ret < 0)
 		phydev_err(phydev, "%s 0x%08x failed: %d\n", __func__,
 			   pbus_address, ret);
 
-	return ret;
+	return phy_restore_page(phydev, saved_page, ret);
 }
 
 static int __air_write_buf(struct phy_device *phydev, u32 address,
@@ -312,10 +303,6 @@ static int __air_write_buf(struct phy_device *phydev, u32 address,
 	unsigned int offset;
 	int ret;
 	u16 val;
-
-	ret = __phy_write(phydev, AIR_EXT_PAGE_ACCESS, AIR_PHY_PAGE_EXTENDED_4);
-	if (ret < 0)
-		return ret;
 
 	ret = __phy_write(phydev, AIR_PBUS_MODE, AIR_PBUS_MODE_ADDR_INCR);
 	if (ret < 0)
@@ -330,20 +317,16 @@ static int __air_write_buf(struct phy_device *phydev, u32 address,
 		return ret;
 
 	for (offset = 0; offset < fw->size; offset += 4) {
-		val = MAKEWORD(fw->data[offset + 2], fw->data[offset + 3]);
+		val = get_unaligned_le16(&fw->data[offset + 2]);
 		ret = __phy_write(phydev, AIR_PBUS_WR_DATA_HIGH, val);
 		if (ret < 0)
 			return ret;
 
-		val = MAKEWORD(fw->data[offset],    fw->data[offset + 1]);
-		ret = __phy_write(phydev, AIR_PBUS_WR_DATA_LOW,  val);
+		val = get_unaligned_le16(&fw->data[offset]);
+		ret = __phy_write(phydev, AIR_PBUS_WR_DATA_LOW, val);
 		if (ret < 0)
 			return ret;
 	}
-
-	ret = __phy_write(phydev, AIR_EXT_PAGE_ACCESS, AIR_PHY_PAGE_STANDARD);
-	if (ret < 0)
-		return ret;
 
 	return 0;
 }
@@ -351,25 +334,24 @@ static int __air_write_buf(struct phy_device *phydev, u32 address,
 static int air_write_buf(struct phy_device *phydev, u32 address,
 			 const struct firmware *fw)
 {
-	int ret;
+	int ret, saved_page;
 
-	phy_lock_mdio_bus(phydev);
+	saved_page = phy_select_page(phydev, AIR_PHY_PAGE_EXTENDED_4);
+
 	ret = __air_write_buf(phydev, address, fw);
-	phy_unlock_mdio_bus(phydev);
-
 	if (ret < 0)
 		phydev_err(phydev, "%s 0x%08x failed: %d\n", __func__,
 			   address, ret);
 
-	return ret;
+	return phy_restore_page(phydev, saved_page, ret);
 }
 
 static int en8811h_load_firmware(struct phy_device *phydev)
 {
 	struct device *dev = &phydev->mdio.dev;
 	const struct firmware *fw1, *fw2;
-	int ret;
 	unsigned int pbus_value;
+	int ret;
 
 	ret = request_firmware_direct(&fw1, EN8811H_MD32_DM, dev);
 	if (ret < 0)
@@ -664,8 +646,8 @@ static int air_led_init(struct phy_device *phydev, u8 index, u8 state, u8 pol)
 static int air_leds_init(struct phy_device *phydev, int num, int dur, int mode)
 {
 	struct en8811h_priv *priv = phydev->priv;
-	int ret, i;
 	int cl45_data = dur;
+	int ret, i;
 
 	ret = phy_write_mmd(phydev, MDIO_MMD_VEND2, AIR_PHY_LED_DUR_BLINK,
 			    cl45_data);
@@ -748,9 +730,9 @@ static int en8811h_probe(struct phy_device *phydev)
 
 static int en8811h_config_init(struct phy_device *phydev)
 {
+	struct device *dev = &phydev->mdio.dev;
 	int ret, pollret, reg_value;
 	unsigned int pbus_value;
-	struct device *dev = &phydev->mdio.dev;
 
 	ret = en8811h_load_firmware(phydev);
 	if (ret) {
@@ -796,11 +778,11 @@ static int en8811h_config_init(struct phy_device *phydev)
 	ret = air_buckpbus_reg_read(phydev, EN8811H_POLARITY, &pbus_value);
 	if (ret < 0)
 		return ret;
-	if (device_property_read_bool(dev, "airoha,rx-pol-reverse"))
+	if (device_property_read_bool(dev, "airoha,pnswap-rx"))
 		pbus_value |=  EN8811H_POLARITY_RX_REVERSE;
 	else
 		pbus_value &= ~EN8811H_POLARITY_RX_REVERSE;
-	if (device_property_read_bool(dev, "airoha,tx-pol-reverse"))
+	if (device_property_read_bool(dev, "airoha,pnswap-tx"))
 		pbus_value &= ~EN8811H_POLARITY_TX_NORMAL;
 	else
 		pbus_value |=  EN8811H_POLARITY_TX_NORMAL;
@@ -843,33 +825,21 @@ static int en8811h_get_rate_matching(struct phy_device *phydev,
 
 static int en8811h_config_aneg(struct phy_device *phydev)
 {
-	u32 adv;
 	bool changed = false;
-	int ret;
+	int err, val;
 
-	phydev_dbg(phydev, "%s: advertising=%*pb\n", __func__,
-		   __ETHTOOL_LINK_MODE_MASK_NBITS, phydev->advertising);
-
-	if (phydev->autoneg == AUTONEG_DISABLE)
-		return genphy_c45_pma_setup_forced(phydev);
-
-	ret = genphy_c45_an_config_aneg(phydev);
-	if (ret < 0)
-		return ret;
-	if (ret > 0)
+	val = 0;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
+			phydev->advertising))
+		val |= MDIO_AN_10GBT_CTRL_ADV2_5G;
+	err =  phy_modify_mmd_changed(phydev, MDIO_MMD_AN, MDIO_AN_10GBT_CTRL,
+				      MDIO_AN_10GBT_CTRL_ADV2_5G, val);
+	if (err < 0)
+		return err;
+	if (err > 0)
 		changed = true;
 
-	/* Clause 45 has no standardized support for 1000BaseT, therefore
-	 * use Clause 22 registers for this mode.
-	 */
-	adv = linkmode_adv_to_mii_ctrl1000_t(phydev->advertising);
-	ret = phy_modify_changed(phydev, MII_CTRL1000, ADVERTISE_1000FULL, adv);
-	if (ret < 0)
-		return ret;
-	if (ret > 0)
-		changed = true;
-
-	return genphy_c45_check_and_restart_aneg(phydev, changed);
+	return __genphy_config_aneg(phydev, changed);
 }
 
 int en8811h_c45_read_link(struct phy_device *phydev)
@@ -898,30 +868,30 @@ int en8811h_c45_read_link(struct phy_device *phydev)
 
 static int en8811h_read_status(struct phy_device *phydev)
 {
-	int ret, lpagb;
 	unsigned int pbus_value;
+	int ret;
 
 	ret = en8811h_c45_read_link(phydev);
 	if (ret)
 		return ret;
 
+	phydev->master_slave_get = MASTER_SLAVE_CFG_UNSUPPORTED;
+	phydev->master_slave_state = MASTER_SLAVE_STATE_UNSUPPORTED;
 	phydev->speed = SPEED_UNKNOWN;
 	phydev->duplex = DUPLEX_UNKNOWN;
 	phydev->pause = 0;
 	phydev->asym_pause = 0;
 
-	if (phydev->autoneg == AUTONEG_ENABLE) {
-		ret = genphy_c45_read_lpa(phydev);
-		if (ret)
+	if (phydev->is_gigabit_capable) {
+		ret = genphy_read_master_slave(phydev);
+		if (ret < 0)
 			return ret;
+	}
 
-		/* Clause 45 has no standardized support for 1000BaseT,
-		 * therefore use Clause 22 registers for this mode.
-		 */
-		lpagb = phy_read(phydev, MII_STAT1000);
-		if (lpagb < 0)
-			return lpagb;
-		mii_stat1000_mod_linkmode_lpa_t(phydev->lp_advertising, lpagb);
+	if (phydev->autoneg == AUTONEG_ENABLE) {
+		ret = genphy_read_lpa(phydev);
+		if (ret < 0)
+			return ret;
 
 		phy_resolve_aneg_pause(phydev);
 	} else {
@@ -1003,31 +973,15 @@ static struct phy_driver en8811h_driver[] = {
 	.config_intr		= en8811h_clear_intr,
 	.handle_interrupt	= en8811h_handle_interrupt,
 	.led_hw_is_supported	= en8811h_led_hw_is_supported,
+	.read_page		= air_phy_read_page,
+	.write_page		= air_phy_write_page,
 	.led_blink_set		= air_led_blink_set,
 	.led_brightness_set	= air_led_brightness_set,
 	.led_hw_control_set	= air_led_hw_control_set,
 	.led_hw_control_get	= air_led_hw_control_get,
 } };
 
-int __init en8811h_phy_driver_register(void)
-{
-	int ret;
-
-	ret = phy_driver_register(en8811h_driver, THIS_MODULE);
-	if (!ret)
-		return 0;
-
-	phy_driver_unregister(en8811h_driver);
-	return ret;
-}
-
-void __exit en8811h_phy_driver_unregister(void)
-{
-	phy_driver_unregister(en8811h_driver);
-}
-
-module_init(en8811h_phy_driver_register);
-module_exit(en8811h_phy_driver_unregister);
+module_phy_driver(en8811h_driver);
 
 static struct mdio_device_id __maybe_unused en8811h_tbl[] = {
 	{ PHY_ID_MATCH_MODEL(EN8811H_PHY_ID) },
