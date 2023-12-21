@@ -85,7 +85,8 @@
 #define RST_GL_PSE		BIT(0)
 
 /* Frame Engine Interrupt Status Register */
-#define MTK_INT_STATUS2		0x08
+#define MTK_FE_INT_STATUS	0x08
+#define MTK_FE_INT_STATUS2	0x28
 #define MTK_FE_INT_ENABLE	0x0c
 #define MTK_FE_INT_FQ_EMPTY	BIT(8)
 #define MTK_FE_INT_TSO_FAIL	BIT(12)
@@ -169,7 +170,6 @@
 #define MTK_CDMM_THRES		0x165c
 
 /* PDMA HW LRO Control Registers */
-#define MTK_PDMA_LRO_CTRL_DW0	0x980
 #define MTK_LRO_EN			BIT(0)
 #define MTK_L3_CKS_UPD_EN		BIT(7)
 #define MTK_L3_CKS_UPD_EN_V2		BIT(19)
@@ -179,9 +179,9 @@
 #define MTK_LRO_RING_RELINQUISH_DONE	(0x7 << 29)
 #define MTK_LRO_RING_RELINQUISH_DONE_V2	(0xf << 28)
 
-#define MTK_PDMA_LRO_CTRL_DW1	0x984
-#define MTK_PDMA_LRO_CTRL_DW2	0x988
-#define MTK_PDMA_LRO_CTRL_DW3	0x98c
+#define MTK_PDMA_LRO_CTRL_DW1	(reg_map->pdma.lro_ctrl_dw0 + 0x04)
+#define MTK_PDMA_LRO_CTRL_DW2	(reg_map->pdma.lro_ctrl_dw0 + 0x08)
+#define MTK_PDMA_LRO_CTRL_DW3	(reg_map->pdma.lro_ctrl_dw0 + 0x0c)
 #define MTK_ADMA_MODE		BIT(15)
 #define MTK_LRO_MIN_RXD_SDL	(MTK_HW_LRO_SDL_REMAIN_ROOM << 16)
 
@@ -211,21 +211,14 @@
 #define MTK_PDMA_DELAY_PINT_MASK	0x7f
 #define MTK_PDMA_DELAY_PTIME_MASK	0xff
 
-/* PDMA HW LRO Alter Flow Delta Register */
-#define MTK_PDMA_LRO_ALT_SCORE_DELTA	0xa4c
-
 /* PDMA HW LRO IP Setting Registers */
-#define MTK_LRO_RX_RING0_DIP_DW0	0xb04
-#define MTK_LRO_DIP_DW0_CFG(x)		(MTK_LRO_RX_RING0_DIP_DW0 + (x * 0x40))
+#define MTK_LRO_DIP_DW0_CFG(x)		(reg_map->pdma.lro_rx_ring0_dip_dw0 + (x * 0x40))
 #define MTK_RING_MYIP_VLD		BIT(9)
 
 /* PDMA HW LRO Ring Control Registers */
-#define MTK_LRO_RX_RING0_CTRL_DW1	0xb28
-#define MTK_LRO_RX_RING0_CTRL_DW2	0xb2c
-#define MTK_LRO_RX_RING0_CTRL_DW3	0xb30
-#define MTK_LRO_CTRL_DW1_CFG(x)		(MTK_LRO_RX_RING0_CTRL_DW1 + (x * 0x40))
-#define MTK_LRO_CTRL_DW2_CFG(x)		(MTK_LRO_RX_RING0_CTRL_DW2 + (x * 0x40))
-#define MTK_LRO_CTRL_DW3_CFG(x)		(MTK_LRO_RX_RING0_CTRL_DW3 + (x * 0x40))
+#define MTK_LRO_CTRL_DW1_CFG(x)		(reg_map->pdma.lro_rx_ring0_ctrl_dw1 + (x * 0x40))
+#define MTK_LRO_CTRL_DW2_CFG(x)		(reg_map->pdma.lro_rx_ring0_ctrl_dw2 + (x * 0x40))
+#define MTK_LRO_CTRL_DW3_CFG(x)		(reg_map->pdma.lro_rx_ring0_ctrl_dw3 + (x * 0x40))
 #define MTK_RING_AGE_TIME_L		((MTK_HW_LRO_AGE_TIME & 0x3ff) << 22)
 #define MTK_RING_AGE_TIME_H		((MTK_HW_LRO_AGE_TIME >> 10) & 0x3f)
 #define MTK_RING_AUTO_LERAN_MODE	(3 << 6)
@@ -1172,6 +1165,12 @@ struct mtk_reg_map {
 		u32	irq_mask;	/* interrupt mask */
 		u32	adma_rx_dbg0;
 		u32	int_grp;
+		u32	lro_ctrl_dw0;
+		u32	lro_alt_score_delta; /* PDMA HW LRO Alter Flow Delta Register */
+		u32	lro_rx_ring0_dip_dw0;
+		u32	lro_rx_ring0_ctrl_dw1;
+		u32	lro_rx_ring0_ctrl_dw2;
+		u32	lro_rx_ring0_ctrl_dw3;
 	} pdma;
 	struct {
 		u32	qtx_cfg;	/* tx queue configuration */

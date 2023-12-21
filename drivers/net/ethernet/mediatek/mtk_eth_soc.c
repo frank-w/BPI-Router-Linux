@@ -58,6 +58,12 @@ static const struct mtk_reg_map mtk_reg_map = {
 		.irq_mask	= 0x0a28,
 		.adma_rx_dbg0	= 0x0a38,
 		.int_grp	= 0x0a50,
+		.lro_ctrl_dw0	= 0x0980,
+		.lro_alt_score_delta = 0x0a4c,
+		.lro_rx_ring0_dip_dw0 = 0x0b04,
+		.lro_rx_ring0_ctrl_dw1 = 0x0b28,
+		.lro_rx_ring0_ctrl_dw2 = 0x0b2c,
+		.lro_rx_ring0_ctrl_dw3 = 0x0b30,
 	},
 	.qdma = {
 		.qtx_cfg	= 0x1800,
@@ -105,6 +111,12 @@ static const struct mtk_reg_map mt7628_reg_map = {
 		.irq_status	= 0x0a20,
 		.irq_mask	= 0x0a28,
 		.int_grp	= 0x0a50,
+		.lro_ctrl_dw0	= 0x0980,
+		.lro_alt_score_delta = 0x0a4c,
+		.lro_rx_ring0_dip_dw0 = 0x0b04,
+		.lro_rx_ring0_ctrl_dw1 = 0x0b28,
+		.lro_rx_ring0_ctrl_dw2 = 0x0b2c,
+		.lro_rx_ring0_ctrl_dw3 = 0x0b30,
 	},
 };
 
@@ -122,6 +134,12 @@ static const struct mtk_reg_map mt7986_reg_map = {
 		.irq_mask	= 0x6228,
 		.adma_rx_dbg0	= 0x6238,
 		.int_grp	= 0x6250,
+		.lro_ctrl_dw0	= 0x6180,
+		.lro_alt_score_delta = 0x624c,
+		.lro_rx_ring0_dip_dw0 = 0x6414,
+		.lro_rx_ring0_ctrl_dw1 = 0x6328,
+		.lro_rx_ring0_ctrl_dw2 = 0x632c,
+		.lro_rx_ring0_ctrl_dw3 = 0x6330,
 	},
 	.qdma = {
 		.qtx_cfg	= 0x4400,
@@ -170,6 +188,12 @@ static const struct mtk_reg_map mt7988_reg_map = {
 		.irq_mask	= 0x6a28,
 		.adma_rx_dbg0	= 0x6a38,
 		.int_grp	= 0x6a50,
+		.lro_ctrl_dw0	= 0x6c08,
+		.lro_alt_score_delta = 0x6c1c,
+		.lro_rx_ring0_dip_dw0 = 0x6c14,
+		.lro_rx_ring0_ctrl_dw1 = 0x6c38,
+		.lro_rx_ring0_ctrl_dw2 = 0x6c3c,
+		.lro_rx_ring0_ctrl_dw3 = 0x6c40,
 	},
 	.qdma = {
 		.qtx_cfg	= 0x4400,
@@ -2513,12 +2537,12 @@ static int mtk_poll_tx(struct mtk_eth *eth, int budget)
 
 static void mtk_handle_status_irq(struct mtk_eth *eth)
 {
-	u32 status2 = mtk_r32(eth, MTK_INT_STATUS2);
+	u32 status2 = mtk_r32(eth, MTK_FE_INT_STATUS);
 
 	if (unlikely(status2 & (MTK_GDM1_AF | MTK_GDM2_AF))) {
 		mtk_stats_update(eth);
 		mtk_w32(eth, (MTK_GDM1_AF | MTK_GDM2_AF),
-			MTK_INT_STATUS2);
+			MTK_FE_INT_STATUS);
 	}
 }
 
@@ -2918,6 +2942,7 @@ static void mtk_rx_clean(struct mtk_eth *eth, struct mtk_rx_ring *ring, bool in_
 
 static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 {
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
 	u32 ring_ctrl_dw1 = 0, ring_ctrl_dw2 = 0, ring_ctrl_dw3 = 0;
 	u32 lro_ctrl_dw0 = 0, lro_ctrl_dw3 = 0;
@@ -2955,7 +2980,7 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	mtk_w32(eth, MTK_HW_LRO_BW_THRE, MTK_PDMA_LRO_CTRL_DW2);
 
 	/* auto-learn score delta setting */
-	mtk_w32(eth, MTK_HW_LRO_REPLACE_DELTA, MTK_PDMA_LRO_ALT_SCORE_DELTA);
+	mtk_w32(eth, MTK_HW_LRO_REPLACE_DELTA, reg_map->pdma.lro_alt_score_delta);
 
 	/* set refresh timer for altering flows to 1 sec. (unit: 20us) */
 	mtk_w32(eth, (MTK_HW_LRO_TIMER_UNIT << 16) | MTK_HW_LRO_REFRESH_TIME,
@@ -2971,22 +2996,23 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	lro_ctrl_dw0 |= MTK_LRO_EN;
 
 	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3);
-	mtk_w32(eth, lro_ctrl_dw0, MTK_PDMA_LRO_CTRL_DW0);
+	mtk_w32(eth, lro_ctrl_dw0, reg_map->pdma.lro_ctrl_dw0);
 
 	return 0;
 }
 
 static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 {
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
 	u32 val;
 
 	/* relinquish lro rings, flush aggregated packets */
-	mtk_w32(eth, MTK_LRO_RING_RELINQUISH_REQ, MTK_PDMA_LRO_CTRL_DW0);
+	mtk_w32(eth, MTK_LRO_RING_RELINQUISH_REQ, reg_map->pdma.lro_ctrl_dw0);
 
 	/* wait for relinquishments done */
 	for (i = 0; i < 10; i++) {
-		val = mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0);
+		val = mtk_r32(eth, reg_map->pdma.lro_ctrl_dw0);
 		if (val & MTK_LRO_RING_RELINQUISH_DONE) {
 			msleep(20);
 			continue;
@@ -2999,11 +3025,12 @@ static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 		mtk_w32(eth, 0, MTK_LRO_CTRL_DW2_CFG(i));
 
 	/* disable HW LRO */
-	mtk_w32(eth, 0, MTK_PDMA_LRO_CTRL_DW0);
+	mtk_w32(eth, 0, reg_map->pdma.lro_ctrl_dw0);
 }
 
 static void mtk_hwlro_val_ipaddr(struct mtk_eth *eth, int idx, __be32 ip)
 {
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
 
 	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(idx));
@@ -3019,6 +3046,7 @@ static void mtk_hwlro_val_ipaddr(struct mtk_eth *eth, int idx, __be32 ip)
 
 static void mtk_hwlro_inval_ipaddr(struct mtk_eth *eth, int idx)
 {
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
 
 	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(idx));
@@ -3286,7 +3314,7 @@ static void mtk_dma_free(struct mtk_eth *eth)
 
 static bool mtk_hw_reset_check(struct mtk_eth *eth)
 {
-	u32 val = mtk_r32(eth, MTK_INT_STATUS2);
+	u32 val = mtk_r32(eth, MTK_FE_INT_STATUS);
 
 	return (val & MTK_FE_INT_FQ_EMPTY) || (val & MTK_FE_INT_RFIFO_UF) ||
 	       (val & MTK_FE_INT_RFIFO_OV) || (val & MTK_FE_INT_TSO_FAIL) ||
