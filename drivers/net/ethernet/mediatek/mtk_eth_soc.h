@@ -62,8 +62,8 @@
 
 #define MTK_QRX_OFFSET		0x10
 
-#define MTK_MAX_RX_RING_NUM	4
-#define MTK_HW_LRO_DMA_SIZE	8
+#define MTK_MAX_RX_RING_NUM	(mtk_is_netsys_v2_or_greater(eth) ? 8 : 4)
+#define MTK_HW_LRO_DMA_SIZE	512
 
 #define	MTK_MAX_LRO_RX_LENGTH		(4096 * 3)
 #define	MTK_MAX_LRO_IP_CNT		2
@@ -75,6 +75,8 @@
 #define	MTK_HW_LRO_BW_THRE		3000
 #define	MTK_HW_LRO_REPLACE_DELTA	1000
 #define	MTK_HW_LRO_SDL_REMAIN_ROOM	1522
+#define MTK_RSS_HASH_KEYSIZE		40
+#define MTK_RSS_MAX_INDIRECTION_TABLE	128
 
 /* Frame Engine Global Configuration */
 #define MTK_FE_GLO_CFG(x)	(((x) == MTK_GMAC3_ID) ? 0x24 : 0x00)
@@ -96,6 +98,9 @@
 #define MTK_FE_INT_RFIFO_UF	BIT(19)
 #define MTK_GDM1_AF		BIT(28)
 #define MTK_GDM2_AF		BIT(29)
+
+#define MTK_FE_IRQ_NUM		(4)
+#define MTK_PDMA_IRQ_NUM	(4)
 
 /* PDMA HW LRO Alter Flow Timer Register */
 #define MTK_PDMA_LRO_ALT_REFRESH_TIMER	0x1c
@@ -170,20 +175,39 @@
 #define MTK_CDMM_THRES		0x165c
 
 /* PDMA HW LRO Control Registers */
+#define MTK_HW_LRO_RING_NUM		(mtk_is_netsys_v2_or_greater(eth) ? 4 : 3)
+#define MTK_HW_LRO_RING(x)		((x) + (mtk_is_netsys_v2_or_greater(eth) ? 4 : 1))
+#define MTK_LRO_CRSN_BNW		BIT((mtk_is_netsys_v2_or_greater(eth) ? 22 : 6))
 #define MTK_LRO_EN			BIT(0)
+#define MTK_NON_LRO_MULTI_EN   		BIT(2)
+#define MTK_LRO_DLY_INT_EN		BIT(5)
 #define MTK_L3_CKS_UPD_EN		BIT(7)
 #define MTK_L3_CKS_UPD_EN_V2		BIT(19)
 #define MTK_LRO_ALT_PKT_CNT_MODE	BIT(21)
-#define MTK_LRO_RING_RELINQUISH_REQ	(0x7 << 26)
-#define MTK_LRO_RING_RELINQUISH_REQ_V2	(0xf << 24)
-#define MTK_LRO_RING_RELINQUISH_DONE	(0x7 << 29)
-#define MTK_LRO_RING_RELINQUISH_DONE_V2	(0xf << 28)
+#define MTK_LRO_RING_RELINQUISH_REQ	(0x7 << (mtk_is_netsys_v2_or_greater(eth) ? 24 : 26))
+#define MTK_LRO_RING_RELINQUISH_DONE	(0x7 << (mtk_is_netsys_v2_or_greater(eth) ? 28 : 29))
+
+#define MTK_CTRL_DW0_SDL_OFFSET		(3)
+#define MTK_CTRL_DW0_SDL_MASK		BITS(3, 18)
 
 #define MTK_PDMA_LRO_CTRL_DW1	(reg_map->pdma.lro_ctrl_dw0 + 0x04)
 #define MTK_PDMA_LRO_CTRL_DW2	(reg_map->pdma.lro_ctrl_dw0 + 0x08)
 #define MTK_PDMA_LRO_CTRL_DW3	(reg_map->pdma.lro_ctrl_dw0 + 0x0c)
 #define MTK_ADMA_MODE		BIT(15)
 #define MTK_LRO_MIN_RXD_SDL	(MTK_HW_LRO_SDL_REMAIN_ROOM << 16)
+
+/* PDMA RSS Control Registers */
+#define MTK_RX_NAPI_NUM			(8)
+#define MTK_RX_RSS_NUM			(3)
+#define MTK_RSS_RING(x)			((x) + 1)
+#define MTK_RSS_EN			BIT(0)
+#define MTK_RSS_CFG_REQ			BIT(2)
+#define MTK_RSS_IPV6_STATIC_HASH	(0x7 << 8)
+#define MTK_RSS_IPV4_STATIC_HASH	(0x7 << 12)
+#define MTK_RSS_HASH_KEY_DW(x)		(reg_map->pdma.rss_glo_cfg + 0x20 +	\
+					 ((x) * 0x4))
+#define MTK_RSS_INDR_TABLE_DW(x)	(reg_map->pdma.rss_glo_cfg + 0x50 +	\
+					 ((x) * 0x4))
 
 #define MTK_RX_DMA_LRO_EN	BIT(8)
 #define MTK_MULTI_EN		BIT(10)
@@ -211,6 +235,9 @@
 #define MTK_PDMA_DELAY_PINT_MASK	0x7f
 #define MTK_PDMA_DELAY_PTIME_MASK	0xff
 
+#define MTK_MAX_DELAY_INT	0x8f0f
+#define MTK_MAX_DELAY_INT_V2	0x8f0f8f0f
+
 /* PDMA HW LRO IP Setting Registers */
 #define MTK_LRO_DIP_DW0_CFG(x)		(reg_map->pdma.lro_rx_ring0_dip_dw0 + (x * 0x40))
 #define MTK_RING_MYIP_VLD		BIT(9)
@@ -221,6 +248,7 @@
 #define MTK_LRO_CTRL_DW3_CFG(x)		(reg_map->pdma.lro_rx_ring0_ctrl_dw3 + (x * 0x40))
 #define MTK_RING_AGE_TIME_L		((MTK_HW_LRO_AGE_TIME & 0x3ff) << 22)
 #define MTK_RING_AGE_TIME_H		((MTK_HW_LRO_AGE_TIME >> 10) & 0x3f)
+#define MTK_RING_PSE_MODE		(1 << 6)
 #define MTK_RING_AUTO_LERAN_MODE	(3 << 6)
 #define MTK_RING_VLD			BIT(8)
 #define MTK_RING_MAX_AGG_TIME		((MTK_HW_LRO_AGG_TIME & 0xffff) << 10)
@@ -274,7 +302,37 @@
 #define FC_THRES_MIN		0x4444
 
 /* QDMA Interrupt Status Register */
-#define MTK_RX_DONE_DLY		BIT(30)
+#define MTK_RX_DONE_INT_V1(ring_no) \
+	( \
+		MTK_HAS_CAPS(eth->soc->caps, MTK_RSS) ?	\
+		( \
+			(ring_no) ? \
+			BIT(24 + (ring_no)) : \
+			BIT(30) \
+		) :	\
+		( \
+			BIT(16 + (ring_no)) \
+		) \
+	)
+
+#define MTK_RX_DONE_INT_V2(ring_no) \
+	( \
+		MTK_HAS_CAPS(eth->soc->caps, MTK_RSS) ?	\
+		( \
+			BIT(24 + (ring_no)) \
+		) :	\
+		( \
+			(ring_no) ? \
+			BIT(16 + (ring_no)) : \
+			BIT(14) \
+		) \
+	)
+
+#define MTK_RX_DONE_INT(ring_no)		\
+	(mtk_is_netsys_v2_or_greater(eth) ?  \
+	 MTK_RX_DONE_INT_V2(ring_no) : \
+	 MTK_RX_DONE_INT_V1(ring_no))
+
 #define MTK_TX_DONE_DLY		BIT(28)
 #define MTK_RX_DONE_INT3	BIT(19)
 #define MTK_RX_DONE_INT2	BIT(18)
@@ -284,10 +342,7 @@
 #define MTK_TX_DONE_INT2	BIT(2)
 #define MTK_TX_DONE_INT1	BIT(1)
 #define MTK_TX_DONE_INT0	BIT(0)
-#define MTK_RX_DONE_INT		MTK_RX_DONE_DLY
 #define MTK_TX_DONE_INT		MTK_TX_DONE_DLY
-
-#define MTK_RX_DONE_INT_V2	BIT(14)
 
 #define MTK_CDM_TXFIFO_RDY	BIT(7)
 
@@ -941,6 +996,7 @@ enum mtk_rx_flags {
  * @frag_size:		How big can each fragment be
  * @buf_size:		The size of each packet buffer
  * @calc_idx:		The current head of ring
+ * @ring_no:		The index of ring
  */
 struct mtk_rx_ring {
 	void *dma;
@@ -952,9 +1008,36 @@ struct mtk_rx_ring {
 	bool calc_idx_update;
 	u16 calc_idx;
 	u32 crx_idx_reg;
+	u32 ring_no;
 	/* page_pool */
 	struct page_pool *page_pool;
 	struct xdp_rxq_info xdp_q;
+};
+
+/* struct mtk_rss_params -	This is the structure holding parameters
+				for the RSS ring
+ * @hash_key			The element is used to record the
+				secret key for the RSS ring
+ * indirection_table		The element is used to record the
+				indirection table for the RSS ring
+ */
+struct mtk_rss_params {
+	u32		hash_key[MTK_RSS_HASH_KEYSIZE / sizeof(u32)];
+	u8		indirection_table[MTK_RSS_MAX_INDIRECTION_TABLE];
+};
+
+/* struct mtk_napi -	This is the structure holding NAPI-related information,
+ *			and a mtk_napi struct is binding to one interrupt group
+ * @napi:		The NAPI struct
+ * @rx_ring:		Pointer to the memory holding info about the RX ring
+ * @irq_grp_idx:	The index indicates which interrupt group that this
+ *			mtk_napi is binding to
+ */
+struct mtk_napi {
+	struct napi_struct	napi;
+	struct mtk_eth		*eth;
+	struct mtk_rx_ring	*rx_ring;
+	u32			irq_grp_no;
 };
 
 enum mkt_eth_capabilities {
@@ -969,6 +1052,7 @@ enum mkt_eth_capabilities {
 	MTK_INFRA_BIT,
 	MTK_SHARED_SGMII_BIT,
 	MTK_HWLRO_BIT,
+	MTK_RSS_BIT,
 	MTK_SHARED_INT_BIT,
 	MTK_TRGMII_MT7621_CLK_BIT,
 	MTK_QDMA_BIT,
@@ -1016,6 +1100,7 @@ enum mkt_eth_capabilities {
 #define MTK_INFRA		BIT_ULL(MTK_INFRA_BIT)
 #define MTK_SHARED_SGMII	BIT_ULL(MTK_SHARED_SGMII_BIT)
 #define MTK_HWLRO		BIT_ULL(MTK_HWLRO_BIT)
+#define MTK_RSS			BIT_ULL(MTK_RSS_BIT)
 #define MTK_SHARED_INT		BIT_ULL(MTK_SHARED_INT_BIT)
 #define MTK_TRGMII_MT7621_CLK	BIT_ULL(MTK_TRGMII_MT7621_CLK_BIT)
 #define MTK_QDMA		BIT_ULL(MTK_QDMA_BIT)
@@ -1130,14 +1215,14 @@ enum mkt_eth_capabilities {
 
 #define MT7986_CAPS  (MTK_GMAC1_SGMII | MTK_GMAC2_SGMII | \
 		      MTK_MUX_GMAC12_TO_GEPHY_SGMII | MTK_QDMA | \
-		      MTK_RSTCTRL_PPE1 | MTK_SRAM)
+		      MTK_RSTCTRL_PPE1 | MTK_SRAM | MTK_RSS)
 
 #define MT7988_CAPS  (MTK_36BIT_DMA | MTK_GDM1_ESW | MTK_GMAC1_SGMII | \
 		      MTK_GMAC2_2P5GPHY | MTK_GMAC2_SGMII | MTK_GMAC2_USXGMII | \
 		      MTK_GMAC3_SGMII | MTK_GMAC3_USXGMII | \
 		      MTK_MUX_GMAC123_TO_GEPHY_SGMII | \
 		      MTK_MUX_GMAC123_TO_USXGMII | MTK_MUX_GMAC2_TO_2P5GPHY | \
-		      MTK_QDMA | MTK_RSTCTRL_PPE1 | MTK_RSTCTRL_PPE2 | MTK_SRAM)
+		      MTK_QDMA | MTK_RSTCTRL_PPE1 | MTK_RSTCTRL_PPE2 | MTK_SRAM | MTK_RSS)
 
 struct mtk_tx_dma_desc_info {
 	dma_addr_t	addr;
@@ -1165,12 +1250,20 @@ struct mtk_reg_map {
 		u32	irq_mask;	/* interrupt mask */
 		u32	adma_rx_dbg0;
 		u32	int_grp;
+		u32	int_grp2;
+		u32	int_grp3;
 		u32	lro_ctrl_dw0;
+		u32	rx_cfg;
 		u32	lro_alt_score_delta; /* PDMA HW LRO Alter Flow Delta Register */
+		u32	rss_delay_int;
+		u32	lro_tx1_dly_int;
+		u32	lro_tx2_dly_int;
+		u32	lro_tx3_dly_int;
 		u32	lro_rx_ring0_dip_dw0;
 		u32	lro_rx_ring0_ctrl_dw1;
 		u32	lro_rx_ring0_ctrl_dw2;
 		u32	lro_rx_ring0_ctrl_dw3;
+		u32	rss_glo_cfg;
 	} pdma;
 	struct {
 		u32	qtx_cfg;	/* tx queue configuration */
@@ -1220,7 +1313,6 @@ struct mtk_reg_map {
  *				offloaded flows.
  * @txd_size			Tx DMA descriptor size.
  * @rxd_size			Rx DMA descriptor size.
- * @rx_irq_done_mask		Rx irq done register mask.
  * @rx_dma_l4_valid		Rx DMA valid register mask.
  * @dma_max_len			Max DMA tx/rx buffer length.
  * @dma_len_offset		Tx/Rx DMA length field offset.
@@ -1228,6 +1320,7 @@ struct mtk_reg_map {
 struct mtk_soc_data {
 	const struct mtk_reg_map *reg_map;
 	u32             ana_rgc3;
+	u32		rss_num;
 	u64		caps;
 	u64		required_clks;
 	bool		required_pctl;
@@ -1241,7 +1334,6 @@ struct mtk_soc_data {
 	struct {
 		u32	txd_size;
 		u32	rxd_size;
-		u32	rx_irq_done_mask;
 		u32	rx_dma_l4_valid;
 		u32	dma_max_len;
 		u32	dma_len_offset;
@@ -1310,7 +1402,8 @@ struct mtk_eth {
 	struct net_device		dummy_dev;
 	struct net_device		*netdev[MTK_MAX_DEVS];
 	struct mtk_mac			*mac[MTK_MAX_DEVS];
-	int				irq[3];
+	int				irq_fe[MTK_FE_IRQ_NUM];
+	int				irq_pdma[MTK_PDMA_IRQ_NUM];
 	u32				msg_enable;
 	unsigned long			sysclk;
 	struct regmap			*ethsys;
@@ -1320,10 +1413,11 @@ struct mtk_eth {
 	bool				hwlro;
 	refcount_t			dma_refcnt;
 	struct mtk_tx_ring		tx_ring;
-	struct mtk_rx_ring		rx_ring[MTK_MAX_RX_RING_NUM];
+	struct mtk_rx_ring		rx_ring[8]; // MTK_MAX_RX_RING_NUM
 	struct mtk_rx_ring		rx_ring_qdma;
 	struct napi_struct		tx_napi;
-	struct napi_struct		rx_napi;
+	struct mtk_napi			rx_napi[MTK_RX_NAPI_NUM];
+	struct mtk_rss_params		rss_params;
 	void				*scratch_ring;
 	dma_addr_t			phy_scratch_ring;
 	void				*scratch_head;
