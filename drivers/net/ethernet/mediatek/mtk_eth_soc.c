@@ -58,7 +58,15 @@ static const struct mtk_reg_map mtk_reg_map = {
 		.irq_mask	= 0x0a28,
 		.adma_rx_dbg0	= 0x0a38,
 		.int_grp	= 0x0a50,
+		.int_grp2	= 0x0a54,
+		.int_grp3	= 0x0a2c,
 		.lro_ctrl_dw0	= 0x0980,
+		.rx_cfg = 0x0a10,
+		.rss_delay_int = 0x0a70,
+		.lro_tx1_dly_int = 0x0a70,
+		.lro_tx2_dly_int = 0x0a74,
+		.lro_tx3_dly_int = 0x0a78,
+		.rss_glo_cfg = 0x2800,
 		.lro_alt_score_delta = 0x0a4c,
 		.lro_rx_ring0_dip_dw0 = 0x0b04,
 		.lro_rx_ring0_ctrl_dw1 = 0x0b28,
@@ -111,12 +119,20 @@ static const struct mtk_reg_map mt7628_reg_map = {
 		.irq_status	= 0x0a20,
 		.irq_mask	= 0x0a28,
 		.int_grp	= 0x0a50,
+		.int_grp2	= 0x0a54,
+		.int_grp3	= 0x0a2c,
 		.lro_ctrl_dw0	= 0x0980,
+		.rx_cfg = 0x0a10,
 		.lro_alt_score_delta = 0x0a4c,
+		.rss_delay_int = 0x0a70,
+		.lro_tx1_dly_int = 0x0a70,
+		.lro_tx2_dly_int = 0x0a74,
+		.lro_tx3_dly_int = 0x0a78,
 		.lro_rx_ring0_dip_dw0 = 0x0b04,
 		.lro_rx_ring0_ctrl_dw1 = 0x0b28,
 		.lro_rx_ring0_ctrl_dw2 = 0x0b2c,
 		.lro_rx_ring0_ctrl_dw3 = 0x0b30,
+		.rss_glo_cfg = 0x2800,
 	},
 };
 
@@ -134,12 +150,20 @@ static const struct mtk_reg_map mt7986_reg_map = {
 		.irq_mask	= 0x6228,
 		.adma_rx_dbg0	= 0x6238,
 		.int_grp	= 0x6250,
+		.int_grp2	= 0x6254,
+		.int_grp3	= 0x622c,
 		.lro_ctrl_dw0	= 0x6180,
+		.rx_cfg = 0x6210,
 		.lro_alt_score_delta = 0x624c,
+		.rss_delay_int = 0x62c0,
+		.lro_tx1_dly_int = 0x6270,
+		.lro_tx2_dly_int = 0x6274,
+		.lro_tx3_dly_int = 0x6278,
 		.lro_rx_ring0_dip_dw0 = 0x6414,
 		.lro_rx_ring0_ctrl_dw1 = 0x6328,
 		.lro_rx_ring0_ctrl_dw2 = 0x632c,
 		.lro_rx_ring0_ctrl_dw3 = 0x6330,
+		.rss_glo_cfg = 0x6800,
 	},
 	.qdma = {
 		.qtx_cfg	= 0x4400,
@@ -188,12 +212,20 @@ static const struct mtk_reg_map mt7988_reg_map = {
 		.irq_mask	= 0x6a28,
 		.adma_rx_dbg0	= 0x6a38,
 		.int_grp	= 0x6a50,
+		.int_grp2	= 0x6a54,
+		.int_grp3	= 0x6a58,
 		.lro_ctrl_dw0	= 0x6c08,
+		.rx_cfg = 0x6a10,
 		.lro_alt_score_delta = 0x6c1c,
+		.rss_delay_int = 0x6ac0,
+		.lro_tx1_dly_int = 0x6a70,
+		.lro_tx2_dly_int = 0x6a74,
+		.lro_tx3_dly_int = 0x6a78,
 		.lro_rx_ring0_dip_dw0 = 0x6c14,
 		.lro_rx_ring0_ctrl_dw1 = 0x6c38,
 		.lro_rx_ring0_ctrl_dw2 = 0x6c3c,
 		.lro_rx_ring0_ctrl_dw3 = 0x6c40,
+		.rss_glo_cfg = 0x7000,
 	},
 	.qdma = {
 		.qtx_cfg	= 0x4400,
@@ -1805,47 +1837,9 @@ drop:
 	return NETDEV_TX_OK;
 }
 
-static struct mtk_rx_ring *mtk_get_rx_ring(struct mtk_eth *eth)
+static void mtk_update_rx_cpu_idx(struct mtk_eth *eth, struct mtk_rx_ring *ring)
 {
-	int i;
-	struct mtk_rx_ring *ring;
-	int idx;
-
-	if (!eth->hwlro)
-		return &eth->rx_ring[0];
-
-	for (i = 0; i < MTK_MAX_RX_RING_NUM; i++) {
-		struct mtk_rx_dma *rxd;
-
-		ring = &eth->rx_ring[i];
-		idx = NEXT_DESP_IDX(ring->calc_idx, ring->dma_size);
-		rxd = ring->dma + idx * eth->soc->txrx.rxd_size;
-		if (rxd->rxd2 & RX_DMA_DONE) {
-			ring->calc_idx_update = true;
-			return ring;
-		}
-	}
-
-	return NULL;
-}
-
-static void mtk_update_rx_cpu_idx(struct mtk_eth *eth)
-{
-	struct mtk_rx_ring *ring;
-	int i;
-
-	if (!eth->hwlro) {
-		ring = &eth->rx_ring[0];
-		mtk_w32(eth, ring->calc_idx, ring->crx_idx_reg);
-	} else {
-		for (i = 0; i < MTK_MAX_RX_RING_NUM; i++) {
-			ring = &eth->rx_ring[i];
-			if (ring->calc_idx_update) {
-				ring->calc_idx_update = false;
-				mtk_w32(eth, ring->calc_idx, ring->crx_idx_reg);
-			}
-		}
-	}
+	mtk_w32(eth, ring->calc_idx, ring->crx_idx_reg);
 }
 
 static bool mtk_page_pool_enabled(struct mtk_eth *eth)
@@ -1876,7 +1870,7 @@ static struct page_pool *mtk_create_page_pool(struct mtk_eth *eth,
 		return pp;
 
 	err = __xdp_rxq_info_reg(xdp_q, &eth->dummy_dev, id,
-				 eth->rx_napi.napi_id, PAGE_SIZE);
+				 eth->rx_napi[id].napi.napi_id, PAGE_SIZE);
 	if (err < 0)
 		goto err_free_pp;
 
@@ -2165,7 +2159,8 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 		       struct mtk_eth *eth)
 {
 	struct dim_sample dim_sample = {};
-	struct mtk_rx_ring *ring;
+	struct mtk_napi *rx_napi = container_of(napi, struct mtk_napi, napi);
+	struct mtk_rx_ring *ring = rx_napi->rx_ring;
 	bool xdp_flush = false;
 	int idx;
 	struct sk_buff *skb;
@@ -2175,15 +2170,14 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 	int done = 0, bytes = 0;
 	dma_addr_t dma_addr = DMA_MAPPING_ERROR;
 
+	if (unlikely(!ring))
+		goto rx_done;
+	
 	while (done < budget) {
 		unsigned int pktlen, *rxdcsum;
 		struct net_device *netdev;
 		u32 hash, reason;
 		int mac = 0;
-
-		ring = mtk_get_rx_ring(eth);
-		if (unlikely(!ring))
-			goto rx_done;
 
 		idx = NEXT_DESP_IDX(ring->calc_idx, ring->dma_size);
 		rxd = ring->dma + idx * eth->soc->txrx.rxd_size;
@@ -2368,7 +2362,7 @@ rx_done:
 		 * we continue
 		 */
 		wmb();
-		mtk_update_rx_cpu_idx(eth);
+		mtk_update_rx_cpu_idx(eth, ring);
 	}
 
 	eth->rx_packets += done;
@@ -2577,7 +2571,9 @@ static int mtk_napi_tx(struct napi_struct *napi, int budget)
 
 static int mtk_napi_rx(struct napi_struct *napi, int budget)
 {
-	struct mtk_eth *eth = container_of(napi, struct mtk_eth, rx_napi);
+	struct mtk_napi *rx_napi = container_of(napi, struct mtk_napi, napi);
+	struct mtk_eth *eth = rx_napi->eth;
+	struct mtk_rx_ring *ring = rx_napi->rx_ring;
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int rx_done_total = 0;
 
@@ -2586,7 +2582,7 @@ static int mtk_napi_rx(struct napi_struct *napi, int budget)
 	do {
 		int rx_done;
 
-		mtk_w32(eth, eth->soc->txrx.rx_irq_done_mask,
+		mtk_w32(eth, MTK_RX_DONE_INT(ring->ring_no),
 			reg_map->pdma.irq_status);
 		rx_done = mtk_poll_rx(napi, budget - rx_done_total, eth);
 		rx_done_total += rx_done;
@@ -2602,10 +2598,10 @@ static int mtk_napi_rx(struct napi_struct *napi, int budget)
 			return budget;
 
 	} while (mtk_r32(eth, reg_map->pdma.irq_status) &
-		 eth->soc->txrx.rx_irq_done_mask);
+		 MTK_RX_DONE_INT(ring->ring_no));
 
 	if (napi_complete_done(napi, rx_done_total))
-		mtk_rx_irq_enable(eth, eth->soc->txrx.rx_irq_done_mask);
+		mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(ring->ring_no));
 
 	return rx_done_total;
 }
@@ -2872,6 +2868,7 @@ static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 	else
 		ring->crx_idx_reg = reg_map->pdma.pcrx_ptr +
 				    ring_no * MTK_QRX_OFFSET;
+	ring->ring_no = ring_no;
 	/* make sure that all changes to the dma ring are flushed before we
 	 * continue
 	 */
@@ -2943,6 +2940,7 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 {
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
+	u32 val;
 	u32 ring_ctrl_dw1 = 0, ring_ctrl_dw2 = 0, ring_ctrl_dw3 = 0;
 	u32 lro_ctrl_dw0 = 0, lro_ctrl_dw3 = 0;
 
@@ -2991,11 +2989,34 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	/* the minimal remaining room of SDL0 in RXD for lro aggregation */
 	lro_ctrl_dw3 |= MTK_LRO_MIN_RXD_SDL;
 
+	if (mtk_is_netsys_v2_or_greater(eth)) {
+		val = mtk_r32(eth, reg_map->pdma.rx_cfg);
+		mtk_w32(eth, val | (MTK_PDMA_LRO_SDL << MTK_RX_CFG_SDL_OFFSET),
+			reg_map->pdma.rx_cfg);
+		lro_ctrl_dw0 |= MTK_PDMA_LRO_SDL << MTK_CTRL_DW0_SDL_OFFSET;
+	} else {
+		/* set HW LRO mode & the max aggregation count for rx packets */
+		lro_ctrl_dw3 |= MTK_ADMA_MODE | (MTK_HW_LRO_MAX_AGG_CNT & 0xff);
+	}
+
 	/* enable HW LRO */
 	lro_ctrl_dw0 |= MTK_LRO_EN;
 
 	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3);
 	mtk_w32(eth, lro_ctrl_dw0, reg_map->pdma.lro_ctrl_dw0);
+
+	/* no use PPE cpu reason */
+	mtk_w32(eth, 0xffffffff, MTK_PDMA_LRO_CTRL_DW1);
+
+	/* Set perLRO GRP INT */
+	if (mtk_is_netsys_v2_or_greater(eth)) {
+		mtk_m32(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(1)),
+			MTK_RX_DONE_INT(MTK_HW_LRO_RING(1)), reg_map->pdma.int_grp);
+		mtk_m32(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(2)),
+			MTK_RX_DONE_INT(MTK_HW_LRO_RING(2)), reg_map->pdma.int_grp2);
+		mtk_m32(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(3)),
+			MTK_RX_DONE_INT(MTK_HW_LRO_RING(3)), reg_map->pdma.int_grp3);
+	}
 
 	return 0;
 }
@@ -3181,6 +3202,115 @@ static int mtk_hwlro_get_fdir_all(struct net_device *dev,
 	return 0;
 }
 
+static u32 mtk_rss_indr_table(struct mtk_rss_params *rss_params, int index)
+{
+	u32 val = 0;
+	int i;
+	for (i = 16 * index; i < 16 * index + 16; i++)
+		val |= (rss_params->indirection_table[i] << (2 * (i % 16)));
+	return val;
+}
+
+static int mtk_rss_init(struct mtk_eth *eth)
+{
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
+	struct mtk_rss_params *rss_params = &eth->rss_params;
+	static u8 hash_key[MTK_RSS_HASH_KEYSIZE] = {
+		0xfa, 0x01, 0xac, 0xbe, 0x3b, 0xb7, 0x42, 0x6a,
+		0x0c, 0xf2, 0x30, 0x80, 0xa3, 0x2d, 0xcb, 0x77,
+		0xb4, 0x30, 0x7b, 0xae, 0xcb, 0x2b, 0xca, 0xd0,
+		0xb0, 0x8f, 0xa3, 0x43, 0x3d, 0x25, 0x67, 0x41,
+		0xc2, 0x0e, 0x5b, 0x25, 0xda, 0x56, 0x5a, 0x6d};
+	u32 val;
+	int i;
+	memcpy(rss_params->hash_key, hash_key, MTK_RSS_HASH_KEYSIZE);
+	for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE; i++)
+		rss_params->indirection_table[i] = i % eth->soc->rss_num;
+
+	if (!mtk_is_netsys_v2_or_greater(eth)) {
+		/* Set RSS rings to PSE modes */
+		val =  mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(1));
+		val |= MTK_RING_PSE_MODE;
+		mtk_w32(eth, val, MTK_LRO_CTRL_DW2_CFG(1));
+
+		/* Enable non-lro multiple rx */
+		val = mtk_r32(eth, reg_map->pdma.lro_ctrl_dw0);
+		val |= MTK_NON_LRO_MULTI_EN;
+		mtk_w32(eth, val, reg_map->pdma.lro_ctrl_dw0);
+
+		/* Enable RSS dly int supoort */
+		val |= MTK_LRO_DLY_INT_EN;
+		mtk_w32(eth, val, reg_map->pdma.lro_ctrl_dw0);
+	}
+
+	/* Hash Type */
+	val = mtk_r32(eth, reg_map->pdma.rss_glo_cfg);
+	val |= MTK_RSS_IPV4_STATIC_HASH;
+	val |= MTK_RSS_IPV6_STATIC_HASH;
+	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
+	
+	/* Hash Key */
+	for (i = 0; i < MTK_RSS_HASH_KEYSIZE / sizeof(u32); i++)
+		mtk_w32(eth, rss_params->hash_key[i], MTK_RSS_HASH_KEY_DW(i));
+
+	/* Select the size of indirection table */
+	for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE / 16; i++)
+		mtk_w32(eth, mtk_rss_indr_table(rss_params, i),
+			MTK_RSS_INDR_TABLE_DW(i));
+
+	/* Pause */
+	val |= MTK_RSS_CFG_REQ;
+	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
+
+	/* Enable RSS*/
+	val |= MTK_RSS_EN;
+	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
+
+	/* Release pause */
+	val &= ~(MTK_RSS_CFG_REQ);
+	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
+
+	/* Set perRSS GRP INT */
+	mtk_m32(eth, MTK_RX_DONE_INT(MTK_RSS_RING(0)),
+		MTK_RX_DONE_INT(MTK_RSS_RING(0)), reg_map->pdma.int_grp);
+	mtk_m32(eth, MTK_RX_DONE_INT(MTK_RSS_RING(1)),
+		MTK_RX_DONE_INT(MTK_RSS_RING(1)), reg_map->pdma.int_grp2);
+	mtk_m32(eth, MTK_RX_DONE_INT(MTK_RSS_RING(2)),
+		MTK_RX_DONE_INT(MTK_RSS_RING(2)), reg_map->pdma.int_grp3);
+
+	/* Set GRP INT */
+	mtk_w32(eth, 0x210FFFF2, MTK_FE_INT_GRP);
+
+	/* Enable RSS delay interrupt */
+	if (!mtk_is_netsys_v2_or_greater(eth)) {
+		mtk_w32(eth, MTK_MAX_DELAY_INT, reg_map->pdma.lro_tx1_dly_int);
+		mtk_w32(eth, MTK_MAX_DELAY_INT, reg_map->pdma.lro_tx2_dly_int);
+		mtk_w32(eth, MTK_MAX_DELAY_INT, reg_map->pdma.lro_tx3_dly_int);
+	} else
+		mtk_w32(eth, MTK_MAX_DELAY_INT_V2, reg_map->pdma.rss_delay_int);
+
+	return 0;
+}
+
+static void mtk_rss_uninit(struct mtk_eth *eth)
+{
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
+	u32 val;
+
+	/* Pause */
+	val = mtk_r32(eth, reg_map->pdma.rss_glo_cfg);
+	val |= MTK_RSS_CFG_REQ;
+	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
+
+	/* Disable RSS*/
+	val &= ~(MTK_RSS_EN);
+	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
+
+	/* Release pause */
+	val &= ~(MTK_RSS_CFG_REQ);
+	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
+}
+
 static netdev_features_t mtk_fix_features(struct net_device *dev,
 					  netdev_features_t features)
 {
@@ -3261,12 +3391,24 @@ static int mtk_dma_init(struct mtk_eth *eth)
 		return err;
 
 	if (eth->hwlro) {
-		for (i = 1; i < MTK_MAX_RX_RING_NUM; i++) {
-			err = mtk_rx_alloc(eth, i, MTK_RX_FLAGS_HWLRO);
+		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
+			err = mtk_rx_alloc(eth, MTK_HW_LRO_RING(i), MTK_RX_FLAGS_HWLRO);
 			if (err)
 				return err;
 		}
 		err = mtk_hwlro_rx_init(eth);
+		if (err)
+			return err;
+	}
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+		for (i = 0; i < MTK_RX_RSS_NUM; i++) {
+			dev_err(eth->dev, "mtk_rx_alloc %d MTK_RX_FLAGS_NORMAL\n", MTK_RSS_RING(i));
+			err = mtk_rx_alloc(eth, MTK_RSS_RING(i), MTK_RX_FLAGS_NORMAL);
+			if (err)
+				return err;
+		}
+		err = mtk_rss_init(eth);
 		if (err)
 			return err;
 	}
@@ -3304,11 +3446,20 @@ static void mtk_dma_free(struct mtk_eth *eth)
 
 	if (eth->hwlro) {
 		mtk_hwlro_rx_uninit(eth);
-		for (i = 1; i < MTK_MAX_RX_RING_NUM; i++)
-			mtk_rx_clean(eth, &eth->rx_ring[i], false);
+		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++)
+			mtk_rx_clean(eth, &eth->rx_ring[MTK_HW_LRO_RING(i)], 0);
 	}
 
-	kfree(eth->scratch_head);
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+		mtk_rss_uninit(eth);
+		for (i = 0; i < MTK_RX_RSS_NUM; i++)
+			mtk_rx_clean(eth, &eth->rx_ring[MTK_RSS_RING(i)], 1);
+	}
+
+	if (eth->scratch_head) {
+		kfree(eth->scratch_head);
+		eth->scratch_head = NULL;
+	}
 }
 
 static bool mtk_hw_reset_check(struct mtk_eth *eth)
@@ -3337,14 +3488,20 @@ static void mtk_tx_timeout(struct net_device *dev, unsigned int txqueue)
 	schedule_work(&eth->pending_work);
 }
 
-static irqreturn_t mtk_handle_irq_rx(int irq, void *_eth)
+static irqreturn_t mtk_handle_irq_rx(int irq, void *priv)
 {
-	struct mtk_eth *eth = _eth;
+	struct mtk_napi *rx_napi = priv;
+	struct mtk_eth *eth = rx_napi->eth;
+	struct mtk_rx_ring *ring = rx_napi->rx_ring;
 
 	eth->rx_events++;
-	if (likely(napi_schedule_prep(&eth->rx_napi))) {
-		mtk_rx_irq_disable(eth, eth->soc->txrx.rx_irq_done_mask);
-		__napi_schedule(&eth->rx_napi);
+	if (unlikely(!(mtk_r32(eth, eth->soc->reg_map->pdma.irq_status) &
+		       MTK_RX_DONE_INT(ring->ring_no))))
+		return IRQ_NONE;
+
+	if (likely(napi_schedule_prep(&rx_napi->napi))) {
+		mtk_rx_irq_disable(eth, MTK_RX_DONE_INT(ring->ring_no));
+		__napi_schedule(&rx_napi->napi);
 	}
 
 	return IRQ_HANDLED;
@@ -3369,16 +3526,26 @@ static irqreturn_t mtk_handle_irq(int irq, void *_eth)
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 
 	if (mtk_r32(eth, reg_map->pdma.irq_mask) &
-	    eth->soc->txrx.rx_irq_done_mask) {
+	    MTK_RX_DONE_INT(0)) {
 		if (mtk_r32(eth, reg_map->pdma.irq_status) &
-		    eth->soc->txrx.rx_irq_done_mask)
-			mtk_handle_irq_rx(irq, _eth);
+		    MTK_RX_DONE_INT(0))
+			mtk_handle_irq_rx(irq, &eth->rx_napi[0]);
 	}
 	if (mtk_r32(eth, reg_map->tx_irq_mask) & MTK_TX_DONE_INT) {
 		if (mtk_r32(eth, reg_map->tx_irq_status) & MTK_TX_DONE_INT)
 			mtk_handle_irq_tx(irq, _eth);
 	}
 
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t mtk_handle_fe_irq(int irq, void *_eth)
+{
+	struct mtk_eth *eth = _eth;
+	u32 status = 0;
+	status = mtk_r32(eth, MTK_FE_INT_STATUS);
+	pr_info("[%s] Trigger FE Misc ISR: 0x%x\n", __func__, status);
+	mtk_w32(eth, 0xFFFFFFFF, MTK_FE_INT_STATUS);
 	return IRQ_HANDLED;
 }
 
@@ -3389,10 +3556,10 @@ static void mtk_poll_controller(struct net_device *dev)
 	struct mtk_eth *eth = mac->hw;
 
 	mtk_tx_irq_disable(eth, MTK_TX_DONE_INT);
-	mtk_rx_irq_disable(eth, eth->soc->txrx.rx_irq_done_mask);
-	mtk_handle_irq_rx(eth->irq[2], dev);
+	mtk_rx_irq_disable(eth, MTK_RX_DONE_INT(0));
+	mtk_handle_irq_rx(eth->irq_fe[2], &eth->rx_napi[0]);
 	mtk_tx_irq_enable(eth, MTK_TX_DONE_INT);
-	mtk_rx_irq_enable(eth, eth->soc->txrx.rx_irq_done_mask);
+	mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(0));
 }
 #endif
 
@@ -3557,9 +3724,24 @@ static int mtk_open(struct net_device *dev)
 		mtk_gdm_config(eth, gdm_config);
 
 		napi_enable(&eth->tx_napi);
-		napi_enable(&eth->rx_napi);
+		napi_enable(&eth->rx_napi[0].napi);
 		mtk_tx_irq_enable(eth, MTK_TX_DONE_INT);
-		mtk_rx_irq_enable(eth, soc->txrx.rx_irq_done_mask);
+		mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(0));
+
+		if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+			for (i = 0; i < MTK_RX_RSS_NUM; i++) {
+				napi_enable(&eth->rx_napi[MTK_RSS_RING(i)].napi);
+				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(MTK_RSS_RING(i)));
+			}
+		}
+
+		if (eth->hwlro) {
+			for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
+				napi_enable(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
+				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(i)));
+			}
+		}
+		
 		refcount_set(&eth->dma_refcnt, 1);
 	}
 	else
@@ -3643,9 +3825,23 @@ static int mtk_stop(struct net_device *dev)
 	mtk_gdm_config(eth, MTK_GDMA_DROP_ALL);
 
 	mtk_tx_irq_disable(eth, MTK_TX_DONE_INT);
-	mtk_rx_irq_disable(eth, eth->soc->txrx.rx_irq_done_mask);
+	mtk_rx_irq_disable(eth, MTK_RX_DONE_INT(0));
 	napi_disable(&eth->tx_napi);
-	napi_disable(&eth->rx_napi);
+	napi_disable(&eth->rx_napi[0].napi);
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+		for (i = 0; i < MTK_RX_RSS_NUM; i++) {
+			mtk_rx_irq_disable(eth, MTK_RX_DONE_INT(MTK_RSS_RING(i)));
+			napi_disable(&eth->rx_napi[MTK_RSS_RING(i)].napi);
+		}
+	}
+
+	if (eth->hwlro) {
+		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
+			mtk_rx_irq_disable(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(i)));
+			napi_disable(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
+		}
+	}
 
 	cancel_work_sync(&eth->rx_dim.work);
 	cancel_work_sync(&eth->tx_dim.work);
@@ -4065,6 +4261,36 @@ out:
 			      MTK_DMA_MONITOR_TIMEOUT);
 }
 
+static int mtk_napi_init(struct mtk_eth *eth)
+{
+	struct mtk_napi *rx_napi = &eth->rx_napi[0];
+	int i;
+
+	rx_napi->eth = eth;
+	rx_napi->rx_ring = &eth->rx_ring[0];
+	rx_napi->irq_grp_no = 2;
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+		for (i = 0; i < MTK_RX_RSS_NUM; i++) {
+			rx_napi = &eth->rx_napi[MTK_RSS_RING(i)];
+			rx_napi->eth = eth;
+			rx_napi->rx_ring = &eth->rx_ring[MTK_RSS_RING(i)];
+			rx_napi->irq_grp_no = 2 + i;
+		}
+	}
+
+	if (eth->hwlro) {
+		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
+			rx_napi = &eth->rx_napi[MTK_HW_LRO_RING(i)];
+			rx_napi->eth = eth;
+			rx_napi->rx_ring = &eth->rx_ring[MTK_HW_LRO_RING(i)];
+			rx_napi->irq_grp_no = 2;
+		}
+	}
+
+	return 0;
+}
+
 static int mtk_hw_init(struct mtk_eth *eth, bool reset)
 {
 	u32 dma_mask = ETHSYS_DMA_AG_MAP_PDMA | ETHSYS_DMA_AG_MAP_QDMA |
@@ -4166,11 +4392,9 @@ static int mtk_hw_init(struct mtk_eth *eth, bool reset)
 	mtk_rx_irq_disable(eth, ~0);
 
 	/* FE int grouping */
-	mtk_w32(eth, MTK_TX_DONE_INT, reg_map->pdma.int_grp);
-	mtk_w32(eth, eth->soc->txrx.rx_irq_done_mask, reg_map->pdma.int_grp + 4);
 	mtk_w32(eth, MTK_TX_DONE_INT, reg_map->qdma.int_grp);
-	mtk_w32(eth, eth->soc->txrx.rx_irq_done_mask, reg_map->qdma.int_grp + 4);
-	mtk_w32(eth, 0x21021000, MTK_FE_INT_GRP);
+	mtk_w32(eth, MTK_RX_DONE_INT(0), reg_map->qdma.int_grp + 4);
+	mtk_w32(eth, 0x210FFFF2, MTK_FE_INT_GRP);
 
 	if (mtk_is_netsys_v3_or_greater(eth)) {
 		/* PSE should not drop port1, port8 and port9 packets */
@@ -4594,6 +4818,8 @@ static void mtk_get_ethtool_stats(struct net_device *dev,
 static int mtk_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
 			 u32 *rule_locs)
 {
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
 	int ret = -EOPNOTSUPP;
 
 	switch (cmd->cmd) {
@@ -4601,12 +4827,13 @@ static int mtk_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
 		if (dev->hw_features & NETIF_F_LRO) {
 			cmd->data = MTK_MAX_RX_RING_NUM;
 			ret = 0;
+		} else if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+			cmd->data = eth->soc->rss_num;
+			ret = 0;
 		}
 		break;
 	case ETHTOOL_GRXCLSRLCNT:
 		if (dev->hw_features & NETIF_F_LRO) {
-			struct mtk_mac *mac = netdev_priv(dev);
-
 			cmd->rule_cnt = mac->hwlro_ip_cnt;
 			ret = 0;
 		}
@@ -4647,6 +4874,64 @@ static int mtk_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	return ret;
 }
 
+static u32 mtk_get_rxfh_key_size(struct net_device *dev)
+{
+	return MTK_RSS_HASH_KEYSIZE;
+}
+
+static u32 mtk_get_rxfh_indir_size(struct net_device *dev)
+{
+	return MTK_RSS_MAX_INDIRECTION_TABLE;
+}
+
+static int mtk_get_rxfh(struct net_device *dev, u32 *indir, u8 *key,
+			u8 *hfunc)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+	struct mtk_rss_params *rss_params = &eth->rss_params;
+	int i;
+	if (hfunc)
+		*hfunc = ETH_RSS_HASH_TOP;	/* Toeplitz */
+	if (key) {
+		memcpy(key, rss_params->hash_key,
+		       sizeof(rss_params->hash_key));
+	}
+	if (indir) {
+		for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE; i++)
+			indir[i] = rss_params->indirection_table[i];
+	}
+	return 0;
+}
+
+static int mtk_set_rxfh(struct net_device *dev, const u32 *indir,
+			const u8 *key, const u8 hfunc)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+	struct mtk_rss_params *rss_params = &eth->rss_params;
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
+	int i;
+	if (hfunc != ETH_RSS_HASH_NO_CHANGE &&
+	    hfunc != ETH_RSS_HASH_TOP)
+		return -EOPNOTSUPP;
+	if (key) {
+		memcpy(rss_params->hash_key, key,
+		       sizeof(rss_params->hash_key));
+		for (i = 0; i < MTK_RSS_HASH_KEYSIZE / sizeof(u32); i++)
+			mtk_w32(eth, rss_params->hash_key[i],
+				MTK_RSS_HASH_KEY_DW(i));
+	}
+	if (indir) {
+		for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE; i++)
+			rss_params->indirection_table[i] = indir[i];
+		for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE / 16; i++)
+			mtk_w32(eth, mtk_rss_indr_table(rss_params, i),
+				MTK_RSS_INDR_TABLE_DW(i));
+	}
+	return 0;
+}
+
 static u16 mtk_select_queue(struct net_device *dev, struct sk_buff *skb,
 			    struct net_device *sb_dev)
 {
@@ -4677,6 +4962,10 @@ static const struct ethtool_ops mtk_ethtool_ops = {
 	.get_ethtool_stats	= mtk_get_ethtool_stats,
 	.get_rxnfc		= mtk_get_rxnfc,
 	.set_rxnfc              = mtk_set_rxnfc,
+	.get_rxfh_key_size	= mtk_get_rxfh_key_size,
+	.get_rxfh_indir_size	= mtk_get_rxfh_indir_size,
+	.get_rxfh		= mtk_get_rxfh,
+	.set_rxfh		= mtk_set_rxfh,
 };
 
 static const struct net_device_ops mtk_netdev_ops = {
@@ -4897,7 +5186,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	eth->netdev[id]->features |= eth->soc->hw_features;
 	eth->netdev[id]->ethtool_ops = &mtk_ethtool_ops;
 
-	eth->netdev[id]->irq = eth->irq[0];
+	eth->netdev[id]->irq = eth->irq_fe[0];
 	eth->netdev[id]->dev.of_node = np;
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628))
@@ -5145,12 +5434,15 @@ static int mtk_probe(struct platform_device *pdev)
 		}
 	}
 
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < MTK_PDMA_IRQ_NUM; i++)
+		eth->irq_pdma[i] = platform_get_irq(pdev, i);
+
+	for (i = 0; i < MTK_FE_IRQ_NUM; i++) {
 		if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_INT) && i > 0)
-			eth->irq[i] = eth->irq[0];
+			eth->irq_fe[i] = eth->irq_fe[0];
 		else
-			eth->irq[i] = platform_get_irq(pdev, i);
-		if (eth->irq[i] < 0) {
+			eth->irq_fe[i] = platform_get_irq(pdev, MTK_PDMA_IRQ_NUM + i);
+		if (eth->irq_fe[i] < 0) {
 			dev_err(&pdev->dev, "no IRQ%d resource found\n", i);
 			err = -ENXIO;
 			goto err_wed_exit;
@@ -5216,20 +5508,57 @@ static int mtk_probe(struct platform_device *pdev)
 			goto err_deinit_hw;
 	}
 
+	err = mtk_napi_init(eth);
+	if (err)
+		goto err_free_dev;
+
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_INT)) {
-		err = devm_request_irq(eth->dev, eth->irq[0],
+		err = devm_request_irq(eth->dev, eth->irq_fe[0],
 				       mtk_handle_irq, 0,
 				       dev_name(eth->dev), eth);
 	} else {
-		err = devm_request_irq(eth->dev, eth->irq[1],
+		err = devm_request_irq(eth->dev, eth->irq_fe[1],
 				       mtk_handle_irq_tx, 0,
 				       dev_name(eth->dev), eth);
 		if (err)
 			goto err_free_dev;
 
-		err = devm_request_irq(eth->dev, eth->irq[2],
-				       mtk_handle_irq_rx, 0,
+		err = devm_request_irq(eth->dev, eth->irq_fe[2],
+				       mtk_handle_fe_irq, 0,
 				       dev_name(eth->dev), eth);
+		if (err)
+			goto err_free_dev;
+
+		err = devm_request_irq(eth->dev, eth->irq_pdma[0],
+				       mtk_handle_irq_rx, IRQF_SHARED,
+				       dev_name(eth->dev), &eth->rx_napi[0]);
+		if (err)
+			goto err_free_dev;
+
+		if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+			for (i = 0; i < MTK_RX_RSS_NUM; i++) {
+				err = devm_request_irq(eth->dev,
+						       eth->irq_pdma[MTK_RSS_RING(i)],
+						       mtk_handle_irq_rx, IRQF_SHARED,
+						       dev_name(eth->dev),
+						       &eth->rx_napi[MTK_RSS_RING(i)]);
+				if (err)
+					goto err_free_dev;
+			}
+		}
+
+		if (eth->hwlro) {
+			i = mtk_is_netsys_v2_or_greater(eth) ? 0 : 1;
+			for (; i < MTK_HW_LRO_RING_NUM; i++) {
+				err = devm_request_irq(eth->dev,
+						       eth->irq_pdma[i],
+						       mtk_handle_irq_rx, IRQF_SHARED,
+						       dev_name(eth->dev),
+						       &eth->rx_napi[MTK_HW_LRO_RING(i)]);
+				if (err)
+					goto err_free_dev;
+			}
+		}
 	}
 	if (err)
 		goto err_free_dev;
@@ -5272,7 +5601,7 @@ static int mtk_probe(struct platform_device *pdev)
 		} else
 			netif_info(eth, probe, eth->netdev[i],
 				   "mediatek frame engine at 0x%08lx, irq %d\n",
-				   eth->netdev[i]->base_addr, eth->irq[0]);
+				   eth->netdev[i]->base_addr, eth->irq_fe[0]);
 	}
 
 	/* we run 2 devices on the same DMA ring so we need a dummy device
@@ -5280,7 +5609,20 @@ static int mtk_probe(struct platform_device *pdev)
 	 */
 	init_dummy_netdev(&eth->dummy_dev);
 	netif_napi_add(&eth->dummy_dev, &eth->tx_napi, mtk_napi_tx);
-	netif_napi_add(&eth->dummy_dev, &eth->rx_napi, mtk_napi_rx);
+	netif_napi_add(&eth->dummy_dev, &eth->rx_napi[0].napi, mtk_napi_rx);
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+		for (i = 0; i < MTK_RX_RSS_NUM; i++)
+			netif_napi_add(&eth->dummy_dev, &eth->rx_napi[MTK_RSS_RING(i)].napi,
+				       mtk_napi_rx);
+	}
+
+	if (eth->hwlro) {
+		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
+			netif_napi_add(&eth->dummy_dev, &eth->rx_napi[MTK_HW_LRO_RING(i)].napi,
+				       mtk_napi_rx);
+		}
+	}
 
 	platform_set_drvdata(pdev, eth);
 	schedule_delayed_work(&eth->reset.monitor_work,
@@ -5327,7 +5669,19 @@ static void mtk_remove(struct platform_device *pdev)
 	mtk_hw_deinit(eth);
 
 	netif_napi_del(&eth->tx_napi);
-	netif_napi_del(&eth->rx_napi);
+	netif_napi_del(&eth->rx_napi[0].napi);
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+		for (i = 0; i < MTK_RX_RSS_NUM; i++)
+			netif_napi_del(&eth->rx_napi[MTK_RSS_RING(i)].napi);
+	}
+
+	if (eth->hwlro) {
+		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
+			netif_napi_del(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
+		}
+	}
+
 	mtk_cleanup(eth);
 	mtk_mdio_cleanup(eth);
 }
@@ -5339,10 +5693,10 @@ static const struct mtk_soc_data mt2701_data = {
 	.required_clks = MT7623_CLKS_BITMAP,
 	.required_pctl = true,
 	.version = 1,
+	.rss_num = 0,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
-		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
@@ -5359,10 +5713,10 @@ static const struct mtk_soc_data mt7621_data = {
 	.offload_version = 1,
 	.hash_offset = 2,
 	.foe_entry_size = MTK_FOE_ENTRY_V1_SIZE,
+	.rss_num = 0,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
-		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
@@ -5381,10 +5735,10 @@ static const struct mtk_soc_data mt7622_data = {
 	.hash_offset = 2,
 	.has_accounting = true,
 	.foe_entry_size = MTK_FOE_ENTRY_V1_SIZE,
+	.rss_num = 0,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
-		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
@@ -5402,10 +5756,10 @@ static const struct mtk_soc_data mt7623_data = {
 	.hash_offset = 2,
 	.foe_entry_size = MTK_FOE_ENTRY_V1_SIZE,
 	.disable_pll_modes = true,
+	.rss_num = 0,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
-		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
@@ -5421,10 +5775,10 @@ static const struct mtk_soc_data mt7629_data = {
 	.required_pctl = false,
 	.has_accounting = true,
 	.version = 1,
+	.rss_num = 0,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
-		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
@@ -5443,10 +5797,10 @@ static const struct mtk_soc_data mt7981_data = {
 	.hash_offset = 4,
 	.has_accounting = true,
 	.foe_entry_size = MTK_FOE_ENTRY_V2_SIZE,
+	.rss_num = 4,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma_v2),
 		.rxd_size = sizeof(struct mtk_rx_dma_v2),
-		.rx_irq_done_mask = MTK_RX_DONE_INT_V2,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_V2,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
 		.dma_len_offset = 8,
@@ -5465,10 +5819,10 @@ static const struct mtk_soc_data mt7986_data = {
 	.hash_offset = 4,
 	.has_accounting = true,
 	.foe_entry_size = MTK_FOE_ENTRY_V2_SIZE,
+	.rss_num = 4,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma_v2),
 		.rxd_size = sizeof(struct mtk_rx_dma_v2),
-		.rx_irq_done_mask = MTK_RX_DONE_INT_V2,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_V2,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
 		.dma_len_offset = 8,
@@ -5478,7 +5832,7 @@ static const struct mtk_soc_data mt7986_data = {
 static const struct mtk_soc_data mt7988_data = {
 	.reg_map = &mt7988_reg_map,
 	.ana_rgc3 = 0x128,
-	.caps = MT7988_CAPS,
+	.caps = MT7988_CAPS | MTK_HWLRO,
 	.hw_features = MTK_HW_FEATURES,
 	.required_clks = MT7988_CLKS_BITMAP,
 	.required_pctl = false,
@@ -5487,10 +5841,10 @@ static const struct mtk_soc_data mt7988_data = {
 	.hash_offset = 4,
 	.has_accounting = true,
 	.foe_entry_size = MTK_FOE_ENTRY_V3_SIZE,
+	.rss_num = 4,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma_v2),
 		.rxd_size = sizeof(struct mtk_rx_dma_v2),
-		.rx_irq_done_mask = MTK_RX_DONE_INT_V2,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_V2,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
 		.dma_len_offset = 8,
@@ -5504,10 +5858,10 @@ static const struct mtk_soc_data rt5350_data = {
 	.required_clks = MT7628_CLKS_BITMAP,
 	.required_pctl = false,
 	.version = 1,
+	.rss_num = 0,
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
-		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_PDMA,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
