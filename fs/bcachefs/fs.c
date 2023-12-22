@@ -1667,8 +1667,7 @@ static int bch2_show_devname(struct seq_file *seq, struct dentry *root)
 		if (!first)
 			seq_putc(seq, ':');
 		first = false;
-		seq_puts(seq, "/dev/");
-		seq_puts(seq, ca->name);
+		seq_puts(seq, ca->disk_sb.sb_name);
 	}
 
 	return 0;
@@ -1733,6 +1732,9 @@ static int bch2_unfreeze(struct super_block *sb)
 {
 	struct bch_fs *c = sb->s_fs_info;
 	int ret;
+
+	if (test_bit(BCH_FS_EMERGENCY_RO, &c->flags))
+		return 0;
 
 	down_write(&c->state_lock);
 	ret = bch2_fs_read_write(c);
