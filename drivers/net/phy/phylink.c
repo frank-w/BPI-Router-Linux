@@ -1135,6 +1135,23 @@ static void phylink_pcs_an_restart(struct phylink *pl)
 		pl->pcs->ops->pcs_an_restart(pl->pcs);
 }
 
+static bool phylink_major_no_inband(struct phylink *pl, phy_interface_t interface)
+{
+	struct device_node *node = pl->config->dev->of_node;
+
+	if (!node)
+		return false;
+
+	if (!of_device_is_compatible(node, "mediatek,eth-mac"))
+		return false;
+
+	if (interface != PHY_INTERFACE_MODE_2500BASEX)
+		return false;
+
+	return true;
+
+}
+
 static void phylink_major_config(struct phylink *pl, bool restart,
 				  const struct phylink_link_state *state)
 {
@@ -1146,9 +1163,21 @@ static void phylink_major_config(struct phylink *pl, bool restart,
 
 	phylink_dbg(pl, "major config %s\n", phy_modes(state->interface));
 
+	if (phylink_major_no_inband(pl, state->interface) && (!!pl->phydev)) {
+		if (pl->cur_link_an_mode == MLO_AN_INBAND)
+			pl->cur_link_an_mode = MLO_AN_PHY;
+		else
+			/* restore mode if it was changed before */
+			pl->cur_link_an_mode = pl->cfg_link_an_mode;
+	}
+
 	pl->pcs_neg_mode = phylink_pcs_neg_mode(pl->cur_link_an_mode,
 						state->interface,
 						state->advertising);
+
+	if (phylink_major_no_inband(pl, state->interface) && (!pl->phydev) &&
+	    (pl->pcs_neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED))
+		pl->pcs_neg_mode = PHYLINK_PCS_NEG_INBAND_DISABLED;
 
 	if (pl->using_mac_select_pcs) {
 		pcs = pl->mac_ops->mac_select_pcs(pl->config, state->interface);
@@ -1279,6 +1308,9 @@ static void phylink_mac_pcs_get_state(struct phylink *pl,
 				      struct phylink_link_state *state)
 {
 	linkmode_copy(state->advertising, pl->link_config.advertising);
+	if (pl->pcs_neg_mode == PHYLINK_PCS_NEG_INBAND_DISABLED)
+		linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+				   state->advertising);
 	linkmode_zero(state->lp_advertising);
 	state->interface = pl->link_config.interface;
 	state->rate_matching = pl->link_config.rate_matching;
