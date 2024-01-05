@@ -78,7 +78,7 @@ void btrfs_extent_buffer_leak_debug_check(struct btrfs_fs_info *fs_info)
 		eb = list_first_entry(&fs_info->allocated_ebs,
 				      struct extent_buffer, leak_list);
 		pr_err(
-	"BTRFS: buffer leak start %llu len %lu refs %d bflags %lu owner %llu\n",
+	"BTRFS: buffer leak start %llu len %u refs %d bflags %lu owner %llu\n",
 		       eb->start, eb->len, atomic_read(&eb->refs), eb->bflags,
 		       btrfs_header_owner(eb));
 		list_del(&eb->leak_list);
@@ -729,6 +729,8 @@ static int alloc_eb_folio_array(struct extent_buffer *eb, gfp_t extra_gfp)
 
 	for (int i = 0; i < num_pages; i++)
 		eb->folios[i] = page_folio(page_array[i]);
+	eb->folio_size = PAGE_SIZE;
+	eb->folio_shift = PAGE_SHIFT;
 	return 0;
 }
 
@@ -1728,10 +1730,10 @@ static noinline_for_stack void write_one_eb(struct extent_buffer *eb,
 			folio_lock(folio);
 			folio_clear_dirty_for_io(folio);
 			folio_start_writeback(folio);
-			ret = bio_add_folio(&bbio->bio, folio, folio_size(folio), 0);
+			ret = bio_add_folio(&bbio->bio, folio, eb->folio_size, 0);
 			ASSERT(ret);
 			wbc_account_cgroup_owner(wbc, folio_page(folio, 0),
-						 folio_size(folio));
+						 eb->folio_size);
 			wbc->nr_to_write -= folio_nr_pages(folio);
 			folio_unlock(folio);
 		}
@@ -3523,7 +3525,7 @@ retry:
 	/* For now, we should only have single-page folios for btree inode. */
 	ASSERT(folio_nr_pages(existing_folio) == 1);
 
-	if (folio_size(existing_folio) != folio_size(eb->folios[0])) {
+	if (folio_size(existing_folio) != eb->folio_size) {
 		folio_unlock(existing_folio);
 		folio_put(existing_folio);
 		return -EAGAIN;
@@ -3666,6 +3668,8 @@ reallocate:
 		 * and free the allocated page.
 		 */
 		folio = eb->folios[i];
+		eb->folio_size = folio_size(folio);
+		eb->folio_shift = folio_shift(folio);
 		spin_lock(&mapping->i_private_lock);
 		/* Should not fail, as we have preallocated the memory */
 		ret = attach_extent_buffer_folio(eb, folio, prealloc);
@@ -4115,7 +4119,7 @@ int read_extent_buffer_pages(struct extent_buffer *eb, int wait, int mirror_num,
 		for (int i = 0; i < num_folios; i++) {
 			struct folio *folio = eb->folios[i];
 
-			ret = bio_add_folio(&bbio->bio, folio, folio_size(folio), 0);
+			ret = bio_add_folio(&bbio->bio, folio, eb->folio_size, 0);
 			ASSERT(ret);
 		}
 	}
@@ -4135,7 +4139,7 @@ static bool report_eb_range(const struct extent_buffer *eb, unsigned long start,
 			    unsigned long len)
 {
 	btrfs_warn(eb->fs_info,
-		"access to eb bytenr %llu len %lu out of range start %lu len %lu",
+		"access to eb bytenr %llu len %u out of range start %lu len %lu",
 		eb->start, eb->len, start, len);
 	WARN_ON(IS_ENABLED(CONFIG_BTRFS_DEBUG));
 
@@ -4164,7 +4168,7 @@ static inline int check_eb_range(const struct extent_buffer *eb,
 void read_extent_buffer(const struct extent_buffer *eb, void *dstv,
 			unsigned long start, unsigned long len)
 {
-	const int unit_size = folio_size(eb->folios[0]);
+	const int unit_size = eb->folio_size;
 	size_t cur;
 	size_t offset;
 	char *dst = (char *)dstv;
@@ -4204,7 +4208,7 @@ int read_extent_buffer_to_user_nofault(const struct extent_buffer *eb,
 				       void __user *dstv,
 				       unsigned long start, unsigned long len)
 {
-	const int unit_size = folio_size(eb->folios[0]);
+	const int unit_size = eb->folio_size;
 	size_t cur;
 	size_t offset;
 	char __user *dst = (char __user *)dstv;
@@ -4244,7 +4248,7 @@ int read_extent_buffer_to_user_nofault(const struct extent_buffer *eb,
 int memcmp_extent_buffer(const struct extent_buffer *eb, const void *ptrv,
 			 unsigned long start, unsigned long len)
 {
-	const int unit_size = folio_size(eb->folios[0]);
+	const int unit_size = eb->folio_size;
 	size_t cur;
 	size_t offset;
 	char *kaddr;
@@ -4315,7 +4319,7 @@ static void __write_extent_buffer(const struct extent_buffer *eb,
 				  const void *srcv, unsigned long start,
 				  unsigned long len, bool use_memmove)
 {
-	const int unit_size = folio_size(eb->folios[0]);
+	const int unit_size = eb->folio_size;
 	size_t cur;
 	size_t offset;
 	char *kaddr;
@@ -4364,7 +4368,7 @@ void write_extent_buffer(const struct extent_buffer *eb, const void *srcv,
 static void memset_extent_buffer(const struct extent_buffer *eb, int c,
 				 unsigned long start, unsigned long len)
 {
-	const int unit_size = folio_size(eb->folios[0]);
+	const int unit_size = eb->folio_size;
 	unsigned long cur = start;
 
 	if (eb->addr) {
@@ -4395,7 +4399,7 @@ void memzero_extent_buffer(const struct extent_buffer *eb, unsigned long start,
 void copy_extent_buffer_full(const struct extent_buffer *dst,
 			     const struct extent_buffer *src)
 {
-	const int unit_size = folio_size(src->folios[0]);
+	const int unit_size = src->folio_size;
 	unsigned long cur = 0;
 
 	ASSERT(dst->len == src->len);
@@ -4417,7 +4421,7 @@ void copy_extent_buffer(const struct extent_buffer *dst,
 			unsigned long dst_offset, unsigned long src_offset,
 			unsigned long len)
 {
-	const int unit_size = folio_size(dst->folios[0]);
+	const int unit_size = dst->folio_size;
 	u64 dst_len = dst->len;
 	size_t cur;
 	size_t offset;
@@ -4473,10 +4477,10 @@ static inline void eb_bitmap_offset(const struct extent_buffer *eb,
 	 * the bitmap item in the extent buffer + the offset of the byte in the
 	 * bitmap item.
 	 */
-	offset = start + offset_in_folio(eb->folios[0], eb->start) + byte_offset;
+	offset = start + offset_in_eb_folio(eb, eb->start) + byte_offset;
 
-	*folio_index = offset >> folio_shift(eb->folios[0]);
-	*folio_offset = offset_in_folio(eb->folios[0], offset);
+	*folio_index = offset >> eb->folio_shift;
+	*folio_offset = offset_in_eb_folio(eb, offset);
 }
 
 /*
@@ -4590,7 +4594,7 @@ void memcpy_extent_buffer(const struct extent_buffer *dst,
 			  unsigned long dst_offset, unsigned long src_offset,
 			  unsigned long len)
 {
-	const int unit_size = folio_size(dst->folios[0]);
+	const int unit_size = dst->folio_size;
 	unsigned long cur_off = 0;
 
 	if (check_eb_range(dst, dst_offset, len) ||
