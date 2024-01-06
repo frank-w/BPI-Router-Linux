@@ -2944,6 +2944,7 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	u32 ring_ctrl_dw1 = 0, ring_ctrl_dw2 = 0, ring_ctrl_dw3 = 0;
 	u32 lro_ctrl_dw0 = 0, lro_ctrl_dw3 = 0;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d hwlro_rx_init\n",__FUNCTION__,__LINE__);
 	/* set LRO rings to auto-learn modes */
 	ring_ctrl_dw2 |= MTK_RING_AUTO_LERAN_MODE;
 
@@ -2990,6 +2991,7 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	lro_ctrl_dw3 |= MTK_LRO_MIN_RXD_SDL;
 
 	if (mtk_is_netsys_v2_or_greater(eth)) {
+		printk(KERN_ALERT "DEBUG: Passed %s %d >=netsys_v2\n",__FUNCTION__,__LINE__);
 		val = mtk_r32(eth, reg_map->pdma.rx_cfg);
 		mtk_w32(eth, val | (MTK_PDMA_LRO_SDL << MTK_RX_CFG_SDL_OFFSET),
 			reg_map->pdma.rx_cfg);
@@ -3010,6 +3012,7 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 
 	/* Set perLRO GRP INT */
 	if (mtk_is_netsys_v2_or_greater(eth)) {
+		printk(KERN_ALERT "DEBUG: Passed %s %d set perLRO GRP INT\n",__FUNCTION__,__LINE__);
 		mtk_m32(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(1)),
 			MTK_RX_DONE_INT(MTK_HW_LRO_RING(1)), reg_map->pdma.int_grp);
 		mtk_m32(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(2)),
@@ -3098,12 +3101,12 @@ static int mtk_hwlro_add_ipaddr(struct net_device *dev,
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
 	int hwlro_idx;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if ((fsp->flow_type != TCP_V4_FLOW) ||
 	    (!fsp->h_u.tcp_ip4_spec.ip4dst) ||
 	    (fsp->location > 1))
 		return -EINVAL;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	mac->hwlro_ip[fsp->location] = htonl(fsp->h_u.tcp_ip4_spec.ip4dst);
 	hwlro_idx = (mac->id * MTK_MAX_LRO_IP_CNT) + fsp->location;
 
@@ -3122,10 +3125,10 @@ static int mtk_hwlro_del_ipaddr(struct net_device *dev,
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
 	int hwlro_idx;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (fsp->location > 1)
 		return -EINVAL;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	mac->hwlro_ip[fsp->location] = 0;
 	hwlro_idx = (mac->id * MTK_MAX_LRO_IP_CNT) + fsp->location;
 
@@ -3159,9 +3162,10 @@ static int mtk_hwlro_get_fdir_entry(struct net_device *dev,
 	struct ethtool_rx_flow_spec *fsp =
 		(struct ethtool_rx_flow_spec *)&cmd->fs;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (fsp->location >= ARRAY_SIZE(mac->hwlro_ip))
 		return -EINVAL;
-
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	/* only tcp dst ipv4 is meaningful, others are meaningless */
 	fsp->flow_type = TCP_V4_FLOW;
 	fsp->h_u.tcp_ip4_spec.ip4dst = ntohl(mac->hwlro_ip[fsp->location]);
@@ -3186,7 +3190,7 @@ static int mtk_hwlro_get_fdir_all(struct net_device *dev,
 	struct mtk_mac *mac = netdev_priv(dev);
 	int cnt = 0;
 	int i;
-
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	for (i = 0; i < MTK_MAX_LRO_IP_CNT; i++) {
 		if (cnt == cmd->rule_cnt)
 			return -EMSGSIZE;
@@ -3223,6 +3227,7 @@ static int mtk_rss_init(struct mtk_eth *eth)
 		0xc2, 0x0e, 0x5b, 0x25, 0xda, 0x56, 0x5a, 0x6d};
 	u32 val;
 	int i;
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	memcpy(rss_params->hash_key, hash_key, MTK_RSS_HASH_KEYSIZE);
 	for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE; i++)
 		rss_params->indirection_table[i] = i % eth->soc->rss_num;
@@ -3288,7 +3293,7 @@ static int mtk_rss_init(struct mtk_eth *eth)
 		mtk_w32(eth, MTK_MAX_DELAY_INT, reg_map->pdma.lro_tx3_dly_int);
 	} else
 		mtk_w32(eth, MTK_MAX_DELAY_INT_V2, reg_map->pdma.rss_delay_int);
-
+	printk(KERN_ALERT "DEBUG: Passed %s %d netsysv2:%d\n",__FUNCTION__,__LINE__,mtk_is_netsys_v2_or_greater(eth));
 	return 0;
 }
 
@@ -3314,6 +3319,7 @@ static void mtk_rss_uninit(struct mtk_eth *eth)
 static netdev_features_t mtk_fix_features(struct net_device *dev,
 					  netdev_features_t features)
 {
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (!(features & NETIF_F_LRO)) {
 		struct mtk_mac *mac = netdev_priv(dev);
 		int ip_cnt = mtk_hwlro_get_ip_cnt(mac);
@@ -3331,7 +3337,7 @@ static netdev_features_t mtk_fix_features(struct net_device *dev,
 static int mtk_set_features(struct net_device *dev, netdev_features_t features)
 {
 	netdev_features_t diff = dev->features ^ features;
-
+	printk(KERN_ALERT "DEBUG: Passed %s %d NETIF_F_LRO:%llx\n",__FUNCTION__,__LINE__,features & NETIF_F_LRO);
 	if ((diff & NETIF_F_LRO) && !(features & NETIF_F_LRO))
 		mtk_hwlro_netdev_disable(dev);
 
@@ -3391,6 +3397,7 @@ static int mtk_dma_init(struct mtk_eth *eth)
 		return err;
 
 	if (eth->hwlro) {
+		printk(KERN_ALERT "DEBUG: Passed %s %d maybe call hwlro_rx_init\n",__FUNCTION__,__LINE__);
 		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
 			err = mtk_rx_alloc(eth, MTK_HW_LRO_RING(i), MTK_RX_FLAGS_HWLRO);
 			if (err)
@@ -3736,6 +3743,7 @@ static int mtk_open(struct net_device *dev)
 		}
 
 		if (eth->hwlro) {
+			printk(KERN_ALERT "DEBUG: Passed %s %d enable napi and irq for lro\n",__FUNCTION__,__LINE__);
 			for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
 				napi_enable(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
 				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(i)));
