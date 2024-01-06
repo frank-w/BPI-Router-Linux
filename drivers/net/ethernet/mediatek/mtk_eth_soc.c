@@ -2172,7 +2172,7 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 
 	if (unlikely(!ring))
 		goto rx_done;
-	
+
 	while (done < budget) {
 		unsigned int pktlen, *rxdcsum;
 		struct net_device *netdev;
@@ -3248,7 +3248,7 @@ static int mtk_rss_init(struct mtk_eth *eth)
 	val |= MTK_RSS_IPV4_STATIC_HASH;
 	val |= MTK_RSS_IPV6_STATIC_HASH;
 	mtk_w32(eth, val, reg_map->pdma.rss_glo_cfg);
-	
+
 	/* Hash Key */
 	for (i = 0; i < MTK_RSS_HASH_KEYSIZE / sizeof(u32); i++)
 		mtk_w32(eth, rss_params->hash_key[i], MTK_RSS_HASH_KEY_DW(i));
@@ -3741,7 +3741,6 @@ static int mtk_open(struct net_device *dev)
 				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(MTK_HW_LRO_RING(i)));
 			}
 		}
-		
 		refcount_set(&eth->dma_refcnt, 1);
 	}
 	else
