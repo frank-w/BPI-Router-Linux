@@ -1307,6 +1307,7 @@ static bool mtk_rx_get_desc(struct mtk_eth *eth, struct mtk_rx_dma_v2 *rxd,
 	if (mtk_is_netsys_v2_or_greater(eth)) {
 		rxd->rxd5 = READ_ONCE(dma_rxd->rxd5);
 		rxd->rxd6 = READ_ONCE(dma_rxd->rxd6);
+		rxd->rxd7 = READ_ONCE(dma_rxd->rxd7);
 	}
 
 	return true;
@@ -2962,7 +2963,7 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	ring_ctrl_dw2 |= MTK_RING_MAX_AGG_CNT_L;
 	ring_ctrl_dw3 |= MTK_RING_MAX_AGG_CNT_H;
 
-	for (i = 1; i < MTK_MAX_RX_RING_NUM; i++) {
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++) {
 		mtk_w32(eth, ring_ctrl_dw1, MTK_LRO_CTRL_DW1_CFG(i));
 		mtk_w32(eth, ring_ctrl_dw2, MTK_LRO_CTRL_DW2_CFG(i));
 		mtk_w32(eth, ring_ctrl_dw3, MTK_LRO_CTRL_DW3_CFG(i));
@@ -2984,9 +2985,6 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	mtk_w32(eth, (MTK_HW_LRO_TIMER_UNIT << 16) | MTK_HW_LRO_REFRESH_TIME,
 		MTK_PDMA_LRO_ALT_REFRESH_TIMER);
 
-	/* set HW LRO mode & the max aggregation count for rx packets */
-	lro_ctrl_dw3 |= MTK_ADMA_MODE | (MTK_HW_LRO_MAX_AGG_CNT & 0xff);
-
 	/* the minimal remaining room of SDL0 in RXD for lro aggregation */
 	lro_ctrl_dw3 |= MTK_LRO_MIN_RXD_SDL;
 
@@ -3003,6 +3001,9 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 
 	/* enable HW LRO */
 	lro_ctrl_dw0 |= MTK_LRO_EN;
+
+	/* enable cpu reason black list */
+	lro_ctrl_dw0 |= MTK_LRO_CRSN_BNW;
 
 	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3);
 	mtk_w32(eth, lro_ctrl_dw0, reg_map->pdma.lro_ctrl_dw0);
@@ -3044,7 +3045,7 @@ static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 	}
 
 	/* invalidate lro rings */
-	for (i = 1; i < MTK_MAX_RX_RING_NUM; i++)
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++)
 		mtk_w32(eth, 0, MTK_LRO_CTRL_DW2_CFG(i));
 
 	/* disable HW LRO */
@@ -3055,6 +3056,9 @@ static void mtk_hwlro_val_ipaddr(struct mtk_eth *eth, int idx, __be32 ip)
 {
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
+
+	if (mtk_is_netsys_v2_or_greater(eth))
+		idx += 1;
 
 	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(idx));
 
@@ -3071,6 +3075,9 @@ static void mtk_hwlro_inval_ipaddr(struct mtk_eth *eth, int idx)
 {
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
+
+	if (mtk_is_netsys_v2_or_greater(eth))
+		idx += 1;
 
 	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(idx));
 
@@ -3093,6 +3100,70 @@ static int mtk_hwlro_get_ip_cnt(struct mtk_mac *mac)
 	return cnt;
 }
 
+static int mtk_hwlro_add_ipaddr_idx(struct net_device *dev, u32 ip4dst)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
+	u32 reg_val;
+	int i;
+
+	/* check for duplicate IP address in the current DIP list */
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++) {
+		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(i));
+		if (reg_val == ip4dst)
+			break;
+	}
+
+	if (i <= MTK_HW_LRO_RING_NUM) {
+		netdev_warn(dev, "Duplicate IP address at DIP(%d)!\n", i);
+		return -EEXIST;
+	}
+
+	/* find out available DIP index */
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++) {
+		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(i));
+		if (reg_val == 0UL)
+			break;
+	}
+
+	if (i > MTK_HW_LRO_RING_NUM) {
+		netdev_warn(dev, "DIP index is currently out of resource!\n");
+		return -EBUSY;
+	}
+
+	if (mtk_is_netsys_v2_or_greater(eth))
+		i -= 1;
+
+	return i;
+}
+
+static int mtk_hwlro_get_ipaddr_idx(struct net_device *dev, u32 ip4dst)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
+	u32 reg_val;
+	int i;
+
+	/* find out DIP index that matches the given IP address */
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++) {
+		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(i));
+		if (reg_val == ip4dst)
+			break;
+	}
+
+	if (i > MTK_HW_LRO_RING_NUM) {
+		netdev_warn(dev, "DIP address is not exist!\n");
+		return -ENOENT;
+	}
+
+	if (mtk_is_netsys_v2_or_greater(eth))
+		i -= 1;
+
+	return i;
+}
+
 static int mtk_hwlro_add_ipaddr(struct net_device *dev,
 				struct ethtool_rxnfc *cmd)
 {
@@ -3101,14 +3172,20 @@ static int mtk_hwlro_add_ipaddr(struct net_device *dev,
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
 	int hwlro_idx;
+	u32 ip4dst;
+
 printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if ((fsp->flow_type != TCP_V4_FLOW) ||
 	    (!fsp->h_u.tcp_ip4_spec.ip4dst) ||
 	    (fsp->location > 1))
 		return -EINVAL;
 printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
-	mac->hwlro_ip[fsp->location] = htonl(fsp->h_u.tcp_ip4_spec.ip4dst);
-	hwlro_idx = (mac->id * MTK_MAX_LRO_IP_CNT) + fsp->location;
+	ip4dst = htonl(fsp->h_u.tcp_ip4_spec.ip4dst);
+	hwlro_idx = mtk_hwlro_add_ipaddr_idx(dev, ip4dst);
+	if (hwlro_idx < 0)
+		return hwlro_idx;
+ 
+	mac->hwlro_ip[fsp->location] = ip4dst;
 
 	mac->hwlro_ip_cnt = mtk_hwlro_get_ip_cnt(mac);
 
@@ -3125,18 +3202,42 @@ static int mtk_hwlro_del_ipaddr(struct net_device *dev,
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
 	int hwlro_idx;
+	u32 ip4dst;
+
 printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (fsp->location > 1)
 		return -EINVAL;
 printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+	ip4dst = mac->hwlro_ip[fsp->location];
+	hwlro_idx = mtk_hwlro_get_ipaddr_idx(dev, ip4dst);
+	if (hwlro_idx < 0)
+		return hwlro_idx;
+ 
 	mac->hwlro_ip[fsp->location] = 0;
-	hwlro_idx = (mac->id * MTK_MAX_LRO_IP_CNT) + fsp->location;
 
 	mac->hwlro_ip_cnt = mtk_hwlro_get_ip_cnt(mac);
 
 	mtk_hwlro_inval_ipaddr(eth, hwlro_idx);
 
 	return 0;
+}
+
+static void mtk_hwlro_netdev_enable(struct net_device *dev)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+	int i, hwlro_idx;
+
+	for (i = 0; i < MTK_MAX_LRO_IP_CNT; i++) {
+		if (mac->hwlro_ip[i] == 0)
+			continue;
+
+		hwlro_idx = mtk_hwlro_get_ipaddr_idx(dev, mac->hwlro_ip[i]);
+		if (hwlro_idx < 0)
+			continue;
+
+		mtk_hwlro_val_ipaddr(eth, hwlro_idx, mac->hwlro_ip[i]);
+	}
 }
 
 static void mtk_hwlro_netdev_disable(struct net_device *dev)
@@ -3146,8 +3247,14 @@ static void mtk_hwlro_netdev_disable(struct net_device *dev)
 	int i, hwlro_idx;
 
 	for (i = 0; i < MTK_MAX_LRO_IP_CNT; i++) {
+		if (mac->hwlro_ip[i] == 0)
+			continue;
+
+		hwlro_idx = mtk_hwlro_get_ipaddr_idx(dev, mac->hwlro_ip[i]);
+		if (hwlro_idx < 0)
+			continue;
+
 		mac->hwlro_ip[i] = 0;
-		hwlro_idx = (mac->id * MTK_MAX_LRO_IP_CNT) + i;
 
 		mtk_hwlro_inval_ipaddr(eth, hwlro_idx);
 	}
@@ -3163,9 +3270,7 @@ static int mtk_hwlro_get_fdir_entry(struct net_device *dev,
 		(struct ethtool_rx_flow_spec *)&cmd->fs;
 
 	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
-	if (fsp->location >= ARRAY_SIZE(mac->hwlro_ip))
-		return -EINVAL;
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 	/* only tcp dst ipv4 is meaningful, others are meaningless */
 	fsp->flow_type = TCP_V4_FLOW;
 	fsp->h_u.tcp_ip4_spec.ip4dst = ntohl(mac->hwlro_ip[fsp->location]);
@@ -3331,17 +3436,34 @@ static netdev_features_t mtk_fix_features(struct net_device *dev,
 		}
 	}
 
+	if ((features & NETIF_F_HW_VLAN_CTAG_TX) && netdev_uses_dsa(dev)) {
+		netdev_info(dev, "TX vlan offload cannot be enabled when dsa is attached.\n");
+
+		features &= ~NETIF_F_HW_VLAN_CTAG_TX;
+	}
+
 	return features;
 }
 
 static int mtk_set_features(struct net_device *dev, netdev_features_t features)
 {
-	netdev_features_t diff = dev->features ^ features;
-	printk(KERN_ALERT "DEBUG: Passed %s %d NETIF_F_LRO:%llx\n",__FUNCTION__,__LINE__,features & NETIF_F_LRO);
-	if ((diff & NETIF_F_LRO) && !(features & NETIF_F_LRO))
-		mtk_hwlro_netdev_disable(dev);
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+	netdev_features_t lro;
+	int err = 0;
+ 
+	lro = dev->features & NETIF_F_LRO;
+	if (!(features & NETIF_F_LRO) && lro)
+ 		mtk_hwlro_netdev_disable(dev);
+	else if ((features & NETIF_F_LRO) && !lro)
+		mtk_hwlro_netdev_enable(dev);
+ 
+	if (!(features & NETIF_F_HW_VLAN_CTAG_RX))
+		mtk_w32(eth, 0, MTK_CDMP_EG_CTRL);
+	else
+		mtk_w32(eth, 1, MTK_CDMP_EG_CTRL);
 
-	return 0;
+	return err;
 }
 
 /* wait for DMA to finish whatever it is doing before we start using it again */
@@ -3596,14 +3718,20 @@ static int mtk_start_dma(struct mtk_eth *eth)
 			val |= MTK_RX_BT_32DWORDS;
 		mtk_w32(eth, val, reg_map->qdma.glo_cfg);
 
+		val = mtk_r32(eth, reg_map->pdma.glo_cfg);
 		mtk_w32(eth,
-			MTK_RX_DMA_EN | rx_2b_offset |
+			val | MTK_RX_DMA_EN | rx_2b_offset |
 			MTK_RX_BT_32DWORDS | MTK_MULTI_EN,
 			reg_map->pdma.glo_cfg);
 	} else {
 		mtk_w32(eth, MTK_TX_WB_DDONE | MTK_TX_DMA_EN | MTK_RX_DMA_EN |
 			MTK_MULTI_EN | MTK_PDMA_SIZE_8DWORDS,
 			reg_map->pdma.glo_cfg);
+	}
+
+	if (mtk_is_netsys_v2_or_greater(eth) && eth->hwlro) {
+		val = mtk_r32(eth, eth->soc->reg_map->pdma.glo_cfg);
+		mtk_w32(eth, val | MTK_RX_DMA_LRO_EN, eth->soc->reg_map->pdma.glo_cfg);
 	}
 
 	return 0;
@@ -4985,8 +5113,8 @@ static const struct net_device_ops mtk_netdev_ops = {
 	.ndo_start_xmit		= mtk_start_xmit,
 	.ndo_set_mac_address	= mtk_set_mac_address,
 	.ndo_validate_addr	= eth_validate_addr,
-	.ndo_eth_ioctl		= mtk_do_ioctl,
-	.ndo_change_mtu		= mtk_change_mtu,
+	.ndo_do_ioctl		= mtk_do_ioctl,
+	//.ndo_change_mtu		= mtk_change_mtu,
 	.ndo_tx_timeout		= mtk_tx_timeout,
 	.ndo_get_stats64        = mtk_get_stats64,
 	.ndo_fix_features	= mtk_fix_features,

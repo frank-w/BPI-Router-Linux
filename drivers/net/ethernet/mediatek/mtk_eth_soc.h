@@ -175,16 +175,16 @@
 /* PDMA HW LRO Control Registers */
 #define MTK_HW_LRO_RING_NUM		(mtk_is_netsys_v2_or_greater(eth) ? 4 : 3)
 #define MTK_HW_LRO_RING(x)		((x) + (mtk_is_netsys_v2_or_greater(eth) ? 4 : 1))
+#define MTK_LRO_CRSN_BNW		BIT((mtk_is_netsys_v2_or_greater(eth) ? 22 : 6))
 #define MTK_LRO_EN			BIT(0)
 #define MTK_NON_LRO_MULTI_EN   		BIT(2)
 #define MTK_LRO_DLY_INT_EN		BIT(5)
 #define MTK_L3_CKS_UPD_EN		BIT(7)
 #define MTK_L3_CKS_UPD_EN_V2		BIT(19)
 #define MTK_LRO_ALT_PKT_CNT_MODE	BIT(21)
-#define MTK_LRO_RING_RELINQUISH_REQ	(0x7 << 26)
-#define MTK_LRO_RING_RELINQUISH_REQ_V2	(0xf << 24)
-#define MTK_LRO_RING_RELINQUISH_DONE	(0x7 << 29)
-#define MTK_LRO_RING_RELINQUISH_DONE_V2	(0xf << 28)
+#define MTK_LRO_RING_RELINQUISH_REQ	(0x7 << (mtk_is_netsys_v2_or_greater(eth) ? 24 : 26))
+#define MTK_LRO_RING_RELINQUISH_DONE	(0x7 << (mtk_is_netsys_v2_or_greater(eth) ? 28 : 29))
+
 #define MTK_CTRL_DW0_SDL_OFFSET		(3)
 #define MTK_CTRL_DW0_SDL_MASK		BITS(3, 18)
 
