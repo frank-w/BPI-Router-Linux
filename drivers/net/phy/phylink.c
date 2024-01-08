@@ -1089,6 +1089,20 @@ static void phylink_pcs_an_restart(struct phylink *pl)
 		pl->pcs->ops->pcs_an_restart(pl->pcs);
 }
 
+/* This function needs to be changed, not using compatible */
+static bool phylink_basex_no_inband(struct phylink *pl)
+{
+	struct device_node *node = pl->config->dev->of_node;
+
+	if (!node)
+		return false;
+
+	if (!of_device_is_compatible(node, "mediatek,eth-mac"))
+		return false;
+
+	return true;
+}
+
 /**
  * phylink_pcs_neg_mode() - helper to determine PCS inband mode
  * @mode: one of %MLO_AN_FIXED, %MLO_AN_PHY, %MLO_AN_INBAND.
@@ -1108,11 +1122,24 @@ static void phylink_pcs_an_restart(struct phylink *pl)
  * Note: this is for cases where the PCS itself is involved in negotiation
  * (e.g. Clause 37, SGMII and similar) not Clause 73.
  */
-static unsigned int phylink_pcs_neg_mode(unsigned int mode,
-					 phy_interface_t interface,
-					 const unsigned long *advertising)
+static void phylink_pcs_neg_mode(struct phylink *pl,
+				 phy_interface_t interface,
+				 const unsigned long *advertising)
 {
-	unsigned int neg_mode;
+	if ((!!pl->phydev) && phylink_basex_no_inband(pl)) {
+		switch (interface) {
+		case PHY_INTERFACE_MODE_1000BASEX:
+		case PHY_INTERFACE_MODE_2500BASEX:
+			if (pl->cur_link_an_mode == MLO_AN_INBAND)
+				pl->cur_link_an_mode = MLO_AN_PHY;
+			break;
+		default:
+			/* restore mode if it was changed before */
+			if (pl->cur_link_an_mode == MLO_AN_PHY &&
+			    pl->cfg_link_an_mode == MLO_AN_INBAND)
+				pl->cur_link_an_mode = pl->cfg_link_an_mode;
+		}
+	}
 
 	switch (interface) {
 	case PHY_INTERFACE_MODE_SGMII:
@@ -1124,10 +1151,10 @@ static unsigned int phylink_pcs_neg_mode(unsigned int mode,
 		 * inband communication. Note: there exist PHYs that run
 		 * with SGMII but do not send the inband data.
 		 */
-		if (!phylink_autoneg_inband(mode))
-			neg_mode = PHYLINK_PCS_NEG_OUTBAND;
+		if (!phylink_autoneg_inband(pl->cur_link_an_mode))
+			pl->pcs_neg_mode = PHYLINK_PCS_NEG_OUTBAND;
 		else
-			neg_mode = PHYLINK_PCS_NEG_INBAND_ENABLED;
+			pl->pcs_neg_mode = PHYLINK_PCS_NEG_INBAND_ENABLED;
 		break;
 
 	case PHY_INTERFACE_MODE_1000BASEX:
@@ -1138,21 +1165,30 @@ static unsigned int phylink_pcs_neg_mode(unsigned int mode,
 		 * as well, but drivers may not support this, so may
 		 * need to override this.
 		 */
-		if (!phylink_autoneg_inband(mode))
-			neg_mode = PHYLINK_PCS_NEG_OUTBAND;
-		else if (linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
-					   advertising))
-			neg_mode = PHYLINK_PCS_NEG_INBAND_ENABLED;
-		else
-			neg_mode = PHYLINK_PCS_NEG_INBAND_DISABLED;
+		if (!phylink_autoneg_inband(pl->cur_link_an_mode)) {
+			pl->pcs_neg_mode = PHYLINK_PCS_NEG_OUTBAND;
+		} else if (linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+					   advertising) &&
+				!phylink_basex_no_inband(pl)) {
+			pl->pcs_neg_mode = PHYLINK_PCS_NEG_INBAND_ENABLED;
+		} else {
+			pl->pcs_neg_mode = PHYLINK_PCS_NEG_INBAND_DISABLED;
+			linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+					   pl->link_config.advertising);
+			pl->link_config.speed = (interface ==
+						 PHY_INTERFACE_MODE_1000BASEX) ?
+						 SPEED_1000 : SPEED_2500;
+			pl->link_config.duplex = DUPLEX_FULL;
+			pl->link_config.pause = MLO_PAUSE_NONE; /* ????? */
+		}
 		break;
 
 	default:
-		neg_mode = PHYLINK_PCS_NEG_NONE;
+		pl->pcs_neg_mode = PHYLINK_PCS_NEG_NONE;
 		break;
 	}
 
-	return neg_mode;
+	return;
 }
 
 static void phylink_major_config(struct phylink *pl, bool restart,
@@ -1166,9 +1202,7 @@ static void phylink_major_config(struct phylink *pl, bool restart,
 
 	phylink_dbg(pl, "major config %s\n", phy_modes(state->interface));
 
-	pl->pcs_neg_mode = phylink_pcs_neg_mode(pl->cur_link_an_mode,
-						state->interface,
-						state->advertising);
+	phylink_pcs_neg_mode(pl, state->interface, state->advertising);
 
 	if (pl->using_mac_select_pcs) {
 		pcs = pl->mac_ops->mac_select_pcs(pl->config, state->interface);
@@ -1272,9 +1306,8 @@ static int phylink_change_inband_advert(struct phylink *pl)
 		    pl->link_config.pause);
 
 	/* Recompute the PCS neg mode */
-	pl->pcs_neg_mode = phylink_pcs_neg_mode(pl->cur_link_an_mode,
-					pl->link_config.interface,
-					pl->link_config.advertising);
+	phylink_pcs_neg_mode(pl, pl->link_config.interface,
+			     pl->link_config.advertising);
 
 	neg_mode = pl->cur_link_an_mode;
 	if (pl->pcs->neg_mode)
@@ -3404,6 +3437,8 @@ static int phylink_sfp_connect_phy(void *upstream, struct phy_device *phy)
 	ret = phylink_bringup_phy(pl, phy, interface);
 	if (ret)
 		phy_detach(phy);
+
+	phylink_major_config(pl, false, &pl->phy_state);
 
 	return ret;
 }
