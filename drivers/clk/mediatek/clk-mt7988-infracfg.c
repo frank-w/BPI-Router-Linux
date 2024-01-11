@@ -16,6 +16,9 @@
 #include <dt-bindings/clock/mediatek,mt7988-clk.h>
 #include <dt-bindings/reset/mediatek,mt7988-resets.h>
 
+#define	MT7988_INFRA_RST0_SET_OFFSET	0x70
+#define	MT7988_INFRA_RST1_SET_OFFSET	0x80
+
 static DEFINE_SPINLOCK(mt7988_clk_lock);
 
 static const char *const infra_mux_uart0_parents[] __initconst = { "csw_infra_f26m_sel",
@@ -251,33 +254,13 @@ static const struct mtk_gate infra_clks[] = {
 };
 
 static u16 infra_rst_ofs[] = {
-	0x80, //drivers/clk/mediatek/reset.h:15:#define INFRA_RST0_SET_OFFSET 0x120
+	MT7988_INFRA_RST0_SET_OFFSET,
+	MT7988_INFRA_RST1_SET_OFFSET,
 };
 
-//infra global reset set 0x10001080 BIT(9)
-//infra global reset clear 0x10001084 BIT(9)
-//infra global reset status 0x10001088 BIT(9)
-
-//0x10001080 INFRA_GLOBALCON_RST1_SE
-//values:
-//BIT(0) = AP_DMS_SWRST
-//BIT(1) = I2C_SWRST
-//BIT(2) = NFI_SWRST
-//BIT(3) = SPI0_SWRST
-//BIT(4) = SPI1_SWRST
-//BIT(5) = UART0_SWRST
-//BIT(6) = UART1_SWRST
-//BIT(7) = UART2_SWRST
-//BIT(8) = PTP_SWRST
-//BIT(9) = PTP_THERM_SWRST
-//BIT(10) = PTP_H_SWRST
-//BIT(11) = AUXADC_SWRST
-//BIT(12) = SPI2_SWRST
-//BIT(13) = I2C_PWR_GATE_GRST
-//BIT(14) = MSDC0_SWRST
-
 static u16 infra_idx_map[] = {
-	[MT7988_INFRA_RST0_THERM_CTRL_SWRST] = 0 * RST_NR_PER_BANK + 9,
+	[MT7988_INFRA_RST0_PEXTP_MAC_SWRST] = 0 * RST_NR_PER_BANK + 6,
+	[MT7988_INFRA_RST1_THERM_CTRL_SWRST] = 1 * RST_NR_PER_BANK + 9,
 };
 
 static struct mtk_clk_rst_desc infra_rst_desc = {
@@ -312,3 +295,4 @@ static struct platform_driver clk_mt7988_infracfg_drv = {
 	.remove_new = mtk_clk_simple_remove,
 };
 module_platform_driver(clk_mt7988_infracfg_drv);
+MODULE_LICENSE("GPL");

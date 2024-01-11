@@ -810,7 +810,7 @@
 			clocks = <&infracfg CLK_INFRA_26M_THERM_SYSTEM>;
 			//clock-names = "lvts_clk";
 			interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
-			resets = <&infracfg MT7988_INFRA_RST0_THERM_CTRL_SWRST>;
+			resets = <&infracfg MT7988_INFRA_RST1_THERM_CTRL_SWRST>;
 			nvmem-cells = <&lvts_calibration>;
 			nvmem-cell-names = "lvts-calib-data-1";
 		};
