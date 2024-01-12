@@ -1435,7 +1435,7 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 	arch_enter_lazy_mmu_mode();
 	do {
 		pte_t ptent = ptep_get(pte);
-		struct folio *folio;
+		struct folio *folio = NULL;
 		struct page *page;
 
 		if (pte_none(ptent))
