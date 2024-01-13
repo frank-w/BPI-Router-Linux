@@ -504,6 +504,22 @@ static inline void __flush_tlb_kernel_pgtable(unsigned long kaddr)
 	dsb(ish);
 	isb();
 }
+
+#ifdef CONFIG_HUGETLB_PAGE_OPTIMIZE_VMEMMAP
+static inline void vmemmap_flush_tlb_all(void)
+{
+	/* do nothing, already flushed tlb in every single BBM */
+}
+#define vmemmap_flush_tlb_all vmemmap_flush_tlb_all
+
+static inline void vmemmap_flush_tlb_range(unsigned long start,
+					   unsigned long end)
+{
+	/* do nothing, already flushed tlb in every single BBM */
+}
+#define vmemmap_flush_tlb_range vmemmap_flush_tlb_range
+#endif
+
 #endif
 
 #endif
