@@ -1219,6 +1219,9 @@ static int pci_dev_wait(struct pci_dev *dev, char *reset_type, int timeout)
 	if (delay > PCI_RESET_WAIT)
 		pci_info(dev, "ready %dms after %s\n", delay - 1,
 			 reset_type);
+	else
+		pci_dbg(dev, "ready %dms after %s\n", delay - 1,
+			reset_type);
 
 	return 0;
 }
@@ -1335,6 +1338,9 @@ static int pci_set_full_power_state(struct pci_dev *dev)
 		pci_restore_bars(dev);
 	}
 
+	if (dev->bus->self)
+		pcie_aspm_pm_state_change(dev->bus->self);
+
 	return 0;
 }
 
@@ -1428,6 +1434,9 @@ static int pci_set_low_power_state(struct pci_dev *dev, pci_power_t state)
 		pci_info_ratelimited(dev, "Refused to change power state from %s to %s\n",
 				     pci_power_name(dev->current_state),
 				     pci_power_name(state));
+
+	if (dev->bus->self)
+		pcie_aspm_pm_state_change(dev->bus->self);
 
 	return 0;
 }

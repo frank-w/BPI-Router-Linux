@@ -9,10 +9,6 @@
 			Linus
 ----------
 
-N: Matt Mackal
-E: mpm@selenic.com
-D: SLOB slab allocator
-
 N: Matti Aarnio
 E: mea@nic.funet.fi
 D: Alpha systems hacking, IPv6 and other network related stuff
@@ -323,6 +319,9 @@ N: Ohad Ben Cohen
 E: ohad@wizery.com
 D: Remote Processor (remoteproc) subsystem
 D: Remote Processor Messaging (rpmsg) subsystem
+D: Hardware spinlock (hwspinlock) subsystem
+D: OMAP hwspinlock driver
+D: OMAP remoteproc driver
 
 N: Krzysztof Benedyczak
 E: golbi@mat.uni.torun.pl
@@ -1425,6 +1424,10 @@ S: University of Stellenbosch
 S: Stellenbosch, Western Cape
 S: South Africa
 
+N: Andy Gross
+E: agross@kernel.org
+D: Qualcomm SoC subsystem and drivers
+
 N: Grant Grundler
 E: grantgrundler@gmail.com
 W: http://obmouse.sourceforge.net/
@@ -1571,6 +1574,10 @@ D: chief codingstyle nitpicker
 S: Ampferstr. 50 / 4
 S: 6020 Innsbruck
 S: Austria
+
+N: Mark Hemment
+E: markhe@nextd.demon.co.uk
+D: SLAB allocator implementation
 
 N: Richard Henderson
 E: rth@twiddle.net
@@ -1828,6 +1835,13 @@ S: K osmidomkum 723
 S: 160 00 Praha 6
 S: Czech Republic
 
+N: Michael Kerrisk
+E: mtk.manpages@gmail.com
+W: https://man7.org/
+P: 4096R/3A35CE5E E522 595B 52ED A4E6 BFCC  CB5E 8561 9911 3A35 CE5E
+D: Maintainer of the Linux man-pages project
+D: Linux man pages online, at <https://man7.org/linux/man-pages/>
+
 N: Niels Kristian Bech Jensen
 E: nkbj1970@hotmail.com
 D: Miscellaneous kernel updates and fixes.
@@ -1854,6 +1868,10 @@ D: CPUFREQ maintenance.
 D: Fedora kernel maintenance (2003-2014).
 D: 'Trinity' and similar fuzz testing work.
 D: Misc/Other.
+
+N: Tom Joseph
+E: tjoseph@cadence.com
+D: Cadence PCIe driver
 
 N: Martin Josfsson
 E: gandalf@wlug.westbo.se
@@ -2125,6 +2143,10 @@ D: Various other kernel patches, cleanups and fixes
 S: 2213 La Terrace Circle
 S: San Jose, CA 95123
 S: USA
+
+N: Mike Kravetz
+E: mike.kravetz@oracle.com
+D: Maintenance and development of the hugetlb subsystem
 
 N: Andreas S. Krebs
 E: akrebs@altavista.net
@@ -2436,6 +2458,10 @@ D: sun4/330 port, capabilities for elf, speedup for rm on ext2, USB,
 D: work on suspend-to-ram/disk, killing duplicates from ioctl32,
 D: Altera SoCFPGA and Nokia N900 support.
 S: Czech Republic
+
+N: Olivia Mackall
+E: olivia@selenic.com
+D: SLOB slab allocator
 
 N: Paul Mackerras
 E: paulus@samba.org

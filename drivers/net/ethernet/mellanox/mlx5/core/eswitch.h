@@ -526,7 +526,8 @@ struct mlx5_esw_flow_attr {
 	u8	total_vlan;
 	struct {
 		u32 flags;
-		struct mlx5_eswitch_rep *rep;
+		bool vport_valid;
+		u16 vport;
 		struct mlx5_pkt_reformat *pkt_reformat;
 		struct mlx5_core_dev *mdev;
 		struct mlx5_termtbl_handle *termtbl;
@@ -615,13 +616,6 @@ const u32 *mlx5_esw_query_functions(struct mlx5_core_dev *dev);
 static inline bool mlx5_esw_allowed(const struct mlx5_eswitch *esw)
 {
 	return esw && MLX5_ESWITCH_MANAGER(esw->dev);
-}
-
-/* The returned number is valid only when the dev is eswitch manager. */
-static inline u16 mlx5_eswitch_manager_vport(struct mlx5_core_dev *dev)
-{
-	return mlx5_core_is_ecpf_esw_manager(dev) ?
-		MLX5_VPORT_ECPF : MLX5_VPORT_PF;
 }
 
 static inline bool

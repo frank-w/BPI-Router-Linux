@@ -1020,14 +1020,16 @@ reopen_success:
 		if (!is_interrupt_error(rc))
 			mapping_set_error(inode->i_mapping, rc);
 
-		if (tcon->posix_extensions)
-			rc = smb311_posix_get_inode_info(&inode, full_path, inode->i_sb, xid);
-		else if (tcon->unix_ext)
+		if (tcon->posix_extensions) {
+			rc = smb311_posix_get_inode_info(&inode, full_path,
+							 NULL, inode->i_sb, xid);
+		} else if (tcon->unix_ext) {
 			rc = cifs_get_inode_info_unix(&inode, full_path,
 						      inode->i_sb, xid);
-		else
+		} else {
 			rc = cifs_get_inode_info(&inode, full_path, NULL,
 						 inode->i_sb, xid, NULL);
+		}
 	}
 	/*
 	 * Else we are writing out data to server already and could deadlock if
@@ -2706,8 +2708,7 @@ static void cifs_extend_writeback(struct address_space *mapping,
 			 */
 			if (!folio_clear_dirty_for_io(folio))
 				WARN_ON(1);
-			if (folio_start_writeback(folio))
-				WARN_ON(1);
+			folio_start_writeback(folio);
 
 			*_count -= folio_nr_pages(folio);
 			folio_unlock(folio);
@@ -2742,8 +2743,7 @@ static ssize_t cifs_write_back_from_locked_folio(struct address_space *mapping,
 	int rc;
 
 	/* The folio should be locked, dirty and not undergoing writeback. */
-	if (folio_start_writeback(folio))
-		WARN_ON(1);
+	folio_start_writeback(folio);
 
 	count -= folio_nr_pages(folio);
 	len = folio_size(folio);
@@ -4671,7 +4671,7 @@ static int cifs_readpage_worker(struct file *file, struct page *page,
 	/* we do not want atime to be less than mtime, it broke some apps */
 	atime = inode_set_atime_to_ts(inode, current_time(inode));
 	mtime = inode_get_mtime(inode);
-	if (timespec64_compare(&atime, &mtime))
+	if (timespec64_compare(&atime, &mtime) < 0)
 		inode_set_atime_to_ts(inode, inode_get_mtime(inode));
 
 	if (PAGE_SIZE > rc)
