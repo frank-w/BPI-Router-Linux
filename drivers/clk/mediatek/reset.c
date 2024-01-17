@@ -57,8 +57,6 @@ static int mtk_reset_update_set_clr(struct reset_controller_dev *rcdev,
 	struct mtk_clk_rst_data *data = to_mtk_clk_rst_data(rcdev);
 	unsigned int deassert_ofs = deassert ? 0x4 : 0;
 
-	printk(KERN_ALERT "DEBUG: Passed %s %d base:0x%x array-offset:0x%lx=0x%x bit:%ld\n",__FUNCTION__,__LINE__,
-			   /*data->regmap->reg_base*/0U,id / RST_NR_PER_BANK,(unsigned int)data->desc->rst_bank_ofs[id / RST_NR_PER_BANK],id % RST_NR_PER_BANK);
 	return regmap_write(data->regmap,
 			    data->desc->rst_bank_ofs[id / RST_NR_PER_BANK] +
 			    deassert_ofs,

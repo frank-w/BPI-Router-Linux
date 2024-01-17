@@ -880,12 +880,11 @@ static int lvts_irq_init(struct lvts_ctrl *lvts_ctrl)
 static int lvts_domain_reset(struct device *dev, struct reset_control *reset)
 {
 	int ret;
-dev_err(dev,"%s before reset",__func__);
+
 	ret = reset_control_assert(reset);
 	if (ret)
 		return ret;
 
-dev_err(dev,"%s after reset",__func__);
 	return reset_control_deassert(reset);
 }
 
@@ -921,7 +920,6 @@ static int lvts_ctrl_connect(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	 *   7	: thermal controller connection is valid
 	 */
 	id = readl(LVTS_ID(lvts_ctrl->base));
-	dev_err(dev,"%s %x",__func__,id);
 	if (!(id & BIT(7)))
 		return -EIO;
 
