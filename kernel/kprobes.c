@@ -623,7 +623,7 @@ static void kprobe_optimizer(struct work_struct *work)
 	 * Note that on non-preemptive kernel, this is transparently converted
 	 * to synchronoze_sched() to wait for all interrupts to have completed.
 	 */
-	synchronize_rcu_tasks();
+	synchronize_rcu_tasks_rude();
 
 	/* Step 3: Optimize kprobes after quiesence period */
 	do_optimize_kprobes();
