@@ -1519,6 +1519,19 @@ struct device *regmap_get_device(struct regmap *map)
 }
 EXPORT_SYMBOL_GPL(regmap_get_device);
 
+/**
+ * regmap_get_base() - Obtain the registerbase from a regmap
+ *
+ * @map: Register map to operate on.
+ *
+ * Returns the register base that the regmap has been created for.
+ */
+u64 regmap_get_base(struct regmap *map)
+{
+	return map->reg_base;
+}
+EXPORT_SYMBOL_GPL(regmap_get_base);
+
 static int _regmap_select_page(struct regmap *map, unsigned int *reg,
 			       struct regmap_range_node *range,
 			       unsigned int val_num)

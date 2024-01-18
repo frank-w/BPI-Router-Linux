@@ -1209,6 +1209,7 @@ int regmap_reinit_cache(struct regmap *map,
 			const struct regmap_config *config);
 struct regmap *dev_get_regmap(struct device *dev, const char *name);
 struct device *regmap_get_device(struct regmap *map);
+u64 regmap_get_base(struct regmap *map);
 int regmap_write(struct regmap *map, unsigned int reg, unsigned int val);
 int regmap_write_async(struct regmap *map, unsigned int reg, unsigned int val);
 int regmap_raw_write(struct regmap *map, unsigned int reg,
@@ -2005,6 +2006,12 @@ static inline struct regmap *dev_get_regmap(struct device *dev,
 }
 
 static inline struct device *regmap_get_device(struct regmap *map)
+{
+	WARN_ONCE(1, "regmap API is disabled");
+	return NULL;
+}
+
+static inline u64 regmap_get_base(struct regmap *map)
 {
 	WARN_ONCE(1, "regmap API is disabled");
 	return NULL;
