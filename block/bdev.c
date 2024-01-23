@@ -916,7 +916,6 @@ free_handle:
 	kfree(handle);
 	return ERR_PTR(ret);
 }
-EXPORT_SYMBOL(bdev_open_by_dev);
 
 static unsigned blk_to_file_flags(blk_mode_t mode)
 {
@@ -1045,7 +1044,6 @@ void bdev_release(struct bdev_handle *handle)
 	blkdev_put_no_open(bdev);
 	kfree(handle);
 }
-EXPORT_SYMBOL(bdev_release);
 
 /**
  * lookup_bdev() - Look up a struct block_device by name.
