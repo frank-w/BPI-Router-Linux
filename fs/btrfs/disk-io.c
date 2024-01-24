@@ -2822,6 +2822,8 @@ void btrfs_init_fs_info(struct btrfs_fs_info *fs_info)
 	fs_info->sectorsize = 4096;
 	fs_info->sectorsize_bits = ilog2(4096);
 	fs_info->stripesize = 4096;
+	fs_info->folio_size = PAGE_SIZE;
+	fs_info->folio_shift = PAGE_SHIFT;
 
 	/* Default compress algorithm when user does -o compress */
 	fs_info->compress_type = BTRFS_COMPRESS_ZLIB;
@@ -3314,6 +3316,15 @@ int __cold open_ctree(struct super_block *sb, struct btrfs_fs_devices *fs_device
 	fs_info->sectorsize_bits = ilog2(sectorsize);
 	fs_info->csums_per_leaf = BTRFS_MAX_ITEM_SIZE(fs_info) / fs_info->csum_size;
 	fs_info->stripesize = stripesize;
+
+	if (sectorsize > PAGE_SIZE) {
+		/* For future multi-page sectorsize support */
+		fs_info->folio_size = sectorsize;
+		fs_info->sectorsize_bits = fs_info->sectorsize_bits;
+	} else {
+		fs_info->folio_size = PAGE_SIZE;
+		fs_info->folio_shift = PAGE_SHIFT;
+	}
 
 	/*
 	 * Handle the space caching options appropriately now that we have the

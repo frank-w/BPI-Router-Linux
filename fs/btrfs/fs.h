@@ -753,6 +753,16 @@ struct btrfs_fs_info {
 	u32 stripesize;
 
 	/*
+	 * For future subpage and multipage sectorsize support.
+	 *
+	 * For subpage, all of our data folios would still be PAGE_SIZE.
+	 * But for multipage, those data folios would be sector sized.
+	 * This is the cached result to read/write path to utilize.
+	 */
+	u32 folio_size;
+	u32 folio_shift;
+
+	/*
 	 * Maximum size of an extent. BTRFS_MAX_EXTENT_SIZE on regular
 	 * filesystem, on zoned it depends on the device constraints.
 	 */
