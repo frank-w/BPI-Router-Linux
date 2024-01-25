@@ -610,6 +610,7 @@ config ARCH_SUPPORTS_KEXEC
 
 config ARCH_SELECTS_KEXEC
 	def_bool y
+	depends on KEXEC
 	select CRASH_DUMP
 
 config ARCH_SUPPORTS_KEXEC_FILE
