@@ -291,7 +291,7 @@ echo "$nr_hugepgs" > /proc/sys/vm/nr_hugepages
 
 CATEGORY="compaction" run_test ./compaction_test
 
-CATEGORY="mlock" run_test sudo -u nobody ./on-fault-limit
+CATEGORY="mlock" run_test ./on-fault-limit
 
 CATEGORY="mmap" run_test ./map_populate
 
