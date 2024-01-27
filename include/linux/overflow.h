@@ -83,6 +83,20 @@ static inline bool __must_check __must_check_overflow(bool overflow)
 	})
 
 /**
+ * inc_wrap() - Intentionally perform a wrapping increment
+ * @var: variable to be incremented
+ * @offset: amount to add
+ *
+ * Increments @var by @offset with wrap-around. Returns the resulting
+ * value of @var. Will not trip any wrap-around sanitizers.
+ */
+#define inc_wrap(var, offset)					\
+	({							\
+		typeof(var) *__ptr = &(var);			\
+		*__ptr = add_wrap(typeof(var), *__ptr, offset);	\
+	})
+
+/**
  * check_sub_overflow() - Calculate subtraction with overflow checking
  * @a: minuend; value to subtract from
  * @b: subtrahend; value to subtract from @a
@@ -111,6 +125,20 @@ static inline bool __must_check __must_check_overflow(bool overflow)
 			/* do nothing */		\
 		}					\
 		__val;					\
+	})
+
+/**
+ * dec_wrap() - Intentionally perform a wrapping decrement
+ * @var: variable to be decremented
+ * @offset: amount to subtract
+ *
+ * Decrements @var by @offset with wrap-around. Returns the resulting
+ * value of @var. Will not trip any wrap-around sanitizers.
+ */
+#define dec_wrap(var, offset)					\
+	({							\
+		typeof(var) *__ptr = &(var);			\
+		*__ptr = sub_wrap(typeof(var), *__ptr, offset);	\
 	})
 
 /**
