@@ -197,6 +197,7 @@
 		phy-mode = "2500base-x";
 		full-duplex;
 		pause;
+		airoha,pnswap-rx;
 
 		leds {
 			#address-cells = <1>;
@@ -230,6 +231,7 @@
 		phy-mode = "2500base-x";
 		full-duplex;
 		pause;
+		airoha,pnswap-rx;
 
 		leds {
 			#address-cells = <1>;
