@@ -24,6 +24,12 @@
 
 #include "../pci.h"
 
+void pci_aspm_get_l1ss(struct pci_dev *pdev)
+{
+	/* Read L1 PM substate capabilities */
+	pdev->l1ss = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_L1SS);
+}
+
 #ifdef CONFIG_PCIEASPM
 
 #ifdef MODULE_PARAM_PREFIX
@@ -964,9 +970,6 @@ void pci_configure_ltr(struct pci_dev *pdev)
 
 	if (!pci_is_pcie(pdev))
 		return;
-
-	/* Read L1 PM substate capabilities */
-	pdev->l1ss = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_L1SS);
 
 	pcie_capability_read_dword(pdev, PCI_EXP_DEVCAP2, &cap);
 	if (!(cap & PCI_EXP_DEVCAP2_LTR))
