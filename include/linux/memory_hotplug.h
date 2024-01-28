@@ -279,7 +279,7 @@ static inline bool movable_node_is_enabled(void)
 	return false;
 }
 
-static bool mhp_supports_memmap_on_memory(void)
+static inline bool mhp_supports_memmap_on_memory(void)
 {
 	return false;
 }
