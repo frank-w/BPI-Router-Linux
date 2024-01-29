@@ -148,7 +148,7 @@ TRACE_EVENT(io_uring_queue_async_work,
 		__field(  void *,			req		)
 		__field(  u64,				user_data	)
 		__field(  u8,				opcode		)
-		__field(  unsigned int,			flags		)
+		__field(  io_req_flags_t,		flags		)
 		__field(  struct io_wq_work *,		work		)
 		__field(  int,				rw		)
 
@@ -167,10 +167,10 @@ TRACE_EVENT(io_uring_queue_async_work,
 		__assign_str(op_str, io_uring_get_opcode(req->opcode));
 	),
 
-	TP_printk("ring %p, request %p, user_data 0x%llx, opcode %s, flags 0x%x, %s queue, work %p",
+	TP_printk("ring %p, request %p, user_data 0x%llx, opcode %s, flags 0x%lx, %s queue, work %p",
 		__entry->ctx, __entry->req, __entry->user_data,
-		__get_str(op_str),
-		__entry->flags, __entry->rw ? "hashed" : "normal", __entry->work)
+		__get_str(op_str), (long) __entry->flags,
+		__entry->rw ? "hashed" : "normal", __entry->work)
 );
 
 /**
@@ -378,7 +378,7 @@ TRACE_EVENT(io_uring_submit_req,
 		__field(  void *,		req		)
 		__field(  unsigned long long,	user_data	)
 		__field(  u8,			opcode		)
-		__field(  u32,			flags		)
+		__field(  io_req_flags_t,	flags		)
 		__field(  bool,			sq_thread	)
 
 		__string( op_str, io_uring_get_opcode(req->opcode) )
@@ -395,10 +395,10 @@ TRACE_EVENT(io_uring_submit_req,
 		__assign_str(op_str, io_uring_get_opcode(req->opcode));
 	),
 
-	TP_printk("ring %p, req %p, user_data 0x%llx, opcode %s, flags 0x%x, "
+	TP_printk("ring %p, req %p, user_data 0x%llx, opcode %s, flags 0x%lx, "
 		  "sq_thread %d", __entry->ctx, __entry->req,
 		  __entry->user_data, __get_str(op_str),
-		  __entry->flags, __entry->sq_thread)
+		  (long) __entry->flags, __entry->sq_thread)
 );
 
 /*
