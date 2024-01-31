@@ -18,6 +18,9 @@ struct ptdump_state {
 	const struct ptdump_range *range;
 };
 
+bool ptdump_walk_pgd_level_core(struct seq_file *m,
+				struct mm_struct *mm, pgd_t *pgd,
+				bool checkwx, bool dmesg);
 void ptdump_walk_pgd(struct ptdump_state *st, struct mm_struct *mm, pgd_t *pgd);
 bool ptdump_check_wx(void);
 
