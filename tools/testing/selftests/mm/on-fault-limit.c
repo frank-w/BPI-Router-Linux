@@ -21,7 +21,7 @@ static void test_limit(void)
 	map = mmap(NULL, 2 * lims.rlim_max, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
 
-	ksft_test_result(map == MAP_FAILED, "Failed mmap\n");
+	ksft_test_result(map == MAP_FAILED, "The map failed respecting mlock limits\n");
 
 	if (map != MAP_FAILED)
 		munmap(map, 2 * lims.rlim_max);
@@ -33,8 +33,8 @@ int main(int argc, char **argv)
 	ksft_print_header();
 	ksft_set_plan(1);
 
-	if (getuid())
-		ksft_test_result_skip("Require root privileges to run\n");
+	if (!getuid())
+		ksft_test_result_skip("The test must be run from a normal user\n");
 	else
 		test_limit();
 
