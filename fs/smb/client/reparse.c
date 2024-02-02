@@ -38,7 +38,8 @@ int smb2_create_reparse_symlink(const unsigned int xid, struct inode *inode,
 		.symlink_target = sym,
 	};
 
-	path = cifs_convert_path_to_utf16(symname, cifs_sb);
+	convert_delimiter(sym, CIFS_DIR_SEP(cifs_sb));
+	path = cifs_convert_path_to_utf16(sym, cifs_sb);
 	if (!path) {
 		rc = -ENOMEM;
 		goto out;
@@ -60,8 +61,10 @@ int smb2_create_reparse_symlink(const unsigned int xid, struct inode *inode,
 	buf->PrintNameOffset = 0;
 	buf->PrintNameLength = cpu_to_le16(plen);
 	memcpy(buf->PathBuffer, path, plen);
-	buf->Flags = cpu_to_le32(*symname != '/' ? SYMLINK_FLAG_RELATIVE : 0);
+	if (*sym != CIFS_DIR_SEP(cifs_sb))
+		buf->Flags = cpu_to_le32(SYMLINK_FLAG_RELATIVE);
 
+	convert_delimiter(sym, '/');
 	iov.iov_base = buf;
 	iov.iov_len = len;
 	new = smb2_get_reparse_inode(&data, inode->i_sb, xid,
