@@ -808,13 +808,12 @@ static void dbgfs_destroy_ctx(struct damon_ctx *ctx)
 static ssize_t damon_dbgfs_deprecated_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	char kbuf[512] = "DAMON debugfs interface is deprecated, "
+	static const char kbuf[512] = "DAMON debugfs interface is deprecated, "
 		     "so users should move to DAMON_SYSFS. If you cannot, "
 		     "please report your usecase to damon@lists.linux.dev and "
 		     "linux-mm@kvack.org.\n";
-	int len = strnlen(kbuf, 1024);
 
-	return simple_read_from_buffer(buf, count, ppos, kbuf, len);
+	return simple_read_from_buffer(buf, count, ppos, kbuf, strlen(kbuf));
 }
 
 /*
