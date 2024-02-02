@@ -1179,6 +1179,12 @@ static __always_inline bool free_pages_prepare(struct page *page,
 	return true;
 }
 
+__always_inline bool free_pages_prepare_fpi_none(struct page *page,
+			unsigned int order)
+{
+	return free_pages_prepare(page, order, FPI_NONE);
+}
+
 /*
  * Frees a number of pages from the PCP lists
  * Assumes all pages on list are in same zone.
