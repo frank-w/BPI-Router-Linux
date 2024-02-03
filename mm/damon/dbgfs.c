@@ -810,7 +810,7 @@ static void dbgfs_destroy_ctx(struct damon_ctx *ctx)
 static ssize_t damon_dbgfs_deprecated_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	static comnst char kbuf[512] = DAMON_DBGFS_DEPRECATION_NOTICE;
+	static const char kbuf[512] = DAMON_DBGFS_DEPRECATION_NOTICE;
 
 	return simple_read_from_buffer(buf, count, ppos, kbuf, strlen(kbuf));
 }
