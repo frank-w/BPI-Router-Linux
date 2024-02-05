@@ -738,6 +738,7 @@ static noinline struct btrfs_device *device_list_add(const char *path,
 	bool same_fsid_diff_dev = false;
 	bool has_metadata_uuid = (btrfs_super_incompat_flags(disk_super) &
 		BTRFS_FEATURE_INCOMPAT_METADATA_UUID);
+	bool can_create_new = *new_device_added;
 
 	if (btrfs_super_flags(disk_super) & BTRFS_SUPER_FLAG_CHANGING_FSID_V2) {
 		btrfs_err(NULL,
@@ -753,6 +754,7 @@ static noinline struct btrfs_device *device_list_add(const char *path,
 		return ERR_PTR(error);
 	}
 
+	*new_device_added = false;
 	fs_devices = find_fsid_by_device(disk_super, path_devt, &same_fsid_diff_dev);
 
 	if (!fs_devices) {
@@ -802,6 +804,15 @@ static noinline struct btrfs_device *device_list_add(const char *path,
 				  task_pid_nr(current));
 			mutex_unlock(&fs_devices->device_list_mutex);
 			return ERR_PTR(-EBUSY);
+		}
+
+		if (!can_create_new) {
+			pr_info(
+	"BTRFS: device fsid %pU devid %llu transid %llu %s skip registration scanned by %s (%d)\n",
+				disk_super->fsid, devid, found_transid, path,
+				current->comm, task_pid_nr(current));
+			mutex_unlock(&fs_devices->device_list_mutex);
+			return NULL;
 		}
 
 		nofs_flag = memalloc_nofs_save();
@@ -1355,27 +1366,14 @@ struct btrfs_device *btrfs_scan_one_device(const char *path, blk_mode_t flags,
 		goto error_bdev_put;
 	}
 
-	if (!mount_arg_dev && btrfs_super_num_devices(disk_super) == 1 &&
-	    !(btrfs_super_flags(disk_super) & BTRFS_SUPER_FLAG_SEEDING)) {
-		dev_t devt;
-
-		ret = lookup_bdev(path, &devt);
-		if (ret)
-			btrfs_warn(NULL, "lookup bdev failed for path %s: %d",
-				   path, ret);
-		else
-			btrfs_free_stale_devices(devt, NULL);
-
-		pr_debug("BTRFS: skip registering single non-seed device %s\n", path);
-		device = NULL;
-		goto free_disk_super;
-	}
+	if (mount_arg_dev || btrfs_super_num_devices(disk_super) != 1 ||
+	    (btrfs_super_flags(disk_super) & BTRFS_SUPER_FLAG_SEEDING))
+		new_device_added = true;
 
 	device = device_list_add(path, disk_super, &new_device_added);
 	if (!IS_ERR(device) && new_device_added)
 		btrfs_free_stale_devices(device->devt, device);
 
-free_disk_super:
 	btrfs_release_disk_super(disk_super);
 
 error_bdev_put:
