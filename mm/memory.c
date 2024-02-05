@@ -3990,6 +3990,20 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	if (!folio) {
 		if (data_race(si->flags & SWP_SYNCHRONOUS_IO) &&
 		    __swap_count(entry) == 1) {
+			/*
+			 * With swap count == 1, after we read the entry,
+			 * other threads could finish swapin first, free
+			 * the entry, then swapout the modified page using
+			 * the same entry. Now the content we just read is
+			 * stalled, and it's undetectable as pte_same()
+			 * returns true due to entry reuse.
+			 *
+			 * So pin the swap entry using the cache flag even
+			 * cache is not used.
+			 */
+			if (swapcache_prepare(entry))
+				goto out;
+
 			/* skip swapcache */
 			folio = vma_alloc_folio(GFP_HIGHUSER_MOVABLE, 0,
 						vma, vmf->address, false);
@@ -4239,6 +4253,9 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 unlock:
 	if (vmf->pte)
 		pte_unmap_unlock(vmf->pte, vmf->ptl);
+	/* Clear the swap cache pin for direct swapin after PTL unlock */
+	if (folio && !swapcache)
+		swapcache_clear(si, entry);
 out:
 	if (si)
 		put_swap_device(si);
@@ -4247,6 +4264,8 @@ out_nomap:
 	if (vmf->pte)
 		pte_unmap_unlock(vmf->pte, vmf->ptl);
 out_page:
+	if (!swapcache)
+		swapcache_clear(si, entry);
 	folio_unlock(folio);
 out_release:
 	folio_put(folio);
