@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include <linux/crash_core.h>
-#include <linux/pgtable.h>
-
-#include <asm/setup.h>
+#include <linux/vmcore_info.h>
+#include <linux/mm.h>
 
 void arch_crash_save_vmcoreinfo(void)
 {
@@ -11,7 +9,9 @@ void arch_crash_save_vmcoreinfo(void)
 	VMCOREINFO_SYMBOL(node_data);
 	VMCOREINFO_LENGTH(node_data, MAX_NUMNODES);
 #endif
-#ifdef CONFIG_X86_PAE
-	VMCOREINFO_CONFIG(X86_PAE);
+#ifdef CONFIG_X2TLB
+	VMCOREINFO_CONFIG(X2TLB);
 #endif
 }
+
+

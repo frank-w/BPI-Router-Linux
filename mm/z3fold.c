@@ -1070,9 +1070,7 @@ found:
 	add_to_unbuddied(pool, zhdr);
 
 headless:
-	spin_lock(&pool->lock);
 	*handle = encode_handle(zhdr, bud);
-	spin_unlock(&pool->lock);
 	if (bud != HEADLESS)
 		z3fold_page_unlock(zhdr);
 
