@@ -101,6 +101,7 @@
 #include <linux/user_events.h>
 #include <linux/iommu.h>
 #include <linux/rseq.h>
+#include <uapi/linux/pidfd.h>
 
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -2050,6 +2051,8 @@ static void pidfd_show_fdinfo(struct seq_file *m, struct file *f)
 
 	seq_put_decimal_ll(m, "Pid:\t", nr);
 
+	/* TODO: report PIDFD_THREAD */
+
 #ifdef CONFIG_PID_NS
 	seq_put_decimal_ll(m, "\nNSpid:\t", nr);
 	if (nr > 0) {
@@ -2074,17 +2077,22 @@ static void pidfd_show_fdinfo(struct seq_file *m, struct file *f)
 static __poll_t pidfd_poll(struct file *file, struct poll_table_struct *pts)
 {
 	struct pid *pid = file->private_data;
+	bool thread = file->f_flags & PIDFD_THREAD;
+	struct task_struct *task;
 	__poll_t poll_flags = 0;
 
 	poll_wait(file, &pid->wait_pidfd, pts);
-
 	/*
-	 * Inform pollers only when the whole thread group exits.
-	 * If the thread group leader exits before all other threads in the
-	 * group, then poll(2) should block, similar to the wait(2) family.
+	 * Depending on PIDFD_THREAD, inform pollers when the thread
+	 * or the whole thread-group exits.
 	 */
-	if (thread_group_exited(pid))
+	rcu_read_lock();
+	task = pid_task(pid, PIDTYPE_PID);
+	if (!task)
+		poll_flags = EPOLLIN | EPOLLRDNORM | EPOLLHUP;
+	else if (task->exit_state && (thread || thread_group_empty(task)))
 		poll_flags = EPOLLIN | EPOLLRDNORM;
+	rcu_read_unlock();
 
 	return poll_flags;
 }
@@ -2130,20 +2138,22 @@ static int __pidfd_prepare(struct pid *pid, unsigned int flags, struct file **re
 	int pidfd;
 	struct file *pidfd_file;
 
-	if (flags & ~(O_NONBLOCK | O_RDWR | O_CLOEXEC))
-		return -EINVAL;
-
-	pidfd = get_unused_fd_flags(O_RDWR | O_CLOEXEC);
+	pidfd = get_unused_fd_flags(O_CLOEXEC);
 	if (pidfd < 0)
 		return pidfd;
 
 	pidfd_file = anon_inode_getfile("[pidfd]", &pidfd_fops, pid,
-					flags | O_RDWR | O_CLOEXEC);
+					flags | O_RDWR);
 	if (IS_ERR(pidfd_file)) {
 		put_unused_fd(pidfd);
 		return PTR_ERR(pidfd_file);
 	}
 	get_pid(pid); /* held by pidfd_file now */
+	/*
+	 * anon_inode_getfile() ignores everything outside of the
+	 * O_ACCMODE | O_NONBLOCK mask, set PIDFD_THREAD manually.
+	 */
+	pidfd_file->f_flags |= (flags & PIDFD_THREAD);
 	*ret = pidfd_file;
 	return pidfd;
 }
@@ -2157,7 +2167,8 @@ static int __pidfd_prepare(struct pid *pid, unsigned int flags, struct file **re
  * Allocate a new file that stashes @pid and reserve a new pidfd number in the
  * caller's file descriptor table. The pidfd is reserved but not installed yet.
  *
- * The helper verifies that @pid is used as a thread group leader.
+ * The helper verifies that @pid is still in use, without PIDFD_THREAD the
+ * task identified by @pid must be a thread-group leader.
  *
  * If this function returns successfully the caller is responsible to either
  * call fd_install() passing the returned pidfd and pidfd file as arguments in
@@ -2176,7 +2187,9 @@ static int __pidfd_prepare(struct pid *pid, unsigned int flags, struct file **re
  */
 int pidfd_prepare(struct pid *pid, unsigned int flags, struct file **ret)
 {
-	if (!pid || !pid_has_task(pid, PIDTYPE_TGID))
+	bool thread = flags & PIDFD_THREAD;
+
+	if (!pid || !pid_has_task(pid, thread ? PIDTYPE_PID : PIDTYPE_TGID))
 		return -EINVAL;
 
 	return __pidfd_prepare(pid, flags, ret);
@@ -2298,9 +2311,8 @@ __latent_entropy struct task_struct *copy_process(
 		/*
 		 * - CLONE_DETACHED is blocked so that we can potentially
 		 *   reuse it later for CLONE_PIDFD.
-		 * - CLONE_THREAD is blocked until someone really needs it.
 		 */
-		if (clone_flags & (CLONE_DETACHED | CLONE_THREAD))
+		if (clone_flags & CLONE_DETACHED)
 			return ERR_PTR(-EINVAL);
 	}
 
@@ -2523,8 +2535,10 @@ __latent_entropy struct task_struct *copy_process(
 	 * if the fd table isn't shared).
 	 */
 	if (clone_flags & CLONE_PIDFD) {
+		int flags = (clone_flags & CLONE_THREAD) ? PIDFD_THREAD : 0;
+
 		/* Note that no task has been attached to @pid yet. */
-		retval = __pidfd_prepare(pid, O_RDWR | O_CLOEXEC, &pidfile);
+		retval = __pidfd_prepare(pid, flags, &pidfile);
 		if (retval < 0)
 			goto bad_fork_free_pid;
 		pidfd = retval;
@@ -2875,8 +2889,8 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 	 * here has the advantage that we don't need to have a separate helper
 	 * to check for legacy clone().
 	 */
-	if ((args->flags & CLONE_PIDFD) &&
-	    (args->flags & CLONE_PARENT_SETTID) &&
+	if ((clone_flags & CLONE_PIDFD) &&
+	    (clone_flags & CLONE_PARENT_SETTID) &&
 	    (args->pidfd == args->parent_tid))
 		return -EINVAL;
 
