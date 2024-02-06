@@ -2,6 +2,7 @@
 #define IO_URING_TYPES_H
 
 #include <linux/blkdev.h>
+#include <linux/hashtable.h>
 #include <linux/task_work.h>
 #include <linux/bitmap.h>
 #include <linux/llist.h>
@@ -373,6 +374,16 @@ struct io_ring_ctx {
 
 	/* deferred free list, protected by ->uring_lock */
 	struct hlist_head	io_buf_list;
+
+#ifdef CONFIG_NET_RX_BUSY_POLL
+	struct list_head	napi_list;	/* track busy poll napi_id */
+	spinlock_t		napi_lock;	/* napi_list lock */
+
+	DECLARE_HASHTABLE(napi_ht, 4);
+	/* napi busy poll default timeout */
+	unsigned int		napi_busy_poll_to;
+	bool			napi_prefer_busy_poll;
+#endif
 
 	/* Keep this last, we don't need it for the fast path */
 	struct wait_queue_head		poll_wq;
