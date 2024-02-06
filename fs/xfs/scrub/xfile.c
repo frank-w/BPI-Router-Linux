@@ -94,6 +94,11 @@ xfile_create(
 
 	lockdep_set_class(&inode->i_rwsem, &xfile_i_mutex_key);
 
+	/*
+	 * We're not quite ready for large folios yet.
+	 */
+	mapping_clear_large_folios(inode->i_mapping);
+
 	trace_xfile_create(xf);
 
 	*xfilep = xf;
