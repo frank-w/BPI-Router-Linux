@@ -621,9 +621,9 @@ static void kprobe_optimizer(struct work_struct *work)
 	 * instruction is preempted. In that case, such tasks can return
 	 * to 2nd-Nth byte of jump instruction. This wait is for avoiding it.
 	 * Note that on non-preemptive kernel, this is transparently converted
-	 * to synchronoze_sched() to wait for all interrupts to have completed.
+	 * to synchronize_sched() to wait for all interrupts to have completed.
 	 */
-	synchronize_rcu_tasks();
+	synchronize_rcu_tasks_rude();
 
 	/* Step 3: Optimize kprobes after quiesence period */
 	do_optimize_kprobes();
