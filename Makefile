@@ -1385,7 +1385,7 @@ ifneq ($(dtstree),)
 
 PHONY += dtbs dtbs_prepare dtbs_install dtbs_check
 dtbs: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(dtstree)
+	$(Q)$(MAKE) $(build)=$(dtstree) need-dtbslist=1
 
 # include/config/kernel.release is actually needed when installing DTBs because
 # INSTALL_DTBS_PATH contains $(KERNELRELEASE). However, we do not want to make
@@ -1403,7 +1403,7 @@ endif
 dtbs_check: dtbs
 
 dtbs_install:
-	$(Q)$(MAKE) $(dtbinst)=$(dtstree) dst=$(INSTALL_DTBS_PATH)
+	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.dtbinst obj=$(dtstree)
 
 ifdef CONFIG_OF_EARLY_FLATTREE
 all: dtbs
@@ -1924,7 +1924,7 @@ clean: $(clean-dirs)
 		-o -name '*.ko.*' \
 		-o -name '*.dtb' -o -name '*.dtbo' \
 		-o -name '*.dtb.S' -o -name '*.dtbo.S' \
-		-o -name '*.dt.yaml' \
+		-o -name '*.dt.yaml' -o -name 'dtbs-list' \
 		-o -name '*.dwo' -o -name '*.lst' \
 		-o -name '*.su' -o -name '*.mod' \
 		-o -name '.*.d' -o -name '.*.tmp' -o -name '*.mod.c' \
