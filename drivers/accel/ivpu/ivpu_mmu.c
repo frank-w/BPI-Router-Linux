@@ -7,6 +7,7 @@
 #include <linux/highmem.h>
 
 #include "ivpu_drv.h"
+#include "ivpu_hw.h"
 #include "ivpu_hw_reg_io.h"
 #include "ivpu_mmu.h"
 #include "ivpu_mmu_context.h"
@@ -230,7 +231,12 @@
 				  (REG_FLD(IVPU_MMU_REG_GERROR, MSI_PRIQ_ABT)) | \
 				  (REG_FLD(IVPU_MMU_REG_GERROR, MSI_ABT)))
 
-static char *ivpu_mmu_event_to_str(u32 cmd)
+#define IVPU_MMU_CERROR_NONE         0x0
+#define IVPU_MMU_CERROR_ILL          0x1
+#define IVPU_MMU_CERROR_ABT          0x2
+#define IVPU_MMU_CERROR_ATC_INV_SYNC 0x3
+
+static const char *ivpu_mmu_event_to_str(u32 cmd)
 {
 	switch (cmd) {
 	case IVPU_MMU_EVT_F_UUT:
@@ -273,6 +279,22 @@ static char *ivpu_mmu_event_to_str(u32 cmd)
 		return "Fetch of VMS caused external abort";
 	default:
 		return "Unknown CMDQ command";
+	}
+}
+
+static const char *ivpu_mmu_cmdq_err_to_str(u32 err)
+{
+	switch (err) {
+	case IVPU_MMU_CERROR_NONE:
+		return "No CMDQ Error";
+	case IVPU_MMU_CERROR_ILL:
+		return "Illegal command";
+	case IVPU_MMU_CERROR_ABT:
+		return "External abort on CMDQ read";
+	case IVPU_MMU_CERROR_ATC_INV_SYNC:
+		return "Sync failed to complete ATS invalidation";
+	default:
+		return "Unknown CMDQ Error";
 	}
 }
 
@@ -479,10 +501,7 @@ static int ivpu_mmu_cmdq_sync(struct ivpu_device *vdev)
 	u64 val;
 	int ret;
 
-	val = FIELD_PREP(IVPU_MMU_CMD_OPCODE, CMD_SYNC) |
-	      FIELD_PREP(IVPU_MMU_CMD_SYNC_0_CS, 0x2) |
-	      FIELD_PREP(IVPU_MMU_CMD_SYNC_0_MSH, 0x3) |
-	      FIELD_PREP(IVPU_MMU_CMD_SYNC_0_MSI_ATTR, 0xf);
+	val = FIELD_PREP(IVPU_MMU_CMD_OPCODE, CMD_SYNC);
 
 	ret = ivpu_mmu_cmdq_cmd_write(vdev, "SYNC", val, 0);
 	if (ret)
@@ -492,8 +511,16 @@ static int ivpu_mmu_cmdq_sync(struct ivpu_device *vdev)
 	REGV_WR32(IVPU_MMU_REG_CMDQ_PROD, q->prod);
 
 	ret = ivpu_mmu_cmdq_wait_for_cons(vdev);
-	if (ret)
-		ivpu_err(vdev, "Timed out waiting for consumer: %d\n", ret);
+	if (ret) {
+		u32 err;
+
+		val = REGV_RD32(IVPU_MMU_REG_CMDQ_CONS);
+		err = REG_GET_FLD(IVPU_MMU_REG_CMDQ_CONS, ERR, val);
+
+		ivpu_err(vdev, "Timed out waiting for MMU consumer: %d, error: %s\n", ret,
+			 ivpu_mmu_cmdq_err_to_str(err));
+		ivpu_hw_diagnose_failure(vdev);
+	}
 
 	return ret;
 }
@@ -750,8 +777,11 @@ int ivpu_mmu_init(struct ivpu_device *vdev)
 
 	ivpu_dbg(vdev, MMU, "Init..\n");
 
-	drmm_mutex_init(&vdev->drm, &mmu->lock);
 	ivpu_mmu_config_check(vdev);
+
+	ret = drmm_mutex_init(&vdev->drm, &mmu->lock);
+	if (ret)
+		return ret;
 
 	ret = ivpu_mmu_structs_alloc(vdev);
 	if (ret)
@@ -857,7 +887,6 @@ static u32 *ivpu_mmu_get_event(struct ivpu_device *vdev)
 
 void ivpu_mmu_irq_evtq_handler(struct ivpu_device *vdev)
 {
-	bool schedule_recovery = false;
 	u32 *event;
 	u32 ssid;
 
@@ -867,14 +896,21 @@ void ivpu_mmu_irq_evtq_handler(struct ivpu_device *vdev)
 		ivpu_mmu_dump_event(vdev, event);
 
 		ssid = FIELD_GET(IVPU_MMU_EVT_SSID_MASK, event[0]);
-		if (ssid == IVPU_GLOBAL_CONTEXT_MMU_SSID)
-			schedule_recovery = true;
-		else
-			ivpu_mmu_user_context_mark_invalid(vdev, ssid);
-	}
+		if (ssid == IVPU_GLOBAL_CONTEXT_MMU_SSID) {
+			ivpu_pm_trigger_recovery(vdev, "MMU event");
+			return;
+		}
 
-	if (schedule_recovery)
-		ivpu_pm_schedule_recovery(vdev);
+		ivpu_mmu_user_context_mark_invalid(vdev, ssid);
+	}
+}
+
+void ivpu_mmu_evtq_dump(struct ivpu_device *vdev)
+{
+	u32 *event;
+
+	while ((event = ivpu_mmu_get_event(vdev)) != NULL)
+		ivpu_mmu_dump_event(vdev, event);
 }
 
 void ivpu_mmu_irq_gerr_handler(struct ivpu_device *vdev)

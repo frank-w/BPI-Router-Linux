@@ -3,8 +3,17 @@
 #ifndef BTRFS_ACCESSORS_H
 #define BTRFS_ACCESSORS_H
 
-#include <linux/stddef.h>
 #include <asm/unaligned.h>
+#include <linux/stddef.h>
+#include <linux/types.h>
+#include <linux/align.h>
+#include <linux/build_bug.h>
+#include <linux/compiler.h>
+#include <linux/string.h>
+#include <linux/mm.h>
+#include <uapi/linux/btrfs_tree.h>
+
+struct extent_buffer;
 
 struct btrfs_map_token {
 	struct extent_buffer *eb;
@@ -90,14 +99,14 @@ static inline void btrfs_set_token_##name(struct btrfs_map_token *token,\
 #define BTRFS_SETGET_HEADER_FUNCS(name, type, member, bits)		\
 static inline u##bits btrfs_##name(const struct extent_buffer *eb)	\
 {									\
-	const type *p = page_address(eb->pages[0]) +			\
+	const type *p = folio_address(eb->folios[0]) +			\
 			offset_in_page(eb->start);			\
 	return get_unaligned_le##bits(&p->member);			\
 }									\
 static inline void btrfs_set_##name(const struct extent_buffer *eb,	\
 				    u##bits val)			\
 {									\
-	type *p = page_address(eb->pages[0]) + offset_in_page(eb->start); \
+	type *p = folio_address(eb->folios[0]) + offset_in_page(eb->start); \
 	put_unaligned_le##bits(val, &p->member);			\
 }
 

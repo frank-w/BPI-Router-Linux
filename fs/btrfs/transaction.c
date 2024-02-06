@@ -23,12 +23,10 @@
 #include "qgroup.h"
 #include "block-group.h"
 #include "space-info.h"
-#include "zoned.h"
 #include "fs.h"
 #include "accessors.h"
 #include "extent-tree.h"
 #include "root-tree.h"
-#include "defrag.h"
 #include "dir-item.h"
 #include "uuid-tree.h"
 #include "ioctl.h"
@@ -36,8 +34,6 @@
 #include "scrub.h"
 
 static struct kmem_cache *btrfs_trans_handle_cachep;
-
-#define BTRFS_ROOT_TRANS_TAG 0
 
 /*
  * Transaction states and transitions

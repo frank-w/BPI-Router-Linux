@@ -4,13 +4,50 @@
 #define BTRFS_FS_H
 
 #include <linux/blkdev.h>
-#include <linux/fs.h>
-#include <linux/btrfs_tree.h>
 #include <linux/sizes.h>
+#include <linux/time64.h>
+#include <linux/compiler.h>
+#include <linux/math.h>
+#include <linux/atomic.h>
+#include <linux/blkdev.h>
+#include <linux/percpu_counter.h>
+#include <linux/completion.h>
+#include <linux/lockdep.h>
+#include <linux/spinlock.h>
+#include <linux/mutex.h>
+#include <linux/rwlock_types.h>
+#include <linux/rwsem.h>
+#include <linux/semaphore.h>
+#include <linux/list.h>
+#include <linux/radix-tree.h>
+#include <linux/workqueue.h>
+#include <linux/wait.h>
+#include <linux/wait_bit.h>
+#include <linux/sched.h>
+#include <linux/rbtree.h>
+#include <uapi/linux/btrfs.h>
+#include <uapi/linux/btrfs_tree.h>
 #include "extent-io-tree.h"
-#include "extent_map.h"
 #include "async-thread.h"
 #include "block-rsv.h"
+#include "fs.h"
+
+struct inode;
+struct super_block;
+struct kobject;
+struct reloc_control;
+struct crypto_shash;
+struct ulist;
+struct btrfs_device;
+struct btrfs_block_group;
+struct btrfs_root;
+struct btrfs_fs_devices;
+struct btrfs_transaction;
+struct btrfs_delayed_root;
+struct btrfs_balance_control;
+struct btrfs_subpage_info;
+struct btrfs_stripe_hash_table;
+struct btrfs_space_info;
 
 #define BTRFS_MAX_EXTENT_SIZE SZ_128M
 
@@ -188,6 +225,7 @@ enum {
 	BTRFS_MOUNT_IGNOREBADROOTS		= (1UL << 27),
 	BTRFS_MOUNT_IGNOREDATACSUMS		= (1UL << 28),
 	BTRFS_MOUNT_NODISCARD			= (1UL << 29),
+	BTRFS_MOUNT_NOSPACECACHE		= (1UL << 30),
 };
 
 /*
@@ -398,7 +436,8 @@ struct btrfs_fs_info {
 	struct extent_io_tree excluded_extents;
 
 	/* logical->physical extent mapping */
-	struct extent_map_tree mapping_tree;
+	struct rb_root_cached mapping_tree;
+	rwlock_t mapping_tree_lock;
 
 	/*
 	 * Block reservation for extent, checksum, root tree and delayed dir
@@ -730,10 +769,13 @@ struct btrfs_fs_info {
 
 	/* Reclaim partially filled block groups in the background */
 	struct work_struct reclaim_bgs_work;
+	/* Protected by unused_bgs_lock. */
 	struct list_head reclaim_bgs;
 	int bg_reclaim_threshold;
 
+	/* Protects the lists unused_bgs and reclaim_bgs. */
 	spinlock_t unused_bgs_lock;
+	/* Protected by unused_bgs_lock. */
 	struct list_head unused_bgs;
 	struct mutex unused_bg_unpin_mutex;
 	/* Protect block groups that are going to be deleted */
@@ -747,6 +789,16 @@ struct btrfs_fs_info {
 	u32 csum_size;
 	u32 csums_per_leaf;
 	u32 stripesize;
+
+	/*
+	 * For future subpage and multipage sectorsize support.
+	 *
+	 * For subpage, all of our data folios would still be PAGE_SIZE.
+	 * But for multipage, those data folios would be sector sized.
+	 * This is the cached result to read/write path to utilize.
+	 */
+	u32 folio_size;
+	u32 folio_shift;
 
 	/*
 	 * Maximum size of an extent. BTRFS_MAX_EXTENT_SIZE on regular
@@ -826,6 +878,17 @@ struct btrfs_fs_info {
 	struct list_head allocated_ebs;
 #endif
 };
+
+#define page_to_inode(_page)	(BTRFS_I(_Generic((_page),			\
+					  struct page *: (_page))->mapping->host))
+#define folio_to_inode(_folio)	(BTRFS_I(_Generic((_folio),			\
+					  struct folio *: (_folio))->mapping->host))
+
+#define page_to_fs_info(_page)	 (page_to_inode(_page)->root->fs_info)
+#define folio_to_fs_info(_folio) (folio_to_inode(_folio)->root->fs_info)
+
+#define inode_to_fs_info(_inode) (BTRFS_I(_Generic((_inode),			\
+					   struct inode *: (_inode)))->root->fs_info)
 
 static inline u64 btrfs_get_fs_generation(const struct btrfs_fs_info *fs_info)
 {
@@ -959,20 +1022,6 @@ void __btrfs_clear_fs_compat_ro(struct btrfs_fs_info *fs_info, u64 flag,
 #define btrfs_raw_test_opt(o, opt)	((o) & BTRFS_MOUNT_##opt)
 #define btrfs_test_opt(fs_info, opt)	((fs_info)->mount_opt & \
 					 BTRFS_MOUNT_##opt)
-
-#define btrfs_set_and_info(fs_info, opt, fmt, args...)			\
-do {									\
-	if (!btrfs_test_opt(fs_info, opt))				\
-		btrfs_info(fs_info, fmt, ##args);			\
-	btrfs_set_opt(fs_info->mount_opt, opt);				\
-} while (0)
-
-#define btrfs_clear_and_info(fs_info, opt, fmt, args...)		\
-do {									\
-	if (btrfs_test_opt(fs_info, opt))				\
-		btrfs_info(fs_info, fmt, ##args);			\
-	btrfs_clear_opt(fs_info->mount_opt, opt);			\
-} while (0)
 
 static inline int btrfs_fs_closing(struct btrfs_fs_info *fs_info)
 {
