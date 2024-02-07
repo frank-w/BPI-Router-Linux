@@ -6,7 +6,6 @@
 #include <linux/sched.h>
 #include "ctree.h"
 #include "disk-io.h"
-#include "print-tree.h"
 #include "transaction.h"
 #include "locking.h"
 #include "accessors.h"
@@ -521,7 +520,7 @@ static int btrfs_defrag_leaves(struct btrfs_trans_handle *trans,
 	 * keep_locks set and lowest_level is 1, regardless of the value of
 	 * path->slots[1].
 	 */
-	BUG_ON(path->locks[1] == 0);
+	ASSERT(path->locks[1] != 0);
 	ret = btrfs_realloc_node(trans, root,
 				 path->nodes[1], 0,
 				 &last_ret,
@@ -810,7 +809,7 @@ static u32 get_extent_max_capacity(const struct btrfs_fs_info *fs_info,
 static bool defrag_check_next_extent(struct inode *inode, struct extent_map *em,
 				     u32 extent_thresh, u64 newer_than, bool locked)
 {
-	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
+	struct btrfs_fs_info *fs_info = inode_to_fs_info(inode);
 	struct extent_map *next;
 	bool ret = false;
 
@@ -861,20 +860,22 @@ out:
  * NOTE: Caller should also wait for page writeback after the cluster is
  * prepared, here we don't do writeback wait for each page.
  */
-static struct page *defrag_prepare_one_page(struct btrfs_inode *inode, pgoff_t index)
+static struct folio *defrag_prepare_one_folio(struct btrfs_inode *inode,
+					      u64 folio_start)
 {
+	struct btrfs_fs_info *fs_info = inode->root->fs_info;
 	struct address_space *mapping = inode->vfs_inode.i_mapping;
 	gfp_t mask = btrfs_alloc_write_mask(mapping);
-	u64 page_start = (u64)index << PAGE_SHIFT;
-	u64 page_end = page_start + PAGE_SIZE - 1;
+	u64 folio_end = folio_start + fs_info->folio_size - 1;
 	struct extent_state *cached_state = NULL;
-	struct page *page;
+	struct folio *folio;
 	int ret;
 
 again:
-	page = find_or_create_page(mapping, index, mask);
-	if (!page)
-		return ERR_PTR(-ENOMEM);
+	folio = __filemap_get_folio(mapping, folio_start >> PAGE_SHIFT,
+				    FGP_LOCK | FGP_ACCESSED | FGP_CREAT, mask);
+	if (IS_ERR(folio))
+		return folio;
 
 	/*
 	 * Since we can defragment files opened read-only, we can encounter
@@ -884,16 +885,16 @@ again:
 	 * executables that explicitly enable them, so this isn't very
 	 * restrictive.
 	 */
-	if (PageCompound(page)) {
-		unlock_page(page);
-		put_page(page);
+	if (folio_test_large(folio)) {
+		folio_unlock(folio);
+		folio_put(folio);
 		return ERR_PTR(-ETXTBSY);
 	}
 
-	ret = set_page_extent_mapped(page);
+	ret = set_folio_extent_mapped(folio);
 	if (ret < 0) {
-		unlock_page(page);
-		put_page(page);
+		folio_unlock(folio);
+		folio_put(folio);
 		return ERR_PTR(ret);
 	}
 
@@ -901,24 +902,25 @@ again:
 	while (1) {
 		struct btrfs_ordered_extent *ordered;
 
-		lock_extent(&inode->io_tree, page_start, page_end, &cached_state);
-		ordered = btrfs_lookup_ordered_range(inode, page_start, PAGE_SIZE);
-		unlock_extent(&inode->io_tree, page_start, page_end,
+		lock_extent(&inode->io_tree, folio_start, folio_end, &cached_state);
+		ordered = btrfs_lookup_ordered_range(inode, folio_start,
+						     fs_info->folio_size);
+		unlock_extent(&inode->io_tree, folio_start, folio_end,
 			      &cached_state);
 		if (!ordered)
 			break;
 
-		unlock_page(page);
+		folio_unlock(folio);
 		btrfs_start_ordered_extent(ordered);
 		btrfs_put_ordered_extent(ordered);
-		lock_page(page);
+		folio_lock(folio);
 		/*
-		 * We unlocked the page above, so we need check if it was
+		 * We unlocked the folio above, so we need check if it was
 		 * released or not.
 		 */
-		if (page->mapping != mapping || !PagePrivate(page)) {
-			unlock_page(page);
-			put_page(page);
+		if (folio->mapping != mapping || !folio->private) {
+			folio_unlock(folio);
+			folio_put(folio);
 			goto again;
 		}
 	}
@@ -927,21 +929,21 @@ again:
 	 * Now the page range has no ordered extent any more.  Read the page to
 	 * make it uptodate.
 	 */
-	if (!PageUptodate(page)) {
-		btrfs_read_folio(NULL, page_folio(page));
-		lock_page(page);
-		if (page->mapping != mapping || !PagePrivate(page)) {
-			unlock_page(page);
-			put_page(page);
+	if (!folio_test_uptodate(folio)) {
+		btrfs_read_folio(NULL, folio);
+		folio_lock(folio);
+		if (folio->mapping != mapping || !folio->private) {
+			folio_unlock(folio);
+			folio_put(folio);
 			goto again;
 		}
-		if (!PageUptodate(page)) {
-			unlock_page(page);
-			put_page(page);
+		if (!folio_test_uptodate(folio)) {
+			folio_unlock(folio);
+			folio_put(folio);
 			return ERR_PTR(-EIO);
 		}
 	}
-	return page;
+	return folio;
 }
 
 struct defrag_target_range {
@@ -1162,20 +1164,20 @@ static_assert(PAGE_ALIGNED(CLUSTER_SIZE));
  */
 static int defrag_one_locked_target(struct btrfs_inode *inode,
 				    struct defrag_target_range *target,
-				    struct page **pages, int nr_pages,
+				    struct folio **folios, int nr_folios,
 				    struct extent_state **cached_state)
 {
 	struct btrfs_fs_info *fs_info = inode->root->fs_info;
 	struct extent_changeset *data_reserved = NULL;
 	const u64 start = target->start;
 	const u64 len = target->len;
-	unsigned long last_index = (start + len - 1) >> PAGE_SHIFT;
-	unsigned long start_index = start >> PAGE_SHIFT;
-	unsigned long first_index = page_index(pages[0]);
+	unsigned long last_index = (start + len - 1) >> fs_info->folio_shift;
+	unsigned long start_index = start >> fs_info->folio_shift;
+	unsigned long first_index = folios[0]->index;
 	int ret = 0;
 	int i;
 
-	ASSERT(last_index - first_index + 1 <= nr_pages);
+	ASSERT(last_index - first_index + 1 <= nr_folios);
 
 	ret = btrfs_delalloc_reserve_space(inode, &data_reserved, start, len);
 	if (ret < 0)
@@ -1186,10 +1188,10 @@ static int defrag_one_locked_target(struct btrfs_inode *inode,
 	set_extent_bit(&inode->io_tree, start, start + len - 1,
 		       EXTENT_DELALLOC | EXTENT_DEFRAG, cached_state);
 
-	/* Update the page status */
+	/* Update the folio status */
 	for (i = start_index - first_index; i <= last_index - first_index; i++) {
-		ClearPageChecked(pages[i]);
-		btrfs_folio_clamp_set_dirty(fs_info, page_folio(pages[i]), start, len);
+		folio_clear_checked(folios[i]);
+		btrfs_folio_clamp_set_dirty(fs_info, folios[i], start, len);
 	}
 	btrfs_delalloc_release_extents(inode, len);
 	extent_changeset_free(data_reserved);
@@ -1201,40 +1203,42 @@ static int defrag_one_range(struct btrfs_inode *inode, u64 start, u32 len,
 			    u32 extent_thresh, u64 newer_than, bool do_compress,
 			    u64 *last_scanned_ret)
 {
+	struct btrfs_fs_info *fs_info = inode->root->fs_info;
 	struct extent_state *cached_state = NULL;
 	struct defrag_target_range *entry;
 	struct defrag_target_range *tmp;
 	LIST_HEAD(target_list);
-	struct page **pages;
-	const u32 sectorsize = inode->root->fs_info->sectorsize;
-	u64 last_index = (start + len - 1) >> PAGE_SHIFT;
-	u64 start_index = start >> PAGE_SHIFT;
-	unsigned int nr_pages = last_index - start_index + 1;
+	struct folio **folios;
+	const u32 sectorsize = fs_info->sectorsize;
+	u64 last_index = (start + len - 1) >> fs_info->folio_shift;
+	u64 start_index = start >> fs_info->folio_shift;
+	unsigned int nr_folios = last_index - start_index + 1;
 	int ret = 0;
 	int i;
 
-	ASSERT(nr_pages <= CLUSTER_SIZE / PAGE_SIZE);
+	ASSERT(nr_folios <= (CLUSTER_SIZE >> fs_info->folio_shift));
 	ASSERT(IS_ALIGNED(start, sectorsize) && IS_ALIGNED(len, sectorsize));
 
-	pages = kcalloc(nr_pages, sizeof(struct page *), GFP_NOFS);
-	if (!pages)
+	folios = kcalloc(nr_folios, sizeof(struct folio *), GFP_NOFS);
+	if (!folios)
 		return -ENOMEM;
 
 	/* Prepare all pages */
-	for (i = 0; i < nr_pages; i++) {
-		pages[i] = defrag_prepare_one_page(inode, start_index + i);
-		if (IS_ERR(pages[i])) {
-			ret = PTR_ERR(pages[i]);
-			pages[i] = NULL;
-			goto free_pages;
+	for (i = 0; i < nr_folios ; i++) {
+		folios[i] = defrag_prepare_one_folio(inode,
+				(start_index + i) << fs_info->folio_shift);
+		if (IS_ERR(folios[i])) {
+			ret = PTR_ERR(folios[i]);
+			nr_folios = i;
+			goto free_folios;
 		}
 	}
-	for (i = 0; i < nr_pages; i++)
-		wait_on_page_writeback(pages[i]);
+	for (i = 0; i < nr_folios; i++)
+		folio_wait_writeback(folios[i]);
 
 	/* Lock the pages range */
-	lock_extent(&inode->io_tree, start_index << PAGE_SHIFT,
-		    (last_index << PAGE_SHIFT) + PAGE_SIZE - 1,
+	lock_extent(&inode->io_tree, start_index << fs_info->folio_shift,
+		    (last_index << fs_info->folio_shift) + fs_info->folio_size - 1,
 		    &cached_state);
 	/*
 	 * Now we have a consistent view about the extent map, re-check
@@ -1250,7 +1254,7 @@ static int defrag_one_range(struct btrfs_inode *inode, u64 start, u32 len,
 		goto unlock_extent;
 
 	list_for_each_entry(entry, &target_list, list) {
-		ret = defrag_one_locked_target(inode, entry, pages, nr_pages,
+		ret = defrag_one_locked_target(inode, entry, folios, nr_folios,
 					       &cached_state);
 		if (ret < 0)
 			break;
@@ -1261,17 +1265,15 @@ static int defrag_one_range(struct btrfs_inode *inode, u64 start, u32 len,
 		kfree(entry);
 	}
 unlock_extent:
-	unlock_extent(&inode->io_tree, start_index << PAGE_SHIFT,
-		      (last_index << PAGE_SHIFT) + PAGE_SIZE - 1,
+	unlock_extent(&inode->io_tree, start_index << fs_info->folio_shift,
+		      (last_index << fs_info->folio_shift) + fs_info->folio_size - 1,
 		      &cached_state);
-free_pages:
-	for (i = 0; i < nr_pages; i++) {
-		if (pages[i]) {
-			unlock_page(pages[i]);
-			put_page(pages[i]);
-		}
+free_folios:
+	for (i = 0; i < nr_folios; i++) {
+		folio_unlock(folios[i]);
+		folio_put(folios[i]);
 	}
-	kfree(pages);
+	kfree(folios);
 	return ret;
 }
 
@@ -1283,7 +1285,8 @@ static int defrag_one_cluster(struct btrfs_inode *inode,
 			      unsigned long max_sectors,
 			      u64 *last_scanned_ret)
 {
-	const u32 sectorsize = inode->root->fs_info->sectorsize;
+	struct btrfs_fs_info *fs_info = inode->root->fs_info;
+	const u32 sectorsize = fs_info->sectorsize;
 	struct defrag_target_range *entry;
 	struct defrag_target_range *tmp;
 	LIST_HEAD(target_list);
@@ -1366,7 +1369,7 @@ int btrfs_defrag_file(struct inode *inode, struct file_ra_state *ra,
 		      struct btrfs_ioctl_defrag_range_args *range,
 		      u64 newer_than, unsigned long max_to_defrag)
 {
-	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
+	struct btrfs_fs_info *fs_info = inode_to_fs_info(inode);
 	unsigned long sectors_defragged = 0;
 	u64 isize = i_size_read(inode);
 	u64 cur;
@@ -1422,7 +1425,7 @@ int btrfs_defrag_file(struct inode *inode, struct file_ra_state *ra,
 	 * Make writeback start from the beginning of the range, so that the
 	 * defrag range can be written sequentially.
 	 */
-	start_index = cur >> PAGE_SHIFT;
+	start_index = cur >> fs_info->folio_shift;
 	if (start_index < inode->i_mapping->writeback_index)
 		inode->i_mapping->writeback_index = start_index;
 
@@ -1437,8 +1440,8 @@ int btrfs_defrag_file(struct inode *inode, struct file_ra_state *ra,
 		}
 
 		/* We want the cluster end at page boundary when possible */
-		cluster_end = (((cur >> PAGE_SHIFT) +
-			       (SZ_256K >> PAGE_SHIFT)) << PAGE_SHIFT) - 1;
+		cluster_end = (((cur >> fs_info->folio_shift) +
+			(SZ_256K >> fs_info->folio_shift)) << fs_info->folio_shift) - 1;
 		cluster_end = min(cluster_end, last_byte);
 
 		btrfs_inode_lock(BTRFS_I(inode), 0);

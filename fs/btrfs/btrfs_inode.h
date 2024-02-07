@@ -8,12 +8,31 @@
 
 #include <linux/hash.h>
 #include <linux/refcount.h>
+#include <linux/spinlock.h>
+#include <linux/mutex.h>
+#include <linux/rwsem.h>
+#include <linux/fs.h>
+#include <linux/mm.h>
+#include <linux/compiler.h>
 #include <linux/fscrypt.h>
+#include <linux/lockdep.h>
+#include <uapi/linux/btrfs_tree.h>
 #include <trace/events/btrfs.h>
+#include "block-rsv.h"
+#include "btrfs_inode.h"
 #include "extent_map.h"
 #include "extent_io.h"
+#include "extent-io-tree.h"
 #include "ordered-data.h"
 #include "delayed-inode.h"
+
+struct extent_state;
+struct posix_acl;
+struct iov_iter;
+struct writeback_control;
+struct btrfs_root;
+struct btrfs_fs_info;
+struct btrfs_trans_handle;
 
 /*
  * Since we search a directory based on f_pos (struct dir_context::pos) we have
@@ -490,8 +509,7 @@ struct inode *btrfs_iget_path(struct super_block *s, u64 ino,
 			      struct btrfs_root *root, struct btrfs_path *path);
 struct inode *btrfs_iget(struct super_block *s, u64 ino, struct btrfs_root *root);
 struct extent_map *btrfs_get_extent(struct btrfs_inode *inode,
-				    struct page *page, size_t pg_offset,
-				    u64 start, u64 len);
+				    struct page *page, u64 start, u64 len);
 int btrfs_update_inode(struct btrfs_trans_handle *trans,
 		       struct btrfs_inode *inode);
 int btrfs_update_inode_fallback(struct btrfs_trans_handle *trans,
