@@ -65,6 +65,7 @@ struct vduse_virtqueue {
 	int irq_effective_cpu;
 	struct cpumask irq_affinity;
 	struct kobject kobj;
+	unsigned long vdpa_reconnect_vaddr;
 };
 
 struct vduse_dev;
@@ -1138,6 +1139,38 @@ static void vduse_vq_update_effective_cpu(struct vduse_virtqueue *vq)
 
 	vq->irq_effective_cpu = curr_cpu;
 }
+static int vduse_alloc_reconnnect_info_mem(struct vduse_dev *dev)
+{
+	unsigned long vaddr = 0;
+	struct vduse_virtqueue *vq;
+
+	for (int i = 0; i < dev->vq_num; i++) {
+		/*page 0~ vq_num save the reconnect info for vq*/
+		vq = dev->vqs[i];
+		vaddr = get_zeroed_page(GFP_KERNEL);
+		if (vaddr == 0)
+			return -ENOMEM;
+
+		vq->vdpa_reconnect_vaddr = vaddr;
+	}
+
+	return 0;
+}
+
+static int vduse_free_reconnnect_info_mem(struct vduse_dev *dev)
+{
+	struct vduse_virtqueue *vq;
+
+	for (int i = 0; i < dev->vq_num; i++) {
+		vq = dev->vqs[i];
+
+		if (vq->vdpa_reconnect_vaddr)
+			free_page(vq->vdpa_reconnect_vaddr);
+		vq->vdpa_reconnect_vaddr = 0;
+	}
+
+	return 0;
+}
 
 static long vduse_dev_ioctl(struct file *file, unsigned int cmd,
 			    unsigned long arg)
@@ -1705,6 +1738,8 @@ static int vduse_destroy_dev(char *name)
 		mutex_unlock(&dev->lock);
 		return -EBUSY;
 	}
+	vduse_free_reconnnect_info_mem(dev);
+
 	dev->connected = true;
 	mutex_unlock(&dev->lock);
 
@@ -1887,12 +1922,17 @@ static int vduse_create_dev(struct vduse_dev_config *config,
 	ret = vduse_dev_init_vqs(dev, config->vq_align, config->vq_num);
 	if (ret)
 		goto err_vqs;
+	ret = vduse_alloc_reconnnect_info_mem(dev);
+	if (ret < 0)
+		goto err_mem;
 
 	__module_get(THIS_MODULE);
 
 	return 0;
 err_vqs:
 	device_destroy(&vduse_class, MKDEV(MAJOR(vduse_major), dev->minor));
+err_mem:
+	vduse_free_reconnnect_info_mem(dev);
 err_dev:
 	idr_remove(&vduse_idr, dev->minor);
 err_idr:
