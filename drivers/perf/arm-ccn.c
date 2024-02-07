@@ -589,15 +589,9 @@ static const struct attribute_group *arm_ccn_pmu_attr_groups[] = {
 
 static int arm_ccn_pmu_alloc_bit(unsigned long *bitmap, unsigned long size)
 {
-	int bit;
+	int bit = find_and_set_bit(bitmap, size);
 
-	do {
-		bit = find_first_zero_bit(bitmap, size);
-		if (bit >= size)
-			return -EAGAIN;
-	} while (test_and_set_bit(bit, bitmap));
-
-	return bit;
+	return bit < size ? bit : -EAGAIN;
 }
 
 /* All RN-I and RN-D nodes have identical PMUs */

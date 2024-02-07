@@ -3311,23 +3311,19 @@ static inline void mm_cid_put(struct mm_struct *mm)
 
 static inline int __mm_cid_try_get(struct mm_struct *mm)
 {
-	struct cpumask *cpumask;
-	int cid;
+	struct cpumask *cpumask = mm_cidmask(mm);
+	int cid = nr_cpu_ids;
 
-	cpumask = mm_cidmask(mm);
 	/*
 	 * Retry finding first zero bit if the mask is temporarily
 	 * filled. This only happens during concurrent remote-clear
 	 * which owns a cid without holding a rq lock.
 	 */
-	for (;;) {
-		cid = cpumask_first_zero(cpumask);
-		if (cid < nr_cpu_ids)
-			break;
+	while (cid >= nr_cpu_ids) {
+		cid = cpumask_find_and_set(cpumask);
 		cpu_relax();
 	}
-	if (cpumask_test_and_set_cpu(cid, cpumask))
-		return -1;
+
 	return cid;
 }
 

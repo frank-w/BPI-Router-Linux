@@ -320,12 +320,9 @@ static int cci400_get_event_idx(struct cci_pmu *cci_pmu,
 		return CCI400_PMU_CYCLE_CNTR_IDX;
 	}
 
-	for (idx = CCI400_PMU_CNTR0_IDX; idx <= CCI_PMU_CNTR_LAST(cci_pmu); ++idx)
-		if (!test_and_set_bit(idx, hw->used_mask))
-			return idx;
-
-	/* No counters available */
-	return -EAGAIN;
+	idx = find_and_set_next_bit(hw->used_mask, CCI_PMU_CNTR_LAST(cci_pmu) + 1,
+							CCI400_PMU_CNTR0_IDX);
+	return idx < CCI_PMU_CNTR_LAST(cci_pmu) + 1 ? idx : -EAGAIN;
 }
 
 static int cci400_validate_hw_event(struct cci_pmu *cci_pmu, unsigned long hw_event)
@@ -802,13 +799,8 @@ static int pmu_get_event_idx(struct cci_pmu_hw_events *hw, struct perf_event *ev
 	if (cci_pmu->model->get_event_idx)
 		return cci_pmu->model->get_event_idx(cci_pmu, hw, cci_event);
 
-	/* Generic code to find an unused idx from the mask */
-	for (idx = 0; idx <= CCI_PMU_CNTR_LAST(cci_pmu); idx++)
-		if (!test_and_set_bit(idx, hw->used_mask))
-			return idx;
-
-	/* No counters available */
-	return -EAGAIN;
+	idx = find_and_set_bit(hw->used_mask, CCI_PMU_CNTR_LAST(cci_pmu) + 1);
+	return idx < CCI_PMU_CNTR_LAST(cci_pmu) + 1 ? idx : -EAGAIN;
 }
 
 static int pmu_map_event(struct perf_event *event)
@@ -861,12 +853,8 @@ static void pmu_free_irq(struct cci_pmu *cci_pmu)
 {
 	int i;
 
-	for (i = 0; i < cci_pmu->nr_irqs; i++) {
-		if (!test_and_clear_bit(i, &cci_pmu->active_irqs))
-			continue;
-
+	for_each_test_and_clear_bit(i, &cci_pmu->active_irqs, cci_pmu->nr_irqs)
 		free_irq(cci_pmu->irqs[i], cci_pmu);
-	}
 }
 
 static u32 pmu_read_counter(struct perf_event *event)
