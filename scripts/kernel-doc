@@ -1509,6 +1509,15 @@ sub create_parameterlist($$$$) {
 	    $type =~ s/([^\(]+\(\*?)\s*$param/$1/;
 	    save_struct_actual($param);
 	    push_parameter($param, $type, $arg, $file, $declaration_name);
+	} elsif ($arg =~ m/\(.+\)\s*\[/) {
+	    # array-of-pointers
+	    $arg =~ tr/#/,/;
+	    $arg =~ m/[^\(]+\(\s*\*\s*([\w\[\]\.]*?)\s*(\s*\[\s*[\w]+\s*\]\s*)*\)/;
+	    $param = $1;
+	    $type = $arg;
+	    $type =~ s/([^\(]+\(\*?)\s*$param/$1/;
+	    save_struct_actual($param);
+	    push_parameter($param, $type, $arg, $file, $declaration_name);
 	} elsif ($arg) {
 	    $arg =~ s/\s*:\s*/:/g;
 	    $arg =~ s/\s*\[/\[/g;
@@ -1907,7 +1916,7 @@ sub process_proto_function($$) {
 
     $x =~ s@\/\/.*$@@gos; # strip C99-style comments to end of line
 
-    if ($x =~ m#\s*/\*\s+MACDOC\s*#io || ($x =~ /^#/ && $x !~ /^#\s*define/)) {
+    if ($x =~ /^#/ && $x !~ /^#\s*define/) {
 	# do nothing
     }
     elsif ($x =~ /([^\{]*)/) {
@@ -2331,7 +2340,7 @@ sub process_file($) {
 
     $section_counter = 0;
     while (<IN_FILE>) {
-	while (s/\\\s*$//) {
+	while (!/^ \*/ && s/\\\s*$//) {
 	    $_ .= <IN_FILE>;
 	}
 	# Replace tabs by spaces
