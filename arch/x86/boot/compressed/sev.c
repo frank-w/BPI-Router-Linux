@@ -12,6 +12,7 @@
  */
 #include "misc.h"
 
+#include <asm/bootparam.h>
 #include <asm/pgtable_types.h>
 #include <asm/sev.h>
 #include <asm/trapnr.h>
@@ -301,6 +302,10 @@ void do_boot_stage2_vc(struct pt_regs *regs, unsigned long exit_code)
 
 	vc_ghcb_invalidate(boot_ghcb);
 	result = vc_init_em_ctxt(&ctxt, regs, exit_code);
+	if (result != ES_OK)
+		goto finish;
+
+	result = vc_check_opcode_bytes(&ctxt, exit_code);
 	if (result != ES_OK)
 		goto finish;
 
