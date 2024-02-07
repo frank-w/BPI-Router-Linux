@@ -1422,6 +1422,13 @@ static long vduse_dev_ioctl(struct file *file, unsigned int cmd,
 		ret = 0;
 		break;
 	}
+
+	case VDUSE_DEV_GET_STATUS:
+		/*
+		 * Returns the status read from device
+		 */
+		ret = put_user(dev->status, (u8 __user *)argp);
+		break;
 	default:
 		ret = -ENOIOCTLCMD;
 		break;
