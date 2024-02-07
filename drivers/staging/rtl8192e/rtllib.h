@@ -123,7 +123,7 @@ struct cb_desc {
 	u8 bPacketBW:1;
 	u8 bRTSUseShortPreamble:1;
 	u8 bRTSUseShortGI:1;
-	u8 bMulticast:1;
+	u8 multicast:1;
 	u8 bBroadcast:1;
 	u8 drv_agg_enable:1;
 	u8 reserved2:1;
@@ -1115,13 +1115,13 @@ struct rt_link_detect {
 
 	u32				RxBcnNum[RT_MAX_LD_SLOT_NUM];
 	u32				RxDataNum[RT_MAX_LD_SLOT_NUM];
-	u16				SlotNum;
-	u16				SlotIndex;
+	u16				slot_num;
+	u16				slot_index;
 
 	u32				num_tx_ok_in_period;
 	u32				num_rx_ok_in_period;
-	u32				NumRxUnicastOkInPeriod;
-	bool				bBusyTraffic;
+	u32				num_rx_unicast_ok_in_period;
+	bool				busy_traffic;
 	bool				bHigherBusyTraffic;
 	bool				bHigherBusyRxTraffic;
 };
@@ -1161,7 +1161,7 @@ struct rate_adaptive {
 
 #define	NUM_PMKID_CACHE		16
 struct rt_pmkid_list {
-	u8 Bssid[ETH_ALEN];
+	u8 bssid[ETH_ALEN];
 	u8 PMKID[16];
 	u8 SsidBuf[33];
 	u8 used;
@@ -1374,14 +1374,14 @@ struct rtllib_device {
 
 	/* for PS mode */
 	unsigned long last_rx_ps_time;
-	bool			bAwakePktSent;
+	bool			awake_pkt_sent;
 	u8			LPSDelayCnt;
 
 	/* used if IEEE_SOFTMAC_SINGLE_QUEUE is set */
 	struct sk_buff *mgmt_queue_ring[MGMT_QUEUE_NUM];
 	int mgmt_queue_head;
 	int mgmt_queue_tail;
-	u8 AsocRetryCount;
+	u8 asoc_retry_count;
 	struct sk_buff_head skb_waitq[MAX_QUEUE_SIZE];
 
 	bool	bdynamic_txpower_enable;
@@ -1484,7 +1484,7 @@ struct rtllib_device {
 	void (*set_bw_mode_handler)(struct net_device *dev,
 				    enum ht_channel_width bandwidth,
 				    enum ht_extchnl_offset Offset);
-	bool (*GetNmodeSupportBySecCfg)(struct net_device *dev);
+	bool (*get_nmode_support_by_sec_cfg)(struct net_device *dev);
 	void (*set_wireless_mode)(struct net_device *dev, u8 wireless_mode);
 	bool (*GetHalfNmodeSupportByAPsHandler)(struct net_device *dev);
 	u8   (*rtllib_ap_sec_type)(struct rtllib_device *ieee);
@@ -1662,7 +1662,7 @@ int rtllib_rx_frame_softmac(struct rtllib_device *ieee, struct sk_buff *skb,
 void rtllib_softmac_new_net(struct rtllib_device *ieee,
 			    struct rtllib_network *net);
 
-void SendDisassociation(struct rtllib_device *ieee, bool deauth, u16 asRsn);
+void send_disassociation(struct rtllib_device *ieee, bool deauth, u16 asRsn);
 void rtllib_softmac_xmit(struct rtllib_txb *txb, struct rtllib_device *ieee);
 
 int rtllib_softmac_init(struct rtllib_device *ieee);
@@ -1788,8 +1788,8 @@ bool rtllib_get_ts(struct rtllib_device *ieee, struct ts_common_info **ppTS, u8 
 void rtllib_ts_init(struct rtllib_device *ieee);
 void TsStartAddBaProcess(struct rtllib_device *ieee,
 			 struct tx_ts_record *pTxTS);
-void RemovePeerTS(struct rtllib_device *ieee, u8 *addr);
-void RemoveAllTS(struct rtllib_device *ieee);
+void remove_peer_ts(struct rtllib_device *ieee, u8 *addr);
+void remove_all_ts(struct rtllib_device *ieee);
 
 static inline const char *escape_essid(const char *essid, u8 essid_len)
 {
@@ -1805,7 +1805,7 @@ static inline const char *escape_essid(const char *essid, u8 essid_len)
 }
 
 /* fun with the built-in rtllib stack... */
-bool rtllib_MgntDisconnect(struct rtllib_device *rtllib, u8 asRsn);
+bool rtllib_mgnt_disconnect(struct rtllib_device *rtllib, u8 asRsn);
 
 /* For the function is more related to hardware setting, it's better to use the
  * ieee handler to refer to it.

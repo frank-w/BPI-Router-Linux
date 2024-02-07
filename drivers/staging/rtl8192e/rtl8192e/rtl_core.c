@@ -172,7 +172,7 @@ bool rtl92e_set_rf_state(struct net_device *dev,
 					priv->blinked_ingpio = true;
 				else
 					priv->blinked_ingpio = false;
-				rtllib_MgntDisconnect(priv->rtllib,
+				rtllib_mgnt_disconnect(priv->rtllib,
 						      WLAN_REASON_DISASSOC_STA_HAS_LEFT);
 			}
 		}
@@ -656,7 +656,7 @@ static void _rtl92e_init_priv_handler(struct net_device *dev)
 	priv->rtllib->enter_sleep_state = rtl92e_enter_sleep;
 	priv->rtllib->ps_is_queue_empty = _rtl92e_is_tx_queue_empty;
 
-	priv->rtllib->GetNmodeSupportBySecCfg = rtl92e_get_nmode_support_by_sec;
+	priv->rtllib->get_nmode_support_by_sec_cfg = rtl92e_get_nmode_support_by_sec;
 	priv->rtllib->GetHalfNmodeSupportByAPsHandler =
 						rtl92e_is_halfn_supported_by_ap;
 
@@ -909,25 +909,24 @@ static void _rtl92e_if_check_reset(struct net_device *dev)
 		netdev_info(dev, "%s(): TxResetType is %d, RxResetType is %d\n",
 			    __func__, TxResetType, RxResetType);
 	}
-	return;
 }
 
 static void _rtl92e_update_rxcounts(struct r8192_priv *priv, u32 *TotalRxBcnNum,
 				    u32 *TotalRxDataNum)
 {
-	u16	SlotIndex;
+	u16	slot_index;
 	u8	i;
 
 	*TotalRxBcnNum = 0;
 	*TotalRxDataNum = 0;
 
-	SlotIndex = (priv->rtllib->link_detect_info.SlotIndex++) %
-			(priv->rtllib->link_detect_info.SlotNum);
-	priv->rtllib->link_detect_info.RxBcnNum[SlotIndex] =
+	slot_index = (priv->rtllib->link_detect_info.slot_index++) %
+			(priv->rtllib->link_detect_info.slot_num);
+	priv->rtllib->link_detect_info.RxBcnNum[slot_index] =
 			priv->rtllib->link_detect_info.NumRecvBcnInPeriod;
-	priv->rtllib->link_detect_info.RxDataNum[SlotIndex] =
+	priv->rtllib->link_detect_info.RxDataNum[slot_index] =
 			priv->rtllib->link_detect_info.NumRecvDataInPeriod;
-	for (i = 0; i < priv->rtllib->link_detect_info.SlotNum; i++) {
+	for (i = 0; i < priv->rtllib->link_detect_info.slot_num; i++) {
 		*TotalRxBcnNum += priv->rtllib->link_detect_info.RxBcnNum[i];
 		*TotalRxDataNum += priv->rtllib->link_detect_info.RxDataNum[i];
 	}
@@ -943,7 +942,7 @@ static void _rtl92e_watchdog_wq_cb(void *data)
 	unsigned long flags;
 	struct rt_pwr_save_ctrl *psc = (struct rt_pwr_save_ctrl *)
 					(&priv->rtllib->pwr_save_ctrl);
-	bool bBusyTraffic = false;
+	bool busy_traffic = false;
 	bool	bHigherBusyTraffic = false;
 	bool	bHigherBusyRxTraffic = false;
 	bool bEnterPS = false;
@@ -973,7 +972,7 @@ static void _rtl92e_watchdog_wq_cb(void *data)
 	if ((ieee->link_state == MAC80211_LINKED) && (ieee->iw_mode == IW_MODE_INFRA)) {
 		if (ieee->link_detect_info.num_rx_ok_in_period > 100 ||
 		ieee->link_detect_info.num_tx_ok_in_period > 100)
-			bBusyTraffic = true;
+			busy_traffic = true;
 
 		if (ieee->link_detect_info.num_rx_ok_in_period > 4000 ||
 		    ieee->link_detect_info.num_tx_ok_in_period > 4000) {
@@ -984,9 +983,9 @@ static void _rtl92e_watchdog_wq_cb(void *data)
 				bHigherBusyRxTraffic = false;
 		}
 
-		if (((ieee->link_detect_info.NumRxUnicastOkInPeriod +
+		if (((ieee->link_detect_info.num_rx_unicast_ok_in_period +
 		    ieee->link_detect_info.num_tx_ok_in_period) > 8) ||
-		    (ieee->link_detect_info.NumRxUnicastOkInPeriod > 2))
+		    (ieee->link_detect_info.num_rx_unicast_ok_in_period > 2))
 			bEnterPS = false;
 		else
 			bEnterPS = true;
@@ -1005,8 +1004,8 @@ static void _rtl92e_watchdog_wq_cb(void *data)
 
 	ieee->link_detect_info.num_rx_ok_in_period = 0;
 	ieee->link_detect_info.num_tx_ok_in_period = 0;
-	ieee->link_detect_info.NumRxUnicastOkInPeriod = 0;
-	ieee->link_detect_info.bBusyTraffic = bBusyTraffic;
+	ieee->link_detect_info.num_rx_unicast_ok_in_period = 0;
+	ieee->link_detect_info.busy_traffic = busy_traffic;
 
 	ieee->link_detect_info.bHigherBusyTraffic = bHigherBusyTraffic;
 	ieee->link_detect_info.bHigherBusyRxTraffic = bHigherBusyRxTraffic;
@@ -1032,7 +1031,7 @@ static void _rtl92e_watchdog_wq_cb(void *data)
 
 			ieee->link_state = RTLLIB_ASSOCIATING;
 
-			RemovePeerTS(priv->rtllib,
+			remove_peer_ts(priv->rtllib,
 				     priv->rtllib->current_network.bssid);
 			ieee->is_roaming = true;
 			ieee->is_set_key = false;
@@ -1257,7 +1256,7 @@ static short _rtl92e_tx(struct net_device *dev, struct sk_buff *skb)
 	int   idx;
 	u32 fwinfo_size = 0;
 
-	priv->rtllib->bAwakePktSent = true;
+	priv->rtllib->awake_pkt_sent = true;
 
 	fwinfo_size = sizeof(struct tx_fwinfo_8190pci);
 
