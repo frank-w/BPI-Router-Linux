@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include <dt-bindings/net/qca-ar803x.h>
+#include <dt-bindings/phy/phy-imx8-pcie.h>
 #include "imx8mp.dtsi"
 
 / {
@@ -429,6 +430,21 @@
 	status = "okay";
 };
 
+&pcie_phy {
+	clocks = <&pcieclk 0>;
+	clock-names = "ref";
+	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
+	status = "okay";
+};
+
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie0>;
+	fsl,max-link-speed = <3>;
+	reset-gpio = <&gpio1 5 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
 &pwm1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_panel_pwm>;
@@ -486,7 +502,7 @@
 &uart4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart4>;
-	status = "okay";
+	status = "disabled";
 };
 
 &usb3_phy0 {
