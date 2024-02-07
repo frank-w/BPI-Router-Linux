@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 
 #include "bcachefs.h"
+#include "bkey_buf.h"
 #include "bset.h"
+#include "btree_cache.h"
 #include "btree_journal_iter.h"
 #include "journal_io.h"
 
@@ -334,9 +336,38 @@ void bch2_btree_and_journal_iter_advance(struct btree_and_journal_iter *iter)
 		iter->pos = bpos_successor(iter->pos);
 }
 
+static void btree_and_journal_iter_prefetch(struct btree_and_journal_iter *_iter)
+{
+	struct btree_and_journal_iter iter = *_iter;
+	struct bch_fs *c = iter.trans->c;
+	unsigned level = iter.journal.level;
+	struct bkey_buf tmp;
+	unsigned nr = test_bit(BCH_FS_started, &c->flags)
+		? (level > 1 ? 0 :  2)
+		: (level > 1 ? 1 : 16);
+
+	iter.prefetch = false;
+	bch2_bkey_buf_init(&tmp);
+
+	while (nr--) {
+		bch2_btree_and_journal_iter_advance(&iter);
+		struct bkey_s_c k = bch2_btree_and_journal_iter_peek(&iter);
+		if (!k.k)
+			break;
+
+		bch2_bkey_buf_reassemble(&tmp, c, k);
+		bch2_btree_node_prefetch(iter.trans, NULL, tmp.k, iter.journal.btree_id, level - 1);
+	}
+
+	bch2_bkey_buf_exit(&tmp, c);
+}
+
 struct bkey_s_c bch2_btree_and_journal_iter_peek(struct btree_and_journal_iter *iter)
 {
 	struct bkey_s_c btree_k, journal_k, ret;
+
+	if (iter->prefetch && iter->journal.level)
+		btree_and_journal_iter_prefetch(iter);
 again:
 	if (iter->at_end)
 		return bkey_s_c_null;
@@ -376,17 +407,18 @@ void bch2_btree_and_journal_iter_exit(struct btree_and_journal_iter *iter)
 	bch2_journal_iter_exit(&iter->journal);
 }
 
-void __bch2_btree_and_journal_iter_init_node_iter(struct btree_and_journal_iter *iter,
-						  struct bch_fs *c,
+void __bch2_btree_and_journal_iter_init_node_iter(struct btree_trans *trans,
+						  struct btree_and_journal_iter *iter,
 						  struct btree *b,
 						  struct btree_node_iter node_iter,
 						  struct bpos pos)
 {
 	memset(iter, 0, sizeof(*iter));
 
+	iter->trans = trans;
 	iter->b = b;
 	iter->node_iter = node_iter;
-	bch2_journal_iter_init(c, &iter->journal, b->c.btree_id, b->c.level, pos);
+	bch2_journal_iter_init(trans->c, &iter->journal, b->c.btree_id, b->c.level, pos);
 	INIT_LIST_HEAD(&iter->journal.list);
 	iter->pos = b->data->min_key;
 	iter->at_end = false;
@@ -396,15 +428,15 @@ void __bch2_btree_and_journal_iter_init_node_iter(struct btree_and_journal_iter 
  * this version is used by btree_gc before filesystem has gone RW and
  * multithreaded, so uses the journal_iters list:
  */
-void bch2_btree_and_journal_iter_init_node_iter(struct btree_and_journal_iter *iter,
-						struct bch_fs *c,
+void bch2_btree_and_journal_iter_init_node_iter(struct btree_trans *trans,
+						struct btree_and_journal_iter *iter,
 						struct btree *b)
 {
 	struct btree_node_iter node_iter;
 
 	bch2_btree_node_iter_init_from_start(&node_iter, b);
-	__bch2_btree_and_journal_iter_init_node_iter(iter, c, b, node_iter, b->data->min_key);
-	list_add(&iter->journal.list, &c->journal_iters);
+	__bch2_btree_and_journal_iter_init_node_iter(trans, iter, b, node_iter, b->data->min_key);
+	list_add(&iter->journal.list, &trans->c->journal_iters);
 }
 
 /* sort and dedup all keys in the journal: */
@@ -416,8 +448,7 @@ void bch2_journal_entries_free(struct bch_fs *c)
 
 	genradix_for_each(&c->journal_entries, iter, i)
 		if (*i)
-			kvpfree(*i, offsetof(struct journal_replay, j) +
-				vstruct_bytes(&(*i)->j));
+			kvfree(*i);
 	genradix_free(&c->journal_entries);
 }
 

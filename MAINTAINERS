@@ -13383,6 +13383,15 @@ S:	Maintained
 F:	drivers/net/mdio/mdio-regmap.c
 F:	include/linux/mdio/mdio-regmap.h
 
+MEAN AND VARIANCE LIBRARY
+M:	Daniel B. Hill <daniel@gluo.nz>
+M:	Kent Overstreet <kent.overstreet@linux.dev>
+S:	Maintained
+T:	git https://github.com/YellowOnion/linux/
+F:	include/linux/mean_and_variance.h
+F:	lib/math/mean_and_variance.c
+F:	lib/math/mean_and_variance_test.c
+
 MEASUREMENT COMPUTING CIO-DAC IIO DRIVER
 M:	William Breathitt Gray <william.gray@linaro.org>
 L:	linux-iio@vger.kernel.org
@@ -22134,6 +22143,12 @@ F:	kernel/time/clocksource.c
 F:	kernel/time/ntp.c
 F:	kernel/time/time*.c
 F:	tools/testing/selftests/timers/
+
+TIME STATS:
+M:	Kent Overstreet <kent.overstreet@linux.dev>
+S:	Maintained
+F:	include/linux/time_stats.h
+F:	lib/time_stats.c
 
 TIPC NETWORK LAYER
 M:	Jon Maloy <jmaloy@redhat.com>
