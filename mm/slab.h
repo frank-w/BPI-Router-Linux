@@ -387,7 +387,7 @@ extern const struct kmalloc_info_struct {
 
 /* Kmalloc array related functions */
 void setup_kmalloc_cache_index_table(void);
-void create_kmalloc_caches(slab_flags_t);
+void create_kmalloc_caches(void);
 
 extern u8 kmalloc_size_index[24];
 
@@ -422,8 +422,6 @@ gfp_t kmalloc_fix_flags(gfp_t flags);
 int __kmem_cache_create(struct kmem_cache *, slab_flags_t flags);
 
 void __init kmem_cache_init(void);
-void __init new_kmalloc_cache(int idx, enum kmalloc_cache_type type,
-			      slab_flags_t flags);
 extern void create_boot_cache(struct kmem_cache *, const char *name,
 			unsigned int size, slab_flags_t flags,
 			unsigned int useroffset, unsigned int usersize);
@@ -528,7 +526,7 @@ static inline bool __slub_debug_enabled(void)
 #endif
 
 /*
- * Returns true if any of the specified slub_debug flags is enabled for the
+ * Returns true if any of the specified slab_debug flags is enabled for the
  * cache. Use only for flags parsed by setup_slub_debug() as it also enables
  * the static key.
  */
