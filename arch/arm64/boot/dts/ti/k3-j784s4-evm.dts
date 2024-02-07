@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
- * Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2022-2024 Texas Instruments Incorporated - https://www.ti.com/
  *
  * EVM Board Schematics: https://www.ti.com/lit/zip/sprr458
  */
@@ -31,6 +31,7 @@
 
 	memory@80000000 {
 		device_type = "memory";
+		bootph-all;
 		/* 32G RAM */
 		reg = <0x00 0x80000000 0x00 0x80000000>,
 		      <0x08 0x80000000 0x07 0x80000000>;
