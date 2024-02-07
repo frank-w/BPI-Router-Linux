@@ -54,6 +54,7 @@
 #include <linux/if_tun.h>
 #include <linux/if_vlan.h>
 #include <linux/crc32.h>
+#include <linux/math.h>
 #include <linux/nsproxy.h>
 #include <linux/virtio_net.h>
 #include <linux/rcupdate.h>
@@ -523,8 +524,7 @@ static inline void tun_flow_save_rps_rxhash(struct tun_flow_entry *e, u32 hash)
 static u16 tun_automq_select_queue(struct tun_struct *tun, struct sk_buff *skb)
 {
 	struct tun_flow_entry *e;
-	u32 txq = 0;
-	u32 numqueues = 0;
+	u32 txq, numqueues;
 
 	numqueues = READ_ONCE(tun->numqueues);
 
@@ -534,8 +534,7 @@ static u16 tun_automq_select_queue(struct tun_struct *tun, struct sk_buff *skb)
 		tun_flow_save_rps_rxhash(e, txq);
 		txq = e->queue_index;
 	} else {
-		/* use multiply and shift instead of expensive divide */
-		txq = ((u64)txq * numqueues) >> 32;
+		txq = reciprocal_scale(txq, numqueues);
 	}
 
 	return txq;
@@ -3644,12 +3643,22 @@ static int tun_set_coalesce(struct net_device *dev,
 	return 0;
 }
 
+static void tun_get_channels(struct net_device *dev,
+			     struct ethtool_channels *channels)
+{
+	struct tun_struct *tun = netdev_priv(dev);
+
+	channels->combined_count = tun->numqueues;
+	channels->max_combined = tun->flags & IFF_MULTI_QUEUE ? MAX_TAP_QUEUES : 1;
+}
+
 static const struct ethtool_ops tun_ethtool_ops = {
 	.supported_coalesce_params = ETHTOOL_COALESCE_RX_MAX_FRAMES,
 	.get_drvinfo	= tun_get_drvinfo,
 	.get_msglevel	= tun_get_msglevel,
 	.set_msglevel	= tun_set_msglevel,
 	.get_link	= ethtool_op_get_link,
+	.get_channels   = tun_get_channels,
 	.get_ts_info	= ethtool_op_get_ts_info,
 	.get_coalesce   = tun_get_coalesce,
 	.set_coalesce   = tun_set_coalesce,

@@ -638,7 +638,7 @@ struct phy_device {
 
 	/* Information about the PHY type */
 	/* And management functions */
-	struct phy_driver *drv;
+	const struct phy_driver *drv;
 
 	struct device_link *devlink;
 
@@ -850,6 +850,15 @@ struct phy_plca_cfg {
  */
 struct phy_plca_status {
 	bool pst;
+};
+
+/* Modes for PHY LED configuration */
+enum phy_led_modes {
+	PHY_LED_ACTIVE_LOW = 0,
+	PHY_LED_INACTIVE_HIGH_IMPEDANCE = 1,
+
+	/* keep it last */
+	__PHY_LED_MODES_NUM,
 };
 
 /**
@@ -1145,6 +1154,19 @@ struct phy_driver {
 	int (*led_hw_control_get)(struct phy_device *dev, u8 index,
 				  unsigned long *rules);
 
+	/**
+	 * @led_polarity_set: Set the LED polarity modes
+	 * @dev: PHY device which has the LED
+	 * @index: Which LED of the PHY device
+	 * @modes: bitmap of LED polarity modes
+	 *
+	 * Configure LED with all the required polarity modes in @modes
+	 * to make it correctly turn ON or OFF.
+	 *
+	 * Returns 0, or an error code.
+	 */
+	int (*led_polarity_set)(struct phy_device *dev, int index,
+				unsigned long modes);
 };
 #define to_phy_driver(d) container_of(to_mdio_common_driver(d),		\
 				      struct phy_driver, mdiodrv)
@@ -1886,9 +1908,9 @@ int genphy_c45_plca_get_status(struct phy_device *phydev,
 int genphy_c45_eee_is_active(struct phy_device *phydev, unsigned long *adv,
 			     unsigned long *lp, bool *is_enabled);
 int genphy_c45_ethtool_get_eee(struct phy_device *phydev,
-			       struct ethtool_eee *data);
+			       struct ethtool_keee *data);
 int genphy_c45_ethtool_set_eee(struct phy_device *phydev,
-			       struct ethtool_eee *data);
+			       struct ethtool_keee *data);
 int genphy_c45_write_eee_adv(struct phy_device *phydev, unsigned long *adv);
 int genphy_c45_an_config_eee_aneg(struct phy_device *phydev);
 int genphy_c45_read_eee_adv(struct phy_device *phydev, unsigned long *adv);
@@ -1966,8 +1988,8 @@ int phy_unregister_fixup_for_uid(u32 phy_uid, u32 phy_uid_mask);
 
 int phy_init_eee(struct phy_device *phydev, bool clk_stop_enable);
 int phy_get_eee_err(struct phy_device *phydev);
-int phy_ethtool_set_eee(struct phy_device *phydev, struct ethtool_eee *data);
-int phy_ethtool_get_eee(struct phy_device *phydev, struct ethtool_eee *data);
+int phy_ethtool_set_eee(struct phy_device *phydev, struct ethtool_keee *data);
+int phy_ethtool_get_eee(struct phy_device *phydev, struct ethtool_keee *data);
 int phy_ethtool_set_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol);
 void phy_ethtool_get_wol(struct phy_device *phydev,
 			 struct ethtool_wolinfo *wol);
