@@ -248,7 +248,7 @@ retry:
 	} else {
 		blkcnt_t count = 1;
 
-		err = inc_valid_block_count(sbi, inode, &count);
+		err = inc_valid_block_count(sbi, inode, &count, true);
 		if (err) {
 			f2fs_put_dnode(&dn);
 			return err;
@@ -905,6 +905,8 @@ int f2fs_disable_cp_again(struct f2fs_sb_info *sbi, block_t unusable)
 		return -EAGAIN;
 	if (is_sbi_flag_set(sbi, SBI_CP_DISABLED_QUICK) &&
 		dirty_segments(sbi) > ovp_hole_segs)
+		return -EAGAIN;
+	if (has_not_enough_free_secs(sbi, 0, 0))
 		return -EAGAIN;
 	return 0;
 }
