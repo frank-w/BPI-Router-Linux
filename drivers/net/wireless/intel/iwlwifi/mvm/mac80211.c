@@ -263,6 +263,9 @@ static const u8 tm_if_types_ext_capa_sta[] = {
 					__bf_shf(IEEE80211_EML_CAP_EMLSR_PADDING_DELAY) | \
 				 IEEE80211_EML_CAP_EMLSR_TRANSITION_DELAY_64US << \
 					__bf_shf(IEEE80211_EML_CAP_EMLSR_TRANSITION_DELAY))
+#define IWL_MVM_MLD_CAPA_OPS FIELD_PREP_CONST( \
+			IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP, \
+			IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP_SAME)
 
 static const struct wiphy_iftype_ext_capab add_iftypes_ext_capa[] = {
 	{
@@ -272,6 +275,7 @@ static const struct wiphy_iftype_ext_capab add_iftypes_ext_capa[] = {
 		.extended_capabilities_len = sizeof(he_if_types_ext_capa_sta),
 		/* relevant only if EHT is supported */
 		.eml_capabilities = IWL_MVM_EMLSR_CAPA,
+		.mld_capa_and_ops = IWL_MVM_MLD_CAPA_OPS,
 	},
 	{
 		.iftype = NL80211_IFTYPE_STATION,
@@ -280,6 +284,7 @@ static const struct wiphy_iftype_ext_capab add_iftypes_ext_capa[] = {
 		.extended_capabilities_len = sizeof(tm_if_types_ext_capa_sta),
 		/* relevant only if EHT is supported */
 		.eml_capabilities = IWL_MVM_EMLSR_CAPA,
+		.mld_capa_and_ops = IWL_MVM_MLD_CAPA_OPS,
 	},
 };
 
@@ -489,6 +494,11 @@ int iwl_mvm_mac_setup_register(struct iwl_mvm *mvm)
 	if (fw_has_capa(&mvm->fw->ucode_capa,
 			IWL_UCODE_TLV_CAPA_TIME_SYNC_BOTH_FTM_TM))
 		hw->wiphy->hw_timestamp_max_peers = 1;
+
+	if (fw_has_capa(&mvm->fw->ucode_capa,
+			IWL_UCODE_TLV_CAPA_SPP_AMSDU_SUPPORT))
+		wiphy_ext_feature_set(hw->wiphy,
+				      NL80211_EXT_FEATURE_SPP_AMSDU_SUPPORT);
 
 	ieee80211_hw_set(hw, SINGLE_SCAN_ON_ALL_BANDS);
 	hw->wiphy->features |=
@@ -1195,14 +1205,12 @@ int iwl_mvm_mac_start(struct ieee80211_hw *hw)
 {
 	struct iwl_mvm *mvm = IWL_MAC80211_GET_MVM(hw);
 	int ret;
-	int retry, max_retry = 0;
 
 	mutex_lock(&mvm->mutex);
 
 	/* we are starting the mac not in error flow, and restart is enabled */
 	if (!test_bit(IWL_MVM_STATUS_HW_RESTART_REQUESTED, &mvm->status) &&
 	    iwlwifi_mod_params.fw_restart) {
-		max_retry = IWL_MAX_INIT_RETRY;
 		/*
 		 * This will prevent mac80211 recovery flows to trigger during
 		 * init failures
@@ -1210,13 +1218,7 @@ int iwl_mvm_mac_start(struct ieee80211_hw *hw)
 		set_bit(IWL_MVM_STATUS_STARTING, &mvm->status);
 	}
 
-	for (retry = 0; retry <= max_retry; retry++) {
-		ret = __iwl_mvm_mac_start(mvm);
-		if (!ret || mvm->pldr_sync)
-			break;
-
-		IWL_ERR(mvm, "mac start retry %d\n", retry);
-	}
+	ret = __iwl_mvm_mac_start(mvm);
 	clear_bit(IWL_MVM_STATUS_STARTING, &mvm->status);
 
 	mutex_unlock(&mvm->mutex);
@@ -1350,6 +1352,7 @@ void iwl_mvm_mac_stop(struct ieee80211_hw *hw)
 	 * discover that its list is now empty.
 	 */
 	cancel_work_sync(&mvm->async_handlers_wk);
+	wiphy_work_cancel(hw->wiphy, &mvm->async_handlers_wiphy_wk);
 }
 
 struct iwl_mvm_phy_ctxt *iwl_mvm_get_free_phy_ctxt(struct iwl_mvm *mvm)
@@ -3695,6 +3698,19 @@ iwl_mvm_sta_state_notexist_to_none(struct iwl_mvm *mvm,
 	if (vif->type == NL80211_IFTYPE_STATION && !sta->tdls)
 		mvmvif->ap_sta = sta;
 
+	/*
+	 * Initialize the rates here already - this really tells
+	 * the firmware only what the supported legacy rates are
+	 * (may be) since it's initialized already from what the
+	 * AP advertised in the beacon/probe response. This will
+	 * allow the firmware to send auth/assoc frames with one
+	 * of the supported rates already, rather than having to
+	 * use a mandatory rate.
+	 * If we're the AP, we'll just assume mandatory rates at
+	 * this point, but we know nothing about the STA anyway.
+	 */
+	iwl_mvm_rs_rate_init_all_links(mvm, vif, sta);
+
 	return 0;
 }
 
@@ -3793,13 +3809,17 @@ iwl_mvm_sta_state_assoc_to_authorized(struct iwl_mvm *mvm,
 
 	mvm_sta->authorized = true;
 
-	iwl_mvm_rs_rate_init_all_links(mvm, vif, sta);
-
 	/* MFP is set by default before the station is authorized.
 	 * Clear it here in case it's not used.
 	 */
-	if (!sta->mfp)
-		return callbacks->update_sta(mvm, vif, sta);
+	if (!sta->mfp) {
+		int ret = callbacks->update_sta(mvm, vif, sta);
+
+		if (ret)
+			return ret;
+	}
+
+	iwl_mvm_rs_rate_init_all_links(mvm, vif, sta);
 
 	return 0;
 }
@@ -4409,44 +4429,6 @@ static bool iwl_mvm_rx_aux_roc(struct iwl_notif_wait_data *notif_wait,
 	return true;
 }
 
-#define AUX_ROC_MIN_DURATION MSEC_TO_TU(100)
-#define AUX_ROC_MIN_DELAY MSEC_TO_TU(200)
-#define AUX_ROC_MAX_DELAY MSEC_TO_TU(600)
-#define AUX_ROC_SAFETY_BUFFER MSEC_TO_TU(20)
-#define AUX_ROC_MIN_SAFETY_BUFFER MSEC_TO_TU(10)
-
-static void iwl_mvm_roc_duration_and_delay(struct ieee80211_vif *vif,
-					   u32 duration_ms,
-					   u32 *duration_tu,
-					   u32 *delay)
-{
-	u32 dtim_interval = vif->bss_conf.dtim_period *
-		vif->bss_conf.beacon_int;
-
-	*delay = AUX_ROC_MIN_DELAY;
-	*duration_tu = MSEC_TO_TU(duration_ms);
-
-	/*
-	 * If we are associated we want the delay time to be at least one
-	 * dtim interval so that the FW can wait until after the DTIM and
-	 * then start the time event, this will potentially allow us to
-	 * remain off-channel for the max duration.
-	 * Since we want to use almost a whole dtim interval we would also
-	 * like the delay to be for 2-3 dtim intervals, in case there are
-	 * other time events with higher priority.
-	 */
-	if (vif->cfg.assoc) {
-		*delay = min_t(u32, dtim_interval * 3, AUX_ROC_MAX_DELAY);
-		/* We cannot remain off-channel longer than the DTIM interval */
-		if (dtim_interval <= *duration_tu) {
-			*duration_tu = dtim_interval - AUX_ROC_SAFETY_BUFFER;
-			if (*duration_tu <= AUX_ROC_MIN_DURATION)
-				*duration_tu = dtim_interval -
-					AUX_ROC_MIN_SAFETY_BUFFER;
-		}
-	}
-}
-
 static int iwl_mvm_send_aux_roc_cmd(struct iwl_mvm *mvm,
 				    struct ieee80211_channel *channel,
 				    struct ieee80211_vif *vif,
@@ -4540,48 +4522,6 @@ static int iwl_mvm_send_aux_roc_cmd(struct iwl_mvm *mvm,
 		iwl_mvm_te_clear_data(mvm, te_data);
 		spin_unlock_bh(&mvm->time_event_lock);
 	}
-
-	return res;
-}
-
-static int iwl_mvm_roc_add_cmd(struct iwl_mvm *mvm,
-			       struct ieee80211_channel *channel,
-			       struct ieee80211_vif *vif,
-			       int duration, u32 activity)
-{
-	int res;
-	u32 duration_tu, delay;
-	struct iwl_roc_req roc_req = {
-		.action = cpu_to_le32(FW_CTXT_ACTION_ADD),
-		.activity = cpu_to_le32(activity),
-		.sta_id = cpu_to_le32(mvm->aux_sta.sta_id),
-	};
-
-	lockdep_assert_held(&mvm->mutex);
-
-	/* Set the channel info data */
-	iwl_mvm_set_chan_info(mvm, &roc_req.channel_info,
-			      channel->hw_value,
-			      iwl_mvm_phy_band_from_nl80211(channel->band),
-			      IWL_PHY_CHANNEL_MODE20, 0);
-
-	iwl_mvm_roc_duration_and_delay(vif, duration, &duration_tu,
-				       &delay);
-	roc_req.duration = cpu_to_le32(duration_tu);
-	roc_req.max_delay = cpu_to_le32(delay);
-
-	IWL_DEBUG_TE(mvm,
-		     "\t(requested = %ums, max_delay = %ums)\n",
-		     duration, delay);
-	IWL_DEBUG_TE(mvm,
-		     "Requesting to remain on channel %u for %utu\n",
-		     channel->hw_value, duration_tu);
-
-	/* Set the node address */
-	memcpy(roc_req.node_addr, vif->addr, ETH_ALEN);
-
-	res = iwl_mvm_send_cmd_pdu(mvm, WIDE_ID(MAC_CONF_GROUP, ROC_CMD),
-				   0, sizeof(roc_req), &roc_req);
 
 	return res;
 }
@@ -4790,8 +4730,8 @@ static void iwl_mvm_ftm_responder_chanctx_iter(void *_data, u8 *mac,
 		data->responder = true;
 }
 
-static bool iwl_mvm_is_ftm_responder_chanctx(struct iwl_mvm *mvm,
-					     struct ieee80211_chanctx_conf *ctx)
+bool iwl_mvm_is_ftm_responder_chanctx(struct iwl_mvm *mvm,
+				      struct ieee80211_chanctx_conf *ctx)
 {
 	struct iwl_mvm_ftm_responder_iter_data data = {
 		.responder = false,
@@ -4810,9 +4750,7 @@ static int __iwl_mvm_add_chanctx(struct iwl_mvm *mvm,
 {
 	u16 *phy_ctxt_id = (u16 *)ctx->drv_priv;
 	struct iwl_mvm_phy_ctxt *phy_ctxt;
-	bool use_def = iwl_mvm_is_ftm_responder_chanctx(mvm, ctx) ||
-		iwl_mvm_enable_fils(mvm, ctx);
-	struct cfg80211_chan_def *def = use_def ? &ctx->def : &ctx->min_def;
+	struct cfg80211_chan_def *def = iwl_mvm_chanctx_def(mvm, ctx);
 	int ret;
 
 	lockdep_assert_held(&mvm->mutex);
@@ -4878,9 +4816,7 @@ void iwl_mvm_change_chanctx(struct ieee80211_hw *hw,
 	struct iwl_mvm *mvm = IWL_MAC80211_GET_MVM(hw);
 	u16 *phy_ctxt_id = (u16 *)ctx->drv_priv;
 	struct iwl_mvm_phy_ctxt *phy_ctxt = &mvm->phy_ctxts[*phy_ctxt_id];
-	bool use_def = iwl_mvm_is_ftm_responder_chanctx(mvm, ctx) ||
-		iwl_mvm_enable_fils(mvm, ctx);
-	struct cfg80211_chan_def *def = use_def ? &ctx->def : &ctx->min_def;
+	struct cfg80211_chan_def *def = iwl_mvm_chanctx_def(mvm, ctx);
 
 	if (WARN_ONCE((phy_ctxt->ref > 1) &&
 		      (changed & ~(IEEE80211_CHANCTX_CHANGE_WIDTH |
