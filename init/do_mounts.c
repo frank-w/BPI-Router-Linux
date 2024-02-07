@@ -19,6 +19,7 @@
 #include <linux/ramfs.h>
 #include <linux/shmem_fs.h>
 #include <linux/ktime.h>
+#include <linux/task_work.h>
 
 #include <linux/nfs_fs.h>
 #include <linux/nfs_fs_sb.h>
@@ -208,6 +209,10 @@ retry:
 				goto out;
 			case -EACCES:
 			case -EINVAL:
+#ifdef CONFIG_BLOCK
+				flush_delayed_fput();
+				task_work_run();
+#endif
 				continue;
 		}
 	        /*

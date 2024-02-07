@@ -281,13 +281,17 @@ struct file *alloc_empty_backing_file(int flags, const struct cred *cred)
  * @path: the (dentry, vfsmount) pair for the new file
  * @flags: O_... flags with which the new file will be opened
  * @fop: the 'struct file_operations' for the new file
+ * @noaccount: whether this is an internal open that shouldn't be counted
  */
 static struct file *alloc_file(const struct path *path, int flags,
-		const struct file_operations *fop)
+		const struct file_operations *fop, bool noaccount)
 {
 	struct file *file;
 
-	file = alloc_empty_file(flags, current_cred());
+	if (noaccount)
+		file = alloc_empty_file_noaccount(flags, current_cred());
+	else
+		file = alloc_empty_file(flags, current_cred());
 	if (IS_ERR(file))
 		return file;
 
@@ -312,9 +316,11 @@ static struct file *alloc_file(const struct path *path, int flags,
 	return file;
 }
 
-struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
-				const char *name, int flags,
-				const struct file_operations *fops)
+static struct file *__alloc_file_pseudo(struct inode *inode,
+					struct vfsmount *mnt, const char *name,
+					int flags,
+					const struct file_operations *fops,
+					bool noaccount)
 {
 	struct qstr this = QSTR_INIT(name, strlen(name));
 	struct path path;
@@ -325,19 +331,35 @@ struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
 		return ERR_PTR(-ENOMEM);
 	path.mnt = mntget(mnt);
 	d_instantiate(path.dentry, inode);
-	file = alloc_file(&path, flags, fops);
+	file = alloc_file(&path, flags, fops, noaccount);
 	if (IS_ERR(file)) {
 		ihold(inode);
 		path_put(&path);
 	}
 	return file;
 }
+
+struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
+				const char *name, int flags,
+				const struct file_operations *fops)
+{
+	return __alloc_file_pseudo(inode, mnt, name, flags, fops, false);
+}
 EXPORT_SYMBOL(alloc_file_pseudo);
+
+struct file *alloc_file_pseudo_noaccount(struct inode *inode,
+					 struct vfsmount *mnt, const char *name,
+					 int flags,
+					 const struct file_operations *fops)
+{
+	return __alloc_file_pseudo(inode, mnt, name, flags, fops, true);
+}
+EXPORT_SYMBOL_GPL(alloc_file_pseudo_noaccount);
 
 struct file *alloc_file_clone(struct file *base, int flags,
 				const struct file_operations *fops)
 {
-	struct file *f = alloc_file(&base->f_path, flags, fops);
+	struct file *f = alloc_file(&base->f_path, flags, fops, false);
 	if (!IS_ERR(f)) {
 		path_get(&f->f_path);
 		f->f_mapping = base->f_mapping;
