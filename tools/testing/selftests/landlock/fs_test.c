@@ -3922,6 +3922,67 @@ TEST_F_FORK(layout1, o_path_ftruncate_and_ioctl)
 	ASSERT_EQ(0, close(fd));
 }
 
+static int test_fionread_ioctl(int fd)
+{
+	size_t sz = 0;
+
+	if (ioctl(fd, FIONREAD, &sz) < 0 && errno == EACCES)
+		return errno;
+	return 0;
+}
+
+/*
+ * For named pipes, the same rules should apply as for anonymous pipes.
+ *
+ * That means, if the pipe is opened, we should permit the IOCTLs which are
+ * implemented by pipefifo_fops (fs/pipe.c), even if they were otherwise
+ * forbidden by Landlock policy.
+ */
+TEST_F_FORK(layout1, named_pipe_ioctl)
+{
+	pid_t child_pid;
+	int fd, ruleset_fd;
+	const char *const path = file1_s1d1;
+	const struct landlock_ruleset_attr attr = {
+		.handled_access_fs = LANDLOCK_ACCESS_FS_IOCTL,
+	};
+
+	ASSERT_EQ(0, unlink(path));
+	ASSERT_EQ(0, mkfifo(path, 0600));
+
+	/* Enables Landlock. */
+	ruleset_fd = landlock_create_ruleset(&attr, sizeof(attr), 0);
+	ASSERT_LE(0, ruleset_fd);
+	enforce_ruleset(_metadata, ruleset_fd);
+	ASSERT_EQ(0, close(ruleset_fd));
+
+	/* The child process opens the pipe for writing. */
+	child_pid = fork();
+	ASSERT_NE(-1, child_pid);
+	if (child_pid == 0) {
+		fd = open(path, O_WRONLY);
+		close(fd);
+		exit(0);
+	}
+
+	fd = open(path, O_RDONLY);
+	ASSERT_LE(0, fd);
+
+	/* FIONREAD is implemented by pipefifo_fops. */
+	EXPECT_EQ(0, test_fionread_ioctl(fd));
+
+	ASSERT_EQ(0, close(fd));
+	ASSERT_EQ(0, unlink(path));
+
+	/* Under the same conditions, FIONREAD on a regular file fails. */
+	fd = open(file2_s1d1, O_RDONLY);
+	ASSERT_LE(0, fd);
+	EXPECT_EQ(EACCES, test_fionread_ioctl(fd));
+	ASSERT_EQ(0, close(fd));
+
+	ASSERT_EQ(child_pid, waitpid(child_pid, NULL, 0));
+}
+
 /* clang-format off */
 FIXTURE(ioctl) {};
 /* clang-format on */
@@ -4130,15 +4191,6 @@ static int test_fibmap_ioctl(int fd)
 	 * EPERM when missing CAP_SYS_RAWIO.)
 	 */
 	if (ioctl(fd, FIBMAP, &blk) < 0 && errno == EACCES)
-		return errno;
-	return 0;
-}
-
-static int test_fionread_ioctl(int fd)
-{
-	size_t sz = 0;
-
-	if (ioctl(fd, FIONREAD, &sz) < 0 && errno == EACCES)
 		return errno;
 	return 0;
 }
