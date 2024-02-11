@@ -40,15 +40,14 @@ jobs:
       - name: Print env
         run: |
           echo $BRANCH $KERNELVER $DT
-          
+
       - name: Setup cache
         id: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${BRANCH}
+          path: ~/.cache/ccache/
+          key: ${{ runner.os }}-ccache
           restore-keys: |
-            ${{ runner.os }}-ccache-${BRANCH}
             ${{ runner.os }}-ccache
             ${{ runner.os }}-ccache-
 
