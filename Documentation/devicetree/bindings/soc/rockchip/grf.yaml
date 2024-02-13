@@ -29,6 +29,8 @@ properties:
               - rockchip,rk3588-sys-grf
               - rockchip,rk3588-pcie3-phy-grf
               - rockchip,rk3588-pcie3-pipe-grf
+              - rockchip,rk3588-usb-grf
+              - rockchip,rk3588-usbdpphy-grf
               - rockchip,rk3588-vo-grf
               - rockchip,rk3588-vop-grf
               - rockchip,rv1108-usbgrf
@@ -65,6 +67,9 @@ properties:
           - const: simple-mfd
 
   reg:
+    maxItems: 1
+
+  clocks:
     maxItems: 1
 
   "#address-cells":
@@ -248,6 +253,22 @@ allOf:
           $ref: /schemas/power/rockchip-io-domain.yaml#
 
           unevaluatedProperties: false
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - rockchip,rk3588-vo-grf
+
+    then:
+      required:
+        - clocks
+
+    else:
+      properties:
+        clocks: false
+
 
 examples:
   - |
