@@ -350,27 +350,19 @@ function upload {
 		b=""
 	fi
 
-	if [[ "$board" == "bpi-r2pro" ]];then
-                imagename="none-linux-bpi-r2pro"
-                read -e -i $imagename -p "Kernel-filename: " input
-                imagename="${input:-$imagename}"
-	else
-		imagename="uImage_${kernver}${gitbranch}${b}"
-		read -e -i $imagename -p "Kernel-filename: " input
-		imagename="${input:-$imagename}"
-	fi
+	imagename="${kernver}${gitbranch}${b}"
+	read -e -i $imagename -p "Kernel-filename: " input
+	imagename="${input:-$imagename}"
 
 	echo "Name: $imagename"
 
-	if [[ "$board" == "bpi-r2pro" ]];then
-		dtbname="none-oftree-bpi-r2pro"
-		read -e -i $dtbname -p "dtb-filename: " input
-		dtbname="${input:-$dtbname}"
-	elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
+	if [[ "$board" == "bpi-r2" ]];then
+		imagename="uImage_$imagename"
+	else
 		read -e -i y -p "upload fit? " fitupload
 		if [[ "$fitupload" == "y" ]];
 		then
-			imagename="${imagename//uImage_}.itb"
+			imagename="${imagename}.itb"
 			echo "uploading fit as $imagename"
 		else
 			dtbname="${kernver}${b}${gitbranch}.dtb"
@@ -383,10 +375,9 @@ function upload {
 	echo "DTB Name: $dtbname"
 	echo "uploading to ${uploadserver}:${uploaddir}..."
 
-	if [[ "$board" == "bpi-r2pro" ]];then
-		scp ${bindir}arch/arm64/boot/Image.gz ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
-		scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
-	elif [[ "$board" == "bpi-r64" || "$board" == "bpi-r3" || "$board" == "bpi-r4" ]];then
+	if [[ "$board" == "bpi-r2" ]];then
+		scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
+	else
 		if [[ "$fitupload" == "y" ]];
 		then
 			scp ${board}.itb ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
@@ -394,9 +385,6 @@ function upload {
 			scp uImage_nodt ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 			scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
 		fi
-
-	else
-		scp uImage ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 	fi
 }
 
