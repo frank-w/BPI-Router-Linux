@@ -157,6 +157,16 @@ struct mt7996_mcu_eeprom {
 	__le16 buf_len;
 } __packed;
 
+struct mt7996_mcu_eeprom_info {
+	u8 _rsv[4];
+
+	__le16 tag;
+	__le16 len;
+	__le32 addr;
+	__le32 valid;
+	u8 data[MT7996_EEPROM_BLOCK_SIZE];
+} __packed;
+
 struct mt7996_mcu_phy_rx_info {
 	u8 category;
 	u8 rate;
