@@ -3625,7 +3625,7 @@ static unsigned long __init hugetlb_pages_alloc_boot(struct hstate *h)
 static void __init hugetlb_hstate_alloc_pages(struct hstate *h)
 {
 	unsigned long allocated;
-	static bool initialied __initdata;
+	static bool initialized __initdata;
 
 	/* skip gigantic hugepages allocation if hugetlb_cma enabled */
 	if (hstate_is_gigantic(h) && hugetlb_cma_size) {
@@ -3634,12 +3634,12 @@ static void __init hugetlb_hstate_alloc_pages(struct hstate *h)
 	}
 
 	/* hugetlb_hstate_alloc_pages will be called many times, initialize huge_boot_pages once */
-	if (!initialied) {
+	if (!initialized) {
 		int i = 0;
 
 		for (i = 0; i < MAX_NUMNODES; i++)
 			INIT_LIST_HEAD(&huge_boot_pages[i]);
-		initialied = true;
+		initialized = true;
 	}
 
 	/* do node specific alloc */
