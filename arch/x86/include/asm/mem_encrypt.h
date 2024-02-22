@@ -16,6 +16,7 @@
 #include <linux/cc_platform.h>
 
 #include <asm/asm.h>
+
 struct boot_params;
 
 #ifdef CONFIG_X86_MEM_ENCRYPT
