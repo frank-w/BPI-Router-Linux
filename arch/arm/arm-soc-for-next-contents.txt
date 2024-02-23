@@ -1,6 +1,8 @@
 soc/arm
 
 soc/dt
+	patch
+		dtc: Enable dtc interrupt_provider check
 
 soc/drivers
 	mediatek/soc-drivers
@@ -35,5 +37,14 @@ arm/fixes
 		arm64: dts: Fix dtc interrupt_provider warnings
 		arm: dts: Fix dtc interrupt_map warnings
 		arm64: dts: qcom: Fix interrupt-map cell sizes
-		dtc: Enable dtc interrupt_provider check
+	<no branch> (9bd405c48b0ac4de087c0c4440fd79597201b8a7)
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-cache-fixes-for-v6.8-rc6
+	<no branch> (0abcac4fe3ca3aeaef40ad53c0b295b2d5f8cbf1)
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-firmware-fixes-for-v6.8-rc6
+	<no branch> (6dd9a236042e305d7b69ee92db7347bf5943e7d3)
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-soc-drivers-fixes-for-v6.8-rc6
+	<no branch> (ce6b6d1513965f500a05f3facf223fa01fd74920)
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-fixes-for-v6.8-rc6
+	<no branch> (8c987693dc2d292d777f1be63cb35233049ae25e)
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-fixes-for-v6.8-tag1
 
