@@ -21,7 +21,6 @@
 #include <linux/llist.h>
 #include <linux/cpu.h>
 #include <linux/cache.h>
-#include <linux/sched/sysctl.h>
 #include <linux/sched/topology.h>
 #include <linux/sched/signal.h>
 #include <linux/delay.h>
@@ -1167,10 +1166,11 @@ static inline bool blk_mq_complete_need_ipi(struct request *rq)
 	if (force_irqthreads())
 		return false;
 
-	/* same CPU or cache domain?  Complete locally */
+	/* same CPU or cache domain and capacity?  Complete locally */
 	if (cpu == rq->mq_ctx->cpu ||
 	    (!test_bit(QUEUE_FLAG_SAME_FORCE, &rq->q->queue_flags) &&
-	     cpus_share_cache(cpu, rq->mq_ctx->cpu)))
+	     cpus_share_cache(cpu, rq->mq_ctx->cpu) &&
+	     cpus_equal_capacity(cpu, rq->mq_ctx->cpu)))
 		return false;
 
 	/* don't try to IPI to an offline CPU */
@@ -1409,22 +1409,10 @@ blk_status_t blk_execute_rq(struct request *rq, bool at_head)
 	blk_mq_insert_request(rq, at_head ? BLK_MQ_INSERT_AT_HEAD : 0);
 	blk_mq_run_hw_queue(hctx, false);
 
-	if (blk_rq_is_poll(rq)) {
+	if (blk_rq_is_poll(rq))
 		blk_rq_poll_completion(rq, &wait.done);
-	} else {
-		/*
-		 * Prevent hang_check timer from firing at us during very long
-		 * I/O
-		 */
-		unsigned long hang_check = sysctl_hung_task_timeout_secs;
-
-		if (hang_check)
-			while (!wait_for_completion_io_timeout(&wait.done,
-					hang_check * (HZ/2)))
-				;
-		else
-			wait_for_completion_io(&wait.done);
-	}
+	else
+		blk_wait_io(&wait.done);
 
 	return wait.ret;
 }
