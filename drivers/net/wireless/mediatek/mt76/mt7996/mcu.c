@@ -476,6 +476,7 @@ mt7996_mcu_ie_countdown(struct mt7996_dev *dev, struct sk_buff *skb)
 static int
 mt7996_mcu_update_tx_gi(struct rate_info *rate, struct all_sta_trx_rate *mcu_rate)
 {
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	switch (mcu_rate->tx_mode) {
 	case MT_PHY_TYPE_CCK:
 	case MT_PHY_TYPE_OFDM:
@@ -504,9 +505,11 @@ mt7996_mcu_update_tx_gi(struct rate_info *rate, struct all_sta_trx_rate *mcu_rat
 		rate->eht_gi = mcu_rate->tx_gi;
 		break;
 	default:
+		printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
@@ -2496,6 +2499,7 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw,
 	struct bss_bcn_content_tlv *bcn;
 	int len;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (vif->bss_conf.nontransmitted)
 		return 0;
 
@@ -2532,6 +2536,7 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw,
 	mt7996_mcu_beacon_cntdwn(vif, rskb, skb, &offs);
 out:
 	dev_kfree_skb(skb);
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return mt76_mcu_skb_send_msg(&phy->dev->mt76, rskb,
 				     MCU_WMWA_UNI_CMD(BSS_INFO_UPDATE), true);
 }
@@ -2574,6 +2579,7 @@ int mt7996_mcu_beacon_inband_discov(struct mt7996_dev *dev,
 
 	if (!skb) {
 		dev_kfree_skb(rskb);
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 
@@ -2581,6 +2587,7 @@ int mt7996_mcu_beacon_inband_discov(struct mt7996_dev *dev,
 		dev_err(dev->mt76.dev, "inband discovery size limit exceed\n");
 		dev_kfree_skb(rskb);
 		dev_kfree_skb(skb);
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 
@@ -2669,6 +2676,7 @@ static int mt7996_load_patch(struct mt7996_dev *dev)
 
 	if (!fw || !fw->data || fw->size < sizeof(*hdr)) {
 		dev_err(dev->mt76.dev, "Invalid firmware\n");
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -2687,6 +2695,7 @@ static int mt7996_load_patch(struct mt7996_dev *dev)
 						  i * sizeof(*sec));
 		if ((be32_to_cpu(sec->type) & PATCH_SEC_TYPE_MASK) !=
 		    PATCH_SEC_TYPE_INFO) {
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 			ret = -EINVAL;
 			goto out;
 		}
@@ -2729,6 +2738,7 @@ out:
 	}
 	release_firmware(fw);
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return ret;
 }
 
@@ -2759,6 +2769,7 @@ mt7996_mcu_send_ram_firmware(struct mt7996_dev *dev,
 
 		err = mt76_connac_mcu_init_download(&dev->mt76, addr, len,
 						    mode);
+	printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 		if (err) {
 			dev_err(dev->mt76.dev, "Download request failed\n");
 			return err;
@@ -2766,6 +2777,7 @@ mt7996_mcu_send_ram_firmware(struct mt7996_dev *dev,
 
 		err = __mt76_mcu_send_firmware(&dev->mt76, MCU_CMD(FW_SCATTER),
 					       data + offset, len, 4096);
+	printk(KERN_ALERT "DEBUG: Passed %s %d err:%d\n",__FUNCTION__,__LINE__,err);
 		if (err) {
 			dev_err(dev->mt76.dev, "Failed to send firmware.\n");
 			return err;
@@ -2781,6 +2793,7 @@ mt7996_mcu_send_ram_firmware(struct mt7996_dev *dev,
 		option |= FW_START_WORKING_PDA_CR4;
 	else if (type == MT7996_RAM_TYPE_DSP)
 		option |= FW_START_WORKING_PDA_DSP;
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	return mt76_connac_mcu_start_firmware(&dev->mt76, override, option);
 }
@@ -2798,6 +2811,7 @@ static int __mt7996_load_ram(struct mt7996_dev *dev, const char *fw_type,
 
 	if (!fw || !fw->data || fw->size < sizeof(*hdr)) {
 		dev_err(dev->mt76.dev, "Invalid firmware\n");
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -2819,6 +2833,7 @@ static int __mt7996_load_ram(struct mt7996_dev *dev, const char *fw_type,
 out:
 	release_firmware(fw);
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return ret;
 }
 
@@ -2891,14 +2906,17 @@ static int mt7996_load_firmware(struct mt7996_dev *dev)
 	}
 
 	ret = mt7996_load_patch(dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_load_ram(dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_firmware_state(dev, true);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
@@ -2906,6 +2924,7 @@ static int mt7996_load_firmware(struct mt7996_dev *dev)
 
 	dev_dbg(dev->mt76.dev, "Firmware init done\n");
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d end of func\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
@@ -3018,6 +3037,7 @@ int mt7996_mcu_init_firmware(struct mt7996_dev *dev)
 	mt76_wr(dev, MT_SWDEF_MODE, MT_SWDEF_NORMAL_MODE);
 
 	ret = mt7996_driver_own(dev, 0);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 	/* set driver own for band1 when two hif exist */
@@ -3028,26 +3048,32 @@ int mt7996_mcu_init_firmware(struct mt7996_dev *dev)
 	}
 
 	ret = mt7996_load_firmware(dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	set_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state);
 	ret = mt7996_mcu_fw_log_2_host(dev, MCU_FW_LOG_WM, 0);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_mcu_fw_log_2_host(dev, MCU_FW_LOG_WA, 0);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_mcu_set_mwds(dev, 1);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_mcu_init_rx_airtime(dev);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d end\n",__FUNCTION__,__LINE__);
 	return mt7996_mcu_wa_cmd(dev, MCU_WA_PARAM_CMD(SET),
 				 MCU_WA_PARAM_RED, 0, 0);
 }
@@ -3313,6 +3339,7 @@ mt7996_mcu_background_chain_ctrl(struct mt7996_phy *phy,
 
 	if (!cfg80211_chandef_valid(&mphy->chandef))
 		return -EINVAL;
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	switch (cmd) {
 	case CH_SWITCH_BACKGROUND_SCAN_START: {
@@ -3342,6 +3369,7 @@ mt7996_mcu_background_chain_ctrl(struct mt7996_phy *phy,
 		req.rx_stream = mphy->antenna_mask;
 		break;
 	default:
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 	req.band = chandef ? chandef->chan->band == NL80211_BAND_5GHZ : 1;
@@ -3534,8 +3562,10 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *read_buf)
 	ret = mt76_mcu_send_and_get_msg(&dev->mt76,
 					MCU_WM_UNI_CMD_QUERY(EFUSE_CTRL),
 					&req, sizeof(req), true, &skb);
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (ret)
 		return ret;
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	valid = le32_to_cpu(*(__le32 *)(skb->data + 16));
 	if (valid) {
@@ -3546,6 +3576,7 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *read_buf)
 		skb_pull(skb, 48);
 		memcpy(buf, skb->data, MT7996_EEPROM_BLOCK_SIZE);
 	} else {
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		ret = -EINVAL;
 	}
 
@@ -3844,6 +3875,7 @@ int mt7996_mcu_set_ser(struct mt7996_dev *dev, u8 action, u8 val, u8 band)
 		req.trigger.band = band;
 		break;
 	default:
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 
@@ -3896,6 +3928,7 @@ int mt7996_mcu_set_txbf(struct mt7996_dev *dev, u8 action)
 		break;
 	}
 	default:
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 
@@ -4403,6 +4436,8 @@ int mt7996_mcu_set_rro(struct mt7996_dev *dev, u16 tag, u16 val)
 		req.timeout.flush_all = cpu_to_le16(2 * val);
 		break;
 	default:
+		printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 		return -EINVAL;
 	}
 

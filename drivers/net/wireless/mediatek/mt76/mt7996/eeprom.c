@@ -15,6 +15,7 @@ static int mt7996_check_eeprom(struct mt7996_dev *dev)
 	u8 i, fem[__MT_MAX_BAND], fem_type;
 	u16 val = get_unaligned_le16(eeprom);
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d val:%x\n",__FUNCTION__,__LINE__,val);
 	for (i = 0; i < __MT_MAX_BAND; i++)
 		fem[i] = eeprom[MT_EE_WIFI_CONF + 6 + i] & MT_EE_WIFI_PA_LNA_CONFIG;
 
@@ -110,8 +111,11 @@ static int mt7996_eeprom_load(struct mt7996_dev *dev)
 		u32 eeprom_blk_size = MT7996_EEPROM_BLOCK_SIZE;
 
 		ret = mt7996_mcu_get_eeprom_free_block(dev, &free_block_num);
+		printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
+
 		if (ret < 0)
 			return ret;
+		printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 		/* efuse info isn't enough */
 		if (free_block_num >= 59)
@@ -182,10 +186,12 @@ static int mt7996_eeprom_parse_band_config(struct mt7996_phy *phy)
 		phy->mt76->cap.has_6ghz = true;
 		break;
 	default:
+		printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 		ret = -EINVAL;
 		break;
 	}
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return ret;
 }
 
@@ -197,6 +203,7 @@ int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy)
 	int max_path = 5, max_nss = 4;
 	int ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	switch (band_idx) {
 	case MT_BAND1:
 		path = FIELD_GET(MT_EE_WIFI_CONF2_TX_PATH_BAND1,
@@ -242,10 +249,12 @@ int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy)
 		dev->chainshift[band_idx + 1] = dev->chainshift[band_idx] +
 						hweight16(mphy->chainmask);
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	ret = mt7996_eeprom_parse_efuse_hw_cap(dev);
 	if (ret)
 		return ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__); //till here ok
 	return mt7996_eeprom_parse_band_config(phy);
 }
 
@@ -352,6 +361,8 @@ static int mt7996_apply_cal_free_data(struct mt7996_dev *dev)
 		eep_offs[1] = eep_offs_list[adie_id];
 		break;
 	default:
+		printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 		return -EINVAL;
 	}
 
@@ -398,6 +409,7 @@ int mt7996_eeprom_init(struct mt7996_dev *dev)
 	if (ret)
 		return ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	ret = mt7996_eeprom_load(dev);
 	if (ret < 0) {
 		if (ret != -EINVAL)
@@ -413,10 +425,13 @@ int mt7996_eeprom_init(struct mt7996_dev *dev)
 	if (ret)
 		return ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	ret = mt7996_eeprom_parse_hw_cap(dev, &dev->phy);
+	printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret < 0)
 		return ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	memcpy(dev->mphy.macaddr, dev->mt76.eeprom.data + MT_EE_MAC_ADDR, ETH_ALEN);
 	mt76_eeprom_override(&dev->mphy);
 
