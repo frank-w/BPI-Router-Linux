@@ -700,6 +700,11 @@ properties:
               - powkiddy,x55
           - const: rockchip,rk3566
 
+      - description: QNAP TS-433-4G 4-Bay NAS
+        items:
+          - const: qnap,ts433
+          - const: rockchip,rk3568
+
       - description: Radxa Compute Module 3(CM3)
         items:
           - enum:
@@ -904,6 +909,12 @@ properties:
       - description: Theobroma Systems RK3588-SBC Jaguar
         items:
           - const: tsd,rk3588-jaguar
+          - const: rockchip,rk3588
+
+      - description: Theobroma Systems RK3588-Q7 with Haikou baseboard
+        items:
+          - const: tsd,rk3588-tiger-haikou
+          - const: tsd,rk3588-tiger
           - const: rockchip,rk3588
 
       - description: Tronsmart Orion R68 Meta
