@@ -125,7 +125,7 @@ again:
 	foliop = page_folio(&precise);
 	idx = folio_page_idx(foliop, page);
 	if (idx != 0) {
-		if (idx < (1UL << PUD_ORDER)) {
+		if (idx < MAX_FOLIO_NR_PAGES) {
 			memcpy(&folio, foliop, 2 * sizeof(struct page));
 			nr_pages = folio_nr_pages(&folio);
 		}
