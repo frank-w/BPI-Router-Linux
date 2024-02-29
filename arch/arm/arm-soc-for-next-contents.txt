@@ -3,6 +3,36 @@ soc/arm
 soc/dt
 	patch
 		dtc: Enable dtc interrupt_provider check
+	renesas/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v6.9-tag1
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dts-for-v6.9-tag1
+	samsung/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.9
+	samsung/dt32
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt-6.9
+	dt/cleanup
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt-cleanup-6.9
+	mediatek/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/mediatek/linux tags/mtk-dts64-for-v6.9
+	gemini/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/gemini-dts-v6.9
+	versatile/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/versatile-dts-v6.9
+	rockchip/dts64
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-dts64-1
+	rockchips/dts32
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-dts32-1
+	renesas/dt-bindings-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v6.9-tag2
+	renesas/dt-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dts-for-v6.9-tag2
+	tegra/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.9-dt-bindings
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.9-arm-dt
+	tegra/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.9-arm64-dt
 
 soc/drivers
 	mediatek/soc-drivers
@@ -25,26 +55,4 @@ soc/defconfig
 soc/late
 
 arm/fixes
-	patch
-		ARM: ep93xx: Add terminator to gpiod_lookup_table
-	<no branch> (7bca405c986075c99b9f729d3587b5c45db39d01)
-		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-6.8
-	<no branch> (c22d03a95b0d815cd186302fdd93f74d99f1c914)
-		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.8-rockchip-dtsfixes1
-	patch
-		arm64: dts: freescale: Disable interrupt_map check
-		arm: dts: Fix dtc interrupt_provider warnings
-		arm64: dts: Fix dtc interrupt_provider warnings
-		arm: dts: Fix dtc interrupt_map warnings
-		arm64: dts: qcom: Fix interrupt-map cell sizes
-	<no branch> (9bd405c48b0ac4de087c0c4440fd79597201b8a7)
-		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-cache-fixes-for-v6.8-rc6
-	<no branch> (0abcac4fe3ca3aeaef40ad53c0b295b2d5f8cbf1)
-		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-firmware-fixes-for-v6.8-rc6
-	<no branch> (6dd9a236042e305d7b69ee92db7347bf5943e7d3)
-		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-soc-drivers-fixes-for-v6.8-rc6
-	<no branch> (ce6b6d1513965f500a05f3facf223fa01fd74920)
-		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-dt-fixes-for-v6.8-rc6
-	<no branch> (8c987693dc2d292d777f1be63cb35233049ae25e)
-		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-fixes-for-v6.8-tag1
 
