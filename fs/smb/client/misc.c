@@ -853,6 +853,28 @@ cifs_close_deferred_file_under_dentry(struct cifs_tcon *tcon, const char *path)
 	free_dentry_path(page);
 }
 
+/*
+ * If a dentry has been deleted, all corresponding open handles should know that
+ * so that we do not defer close them.
+ */
+void cifs_mark_open_handles_for_deleted_file(struct cifs_tcon *tcon,
+					     const char *path)
+{
+	struct cifsFileInfo *cfile;
+	void *page;
+	const char *full_path;
+
+	page = alloc_dentry_path();
+	spin_lock(&tcon->open_file_lock);
+	list_for_each_entry(cfile, &tcon->openFileList, tlist) {
+		full_path = build_path_from_dentry(cfile->dentry, page);
+		if (strcmp(full_path, path) == 0)
+			cfile->status_file_deleted = true;
+	}
+	spin_unlock(&tcon->open_file_lock);
+	free_dentry_path(page);
+}
+
 /* parses DFS referral V3 structure
  * caller is responsible for freeing target_nodes
  * returns:
