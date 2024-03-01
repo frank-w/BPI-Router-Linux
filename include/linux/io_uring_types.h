@@ -205,7 +205,9 @@ struct io_submit_state {
 
 	bool			plug_started;
 	bool			need_plug;
+	bool			flush_cqes;
 	unsigned short		submit_nr;
+
 	unsigned int		cqes_count;
 	struct blk_plug		plug;
 };
@@ -341,8 +343,6 @@ struct io_ring_ctx {
 		struct list_head	ltimeout_list;
 		unsigned		cq_last_tm_flush;
 	} ____cacheline_aligned_in_smp;
-
-	struct io_uring_cqe	completion_cqes[16];
 
 	spinlock_t		completion_lock;
 
@@ -480,6 +480,7 @@ enum {
 	REQ_F_POLL_NO_LAZY_BIT,
 	REQ_F_CANCEL_SEQ_BIT,
 	REQ_F_CAN_POLL_BIT,
+	REQ_F_BL_EMPTY_BIT,
 
 	/* not a real bit, just to check we're not overflowing the space */
 	__REQ_F_LAST_BIT,
@@ -556,6 +557,8 @@ enum {
 	REQ_F_CANCEL_SEQ	= IO_REQ_FLAG(REQ_F_CANCEL_SEQ_BIT),
 	/* file is pollable */
 	REQ_F_CAN_POLL		= IO_REQ_FLAG(REQ_F_CAN_POLL_BIT),
+	/* buffer list was empty after selection of buffer */
+	REQ_F_BL_EMPTY		= IO_REQ_FLAG(REQ_F_BL_EMPTY_BIT),
 };
 
 typedef void (*io_req_tw_func_t)(struct io_kiocb *req, struct io_tw_state *ts);
