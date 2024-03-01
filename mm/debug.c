@@ -55,7 +55,6 @@ static void __dump_folio(struct folio *folio, struct page *page,
 		unsigned long pfn, unsigned long idx)
 {
 	struct address_space *mapping = folio_mapping(folio);
-	bool page_cma;
 	int mapcount = 0;
 	char *type = "";
 
@@ -98,9 +97,8 @@ static void __dump_folio(struct folio *folio, struct page *page,
 	 * state for debugging, it should be fine to accept a bit of
 	 * inaccuracy here due to racing.
 	 */
-	page_cma = is_migrate_cma_page(page);
 	pr_warn("%sflags: %pGp%s\n", type, &folio->flags,
-		page_cma ? " CMA" : "");
+		is_migrate_cma_folio(folio, pfn) ? " CMA" : "");
 	pr_warn("page_type: %pGt\n", &folio->page.page_type);
 
 	print_hex_dump(KERN_WARNING, "raw: ", DUMP_PREFIX_NONE, 32,
