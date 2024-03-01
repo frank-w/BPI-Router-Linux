@@ -316,9 +316,12 @@ static void nbd_mark_nsock_dead(struct nbd_device *nbd, struct nbd_sock *nsock,
 	nsock->sent = 0;
 }
 
-static int nbd_set_size(struct nbd_device *nbd, loff_t bytesize,
+static int __nbd_set_size(struct nbd_device *nbd, loff_t bytesize,
 		loff_t blksize)
 {
+	struct queue_limits lim;
+	int error;
+
 	if (!blksize)
 		blksize = 1u << NBD_DEF_BLKSIZE_BITS;
 
@@ -334,16 +337,34 @@ static int nbd_set_size(struct nbd_device *nbd, loff_t bytesize,
 	if (!nbd->pid)
 		return 0;
 
+	lim = queue_limits_start_update(nbd->disk->queue);
 	if (nbd->config->flags & NBD_FLAG_SEND_TRIM)
-		blk_queue_max_discard_sectors(nbd->disk->queue, UINT_MAX);
-	blk_queue_logical_block_size(nbd->disk->queue, blksize);
-	blk_queue_physical_block_size(nbd->disk->queue, blksize);
+		lim.max_hw_discard_sectors = UINT_MAX;
+	else
+		lim.max_hw_discard_sectors = 0;
+	lim.logical_block_size = blksize;
+	lim.physical_block_size = blksize;
+	error = queue_limits_commit_update(nbd->disk->queue, &lim);
+	if (error)
+		return error;
 
 	if (max_part)
 		set_bit(GD_NEED_PART_SCAN, &nbd->disk->state);
 	if (!set_capacity_and_notify(nbd->disk, bytesize >> 9))
 		kobject_uevent(&nbd_to_dev(nbd)->kobj, KOBJ_CHANGE);
 	return 0;
+}
+
+static int nbd_set_size(struct nbd_device *nbd, loff_t bytesize,
+		loff_t blksize)
+{
+	int error;
+
+	blk_mq_freeze_queue(nbd->disk->queue);
+	error = __nbd_set_size(nbd, bytesize, blksize);
+	blk_mq_unfreeze_queue(nbd->disk->queue);
+
+	return error;
 }
 
 static void nbd_complete_rq(struct request *req)
@@ -1351,7 +1372,6 @@ static void nbd_config_put(struct nbd_device *nbd)
 		nbd->config = NULL;
 
 		nbd->tag_set.timeout = 0;
-		blk_queue_max_discard_sectors(nbd->disk->queue, 0);
 
 		mutex_unlock(&nbd->config_lock);
 		nbd_put(nbd);
