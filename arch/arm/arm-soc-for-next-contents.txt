@@ -89,6 +89,12 @@ soc/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-dts32-2
 	qcom/dt32
 		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm32-for-6.9
+	keystone/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-dt-for-v6.9
+	patch
+		ARM: dts: samsung: exynos4412: decrease memory to account for unusable region
+	vexpress/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/vexpress-update-6.9
 
 soc/drivers
 	mediatek/soc-drivers
@@ -117,6 +123,8 @@ soc/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/ti-sysc-signed
 	drivers/memory-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.9-2
+	patch
+		tee: make tee_bus_type const
 
 soc/defconfig
 	patch
@@ -125,8 +133,24 @@ soc/defconfig
 		arm64: config: disable new platforms in virt.config
 	renesas/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v6.9-tag1
+	patch
+		arm64: defconfig: drop ext2 filesystem and redundant ext3
+	qcom/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-6.9
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.9
+	patch
+		ARM: defconfig: enable STMicroelectronics accelerometer and gyro for Exynos
+	k3/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-config-for-v6.9
+	rockchip/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-config64-1
 
 soc/late
+	omap/clksel
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/dt-warnings-signed
+	drivers/reset
+		git://git.pengutronix.de/pza/linux tags/reset-for-v6.9
 
 arm/fixes
 	<no branch> (cbec657208bdd4bff4ff31cac5924aa18817027c)
