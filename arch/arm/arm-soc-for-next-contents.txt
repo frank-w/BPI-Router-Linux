@@ -1,4 +1,18 @@
 soc/arm
+	samsung/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-soc-6.9
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-6.9
+	omap/kerneldoc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/soc-signed
+	zynq/soc
+		https://github.com/Xilinx/linux-xlnx tags/zynq-soc-for-6.9
+	zynq/soc-arm64
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-soc-for-6.9
+	omap/omap1-soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/omap1-signed
+	omap/soc-omap2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/soc-part2-signed
 
 soc/dt
 	patch
@@ -33,6 +47,48 @@ soc/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.9-arm-dt
 	tegra/dt64
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.9-arm64-dt
+	allwinner/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-dt-for-6.9-1
+	qcom/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-6.9
+	socfpga/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/dinguyen/linux tags/socfpga_dts_updates_for_v6.9
+	imx/dt-bindings
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-bindings-6.9
+	imx/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt-6.9
+	imx/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-dt64-6.9
+	omap/dt-sgx
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/sgx-for-v6.9-signed
+	zynq/dt64
+		https://github.com/Xilinx/linux-xlnx tags/zynqmp-dt-for-6.9
+	at91/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/at91-dt-6.9
+	k3/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.9
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/dt-signed
+	amlogic/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm-dt-for-v6.9
+	amlogic/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm64-dt-for-v6.9
+	stm32/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-dt-for-v6.9-1
+	renesas/dt-3
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-dt-bindings-for-v6.9-tag3
+	mvebu/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt-6.9-1
+	mvebu/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-6.9-1
+	sophgo/dt
+		https://github.com/sophgo/linux tags/riscv-sophgo-dt-for-v6.9
+	rockchip/dt64-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-dts64-2
+	rockchip/dt32-2
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-dts32-2
+	qcom/dt32
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm32-for-6.9
 
 soc/drivers
 	mediatek/soc-drivers
@@ -43,6 +99,24 @@ soc/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-6.9
 	drivers/memory
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.9
+	drivers/ffa
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/ffa-update-6.9
+	firmware/scmi
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-6.9
+	tegra/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.9-soc
+	tegra/firmware
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.9-firmware
+	sunxi/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-drivers-for-6.9-1
+	qcom/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.9
+	samsung/drivers-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-drivers-6.9-2
+	omap/sysc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/ti-sysc-signed
+	drivers/memory-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.9-2
 
 soc/defconfig
 	patch
@@ -55,4 +129,14 @@ soc/defconfig
 soc/late
 
 arm/fixes
+	<no branch> (cbec657208bdd4bff4ff31cac5924aa18817027c)
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-fixes-for-6.8-1
+	<no branch> (cb0bbdc4cc327ee91ba21ff744adbe07885db2b8)
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-fixes-for-6.8
+	<no branch> (65e32301e1a0a436bf542674c23030d0dcc1afde)
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-fixes-6.8-2
+	<no branch> (ff6bd76f4d997642ef390bffe42e93d6f7be87d3)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.8-arm64-dt
+	<no branch> (95915ba4b987cf2b222b0f251280228a1ff977ac)
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-fix-for-v6.8
 
