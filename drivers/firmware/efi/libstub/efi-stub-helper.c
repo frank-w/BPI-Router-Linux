@@ -11,6 +11,7 @@
 
 #include <linux/efi.h>
 #include <linux/kernel.h>
+#include <linux/overflow.h>
 #include <asm/efi.h>
 #include <asm/setup.h>
 
@@ -193,7 +194,7 @@ void efi_apply_loadoptions_quirk(const void **load_options, u32 *load_options_si
 	*load_options_size = load_option_unpacked.optional_data_size;
 }
 
-enum efistub_event {
+enum efistub_event_type {
 	EFISTUB_EVT_INITRD,
 	EFISTUB_EVT_LOAD_OPTIONS,
 	EFISTUB_EVT_COUNT,
@@ -219,46 +220,51 @@ static const struct {
 	},
 };
 
+union efistub_event {
+	efi_tcg2_event_t	tcg2_data;
+};
+
+struct efistub_measured_event {
+	union efistub_event	event_data;
+	u32			tagged_event_id;
+	u32			tagged_event_data_size;
+	u8			tagged_event_data[];
+} __packed;
+
 static efi_status_t efi_measure_tagged_event(unsigned long load_addr,
 					     unsigned long load_size,
-					     enum efistub_event event)
+					     enum efistub_event_type event)
 {
+	struct efistub_measured_event *evt;
+	int size = struct_size(evt, tagged_event_data,
+			       events[event].event_data_len);
 	efi_guid_t tcg2_guid = EFI_TCG2_PROTOCOL_GUID;
 	efi_tcg2_protocol_t *tcg2 = NULL;
 	efi_status_t status;
 
 	efi_bs_call(locate_protocol, &tcg2_guid, NULL, (void **)&tcg2);
 	if (tcg2) {
-		struct efi_measured_event {
-			efi_tcg2_event_t	event_data;
-			efi_tcg2_tagged_event_t tagged_event;
-			u8			tagged_event_data[];
-		} *evt;
-		int size = sizeof(*evt) + events[event].event_data_len;
-
 		status = efi_bs_call(allocate_pool, EFI_LOADER_DATA, size,
 				     (void **)&evt);
 		if (status != EFI_SUCCESS)
 			goto fail;
 
-		evt->event_data = (struct efi_tcg2_event){
+		evt->event_data.tcg2_data = (struct efi_tcg2_event){
 			.event_size			= size,
-			.event_header.header_size	= sizeof(evt->event_data.event_header),
+			.event_header.header_size	= sizeof(evt->event_data.tcg2_data.event_header),
 			.event_header.header_version	= EFI_TCG2_EVENT_HEADER_VERSION,
 			.event_header.pcr_index		= events[event].pcr_index,
 			.event_header.event_type	= EV_EVENT_TAG,
 		};
 
-		evt->tagged_event = (struct efi_tcg2_tagged_event){
-			.tagged_event_id		= events[event].event_id,
-			.tagged_event_data_size		= events[event].event_data_len,
-		};
+		evt->tagged_event_id		= events[event].event_id;
+		evt->tagged_event_data_size	= events[event].event_data_len;
 
 		memcpy(evt->tagged_event_data, events[event].event_data,
 		       events[event].event_data_len);
 
 		status = efi_call_proto(tcg2, hash_log_extend_event, 0,
-					load_addr, load_size, &evt->event_data);
+					load_addr, load_size, &evt->event_data.tcg2_data);
 		efi_bs_call(free_pool, evt);
 
 		if (status != EFI_SUCCESS)

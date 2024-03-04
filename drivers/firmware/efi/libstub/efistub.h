@@ -843,14 +843,7 @@ struct efi_tcg2_event {
 	/* u8[] event follows here */
 } __packed;
 
-struct efi_tcg2_tagged_event {
-	u32 tagged_event_id;
-	u32 tagged_event_data_size;
-	/* u8  tagged event data follows here */
-} __packed;
-
 typedef struct efi_tcg2_event efi_tcg2_event_t;
-typedef struct efi_tcg2_tagged_event efi_tcg2_tagged_event_t;
 typedef union efi_tcg2_protocol efi_tcg2_protocol_t;
 
 union efi_tcg2_protocol {
