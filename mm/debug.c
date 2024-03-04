@@ -139,7 +139,7 @@ again:
 	if (idx > nr_pages) {
 		if (loops-- > 0)
 			goto again;
-		printk("page does not match folio\n");
+		pr_warn("page does not match folio\n");
 		precise.compound_head &= ~1UL;
 		foliop = (struct folio *)&precise;
 		idx = 0;
