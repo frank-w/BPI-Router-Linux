@@ -121,23 +121,31 @@ static void __dump_page(const struct page *page)
 again:
 	memcpy(&precise, page, sizeof(*page));
 	foliop = page_folio(&precise);
-	idx = folio_page_idx(foliop, page);
-	if (idx != 0) {
-		if (idx < MAX_FOLIO_NR_PAGES) {
-			memcpy(&folio, foliop, 2 * sizeof(struct page));
-			nr_pages = folio_nr_pages(&folio);
-		}
-
-		if (idx > nr_pages) {
-			if (loops-- > 0)
-				goto again;
-			printk("page does not match folio\n");
-			precise.compound_head &= ~1UL;
-			foliop = (struct folio *)&precise;
-			idx = 0;
-		}
+	if (foliop == (struct folio *)&precise) {
+		idx = 0;
+		if (!folio_test_large(foliop))
+			goto dump;
+		foliop = (struct folio *)page;
+	} else {
+		idx = folio_page_idx(foliop, page);
 	}
 
+	if (idx < MAX_FOLIO_NR_PAGES) {
+		memcpy(&folio, foliop, 2 * sizeof(struct page));
+		nr_pages = folio_nr_pages(&folio);
+		foliop = &folio;
+	}
+
+	if (idx > nr_pages) {
+		if (loops-- > 0)
+			goto again;
+		printk("page does not match folio\n");
+		precise.compound_head &= ~1UL;
+		foliop = (struct folio *)&precise;
+		idx = 0;
+	}
+
+dump:
 	__dump_folio(foliop, &precise, pfn, idx);
 }
 
