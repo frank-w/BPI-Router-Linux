@@ -912,7 +912,7 @@ static __cpuidle void mwait_idle(void)
 void __init select_idle_routine(void)
 {
 	if (boot_option_idle_override == IDLE_POLL) {
-		if (IS_ENABLED(CONFIG_SMP) && smp_num_siblings > 1)
+		if (IS_ENABLED(CONFIG_SMP) && __max_threads_per_core > 1)
 			pr_warn_once("WARNING: polling idle and HT enabled, performance may degrade\n");
 		return;
 	}
