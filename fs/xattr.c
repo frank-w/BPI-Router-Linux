@@ -395,6 +395,9 @@ vfs_getxattr_alloc(struct mnt_idmap *idmap, struct dentry *dentry,
 	if (error < 0)
 		return error;
 
+	if (error > XATTR_SIZE_MAX)
+		return -E2BIG;
+
 	if (!value || (error > xattr_size)) {
 		value = krealloc(*xattr_value, error + 1, flags);
 		if (!value)
