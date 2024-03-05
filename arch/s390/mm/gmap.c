@@ -206,10 +206,10 @@ static void gmap_free(struct gmap *gmap)
 
 	/* Free additional data for a shadow gmap */
 	if (gmap_is_shadow(gmap)) {
-		struct ptdesc *ptdesc;
+		struct ptdesc *ptdesc, *n;
 
 		/* Free all page tables. */
-		list_for_each_entry_safe(ptdesc, next, &gmap->pt_list, pt_list)
+		list_for_each_entry_safe(ptdesc, n, &gmap->pt_list, pt_list)
 			page_table_free_pgste(ptdesc);
 		gmap_rmap_radix_tree_free(&gmap->host_to_rmap);
 		/* Release reference to the parent */
