@@ -10,6 +10,8 @@
 #include <uapi/linux/dpll.h>
 #include <linux/device.h>
 #include <linux/netlink.h>
+#include <linux/netdevice.h>
+#include <linux/rtnetlink.h>
 
 struct dpll_device;
 struct dpll_pin;
@@ -17,9 +19,6 @@ struct dpll_pin;
 struct dpll_device_ops {
 	int (*mode_get)(const struct dpll_device *dpll, void *dpll_priv,
 			enum dpll_mode *mode, struct netlink_ext_ack *extack);
-	bool (*mode_supported)(const struct dpll_device *dpll, void *dpll_priv,
-			       const enum dpll_mode mode,
-			       struct netlink_ext_ack *extack);
 	int (*lock_status_get)(const struct dpll_device *dpll, void *dpll_priv,
 			       enum dpll_lock_status *status,
 			       struct netlink_ext_ack *extack);
@@ -80,6 +79,9 @@ struct dpll_pin_ops {
 				const struct dpll_device *dpll, void *dpll_priv,
 				const s32 phase_adjust,
 				struct netlink_ext_ack *extack);
+	int (*ffo_get)(const struct dpll_pin *pin, void *pin_priv,
+		       const struct dpll_device *dpll, void *dpll_priv,
+		       s64 *ffo, struct netlink_ext_ack *extack);
 };
 
 struct dpll_pin_frequency {
@@ -166,5 +168,14 @@ void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
 int dpll_device_change_ntf(struct dpll_device *dpll);
 
 int dpll_pin_change_ntf(struct dpll_pin *pin);
+
+#if !IS_ENABLED(CONFIG_DPLL)
+static inline struct dpll_pin *netdev_dpll_pin(const struct net_device *dev)
+{
+	return NULL;
+}
+#else
+struct dpll_pin *netdev_dpll_pin(const struct net_device *dev);
+#endif
 
 #endif
