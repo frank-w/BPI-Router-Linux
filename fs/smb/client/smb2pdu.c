@@ -1536,6 +1536,11 @@ SMB2_sess_sendreceive(struct SMB2_sess_data *sess_data)
 			    &sess_data->buf0_type,
 			    CIFS_LOG_ERROR | CIFS_SESS_OP, &rsp_iov);
 	cifs_small_buf_release(sess_data->iov[0].iov_base);
+	if (rc == 0)
+		sess_data->ses->expired_pwd = false;
+	else if ((rc == -EACCES) || (rc == -EKEYEXPIRED) || (rc == -EKEYREVOKED))
+		sess_data->ses->expired_pwd = true;
+
 	memcpy(&sess_data->iov[0], &rsp_iov, sizeof(struct kvec));
 
 	return rc;
@@ -2715,6 +2720,17 @@ add_query_id_context(struct kvec *iov, unsigned int *num_iovec)
 	return 0;
 }
 
+static void add_ea_context(struct cifs_open_parms *oparms,
+			   struct kvec *rq_iov, unsigned int *num_iovs)
+{
+	struct kvec *iov = oparms->ea_cctx;
+
+	if (iov && iov->iov_base && iov->iov_len) {
+		rq_iov[(*num_iovs)++] = *iov;
+		memset(iov, 0, sizeof(*iov));
+	}
+}
+
 static int
 alloc_path_with_tree_prefix(__le16 **out_path, int *out_size, int *out_len,
 			    const char *treename, const __le16 *path)
@@ -3081,6 +3097,7 @@ SMB2_open_init(struct cifs_tcon *tcon, struct TCP_Server_Info *server,
 	}
 
 	add_query_id_context(iov, &n_iov);
+	add_ea_context(oparms, iov, &n_iov);
 
 	if (n_iov > 2) {
 		/*
