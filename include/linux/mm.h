@@ -1641,13 +1641,11 @@ static inline int page_zone_id(struct page *page)
 }
 
 #ifdef NODE_NOT_IN_PAGE_FLAGS
-extern int page_to_nid(const struct page *page);
+int page_to_nid(const struct page *page);
 #else
 static inline int page_to_nid(const struct page *page)
 {
-	struct page *p = (struct page *)page;
-
-	return (PF_POISONED_CHECK(p)->flags >> NODES_PGSHIFT) & NODES_MASK;
+	return (PF_POISONED_CHECK(page)->flags >> NODES_PGSHIFT) & NODES_MASK;
 }
 #endif
 
@@ -2065,6 +2063,13 @@ static inline long folio_nr_pages(struct folio *folio)
 	return 1L << (folio->_flags_1 & 0xff);
 #endif
 }
+
+/* Only hugetlbfs can allocate folios larger than MAX_ORDER */
+#ifdef CONFIG_ARCH_HAS_GIGANTIC_PAGE
+#define MAX_FOLIO_NR_PAGES	(1UL << PUD_ORDER)
+#else
+#define MAX_FOLIO_NR_PAGES	MAX_ORDER_NR_PAGES
+#endif
 
 /*
  * compound_nr() returns the number of pages in this potentially compound

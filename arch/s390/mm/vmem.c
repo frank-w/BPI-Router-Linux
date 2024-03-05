@@ -236,7 +236,7 @@ static int __ref modify_pmd_table(pud_t *pud, unsigned long addr,
 		if (!add) {
 			if (pmd_none(*pmd))
 				continue;
-			if (pmd_large(*pmd)) {
+			if (pmd_leaf(*pmd)) {
 				if (IS_ALIGNED(addr, PMD_SIZE) &&
 				    IS_ALIGNED(next, PMD_SIZE)) {
 					if (!direct)
@@ -281,7 +281,7 @@ static int __ref modify_pmd_table(pud_t *pud, unsigned long addr,
 			if (!pte)
 				goto out;
 			pmd_populate(&init_mm, pmd, pte);
-		} else if (pmd_large(*pmd)) {
+		} else if (pmd_leaf(*pmd)) {
 			if (!direct)
 				vmemmap_use_sub_pmd(addr, next);
 			continue;
@@ -329,7 +329,7 @@ static int modify_pud_table(p4d_t *p4d, unsigned long addr, unsigned long end,
 		if (!add) {
 			if (pud_none(*pud))
 				continue;
-			if (pud_large(*pud)) {
+			if (pud_leaf(*pud)) {
 				if (IS_ALIGNED(addr, PUD_SIZE) &&
 				    IS_ALIGNED(next, PUD_SIZE)) {
 					pud_clear(pud);
@@ -350,7 +350,7 @@ static int modify_pud_table(p4d_t *p4d, unsigned long addr, unsigned long end,
 			if (!pmd)
 				goto out;
 			pud_populate(&init_mm, pud, pmd);
-		} else if (pud_large(*pud)) {
+		} else if (pud_leaf(*pud)) {
 			continue;
 		}
 		ret = modify_pmd_table(pud, addr, next, add, direct, altmap);
@@ -599,7 +599,7 @@ pte_t *vmem_get_alloc_pte(unsigned long addr, bool alloc)
 		if (!pmd)
 			goto out;
 		pud_populate(&init_mm, pud, pmd);
-	} else if (WARN_ON_ONCE(pud_large(*pud))) {
+	} else if (WARN_ON_ONCE(pud_leaf(*pud))) {
 		goto out;
 	}
 	pmd = pmd_offset(pud, addr);
@@ -610,7 +610,7 @@ pte_t *vmem_get_alloc_pte(unsigned long addr, bool alloc)
 		if (!pte)
 			goto out;
 		pmd_populate(&init_mm, pmd, pte);
-	} else if (WARN_ON_ONCE(pmd_large(*pmd))) {
+	} else if (WARN_ON_ONCE(pmd_leaf(*pmd))) {
 		goto out;
 	}
 	ptep = pte_offset_kernel(pmd, addr);

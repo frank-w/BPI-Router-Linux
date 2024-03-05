@@ -470,7 +470,7 @@ static int pmd_lookup(struct mm_struct *mm, unsigned long addr, pmd_t **pmdp)
 		return -ENOENT;
 
 	/* Large PUDs are not supported yet. */
-	if (pud_large(*pud))
+	if (pud_leaf(*pud))
 		return -EFAULT;
 
 	*pmdp = pmd_offset(pud, addr);
@@ -827,7 +827,7 @@ again:
 		return key ? -EFAULT : 0;
 	}
 
-	if (pmd_large(*pmdp)) {
+	if (pmd_leaf(*pmdp)) {
 		paddr = pmd_val(*pmdp) & HPAGE_MASK;
 		paddr |= addr & ~HPAGE_MASK;
 		/*
@@ -938,7 +938,7 @@ again:
 		return 0;
 	}
 
-	if (pmd_large(*pmdp)) {
+	if (pmd_leaf(*pmdp)) {
 		paddr = pmd_val(*pmdp) & HPAGE_MASK;
 		paddr |= addr & ~HPAGE_MASK;
 		cc = page_reset_referenced(paddr);
@@ -1002,7 +1002,7 @@ again:
 		return 0;
 	}
 
-	if (pmd_large(*pmdp)) {
+	if (pmd_leaf(*pmdp)) {
 		paddr = pmd_val(*pmdp) & HPAGE_MASK;
 		paddr |= addr & ~HPAGE_MASK;
 		*key = page_get_storage_key(paddr);
