@@ -12,6 +12,9 @@
  *  Multiple device nodes: Harald Freudenberger <freude@linux.ibm.com>
  */
 
+#define KMSG_COMPONENT "zcrypt"
+#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
+
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
@@ -715,8 +718,7 @@ static long zcrypt_rsa_modexpo(struct ap_perms *perms,
 	spin_unlock(&zcrypt_list_lock);
 
 	if (!pref_zq) {
-		ZCRYPT_DBF_DBG("%s no matching queue found => ENODEV\n",
-			       __func__);
+		pr_debug("%s no matching queue found => ENODEV\n", __func__);
 		rc = -ENODEV;
 		goto out;
 	}
@@ -820,8 +822,7 @@ static long zcrypt_rsa_crt(struct ap_perms *perms,
 	spin_unlock(&zcrypt_list_lock);
 
 	if (!pref_zq) {
-		ZCRYPT_DBF_DBG("%s no matching queue found => ENODEV\n",
-			       __func__);
+		pr_debug("%s no matching queue found => ENODEV\n", __func__);
 		rc = -ENODEV;
 		goto out;
 	}
@@ -865,6 +866,8 @@ static long _zcrypt_send_cprb(bool userspace, struct ap_perms *perms,
 	rc = prep_cca_ap_msg(userspace, xcrb, &ap_msg, &func_code, &domain);
 	if (rc)
 		goto out;
+	print_hex_dump_debug("ccareq: ", DUMP_PREFIX_ADDRESS, 16, 1,
+			     ap_msg.msg, ap_msg.len, false);
 
 	tdom = *domain;
 	if (perms != &ap_perms && tdom < AP_DOMAINS) {
@@ -940,8 +943,8 @@ static long _zcrypt_send_cprb(bool userspace, struct ap_perms *perms,
 	spin_unlock(&zcrypt_list_lock);
 
 	if (!pref_zq) {
-		ZCRYPT_DBF_DBG("%s no match for address %02x.%04x => ENODEV\n",
-			       __func__, xcrb->user_defined, *domain);
+		pr_debug("%s no match for address %02x.%04x => ENODEV\n",
+			 __func__, xcrb->user_defined, *domain);
 		rc = -ENODEV;
 		goto out;
 	}
@@ -952,6 +955,10 @@ static long _zcrypt_send_cprb(bool userspace, struct ap_perms *perms,
 		*domain = AP_QID_QUEUE(qid);
 
 	rc = pref_zq->ops->send_cprb(userspace, pref_zq, xcrb, &ap_msg);
+	if (!rc) {
+		print_hex_dump_debug("ccarpl: ", DUMP_PREFIX_ADDRESS, 16, 1,
+				     ap_msg.msg, ap_msg.len, false);
+	}
 
 	spin_lock(&zcrypt_list_lock);
 	zcrypt_drop_queue(pref_zc, pref_zq, mod, wgt);
@@ -1045,6 +1052,8 @@ static long _zcrypt_send_ep11_cprb(bool userspace, struct ap_perms *perms,
 	rc = prep_ep11_ap_msg(userspace, xcrb, &ap_msg, &func_code, &domain);
 	if (rc)
 		goto out_free;
+	print_hex_dump_debug("ep11req: ", DUMP_PREFIX_ADDRESS, 16, 1,
+			     ap_msg.msg, ap_msg.len, false);
 
 	if (perms != &ap_perms && domain < AUTOSEL_DOM) {
 		if (ap_msg.flags & AP_MSG_FLAG_ADMIN) {
@@ -1113,15 +1122,15 @@ static long _zcrypt_send_ep11_cprb(bool userspace, struct ap_perms *perms,
 
 	if (!pref_zq) {
 		if (targets && target_num == 1) {
-			ZCRYPT_DBF_DBG("%s no match for address %02x.%04x => ENODEV\n",
-				       __func__, (int)targets->ap_id,
-				       (int)targets->dom_id);
+			pr_debug("%s no match for address %02x.%04x => ENODEV\n",
+				 __func__, (int)targets->ap_id,
+				 (int)targets->dom_id);
 		} else if (targets) {
-			ZCRYPT_DBF_DBG("%s no match for %d target addrs => ENODEV\n",
-				       __func__, (int)target_num);
+			pr_debug("%s no match for %d target addrs => ENODEV\n",
+				 __func__, (int)target_num);
 		} else {
-			ZCRYPT_DBF_DBG("%s no match for address ff.ffff => ENODEV\n",
-				       __func__);
+			pr_debug("%s no match for address ff.ffff => ENODEV\n",
+				 __func__);
 		}
 		rc = -ENODEV;
 		goto out_free;
@@ -1129,6 +1138,10 @@ static long _zcrypt_send_ep11_cprb(bool userspace, struct ap_perms *perms,
 
 	qid = pref_zq->queue->qid;
 	rc = pref_zq->ops->send_ep11_cprb(userspace, pref_zq, xcrb, &ap_msg);
+	if (!rc) {
+		print_hex_dump_debug("ep11rpl: ", DUMP_PREFIX_ADDRESS, 16, 1,
+				     ap_msg.msg, ap_msg.len, false);
+	}
 
 	spin_lock(&zcrypt_list_lock);
 	zcrypt_drop_queue(pref_zc, pref_zq, mod, wgt);
@@ -1199,8 +1212,7 @@ static long zcrypt_rng(char *buffer)
 	spin_unlock(&zcrypt_list_lock);
 
 	if (!pref_zq) {
-		ZCRYPT_DBF_DBG("%s no matching queue found => ENODEV\n",
-			       __func__);
+		pr_debug("%s no matching queue found => ENODEV\n", __func__);
 		rc = -ENODEV;
 		goto out;
 	}
@@ -1444,7 +1456,7 @@ static int icarsamodexpo_ioctl(struct ap_perms *perms, unsigned long arg)
 	if (rc == -EAGAIN && tr.again_counter >= TRACK_AGAIN_MAX)
 		rc = -EIO;
 	if (rc) {
-		ZCRYPT_DBF_DBG("ioctl ICARSAMODEXPO rc=%d\n", rc);
+		pr_debug("ioctl ICARSAMODEXPO rc=%d\n", rc);
 		return rc;
 	}
 	return put_user(mex.outputdatalength, &umex->outputdatalength);
@@ -1476,7 +1488,7 @@ static int icarsacrt_ioctl(struct ap_perms *perms, unsigned long arg)
 	if (rc == -EAGAIN && tr.again_counter >= TRACK_AGAIN_MAX)
 		rc = -EIO;
 	if (rc) {
-		ZCRYPT_DBF_DBG("ioctl ICARSACRT rc=%d\n", rc);
+		pr_debug("ioctl ICARSACRT rc=%d\n", rc);
 		return rc;
 	}
 	return put_user(crt.outputdatalength, &ucrt->outputdatalength);
@@ -1508,8 +1520,8 @@ static int zsecsendcprb_ioctl(struct ap_perms *perms, unsigned long arg)
 	if (rc == -EAGAIN && tr.again_counter >= TRACK_AGAIN_MAX)
 		rc = -EIO;
 	if (rc)
-		ZCRYPT_DBF_DBG("ioctl ZSENDCPRB rc=%d status=0x%x\n",
-			       rc, xcrb.status);
+		pr_debug("ioctl ZSENDCPRB rc=%d status=0x%x\n",
+			 rc, xcrb.status);
 	if (copy_to_user(uxcrb, &xcrb, sizeof(xcrb)))
 		return -EFAULT;
 	return rc;
@@ -1541,7 +1553,7 @@ static int zsendep11cprb_ioctl(struct ap_perms *perms, unsigned long arg)
 	if (rc == -EAGAIN && tr.again_counter >= TRACK_AGAIN_MAX)
 		rc = -EIO;
 	if (rc)
-		ZCRYPT_DBF_DBG("ioctl ZSENDEP11CPRB rc=%d\n", rc);
+		pr_debug("ioctl ZSENDEP11CPRB rc=%d\n", rc);
 	if (copy_to_user(uxcrb, &xcrb, sizeof(xcrb)))
 		return -EFAULT;
 	return rc;
@@ -1670,7 +1682,7 @@ static long zcrypt_unlocked_ioctl(struct file *filp, unsigned int cmd,
 	}
 	/* unknown ioctl number */
 	default:
-		ZCRYPT_DBF_DBG("unknown ioctl 0x%08x\n", cmd);
+		pr_debug("unknown ioctl 0x%08x\n", cmd);
 		return -ENOIOCTLCMD;
 	}
 }
@@ -2014,8 +2026,8 @@ int zcrypt_wait_api_operational(void)
 			break;
 		default:
 			/* other failure */
-			ZCRYPT_DBF_DBG("%s ap_wait_init_apqn_bindings_complete()=%d\n",
-				       __func__, rc);
+			pr_debug("%s ap_wait_init_apqn_bindings_complete()=%d\n",
+				 __func__, rc);
 			break;
 		}
 		break;
@@ -2038,7 +2050,7 @@ EXPORT_SYMBOL(zcrypt_wait_api_operational);
 int __init zcrypt_debug_init(void)
 {
 	zcrypt_dbf_info = debug_register("zcrypt", 2, 1,
-					 DBF_MAX_SPRINTF_ARGS * sizeof(long));
+					 ZCRYPT_DBF_MAX_SPRINTF_ARGS * sizeof(long));
 	debug_register_view(zcrypt_dbf_info, &debug_sprintf_view);
 	debug_set_level(zcrypt_dbf_info, DBF_ERR);
 
