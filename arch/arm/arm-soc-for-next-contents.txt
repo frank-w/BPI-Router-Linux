@@ -13,6 +13,8 @@ soc/arm
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/omap1-signed
 	omap/soc-omap2
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v6.9/soc-part2-signed
+	patch
+		ARM: s32c: update MAINTAINERS entry
 
 soc/dt
 	patch
@@ -95,6 +97,8 @@ soc/dt
 		ARM: dts: samsung: exynos4412: decrease memory to account for unusable region
 	vexpress/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/vexpress-update-6.9
+	rockchips/drivers1
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-drivers1
 
 soc/drivers
 	mediatek/soc-drivers
@@ -145,6 +149,8 @@ soc/defconfig
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-config-for-v6.9
 	rockchip/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.9-rockchip-config64-1
+	patch
+		arm64: defconfig: Enable support for cbmem entries in the coreboot table
 
 soc/late
 	omap/clksel
