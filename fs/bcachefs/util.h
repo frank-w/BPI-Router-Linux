@@ -5,22 +5,21 @@
 #include <linux/bio.h>
 #include <linux/blkdev.h>
 #include <linux/closure.h>
+#include <linux/darray.h>
 #include <linux/errno.h>
 #include <linux/freezer.h>
 #include <linux/kernel.h>
-#include <linux/sched/clock.h>
 #include <linux/llist.h>
 #include <linux/log2.h>
 #include <linux/percpu.h>
 #include <linux/preempt.h>
 #include <linux/ratelimit.h>
+#include <linux/sched/clock.h>
 #include <linux/slab.h>
+#include <linux/time_stats.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
-
-#include "mean_and_variance.h"
-
-#include "darray.h"
+#include <linux/mean_and_variance.h>
 
 struct closure;
 
@@ -53,38 +52,6 @@ static inline size_t buf_pages(void *p, size_t len)
 			    PAGE_SIZE);
 }
 
-static inline void vpfree(void *p, size_t size)
-{
-	if (is_vmalloc_addr(p))
-		vfree(p);
-	else
-		free_pages((unsigned long) p, get_order(size));
-}
-
-static inline void *vpmalloc(size_t size, gfp_t gfp_mask)
-{
-	return (void *) __get_free_pages(gfp_mask|__GFP_NOWARN,
-					 get_order(size)) ?:
-		__vmalloc(size, gfp_mask);
-}
-
-static inline void kvpfree(void *p, size_t size)
-{
-	if (size < PAGE_SIZE)
-		kfree(p);
-	else
-		vpfree(p, size);
-}
-
-static inline void *kvpmalloc(size_t size, gfp_t gfp_mask)
-{
-	return size < PAGE_SIZE
-		? kmalloc(size, gfp_mask)
-		: vpmalloc(size, gfp_mask);
-}
-
-int mempool_init_kvpmalloc_pool(mempool_t *, int, size_t);
-
 #define HEAP(type)							\
 struct {								\
 	size_t size, used;						\
@@ -97,13 +64,13 @@ struct {								\
 ({									\
 	(heap)->used = 0;						\
 	(heap)->size = (_size);						\
-	(heap)->data = kvpmalloc((heap)->size * sizeof((heap)->data[0]),\
+	(heap)->data = kvmalloc((heap)->size * sizeof((heap)->data[0]),\
 				 (gfp));				\
 })
 
 #define free_heap(heap)							\
 do {									\
-	kvpfree((heap)->data, (heap)->size * sizeof((heap)->data[0]));	\
+	kvfree((heap)->data);						\
 	(heap)->data = NULL;						\
 } while (0)
 
@@ -361,83 +328,7 @@ static inline void prt_bdevname(struct printbuf *out, struct block_device *bdev)
 #endif
 }
 
-#define NR_QUANTILES	15
-#define QUANTILE_IDX(i)	inorder_to_eytzinger0(i, NR_QUANTILES)
-#define QUANTILE_FIRST	eytzinger0_first(NR_QUANTILES)
-#define QUANTILE_LAST	eytzinger0_last(NR_QUANTILES)
-
-struct bch2_quantiles {
-	struct bch2_quantile_entry {
-		u64	m;
-		u64	step;
-	}		entries[NR_QUANTILES];
-};
-
-struct bch2_time_stat_buffer {
-	unsigned	nr;
-	struct bch2_time_stat_buffer_entry {
-		u64	start;
-		u64	end;
-	}		entries[32];
-};
-
-struct bch2_time_stats {
-	spinlock_t	lock;
-	/* all fields are in nanoseconds */
-	u64             min_duration;
-	u64		max_duration;
-	u64		total_duration;
-	u64             max_freq;
-	u64             min_freq;
-	u64		last_event;
-	struct bch2_quantiles quantiles;
-
-	struct mean_and_variance	  duration_stats;
-	struct mean_and_variance_weighted duration_stats_weighted;
-	struct mean_and_variance	  freq_stats;
-	struct mean_and_variance_weighted freq_stats_weighted;
-	struct bch2_time_stat_buffer __percpu *buffer;
-};
-
-#ifndef CONFIG_BCACHEFS_NO_LATENCY_ACCT
-void __bch2_time_stats_update(struct bch2_time_stats *stats, u64, u64);
-
-static inline void bch2_time_stats_update(struct bch2_time_stats *stats, u64 start)
-{
-	__bch2_time_stats_update(stats, start, local_clock());
-}
-
-static inline bool track_event_change(struct bch2_time_stats *stats,
-				      u64 *start, bool v)
-{
-	if (v != !!*start) {
-		if (!v) {
-			bch2_time_stats_update(stats, *start);
-			*start = 0;
-		} else {
-			*start = local_clock() ?: 1;
-			return true;
-		}
-	}
-
-	return false;
-}
-#else
-static inline void __bch2_time_stats_update(struct bch2_time_stats *stats, u64 start, u64 end) {}
-static inline void bch2_time_stats_update(struct bch2_time_stats *stats, u64 start) {}
-static inline bool track_event_change(struct bch2_time_stats *stats,
-				      u64 *start, bool v)
-{
-	bool ret = v && !*start;
-	*start = v;
-	return ret;
-}
-#endif
-
-void bch2_time_stats_to_text(struct printbuf *, struct bch2_time_stats *);
-
-void bch2_time_stats_exit(struct bch2_time_stats *);
-void bch2_time_stats_init(struct bch2_time_stats *);
+void bch2_time_stats_to_text(struct printbuf *, struct time_stats *);
 
 #define ewma_add(ewma, val, weight)					\
 ({									\
@@ -738,34 +629,6 @@ static inline void memset_u64s_tail(void *s, int c, unsigned bytes)
 	memset(s + bytes, c, rem);
 }
 
-void sort_cmp_size(void *base, size_t num, size_t size,
-	  int (*cmp_func)(const void *, const void *, size_t),
-	  void (*swap_func)(void *, void *, size_t));
-
-/* just the memmove, doesn't update @_nr */
-#define __array_insert_item(_array, _nr, _pos)				\
-	memmove(&(_array)[(_pos) + 1],					\
-		&(_array)[(_pos)],					\
-		sizeof((_array)[0]) * ((_nr) - (_pos)))
-
-#define array_insert_item(_array, _nr, _pos, _new_item)			\
-do {									\
-	__array_insert_item(_array, _nr, _pos);				\
-	(_nr)++;							\
-	(_array)[(_pos)] = (_new_item);					\
-} while (0)
-
-#define array_remove_items(_array, _nr, _pos, _nr_to_remove)		\
-do {									\
-	(_nr) -= (_nr_to_remove);					\
-	memmove(&(_array)[(_pos)],					\
-		&(_array)[(_pos) + (_nr_to_remove)],			\
-		sizeof((_array)[0]) * ((_nr) - (_pos)));		\
-} while (0)
-
-#define array_remove_item(_array, _nr, _pos)				\
-	array_remove_items(_array, _nr, _pos, 1)
-
 static inline void __move_gap(void *array, size_t element_size,
 			      size_t nr, size_t size,
 			      size_t old_gap, size_t new_gap)
@@ -788,8 +651,12 @@ static inline void __move_gap(void *array, size_t element_size,
 }
 
 /* Move the gap in a gap buffer: */
-#define move_gap(_array, _nr, _size, _old_gap, _new_gap)	\
-	__move_gap(_array, sizeof(_array[0]), _nr, _size, _old_gap, _new_gap)
+#define move_gap(_d, _new_gap)						\
+do {									\
+	__move_gap((_d)->data, sizeof((_d)->data[0]),			\
+		   (_d)->nr, (_d)->size, (_d)->gap, _new_gap);		\
+	(_d)->gap = _new_gap;						\
+} while (0)
 
 #define bubble_sort(_base, _nr, _cmp)					\
 do {									\

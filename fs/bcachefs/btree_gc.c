@@ -389,7 +389,8 @@ again:
 	have_child = dropped_children = false;
 	bch2_bkey_buf_init(&prev_k);
 	bch2_bkey_buf_init(&cur_k);
-	bch2_btree_and_journal_iter_init_node_iter(&iter, c, b);
+	bch2_btree_and_journal_iter_init_node_iter(trans, &iter, b);
+	iter.prefetch = true;
 
 	while ((k = bch2_btree_and_journal_iter_peek(&iter)).k) {
 		BUG_ON(bpos_lt(k.k->p, b->data->min_key));
@@ -406,7 +407,7 @@ again:
 		printbuf_reset(&buf);
 		bch2_bkey_val_to_text(&buf, c, bkey_i_to_s_c(cur_k.k));
 
-		if (mustfix_fsck_err_on(ret == -EIO, c,
+		if (mustfix_fsck_err_on(bch2_err_matches(ret, EIO), c,
 				btree_node_unreadable,
 				"Topology repair: unreadable btree node at btree %s level %u:\n"
 				"  %s",
@@ -478,7 +479,8 @@ again:
 		goto err;
 
 	bch2_btree_and_journal_iter_exit(&iter);
-	bch2_btree_and_journal_iter_init_node_iter(&iter, c, b);
+	bch2_btree_and_journal_iter_init_node_iter(trans, &iter, b);
+	iter.prefetch = true;
 
 	while ((k = bch2_btree_and_journal_iter_peek(&iter)).k) {
 		bch2_bkey_buf_reassemble(&cur_k, c, k);
@@ -931,7 +933,7 @@ static int bch2_gc_btree_init_recurse(struct btree_trans *trans, struct btree *b
 	struct printbuf buf = PRINTBUF;
 	int ret = 0;
 
-	bch2_btree_and_journal_iter_init_node_iter(&iter, c, b);
+	bch2_btree_and_journal_iter_init_node_iter(trans, &iter, b);
 	bch2_bkey_buf_init(&prev);
 	bch2_bkey_buf_init(&cur);
 	bkey_init(&prev.k->k);
@@ -963,7 +965,8 @@ static int bch2_gc_btree_init_recurse(struct btree_trans *trans, struct btree *b
 
 	if (b->c.level > target_depth) {
 		bch2_btree_and_journal_iter_exit(&iter);
-		bch2_btree_and_journal_iter_init_node_iter(&iter, c, b);
+		bch2_btree_and_journal_iter_init_node_iter(trans, &iter, b);
+		iter.prefetch = true;
 
 		while ((k = bch2_btree_and_journal_iter_peek(&iter)).k) {
 			struct btree *child;
@@ -976,7 +979,7 @@ static int bch2_gc_btree_init_recurse(struct btree_trans *trans, struct btree *b
 						false);
 			ret = PTR_ERR_OR_ZERO(child);
 
-			if (ret == -EIO) {
+			if (bch2_err_matches(ret, EIO)) {
 				bch2_topology_error(c);
 
 				if (__fsck_err(c,
@@ -1190,9 +1193,7 @@ static void bch2_gc_free(struct bch_fs *c)
 	genradix_free(&c->gc_stripes);
 
 	for_each_member_device(c, ca) {
-		kvpfree(rcu_dereference_protected(ca->buckets_gc, 1),
-			sizeof(struct bucket_array) +
-			ca->mi.nbuckets * sizeof(struct bucket));
+		kvfree(rcu_dereference_protected(ca->buckets_gc, 1));
 		ca->buckets_gc = NULL;
 
 		free_percpu(ca->usage_gc);
@@ -1491,7 +1492,7 @@ static int bch2_gc_alloc_done(struct bch_fs *c, bool metadata_only)
 static int bch2_gc_alloc_start(struct bch_fs *c, bool metadata_only)
 {
 	for_each_member_device(c, ca) {
-		struct bucket_array *buckets = kvpmalloc(sizeof(struct bucket_array) +
+		struct bucket_array *buckets = kvmalloc(sizeof(struct bucket_array) +
 				ca->mi.nbuckets * sizeof(struct bucket),
 				GFP_KERNEL|__GFP_ZERO);
 		if (!buckets) {
@@ -1970,7 +1971,7 @@ int bch2_gc_gens(struct bch_fs *c)
 
 	c->gc_count++;
 
-	bch2_time_stats_update(&c->times[BCH_TIME_btree_gc], start_time);
+	time_stats_update(&c->times[BCH_TIME_btree_gc], start_time);
 	trace_and_count(c, gc_gens_end, c);
 err:
 	for_each_member_device(c, ca) {

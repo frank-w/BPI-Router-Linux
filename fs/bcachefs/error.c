@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 #include "bcachefs.h"
 #include "error.h"
+#include "recovery.h"
 #include "super.h"
-#include "thread_with_file.h"
+#include <linux/thread_with_file.h>
 
 #define FSCK_ERR_RATELIMIT_NR	10
 
@@ -25,11 +26,16 @@ bool bch2_inconsistent_error(struct bch_fs *c)
 	}
 }
 
-void bch2_topology_error(struct bch_fs *c)
+int bch2_topology_error(struct bch_fs *c)
 {
 	set_bit(BCH_FS_topology_error, &c->flags);
-	if (!test_bit(BCH_FS_fsck_running, &c->flags))
+	if (!test_bit(BCH_FS_fsck_running, &c->flags)) {
 		bch2_inconsistent_error(c);
+		return -BCH_ERR_btree_need_topology_repair;
+	} else {
+		return bch2_run_explicit_recovery_pass(c, BCH_RECOVERY_PASS_check_topology) ?:
+			-BCH_ERR_btree_node_read_validate_error;
+	}
 }
 
 void bch2_fatal_error(struct bch_fs *c)
@@ -105,7 +111,7 @@ static enum ask_yn bch2_fsck_ask_yn(struct bch_fs *c)
 	do {
 		bch2_print(c, " (y,n, or Y,N for all errors of this type) ");
 
-		int r = bch2_stdio_redirect_readline(stdio, buf, sizeof(buf) - 1);
+		int r = stdio_redirect_readline(stdio, buf, sizeof(buf) - 1);
 		if (r < 0)
 			return YN_NO;
 		buf[r] = '\0';

@@ -14,6 +14,8 @@
 #include "snapshot.h"
 #include "trace.h"
 
+#include <linux/darray.h>
+
 static inline int btree_insert_entry_cmp(const struct btree_insert_entry *l,
 					 const struct btree_insert_entry *r)
 {
@@ -787,6 +789,27 @@ int bch2_btree_delete_range(struct bch_fs *c, enum btree_id id,
 
 int bch2_btree_bit_mod(struct btree_trans *trans, enum btree_id btree,
 		       struct bpos pos, bool set)
+{
+	struct bkey_i *k = bch2_trans_kmalloc(trans, sizeof(*k));
+	int ret = PTR_ERR_OR_ZERO(k);
+	if (ret)
+		return ret;
+
+	bkey_init(&k->k);
+	k->k.type = set ? KEY_TYPE_set : KEY_TYPE_deleted;
+	k->k.p = pos;
+
+	struct btree_iter iter;
+	bch2_trans_iter_init(trans, &iter, btree, pos, BTREE_ITER_INTENT);
+
+	ret   = bch2_btree_iter_traverse(&iter) ?:
+		bch2_trans_update(trans, &iter, k, 0);
+	bch2_trans_iter_exit(trans, &iter);
+	return ret;
+}
+
+int bch2_btree_bit_mod_buffered(struct btree_trans *trans, enum btree_id btree,
+				struct bpos pos, bool set)
 {
 	struct bkey_i k;
 

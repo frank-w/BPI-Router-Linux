@@ -200,6 +200,8 @@
 #include <linux/seqlock.h>
 #include <linux/shrinker.h>
 #include <linux/srcu.h>
+#include <linux/thread_with_file_types.h>
+#include <linux/time_stats.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
 #include <linux/zstd.h>
@@ -264,6 +266,9 @@ do {									\
 #endif
 
 #define bch2_fmt(_c, fmt)		bch2_log_msg(_c, fmt "\n")
+
+__printf(2, 3)
+void bch2_print_opts(struct bch_opts *, const char *, ...);
 
 __printf(2, 3)
 void __bch2_print(struct bch_fs *c, const char *fmt, ...);
@@ -465,7 +470,6 @@ enum bch_time_stats {
 #include "replicas_types.h"
 #include "subvolume_types.h"
 #include "super_types.h"
-#include "thread_with_file_types.h"
 
 /* Number of nodes btree coalesce will try to coalesce at once */
 #define GC_MERGE_NODES		4U
@@ -504,6 +508,7 @@ enum gc_phase {
 	GC_PHASE_BTREE_deleted_inodes,
 	GC_PHASE_BTREE_logged_ops,
 	GC_PHASE_BTREE_rebalance_work,
+	GC_PHASE_BTREE_subvolume_children,
 
 	GC_PHASE_PENDING_DELETE,
 };
@@ -593,7 +598,7 @@ struct bch_dev {
 
 	/* The rest of this all shows up in sysfs */
 	atomic64_t		cur_latency[2];
-	struct bch2_time_stats	io_latency[2];
+	struct time_stats_quantiles	io_latency[2];
 
 #define CONGESTED_MAX		1024
 	atomic_t		congested;
@@ -640,8 +645,8 @@ struct btree_debug {
 #define BCH_TRANSACTIONS_NR 128
 
 struct btree_transaction_stats {
-	struct bch2_time_stats	duration;
-	struct bch2_time_stats	lock_hold_times;
+	struct time_stats	duration;
+	struct time_stats	lock_hold_times;
 	struct mutex		lock;
 	unsigned		nr_max_paths;
 	unsigned		journal_entries_size;
@@ -663,6 +668,8 @@ struct journal_seq_blacklist_table {
 };
 
 struct journal_keys {
+	/* must match layout in darray_types.h */
+	size_t			nr, size;
 	struct journal_key {
 		u64		journal_seq;
 		u32		journal_offset;
@@ -671,15 +678,13 @@ struct journal_keys {
 		bool		allocated;
 		bool		overwritten;
 		struct bkey_i	*k;
-	}			*d;
+	}			*data;
 	/*
 	 * Gap buffer: instead of all the empty space in the array being at the
 	 * end of the buffer - from @nr to @size - the empty space is at @gap.
 	 * This means that sequential insertions are O(n) instead of O(n^2).
 	 */
 	size_t			gap;
-	size_t			nr;
-	size_t			size;
 	atomic_t		ref;
 	bool			initial_ref_held;
 };
@@ -703,6 +708,7 @@ struct btree_trans_buf {
 	x(reflink)							\
 	x(fallocate)							\
 	x(discard)							\
+	x(discard_fast)							\
 	x(invalidate)							\
 	x(delete_dead_snapshots)					\
 	x(snapshot_delete_pagecache)					\
@@ -919,8 +925,6 @@ struct bch_fs {
 	/* ALLOCATOR */
 	spinlock_t		freelist_lock;
 	struct closure_waitlist	freelist_wait;
-	u64			blocked_allocate;
-	u64			blocked_allocate_open_bucket;
 
 	open_bucket_idx_t	open_buckets_freelist;
 	open_bucket_idx_t	open_buckets_nr_free;
@@ -940,8 +944,11 @@ struct bch_fs {
 	unsigned		write_points_nr;
 
 	struct buckets_waiting_for_journal buckets_waiting_for_journal;
-	struct work_struct	discard_work;
 	struct work_struct	invalidate_work;
+	struct work_struct	discard_work;
+	struct mutex		discard_buckets_in_flight_lock;
+	DARRAY(struct bpos)	discard_buckets_in_flight;
+	struct work_struct	discard_fast_work;
 
 	/* GARBAGE COLLECTION */
 	struct task_struct	*gc_thread;
@@ -1104,7 +1111,7 @@ struct bch_fs {
 	unsigned		copy_gc_enabled:1;
 	bool			promote_whole_extents;
 
-	struct bch2_time_stats	times[BCH_TIME_STAT_NR];
+	struct time_stats	times[BCH_TIME_STAT_NR];
 
 	struct btree_transaction_stats btree_transaction_stats[BCH_TRANSACTIONS_NR];
 

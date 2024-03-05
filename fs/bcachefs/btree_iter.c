@@ -891,7 +891,7 @@ static noinline int btree_node_iter_and_journal_peek(struct btree_trans *trans,
 	struct bkey_s_c k;
 	int ret = 0;
 
-	__bch2_btree_and_journal_iter_init_node_iter(&jiter, c, l->b, l->iter, path->pos);
+	__bch2_btree_and_journal_iter_init_node_iter(trans, &jiter, l->b, l->iter, path->pos);
 
 	k = bch2_btree_and_journal_iter_peek(&jiter);
 
@@ -1146,7 +1146,7 @@ int bch2_btree_path_traverse_one(struct btree_trans *trans,
 	path = &trans->paths[path_idx];
 
 	if (unlikely(path->level >= BTREE_MAX_DEPTH))
-		goto out;
+		goto out_uptodate;
 
 	path->level = btree_path_up_until_good_node(trans, path, 0);
 
@@ -1179,7 +1179,7 @@ int bch2_btree_path_traverse_one(struct btree_trans *trans,
 			goto out;
 		}
 	}
-
+out_uptodate:
 	path->uptodate = BTREE_ITER_UPTODATE;
 out:
 	if (bch2_err_matches(ret, BCH_ERR_transaction_restart) != !!trans->restarted)
@@ -1520,7 +1520,7 @@ static noinline void btree_paths_realloc(struct btree_trans *trans)
 {
 	unsigned nr = trans->nr_paths * 2;
 
-	void *p = kzalloc(BITS_TO_LONGS(nr) * sizeof(unsigned long) +
+	void *p = kvzalloc(BITS_TO_LONGS(nr) * sizeof(unsigned long) +
 			  sizeof(struct btree_trans_paths) +
 			  nr * sizeof(struct btree_path) +
 			  nr * sizeof(btree_path_idx_t) + 8 +
@@ -2305,7 +2305,7 @@ struct bkey_s_c bch2_btree_iter_peek_prev(struct btree_iter *iter)
 		btree_iter_path(trans, iter)->level);
 
 	if (iter->flags & BTREE_ITER_WITH_JOURNAL)
-		return bkey_s_c_err(-EIO);
+		return bkey_s_c_err(-BCH_ERR_btree_iter_with_journal_not_supported);
 
 	bch2_btree_iter_verify(iter);
 	bch2_btree_iter_verify_entry_exit(iter);
@@ -2503,6 +2503,7 @@ struct bkey_s_c bch2_btree_iter_peek_slot(struct btree_iter *iter)
 			k = bch2_btree_iter_peek_upto(&iter2, end);
 
 			if (k.k && !bkey_err(k)) {
+				swap(iter->key_cache_path, iter2.key_cache_path);
 				iter->k = iter2.k;
 				k.k = &iter->k;
 			}
@@ -2762,6 +2763,9 @@ void bch2_trans_copy_iter(struct btree_iter *dst, struct btree_iter *src)
 	struct btree_trans *trans = src->trans;
 
 	*dst = *src;
+#ifdef TRACK_PATH_ALLOCATED
+	dst->ip_allocated = _RET_IP_;
+#endif
 	if (src->path)
 		__btree_path_get(trans->paths + src->path, src->flags & BTREE_ITER_INTENT);
 	if (src->update_path)
@@ -2901,7 +2905,7 @@ u32 bch2_trans_begin(struct btree_trans *trans)
 
 	if (!IS_ENABLED(CONFIG_BCACHEFS_NO_LATENCY_ACCT) &&
 	    time_after64(now, trans->last_begin_time + 10))
-		__bch2_time_stats_update(&btree_trans_stats(trans)->duration,
+		__time_stats_update(&btree_trans_stats(trans)->duration,
 					 trans->last_begin_time, now);
 
 	if (!trans->restarted &&
@@ -3085,7 +3089,7 @@ void bch2_trans_put(struct btree_trans *trans)
 	trans->paths		= NULL;
 
 	if (paths_allocated != trans->_paths_allocated)
-		kfree_rcu_mightsleep(paths_allocated);
+		kvfree_rcu_mightsleep(paths_allocated);
 
 	if (trans->mem_bytes == BTREE_TRANS_MEM_MAX)
 		mempool_free(trans->mem, &c->btree_trans_mem_pool);
@@ -3226,7 +3230,7 @@ void bch2_fs_btree_iter_exit(struct bch_fs *c)
 	     s < c->btree_transaction_stats + ARRAY_SIZE(c->btree_transaction_stats);
 	     s++) {
 		kfree(s->max_paths_text);
-		bch2_time_stats_exit(&s->lock_hold_times);
+		time_stats_exit(&s->lock_hold_times);
 	}
 
 	if (c->btree_trans_barrier_initialized)
@@ -3242,8 +3246,8 @@ void bch2_fs_btree_iter_init_early(struct bch_fs *c)
 	for (s = c->btree_transaction_stats;
 	     s < c->btree_transaction_stats + ARRAY_SIZE(c->btree_transaction_stats);
 	     s++) {
-		bch2_time_stats_init(&s->duration);
-		bch2_time_stats_init(&s->lock_hold_times);
+		time_stats_init(&s->duration);
+		time_stats_init(&s->lock_hold_times);
 		mutex_init(&s->lock);
 	}
 

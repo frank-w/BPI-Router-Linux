@@ -103,7 +103,7 @@ static void btree_bounce_free(struct bch_fs *c, size_t size,
 	if (used_mempool)
 		mempool_free(p, &c->btree_bounce_pool);
 	else
-		vpfree(p, size);
+		kvfree(p);
 }
 
 static void *btree_bounce_alloc(struct bch_fs *c, size_t size,
@@ -115,7 +115,7 @@ static void *btree_bounce_alloc(struct bch_fs *c, size_t size,
 	BUG_ON(size > c->opts.btree_node_size);
 
 	*used_mempool = false;
-	p = vpmalloc(size, __GFP_NOWARN|GFP_NOWAIT);
+	p = kvmalloc(size, __GFP_NOWARN|GFP_NOWAIT);
 	if (!p) {
 		*used_mempool = true;
 		p = mempool_alloc(&c->btree_bounce_pool, GFP_NOFS);
@@ -327,7 +327,7 @@ static void btree_node_sort(struct bch_fs *c, struct btree *b,
 	BUG_ON(vstruct_end(&out->keys) > (void *) out + bytes);
 
 	if (sorting_entire_node)
-		bch2_time_stats_update(&c->times[BCH_TIME_btree_node_sort],
+		time_stats_update(&c->times[BCH_TIME_btree_node_sort],
 				       start_time);
 
 	/* Make sure we preserve bset journal_seq: */
@@ -397,7 +397,7 @@ void bch2_btree_sort_into(struct bch_fs *c,
 			&dst->format,
 			true);
 
-	bch2_time_stats_update(&c->times[BCH_TIME_btree_node_sort],
+	time_stats_update(&c->times[BCH_TIME_btree_node_sort],
 			       start_time);
 
 	set_btree_bset_end(dst, dst->set);
@@ -581,8 +581,7 @@ static int __btree_err(int ret,
 		break;
 	case -BCH_ERR_btree_node_read_err_bad_node:
 		bch2_print_string_as_lines(KERN_ERR, out.buf);
-		bch2_topology_error(c);
-		ret = bch2_run_explicit_recovery_pass(c, BCH_RECOVERY_PASS_check_topology) ?: -EIO;
+		ret = bch2_topology_error(c);
 		break;
 	case -BCH_ERR_btree_node_read_err_incompatible:
 		bch2_print_string_as_lines(KERN_ERR, out.buf);
@@ -1251,7 +1250,7 @@ int bch2_btree_node_read_done(struct bch_fs *c, struct bch_dev *ca,
 out:
 	mempool_free(iter, &c->fill_iter);
 	printbuf_exit(&buf);
-	bch2_time_stats_update(&c->times[BCH_TIME_btree_node_read_done], start_time);
+	time_stats_update(&c->times[BCH_TIME_btree_node_read_done], start_time);
 	return retry_read;
 fsck_err:
 	if (ret == -BCH_ERR_btree_node_read_err_want_retry ||
@@ -1323,7 +1322,7 @@ start:
 		}
 	}
 
-	bch2_time_stats_update(&c->times[BCH_TIME_btree_node_read],
+	time_stats_update(&c->times[BCH_TIME_btree_node_read],
 			       rb->start_time);
 	bio_put(&rb->bio);
 
@@ -1737,7 +1736,7 @@ static int __bch2_btree_root_read(struct btree_trans *trans, enum btree_id id,
 		list_move(&b->list, &c->btree_cache.freeable);
 		mutex_unlock(&c->btree_cache.lock);
 
-		ret = -EIO;
+		ret = -BCH_ERR_btree_node_read_error;
 		goto err;
 	}
 
@@ -1841,7 +1840,7 @@ static void btree_node_write_work(struct work_struct *work)
 		bch2_dev_list_has_dev(wbio->wbio.failed, ptr->dev));
 
 	if (!bch2_bkey_nr_ptrs(bkey_i_to_s_c(&wbio->key))) {
-		ret = -BCH_ERR_btree_write_all_failed;
+		ret = -BCH_ERR_btree_node_write_all_failed;
 		goto err;
 	}
 

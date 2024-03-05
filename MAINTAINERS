@@ -3538,6 +3538,7 @@ R:	Brian Foster <bfoster@redhat.com>
 L:	linux-bcachefs@vger.kernel.org
 S:	Supported
 C:	irc://irc.oftc.net/bcache
+T:	git https://evilpiepirate.org/git/bcachefs.git
 F:	fs/bcachefs/
 
 BDISP ST MEDIA DRIVER
@@ -5813,6 +5814,13 @@ F:	net/ax25/ax25_out.c
 F:	net/ax25/ax25_timer.c
 F:	net/ax25/sysctl_net_ax25.c
 
+DARRAY
+M:	Kent Overstreet <kent.overstreet@linux.dev>
+L:	linux-bcachefs@vger.kernel.org
+S:	Maintained
+F:	include/linux/darray.h
+F:	include/linux/darray_types.h
+
 DATA ACCESS MONITOR
 M:	SeongJae Park <sj@kernel.org>
 L:	damon@lists.linux.dev
@@ -8068,6 +8076,12 @@ M:	Marek Szyprowski <m.szyprowski@samsung.com>
 L:	iommu@lists.linux.dev
 S:	Maintained
 F:	drivers/iommu/exynos-iommu.c
+
+EYTZINGER TREE LIB
+M:	Kent Overstreet <kent.overstreet@linux.dev>
+L:	linux-bcachefs@vger.kernel.org
+S:	Maintained
+F:	include/linux/eytzinger.h
 
 F2FS FILE SYSTEM
 M:	Jaegeuk Kim <jaegeuk@kernel.org>
@@ -13396,6 +13410,15 @@ L:	netdev@vger.kernel.org
 S:	Maintained
 F:	drivers/net/mdio/mdio-regmap.c
 F:	include/linux/mdio/mdio-regmap.h
+
+MEAN AND VARIANCE LIBRARY
+M:	Daniel B. Hill <daniel@gluo.nz>
+M:	Kent Overstreet <kent.overstreet@linux.dev>
+S:	Maintained
+T:	git https://github.com/YellowOnion/linux/
+F:	include/linux/mean_and_variance.h
+F:	lib/math/mean_and_variance.c
+F:	lib/math/mean_and_variance_test.c
 
 MEASUREMENT COMPUTING CIO-DAC IIO DRIVER
 M:	William Breathitt Gray <william.gray@linaro.org>
@@ -21905,6 +21928,15 @@ F:	Documentation/userspace-api/media/drivers/thp7312.rst
 F:	drivers/media/i2c/thp7312.c
 F:	include/uapi/linux/thp7312.h
 
+THREAD WITH FILE
+M:	Kent Overstreet <kent.overstreet@linux.dev>
+M:	Darrick J. Wong <djwong@kernel.org>
+L:	linux-bcachefs@vger.kernel.org
+S:	Maintained
+F:	include/linux/thread_with_file.h
+F:	include/linux/thread_with_file_types.h
+F:	lib/thread_with_file.c
+
 THUNDERBOLT DMA TRAFFIC TEST DRIVER
 M:	Isaac Hazan <isaac.hazan@intel.com>
 L:	linux-usb@vger.kernel.org
@@ -22179,6 +22211,13 @@ F:	kernel/time/clocksource.c
 F:	kernel/time/ntp.c
 F:	kernel/time/time*.c
 F:	tools/testing/selftests/timers/
+
+TIME STATS:
+M:	Kent Overstreet <kent.overstreet@linux.dev>
+M:	Darrick J. Wong <djwong@kernel.org>
+S:	Maintained
+F:	include/linux/time_stats.h
+F:	lib/time_stats.c
 
 TIPC NETWORK LAYER
 M:	Jon Maloy <jmaloy@redhat.com>
