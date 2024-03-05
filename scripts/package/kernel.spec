@@ -66,6 +66,24 @@ ln -fns /usr/src/kernels/%{KERNELRELEASE} %{buildroot}/lib/modules/%{KERNELRELEA
 %{make} %{makeflags} run-command KBUILD_RUN_COMMAND='${srctree}/scripts/package/install-extmod-build %{buildroot}/usr/src/kernels/%{KERNELRELEASE}'
 %endif
 
+{
+	for x in System.map config kernel modules.builtin \
+			modules.builtin.modinfo modules.order vmlinuz; do
+		echo "/lib/modules/%{KERNELRELEASE}/${x}"
+	done
+
+	for x in alias alias.bin builtin.alias.bin builtin.bin dep dep.bin \
+					devname softdep symbols symbols.bin; do
+		echo "%ghost /lib/modules/%{KERNELRELEASE}/modules.${x}"
+	done
+
+	for x in System.map config vmlinuz; do
+		echo "%ghost /boot/${x}-%{KERNELRELEASE}"
+	done
+
+	echo "%exclude /lib/modules/%{KERNELRELEASE}/build"
+} > %{buildroot}/kernel.list
+
 %clean
 rm -rf %{buildroot}
 
@@ -78,23 +96,18 @@ for file in vmlinuz System.map config; do
 		cp "/lib/modules/%{KERNELRELEASE}/${file}" "/boot/${file}-%{KERNELRELEASE}"
 	fi
 done
+if [ ! -e "/lib/modules/%{KERNELRELEASE}/modules.dep" ]; then
+	/usr/sbin/depmod %{KERNELRELEASE}
+fi
 
 %preun
-if [ -x /sbin/new-kernel-pkg ]; then
-new-kernel-pkg --remove %{KERNELRELEASE} --rminitrd --initrdfile=/boot/initramfs-%{KERNELRELEASE}.img
-elif [ -x /usr/bin/kernel-install ]; then
+if [ -x /usr/bin/kernel-install ]; then
 kernel-install remove %{KERNELRELEASE}
 fi
 
-%postun
-if [ -x /sbin/update-bootloader ]; then
-/sbin/update-bootloader --remove %{KERNELRELEASE}
-fi
-
-%files
+%files -f %{buildroot}/kernel.list
 %defattr (-, root, root)
-/lib/modules/%{KERNELRELEASE}
-%exclude /lib/modules/%{KERNELRELEASE}/build
+%exclude /kernel.list
 
 %files headers
 %defattr (-, root, root)
