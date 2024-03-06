@@ -16,7 +16,7 @@ int mana_ib_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 	int err;
 
 	mdev = container_of(ibdev, struct mana_ib_dev, ib_dev);
-	gc = mdev->gdma_dev->gdma_context;
+	gc = mdev_to_gc(mdev);
 
 	if (udata->inlen < sizeof(ucmd))
 		return -EINVAL;
@@ -81,7 +81,7 @@ int mana_ib_destroy_cq(struct ib_cq *ibcq, struct ib_udata *udata)
 	int err;
 
 	mdev = container_of(ibdev, struct mana_ib_dev, ib_dev);
-	gc = mdev->gdma_dev->gdma_context;
+	gc = mdev_to_gc(mdev);
 
 	err = mana_ib_gd_destroy_dma_region(mdev, cq->gdma_region);
 	if (err) {
@@ -100,10 +100,29 @@ int mana_ib_destroy_cq(struct ib_cq *ibcq, struct ib_udata *udata)
 	return 0;
 }
 
-void mana_ib_cq_handler(void *ctx, struct gdma_queue *gdma_cq)
+static void mana_ib_cq_handler(void *ctx, struct gdma_queue *gdma_cq)
 {
 	struct mana_ib_cq *cq = ctx;
 
 	if (cq->ibcq.comp_handler)
 		cq->ibcq.comp_handler(&cq->ibcq, cq->ibcq.cq_context);
+}
+
+int mana_ib_install_cq_cb(struct mana_ib_dev *mdev, struct mana_ib_cq *cq)
+{
+	struct gdma_context *gc = mdev_to_gc(mdev);
+	struct gdma_queue *gdma_cq;
+
+	/* Create CQ table entry */
+	WARN_ON(gc->cq_table[cq->id]);
+	gdma_cq = kzalloc(sizeof(*gdma_cq), GFP_KERNEL);
+	if (!gdma_cq)
+		return -ENOMEM;
+
+	gdma_cq->cq.context = cq;
+	gdma_cq->type = GDMA_CQ;
+	gdma_cq->cq.callback = mana_ib_cq_handler;
+	gdma_cq->id = cq->id;
+	gc->cq_table[cq->id] = gdma_cq;
+	return 0;
 }
