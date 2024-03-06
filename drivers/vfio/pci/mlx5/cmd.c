@@ -108,8 +108,9 @@ int mlx5vf_cmd_query_vhca_migration_state(struct mlx5vf_pci_core_device *mvdev,
 		ret = wait_for_completion_interruptible(&mvdev->saving_migf->save_comp);
 		if (ret)
 			return ret;
-		if (mvdev->saving_migf->state ==
-		    MLX5_MIGF_STATE_PRE_COPY_ERROR) {
+		/* Upon cleanup, ignore previous pre_copy error state */
+		if (mvdev->saving_migf->state == MLX5_MIGF_STATE_PRE_COPY_ERROR &&
+		    !(query_flags & MLX5VF_QUERY_CLEANUP)) {
 			/*
 			 * In case we had a PRE_COPY error, only query full
 			 * image for final image
@@ -120,6 +121,11 @@ int mlx5vf_cmd_query_vhca_migration_state(struct mlx5vf_pci_core_device *mvdev,
 				return 0;
 			}
 			query_flags &= ~MLX5VF_QUERY_INC;
+		}
+		/* Block incremental query which is state-dependent */
+		if (mvdev->saving_migf->state == MLX5_MIGF_STATE_ERROR) {
+			complete(&mvdev->saving_migf->save_comp);
+			return -ENODEV;
 		}
 	}
 
@@ -147,6 +153,12 @@ int mlx5vf_cmd_query_vhca_migration_state(struct mlx5vf_pci_core_device *mvdev,
 				   remaining_total_size) : *state_size;
 
 	return 0;
+}
+
+static void set_tracker_change_event(struct mlx5vf_pci_core_device *mvdev)
+{
+	mvdev->tracker.object_changed = true;
+	complete(&mvdev->tracker_comp);
 }
 
 static void set_tracker_error(struct mlx5vf_pci_core_device *mvdev)
@@ -189,7 +201,7 @@ void mlx5vf_cmd_close_migratable(struct mlx5vf_pci_core_device *mvdev)
 	/* Must be done outside the lock to let it progress */
 	set_tracker_error(mvdev);
 	mutex_lock(&mvdev->state_mutex);
-	mlx5vf_disable_fds(mvdev);
+	mlx5vf_disable_fds(mvdev, NULL);
 	_mlx5vf_free_page_tracker_resources(mvdev);
 	mlx5vf_state_mutex_unlock(mvdev);
 }
@@ -608,8 +620,13 @@ static void mlx5vf_save_callback(int status, struct mlx5_async_work *context)
 
 err:
 	/* The error flow can't run from an interrupt context */
-	if (status == -EREMOTEIO)
+	if (status == -EREMOTEIO) {
 		status = MLX5_GET(save_vhca_state_out, async_data->out, status);
+		/* Failed in FW, print cmd out failure details */
+		mlx5_cmd_out_err(migf->mvdev->mdev, MLX5_CMD_OP_SAVE_VHCA_STATE, 0,
+				 async_data->out);
+	}
+
 	async_data->status = status;
 	queue_work(migf->mvdev->cb_wq, &async_data->work);
 }
@@ -623,6 +640,7 @@ int mlx5vf_cmd_save_vhca_state(struct mlx5vf_pci_core_device *mvdev,
 	u32 in[MLX5_ST_SZ_DW(save_vhca_state_in)] = {};
 	struct mlx5_vhca_data_buffer *header_buf = NULL;
 	struct mlx5vf_async_data *async_data;
+	bool pre_copy_cleanup = false;
 	int err;
 
 	lockdep_assert_held(&mvdev->state_mutex);
@@ -632,6 +650,10 @@ int mlx5vf_cmd_save_vhca_state(struct mlx5vf_pci_core_device *mvdev,
 	err = wait_for_completion_interruptible(&migf->save_comp);
 	if (err)
 		return err;
+
+	if ((migf->state == MLX5_MIGF_STATE_PRE_COPY ||
+	     migf->state == MLX5_MIGF_STATE_PRE_COPY_ERROR) && !track && !inc)
+		pre_copy_cleanup = true;
 
 	if (migf->state == MLX5_MIGF_STATE_PRE_COPY_ERROR)
 		/*
@@ -651,7 +673,7 @@ int mlx5vf_cmd_save_vhca_state(struct mlx5vf_pci_core_device *mvdev,
 
 	async_data = &migf->async_data;
 	async_data->buf = buf;
-	async_data->stop_copy_chunk = !track;
+	async_data->stop_copy_chunk = (!track && !pre_copy_cleanup);
 	async_data->out = kvzalloc(out_size, GFP_KERNEL);
 	if (!async_data->out) {
 		err = -ENOMEM;
@@ -900,6 +922,29 @@ static int mlx5vf_cmd_modify_tracker(struct mlx5_core_dev *mdev,
 	return mlx5_cmd_exec(mdev, in, sizeof(in), out, sizeof(out));
 }
 
+static int mlx5vf_cmd_query_tracker(struct mlx5_core_dev *mdev,
+				    struct mlx5_vhca_page_tracker *tracker)
+{
+	u32 out[MLX5_ST_SZ_DW(query_page_track_obj_out)] = {};
+	u32 in[MLX5_ST_SZ_DW(general_obj_in_cmd_hdr)] = {};
+	void *obj_context;
+	void *cmd_hdr;
+	int err;
+
+	cmd_hdr = MLX5_ADDR_OF(modify_page_track_obj_in, in, general_obj_in_cmd_hdr);
+	MLX5_SET(general_obj_in_cmd_hdr, cmd_hdr, opcode, MLX5_CMD_OP_QUERY_GENERAL_OBJECT);
+	MLX5_SET(general_obj_in_cmd_hdr, cmd_hdr, obj_type, MLX5_OBJ_TYPE_PAGE_TRACK);
+	MLX5_SET(general_obj_in_cmd_hdr, cmd_hdr, obj_id, tracker->id);
+
+	err = mlx5_cmd_exec(mdev, in, sizeof(in), out, sizeof(out));
+	if (err)
+		return err;
+
+	obj_context = MLX5_ADDR_OF(query_page_track_obj_out, out, obj_context);
+	tracker->status = MLX5_GET(page_track, obj_context, state);
+	return 0;
+}
+
 static int alloc_cq_frag_buf(struct mlx5_core_dev *mdev,
 			     struct mlx5_vhca_cq_buf *buf, int nent,
 			     int cqe_size)
@@ -957,9 +1002,11 @@ static int mlx5vf_event_notifier(struct notifier_block *nb, unsigned long type,
 		mlx5_nb_cof(nb, struct mlx5_vhca_page_tracker, nb);
 	struct mlx5vf_pci_core_device *mvdev = container_of(
 		tracker, struct mlx5vf_pci_core_device, tracker);
+	struct mlx5_eqe_obj_change *object;
 	struct mlx5_eqe *eqe = data;
 	u8 event_type = (u8)type;
 	u8 queue_type;
+	u32 obj_id;
 	int qp_num;
 
 	switch (event_type) {
@@ -974,6 +1021,12 @@ static int mlx5vf_event_notifier(struct notifier_block *nb, unsigned long type,
 		    qp_num != tracker->fw_qp->qpn)
 			break;
 		set_tracker_error(mvdev);
+		break;
+	case MLX5_EVENT_TYPE_OBJECT_CHANGE:
+		object = &eqe->data.obj_change;
+		obj_id = be32_to_cpu(object->obj_id);
+		if (obj_id == tracker->id)
+			set_tracker_change_event(mvdev);
 		break;
 	default:
 		break;
@@ -1634,6 +1687,11 @@ int mlx5vf_tracker_read_and_clear(struct vfio_device *vdev, unsigned long iova,
 		goto end;
 	}
 
+	if (tracker->is_err) {
+		err = -EIO;
+		goto end;
+	}
+
 	mdev = mvdev->mdev;
 	err = mlx5vf_cmd_modify_tracker(mdev, tracker->id, iova, length,
 					MLX5_PAGE_TRACK_STATE_REPORTING);
@@ -1652,6 +1710,12 @@ int mlx5vf_tracker_read_and_clear(struct vfio_device *vdev, unsigned long iova,
 						      dirty, &tracker->status);
 			if (poll_err == CQ_EMPTY) {
 				wait_for_completion(&mvdev->tracker_comp);
+				if (tracker->object_changed) {
+					tracker->object_changed = false;
+					err = mlx5vf_cmd_query_tracker(mdev, tracker);
+					if (err)
+						goto end;
+				}
 				continue;
 			}
 		}
