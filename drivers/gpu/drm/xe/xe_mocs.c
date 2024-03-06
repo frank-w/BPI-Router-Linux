@@ -72,7 +72,7 @@ struct xe_mocs_info {
 /* Helper defines */
 #define XELP_NUM_MOCS_ENTRIES	64  /* 63-64 are reserved, but configured. */
 #define PVC_NUM_MOCS_ENTRIES	3
-#define MTL_NUM_MOCS_ENTRIES    16
+#define MTL_NUM_MOCS_ENTRIES	16
 #define XE2_NUM_MOCS_ENTRIES	16
 
 /* (e)LLC caching options */
@@ -401,7 +401,11 @@ static unsigned int get_mocs_settings(struct xe_device *xe,
 		info->size = ARRAY_SIZE(dg2_mocs_desc);
 		info->table = dg2_mocs_desc;
 		info->uc_index = 1;
-		info->n_entries = XELP_NUM_MOCS_ENTRIES;
+		/*
+		 * Last entry is RO on hardware, don't bother with what was
+		 * written when checking later
+		 */
+		info->n_entries = XELP_NUM_MOCS_ENTRIES - 1;
 		info->unused_entries_index = 3;
 		break;
 	case XE_DG1:
@@ -470,12 +474,14 @@ static void __init_mocs_table(struct xe_gt *gt,
 	unsigned int i;
 	u32 mocs;
 
-	mocs_dbg(&gt_to_xe(gt)->drm, "entries:%d\n", info->n_entries);
 	drm_WARN_ONCE(&xe->drm, !info->unused_entries_index,
 		      "Unused entries index should have been defined\n");
-	for (i = 0;
-	     i < info->n_entries ? (mocs = get_entry_control(info, i)), 1 : 0;
-	     i++) {
+
+	mocs_dbg(&gt_to_xe(gt)->drm, "mocs entries: %d\n", info->n_entries);
+
+	for (i = 0; i < info->n_entries; i++) {
+		mocs = get_entry_control(info, i);
+
 		mocs_dbg(&gt_to_xe(gt)->drm, "GLOB_MOCS[%d] 0x%x 0x%x\n", i,
 			 XELP_GLOBAL_MOCS(i).addr, mocs);
 
@@ -510,14 +516,14 @@ static void init_l3cc_table(struct xe_gt *gt,
 	unsigned int i;
 	u32 l3cc;
 
-	mocs_dbg(&gt_to_xe(gt)->drm, "entries:%d\n", info->n_entries);
-	for (i = 0;
-	     i < (info->n_entries + 1) / 2 ?
-	     (l3cc = l3cc_combine(get_entry_l3cc(info, 2 * i),
-				  get_entry_l3cc(info, 2 * i + 1))), 1 : 0;
-	     i++) {
-		mocs_dbg(&gt_to_xe(gt)->drm, "LNCFCMOCS[%d] 0x%x 0x%x\n", i, XELP_LNCFCMOCS(i).addr,
-			 l3cc);
+	mocs_dbg(&gt_to_xe(gt)->drm, "l3cc entries: %d\n", info->n_entries);
+
+	for (i = 0; i < (info->n_entries + 1) / 2; i++) {
+		l3cc = l3cc_combine(get_entry_l3cc(info, 2 * i),
+				    get_entry_l3cc(info, 2 * i + 1));
+
+		mocs_dbg(&gt_to_xe(gt)->drm, "LNCFCMOCS[%d] 0x%x 0x%x\n", i,
+			 XELP_LNCFCMOCS(i).addr, l3cc);
 
 		if (GRAPHICS_VERx100(gt_to_xe(gt)) >= 1250)
 			xe_gt_mcr_multicast_write(gt, XEHP_LNCFCMOCS(i), l3cc);
