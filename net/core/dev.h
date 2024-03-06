@@ -3,6 +3,7 @@
 #define _NET_CORE_DEV_H
 
 #include <linux/types.h>
+#include <linux/rwsem.h>
 
 struct net;
 struct net_device;
@@ -46,6 +47,8 @@ extern int		weight_p;
 extern int		dev_weight_rx_bias;
 extern int		dev_weight_tx_bias;
 
+extern struct rw_semaphore dev_addr_sem;
+
 /* rtnl helpers */
 extern struct list_head net_todo_list;
 void netdev_run_todo(void);
@@ -56,6 +59,7 @@ struct netdev_name_node {
 	struct list_head list;
 	struct net_device *dev;
 	const char *name;
+	struct rcu_head rcu;
 };
 
 int netdev_get_name(struct net *net, char *name, int ifindex);

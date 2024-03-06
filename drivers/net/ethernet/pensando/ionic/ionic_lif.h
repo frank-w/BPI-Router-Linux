@@ -37,6 +37,7 @@ struct ionic_tx_stats {
 	u64 dma_map_err;
 	u64 hwstamp_valid;
 	u64 hwstamp_invalid;
+	u64 xdp_frames;
 };
 
 struct ionic_rx_stats {
@@ -51,6 +52,11 @@ struct ionic_rx_stats {
 	u64 alloc_err;
 	u64 hwstamp_valid;
 	u64 hwstamp_invalid;
+	u64 xdp_drop;
+	u64 xdp_aborted;
+	u64 xdp_pass;
+	u64 xdp_tx;
+	u64 xdp_redirect;
 };
 
 #define IONIC_QCQ_F_INITED		BIT(0)
@@ -135,6 +141,12 @@ struct ionic_lif_sw_stats {
 	u64 hw_rx_over_errors;
 	u64 hw_rx_missed_errors;
 	u64 hw_tx_aborted_errors;
+	u64 xdp_drop;
+	u64 xdp_aborted;
+	u64 xdp_pass;
+	u64 xdp_tx;
+	u64 xdp_redirect;
+	u64 xdp_frames;
 };
 
 enum ionic_lif_state_flags {
@@ -230,6 +242,7 @@ struct ionic_lif {
 	struct ionic_phc *phc;
 
 	struct dentry *dentry;
+	struct bpf_prog *xdp_prog;
 };
 
 struct ionic_phc {
@@ -314,7 +327,7 @@ static inline u32 ionic_coal_usec_to_hw(struct ionic *ionic, u32 usecs)
 
 static inline bool ionic_txq_hwstamp_enabled(struct ionic_queue *q)
 {
-	return unlikely(q->features & IONIC_TXQ_F_HWSTAMP);
+	return q->features & IONIC_TXQ_F_HWSTAMP;
 }
 
 void ionic_link_status_check_request(struct ionic_lif *lif, bool can_sleep);

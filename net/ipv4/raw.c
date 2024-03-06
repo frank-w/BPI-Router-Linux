@@ -310,7 +310,7 @@ int raw_rcv(struct sock *sk, struct sk_buff *skb)
 	}
 	nf_reset_ct(skb);
 
-	skb_push(skb, skb->data - skb_network_header(skb));
+	skb_push(skb, -skb_network_offset(skb));
 
 	raw_rcv_skb(sk, skb);
 	return 0;
@@ -353,6 +353,7 @@ static int raw_send_hdrinc(struct sock *sk, struct flowi4 *fl4,
 	skb->priority = READ_ONCE(sk->sk_priority);
 	skb->mark = sockc->mark;
 	skb->tstamp = sockc->transmit_time;
+	skb->mono_delivery_time = !!skb->tstamp;
 	skb_dst_set(skb, &rt->dst);
 	*rtp = NULL;
 
@@ -815,7 +816,7 @@ static int raw_geticmpfilter(struct sock *sk, char __user *optval, int __user *o
 out:	return ret;
 }
 
-static int do_raw_setsockopt(struct sock *sk, int level, int optname,
+static int do_raw_setsockopt(struct sock *sk, int optname,
 			     sockptr_t optval, unsigned int optlen)
 {
 	if (optname == ICMP_FILTER) {
@@ -832,11 +833,11 @@ static int raw_setsockopt(struct sock *sk, int level, int optname,
 {
 	if (level != SOL_RAW)
 		return ip_setsockopt(sk, level, optname, optval, optlen);
-	return do_raw_setsockopt(sk, level, optname, optval, optlen);
+	return do_raw_setsockopt(sk, optname, optval, optlen);
 }
 
-static int do_raw_getsockopt(struct sock *sk, int level, int optname,
-			  char __user *optval, int __user *optlen)
+static int do_raw_getsockopt(struct sock *sk, int optname,
+			     char __user *optval, int __user *optlen)
 {
 	if (optname == ICMP_FILTER) {
 		if (inet_sk(sk)->inet_num != IPPROTO_ICMP)
@@ -852,7 +853,7 @@ static int raw_getsockopt(struct sock *sk, int level, int optname,
 {
 	if (level != SOL_RAW)
 		return ip_getsockopt(sk, level, optname, optval, optlen);
-	return do_raw_getsockopt(sk, level, optname, optval, optlen);
+	return do_raw_getsockopt(sk, optname, optval, optlen);
 }
 
 static int raw_ioctl(struct sock *sk, int cmd, int *karg)

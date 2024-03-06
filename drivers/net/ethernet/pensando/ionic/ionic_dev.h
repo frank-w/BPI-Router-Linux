@@ -8,6 +8,7 @@
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/skbuff.h>
+#include <linux/bpf_trace.h>
 
 #include "ionic_if.h"
 #include "ionic_regs.h"
@@ -15,9 +16,10 @@
 #define IONIC_MAX_TX_DESC		8192
 #define IONIC_MAX_RX_DESC		16384
 #define IONIC_MIN_TXRX_DESC		64
-#define IONIC_DEF_TXRX_DESC		4096
+#define IONIC_DEF_TXRX_DESC		1024
 #define IONIC_RX_FILL_THRESHOLD		16
 #define IONIC_RX_FILL_DIV		8
+#define IONIC_TSO_DESCS_NEEDED		44 /* 64K TSO @1500B */
 #define IONIC_LIFS_MAX			1024
 #define IONIC_WATCHDOG_SECS		5
 #define IONIC_ITR_COAL_USEC_DEFAULT	64
@@ -195,6 +197,11 @@ typedef void (*ionic_desc_cb)(struct ionic_queue *q,
 #define IONIC_PAGE_GFP_MASK			(GFP_ATOMIC | __GFP_NOWARN |\
 						 __GFP_COMP | __GFP_MEMALLOC)
 
+#define IONIC_XDP_MAX_LINEAR_MTU	(IONIC_PAGE_SIZE -	\
+					 (VLAN_ETH_HLEN +	\
+					  XDP_PACKET_HEADROOM +	\
+					  SKB_DATA_ALIGN(sizeof(struct skb_shared_info))))
+
 struct ionic_buf_info {
 	struct page *page;
 	dma_addr_t dma_addr;
@@ -222,6 +229,8 @@ struct ionic_desc_info {
 	struct ionic_buf_info bufs[MAX_SKB_FRAGS + 1];
 	ionic_desc_cb cb;
 	void *cb_arg;
+	struct xdp_frame *xdpf;
+	enum xdp_action act;
 };
 
 #define IONIC_QUEUE_NAME_MAX_SZ		16
@@ -256,6 +265,9 @@ struct ionic_queue {
 		struct ionic_txq_sg_desc *txq_sgl;
 		struct ionic_rxq_sg_desc *rxq_sgl;
 	};
+	struct xdp_rxq_info *xdp_rxq_info;
+	struct ionic_queue *partner;
+	bool xdp_flush;
 	dma_addr_t base_pa;
 	dma_addr_t cmb_base_pa;
 	dma_addr_t sg_base_pa;
@@ -368,6 +380,7 @@ typedef void (*ionic_cq_done_cb)(void *done_arg);
 unsigned int ionic_cq_service(struct ionic_cq *cq, unsigned int work_to_do,
 			      ionic_cq_cb cb, ionic_cq_done_cb done_cb,
 			      void *done_arg);
+unsigned int ionic_tx_cq_service(struct ionic_cq *cq, unsigned int work_to_do);
 
 int ionic_q_init(struct ionic_lif *lif, struct ionic_dev *idev,
 		 struct ionic_queue *q, unsigned int index, const char *name,

@@ -9,6 +9,7 @@ readonly KSFT_SKIP=4
 readonly KSFT_TEST="${MPTCP_LIB_KSFT_TEST:-$(basename "${0}" .sh)}"
 
 MPTCP_LIB_SUBTESTS=()
+MPTCP_LIB_SUBTESTS_DUPLICATED=0
 
 # only if supported (or forced) and not disabled, see no-color.org
 if { [ -t 1 ] || [ "${SELFTESTS_MPTCP_LIB_COLOR_FORCE:-}" = "1" ]; } &&
@@ -146,11 +147,25 @@ mptcp_lib_kversion_ge() {
 	mptcp_lib_fail_if_expected_feature "kernel version ${1} lower than ${v}"
 }
 
+__mptcp_lib_result_check_duplicated() {
+	local subtest
+
+	for subtest in "${MPTCP_LIB_SUBTESTS[@]}"; do
+		if [[ "${subtest}" == *" - ${KSFT_TEST}: ${*%% #*}" ]]; then
+			MPTCP_LIB_SUBTESTS_DUPLICATED=1
+			mptcp_lib_print_err "Duplicated entry: ${*}"
+			break
+		fi
+	done
+}
+
 __mptcp_lib_result_add() {
 	local result="${1}"
 	shift
 
 	local id=$((${#MPTCP_LIB_SUBTESTS[@]} + 1))
+
+	__mptcp_lib_result_check_duplicated "${*}"
 
 	MPTCP_LIB_SUBTESTS+=("${result} ${id} - ${KSFT_TEST}: ${*}")
 }
@@ -206,6 +221,12 @@ mptcp_lib_result_print_all_tap() {
 	for subtest in "${MPTCP_LIB_SUBTESTS[@]}"; do
 		printf "%s\n" "${subtest}"
 	done
+
+	if [ "${MPTCP_LIB_SUBTESTS_DUPLICATED}" = 1 ] &&
+	   mptcp_lib_expect_all_features; then
+		mptcp_lib_print_err "Duplicated test entries"
+		exit ${KSFT_FAIL}
+	fi
 }
 
 # get the value of keyword $1 in the line marked by keyword $2
@@ -297,4 +318,27 @@ mptcp_lib_wait_local_port_listen() {
 			break
 		sleep 0.1
 	done
+}
+
+mptcp_lib_check_output() {
+	local err="${1}"
+	local cmd="${2}"
+	local expected="${3}"
+	local cmd_ret=0
+	local out
+
+	if ! out=$(${cmd} 2>"${err}"); then
+		cmd_ret=${?}
+	fi
+
+	if [ ${cmd_ret} -ne 0 ]; then
+		mptcp_lib_print_err "[FAIL] command execution '${cmd}' stderr"
+		cat "${err}"
+		return 2
+	elif [ "${out}" = "${expected}" ]; then
+		return 0
+	else
+		mptcp_lib_print_err "[FAIL] expected '${expected}' got '${out}'"
+		return 1
+	fi
 }

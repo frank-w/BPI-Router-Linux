@@ -453,7 +453,7 @@ struct bpf_verifier_state {
 
 #define bpf_get_spilled_reg(slot, frame, mask)				\
 	(((slot < frame->allocated_stack / BPF_REG_SIZE) &&		\
-	  ((1 << frame->stack[slot].slot_type[0]) & (mask))) \
+	  ((1 << frame->stack[slot].slot_type[BPF_REG_SIZE - 1]) & (mask))) \
 	 ? &frame->stack[slot].spilled_ptr : NULL)
 
 /* Iterate over 'frame', setting 'reg' to either NULL or a spilled register. */
@@ -610,6 +610,7 @@ struct bpf_subprog_arg_info {
 	enum bpf_arg_type arg_type;
 	union {
 		u32 mem_size;
+		u32 btf_id;
 	};
 };
 
@@ -662,6 +663,7 @@ struct bpf_verifier_env {
 	u32 prev_insn_idx;
 	struct bpf_prog *prog;		/* eBPF program being verified */
 	const struct bpf_verifier_ops *ops;
+	struct module *attach_btf_mod;	/* The owner module of prog->aux->attach_btf */
 	struct bpf_verifier_stack_elem *head; /* stack of verifier states to be processed */
 	int stack_size;			/* number of states to be processed */
 	bool strict_alignment;		/* perform strict pointer alignment checks */
@@ -915,6 +917,15 @@ static inline void mark_verifier_state_scratched(struct bpf_verifier_env *env)
 {
 	env->scratched_regs = ~0U;
 	env->scratched_stack_slots = ~0ULL;
+}
+
+static inline bool bpf_stack_narrow_access_ok(int off, int fill_size, int spill_size)
+{
+#ifdef __BIG_ENDIAN
+	off -= spill_size - fill_size;
+#endif
+
+	return !(off % BPF_REG_SIZE);
 }
 
 const char *reg_type_str(struct bpf_verifier_env *env, enum bpf_reg_type type);
