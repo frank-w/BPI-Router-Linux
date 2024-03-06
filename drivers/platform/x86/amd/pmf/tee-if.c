@@ -453,7 +453,7 @@ int amd_pmf_init_smart_pc(struct amd_pmf_dev *dev)
 		goto error;
 	}
 
-	memcpy(dev->policy_buf, dev->policy_base, dev->policy_sz);
+	memcpy_fromio(dev->policy_buf, dev->policy_base, dev->policy_sz);
 
 	amd_pmf_hex_dump_pb(dev);
 
