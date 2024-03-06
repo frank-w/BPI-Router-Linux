@@ -2699,6 +2699,57 @@ static void parse_ddi_ports(struct drm_i915_private *i915)
 		print_ddi_port(devdata);
 }
 
+static int child_device_expected_size(u16 version)
+{
+	BUILD_BUG_ON(sizeof(struct child_device_config) < 40);
+
+	if (version > 256)
+		return -ENOENT;
+	else if (version >= 256)
+		return 40;
+	else if (version >= 216)
+		return 39;
+	else if (version >= 196)
+		return 38;
+	else if (version >= 195)
+		return 37;
+	else if (version >= 111)
+		return LEGACY_CHILD_DEVICE_CONFIG_SIZE;
+	else if (version >= 106)
+		return 27;
+	else
+		return 22;
+}
+
+static bool child_device_size_valid(struct drm_i915_private *i915, int size)
+{
+	int expected_size;
+
+	expected_size = child_device_expected_size(i915->display.vbt.version);
+	if (expected_size < 0) {
+		expected_size = sizeof(struct child_device_config);
+		drm_dbg(&i915->drm,
+			"Expected child device config size for VBT version %u not known; assuming %d\n",
+			i915->display.vbt.version, expected_size);
+	}
+
+	/* Flag an error for unexpected size, but continue anyway. */
+	if (size != expected_size)
+		drm_err(&i915->drm,
+			"Unexpected child device config size %d (expected %d for VBT version %u)\n",
+			size, expected_size, i915->display.vbt.version);
+
+	/* The legacy sized child device config is the minimum we need. */
+	if (size < LEGACY_CHILD_DEVICE_CONFIG_SIZE) {
+		drm_dbg_kms(&i915->drm,
+			    "Child device config size %d is too small.\n",
+			    size);
+		return false;
+	}
+
+	return true;
+}
+
 static void
 parse_general_definitions(struct drm_i915_private *i915)
 {
@@ -2706,7 +2757,6 @@ parse_general_definitions(struct drm_i915_private *i915)
 	struct intel_bios_encoder_data *devdata;
 	const struct child_device_config *child;
 	int i, child_device_num;
-	u8 expected_size;
 	u16 block_size;
 	int bus_pin;
 
@@ -2730,39 +2780,8 @@ parse_general_definitions(struct drm_i915_private *i915)
 	if (intel_gmbus_is_valid_pin(i915, bus_pin))
 		i915->display.vbt.crt_ddc_pin = bus_pin;
 
-	if (i915->display.vbt.version < 106) {
-		expected_size = 22;
-	} else if (i915->display.vbt.version < 111) {
-		expected_size = 27;
-	} else if (i915->display.vbt.version < 195) {
-		expected_size = LEGACY_CHILD_DEVICE_CONFIG_SIZE;
-	} else if (i915->display.vbt.version == 195) {
-		expected_size = 37;
-	} else if (i915->display.vbt.version <= 215) {
-		expected_size = 38;
-	} else if (i915->display.vbt.version <= 250) {
-		expected_size = 39;
-	} else {
-		expected_size = sizeof(*child);
-		BUILD_BUG_ON(sizeof(*child) < 39);
-		drm_dbg(&i915->drm,
-			"Expected child device config size for VBT version %u not known; assuming %u\n",
-			i915->display.vbt.version, expected_size);
-	}
-
-	/* Flag an error for unexpected size, but continue anyway. */
-	if (defs->child_dev_size != expected_size)
-		drm_err(&i915->drm,
-			"Unexpected child device config size %u (expected %u for VBT version %u)\n",
-			defs->child_dev_size, expected_size, i915->display.vbt.version);
-
-	/* The legacy sized child device config is the minimum we need. */
-	if (defs->child_dev_size < LEGACY_CHILD_DEVICE_CONFIG_SIZE) {
-		drm_dbg_kms(&i915->drm,
-			    "Child device config size %u is too small.\n",
-			    defs->child_dev_size);
+	if (!child_device_size_valid(i915, defs->child_dev_size))
 		return;
-	}
 
 	/* get the number of child device */
 	child_device_num = (block_size - sizeof(*defs)) / defs->child_dev_size;
