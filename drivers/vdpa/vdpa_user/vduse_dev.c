@@ -65,6 +65,7 @@ struct vduse_virtqueue {
 	int irq_effective_cpu;
 	struct cpumask irq_affinity;
 	struct kobject kobj;
+	unsigned long vdpa_reconnect_vaddr;
 };
 
 struct vduse_dev;
@@ -541,6 +542,17 @@ static void vduse_vdpa_set_vq_num(struct vdpa_device *vdpa, u16 idx, u32 num)
 	vq->num = num;
 }
 
+static u16 vduse_vdpa_get_vq_size(struct vdpa_device *vdpa, u16 idx)
+{
+	struct vduse_dev *dev = vdpa_to_vduse(vdpa);
+	struct vduse_virtqueue *vq = dev->vqs[idx];
+
+	if (vq->num)
+		return vq->num;
+	else
+		return vq->num_max;
+}
+
 static void vduse_vdpa_set_vq_ready(struct vdpa_device *vdpa,
 					u16 idx, bool ready)
 {
@@ -773,6 +785,7 @@ static const struct vdpa_config_ops vduse_vdpa_config_ops = {
 	.kick_vq		= vduse_vdpa_kick_vq,
 	.set_vq_cb		= vduse_vdpa_set_vq_cb,
 	.set_vq_num             = vduse_vdpa_set_vq_num,
+	.get_vq_size		= vduse_vdpa_get_vq_size,
 	.set_vq_ready		= vduse_vdpa_set_vq_ready,
 	.get_vq_ready		= vduse_vdpa_get_vq_ready,
 	.set_vq_state		= vduse_vdpa_set_vq_state,
@@ -797,6 +810,26 @@ static const struct vdpa_config_ops vduse_vdpa_config_ops = {
 	.set_map		= vduse_vdpa_set_map,
 	.free			= vduse_vdpa_free,
 };
+
+static void vduse_dev_sync_single_for_device(struct device *dev,
+					     dma_addr_t dma_addr, size_t size,
+					     enum dma_data_direction dir)
+{
+	struct vduse_dev *vdev = dev_to_vduse(dev);
+	struct vduse_iova_domain *domain = vdev->domain;
+
+	vduse_domain_sync_single_for_device(domain, dma_addr, size, dir);
+}
+
+static void vduse_dev_sync_single_for_cpu(struct device *dev,
+					     dma_addr_t dma_addr, size_t size,
+					     enum dma_data_direction dir)
+{
+	struct vduse_dev *vdev = dev_to_vduse(dev);
+	struct vduse_iova_domain *domain = vdev->domain;
+
+	vduse_domain_sync_single_for_cpu(domain, dma_addr, size, dir);
+}
 
 static dma_addr_t vduse_dev_map_page(struct device *dev, struct page *page,
 				     unsigned long offset, size_t size,
@@ -858,6 +891,8 @@ static size_t vduse_dev_max_mapping_size(struct device *dev)
 }
 
 static const struct dma_map_ops vduse_dev_dma_ops = {
+	.sync_single_for_device = vduse_dev_sync_single_for_device,
+	.sync_single_for_cpu = vduse_dev_sync_single_for_cpu,
 	.map_page = vduse_dev_map_page,
 	.unmap_page = vduse_dev_unmap_page,
 	.alloc = vduse_dev_alloc_coherent,
@@ -1103,6 +1138,38 @@ static void vduse_vq_update_effective_cpu(struct vduse_virtqueue *vq)
 	}
 
 	vq->irq_effective_cpu = curr_cpu;
+}
+static int vduse_alloc_reconnnect_info_mem(struct vduse_dev *dev)
+{
+	unsigned long vaddr = 0;
+	struct vduse_virtqueue *vq;
+
+	for (int i = 0; i < dev->vq_num; i++) {
+		/*page 0~ vq_num save the reconnect info for vq*/
+		vq = dev->vqs[i];
+		vaddr = get_zeroed_page(GFP_KERNEL);
+		if (vaddr == 0)
+			return -ENOMEM;
+
+		vq->vdpa_reconnect_vaddr = vaddr;
+	}
+
+	return 0;
+}
+
+static int vduse_free_reconnnect_info_mem(struct vduse_dev *dev)
+{
+	struct vduse_virtqueue *vq;
+
+	for (int i = 0; i < dev->vq_num; i++) {
+		vq = dev->vqs[i];
+
+		if (vq->vdpa_reconnect_vaddr)
+			free_page(vq->vdpa_reconnect_vaddr);
+		vq->vdpa_reconnect_vaddr = 0;
+	}
+
+	return 0;
 }
 
 static long vduse_dev_ioctl(struct file *file, unsigned int cmd,
@@ -1367,6 +1434,34 @@ static long vduse_dev_ioctl(struct file *file, unsigned int cmd,
 		ret = 0;
 		break;
 	}
+	case VDUSE_DEV_GET_CONFIG: {
+		struct vduse_config_data config;
+		unsigned long size = offsetof(struct vduse_config_data, buffer);
+
+		ret = -EFAULT;
+		if (copy_from_user(&config, argp, size))
+			break;
+
+		ret = -EINVAL;
+		if (config.offset > dev->config_size || config.length == 0 ||
+		    config.length > dev->config_size - config.offset)
+			break;
+
+		if (copy_to_user(argp + size, dev->config + config.offset,
+				 config.length)) {
+			ret = -EFAULT;
+			break;
+		}
+		ret = 0;
+		break;
+	}
+
+	case VDUSE_DEV_GET_STATUS:
+		/*
+		 * Returns the status read from device
+		 */
+		ret = put_user(dev->status, (u8 __user *)argp);
+		break;
 	default:
 		ret = -ENOIOCTLCMD;
 		break;
@@ -1403,6 +1498,62 @@ static struct vduse_dev *vduse_dev_get_from_minor(int minor)
 	return dev;
 }
 
+static vm_fault_t vduse_vm_fault(struct vm_fault *vmf)
+{
+	struct vduse_dev *dev = vmf->vma->vm_file->private_data;
+	struct vm_area_struct *vma = vmf->vma;
+	u16 index = vma->vm_pgoff;
+	struct vduse_virtqueue *vq;
+	unsigned long vaddr;
+
+	/* index 1+vq_number page reserved for virtqueue state*/
+	vq = dev->vqs[index];
+	vaddr = vq->vdpa_reconnect_vaddr;
+	if (remap_pfn_range(vma, vmf->address & PAGE_MASK,
+			    PFN_DOWN(virt_to_phys((void *)vaddr)), PAGE_SIZE,
+			    vma->vm_page_prot))
+		return VM_FAULT_SIGBUS;
+	return VM_FAULT_NOPAGE;
+}
+
+static const struct vm_operations_struct vduse_vm_ops = {
+	.fault = vduse_vm_fault,
+};
+
+static int vduse_dev_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct vduse_dev *dev = file->private_data;
+	unsigned long vaddr = 0;
+	unsigned long index = vma->vm_pgoff;
+	struct vduse_virtqueue *vq;
+
+	if (vma->vm_end - vma->vm_start != PAGE_SIZE)
+		return -EINVAL;
+	if ((vma->vm_flags & VM_SHARED) == 0)
+		return -EINVAL;
+
+	if (index >= dev->vq_num)
+		return -EINVAL;
+
+	index = array_index_nospec(index, dev->vq_num);
+	vq = dev->vqs[index];
+	vaddr = vq->vdpa_reconnect_vaddr;
+	if (vaddr == 0)
+		return -EOPNOTSUPP;
+
+	if (virt_to_phys((void *)vaddr) & (PAGE_SIZE - 1))
+		return -EINVAL;
+
+	/* Check if the Userspace App mapped the correct size */
+	if (vma->vm_end - vma->vm_start != PAGE_SIZE)
+		return -EOPNOTSUPP;
+
+	vm_flags_set(vma, VM_DONTEXPAND);
+	vma->vm_ops = &vduse_vm_ops;
+
+	return 0;
+}
+
 static int vduse_dev_open(struct inode *inode, struct file *file)
 {
 	int ret;
@@ -1435,6 +1586,8 @@ static const struct file_operations vduse_dev_fops = {
 	.unlocked_ioctl	= vduse_dev_ioctl,
 	.compat_ioctl	= compat_ptr_ioctl,
 	.llseek		= noop_llseek,
+	.mmap		= vduse_dev_mmap,
+
 };
 
 static ssize_t irq_cb_affinity_show(struct vduse_virtqueue *vq, char *buf)
@@ -1643,6 +1796,8 @@ static int vduse_destroy_dev(char *name)
 		mutex_unlock(&dev->lock);
 		return -EBUSY;
 	}
+	vduse_free_reconnnect_info_mem(dev);
+
 	dev->connected = true;
 	mutex_unlock(&dev->lock);
 
@@ -1825,12 +1980,17 @@ static int vduse_create_dev(struct vduse_dev_config *config,
 	ret = vduse_dev_init_vqs(dev, config->vq_align, config->vq_num);
 	if (ret)
 		goto err_vqs;
+	ret = vduse_alloc_reconnnect_info_mem(dev);
+	if (ret < 0)
+		goto err_mem;
 
 	__module_get(THIS_MODULE);
 
 	return 0;
 err_vqs:
 	device_destroy(&vduse_class, MKDEV(MAJOR(vduse_major), dev->minor));
+err_mem:
+	vduse_free_reconnnect_info_mem(dev);
 err_dev:
 	idr_remove(&vduse_idr, dev->minor);
 err_idr:

@@ -350,4 +350,9 @@ struct vduse_dev_response {
 	};
 };
 
+/* get device configuration space */
+#define VDUSE_DEV_GET_CONFIG _IOR(VDUSE_BASE, 0x1b, struct vduse_config_data)
+
+#define VDUSE_DEV_GET_STATUS _IOR(VDUSE_BASE, 0x1c, __u8)
+
 #endif /* _UAPI_VDUSE_H_ */

@@ -231,3 +231,36 @@ able to start the dataplane processing as follows:
    after the used ring is filled.
 
 For more details on the uAPI, please see include/uapi/linux/vduse.h.
+
+HOW VDUSE devices reconnection works
+------------------------------------
+
+0. Userspace APP checks if the device /dev/vduse/vduse_name exists.
+   If it does not exist, need to create the instance.goto step 1
+   If it does exist, it means this is a reconnect and goto step 3.
+
+1. Create a new VDUSE instance with ioctl(VDUSE_CREATE_DEV) on
+   /dev/vduse/control.
+
+2. When the ioctl(VDUSE_CREATE_DEV) function is called, the kernel allocates memory
+   to save the reconnect information.
+
+3. Userspace App need to mmap the pages to userspace
+   Userspace App need to map Pages 0 to vq_number for vq status,
+   Users can define the structure for saving the reconnect information themselves
+   in the userspace.
+
+4. Check if the infomation sutiable for reconnect
+   If this is reconnect:
+   Before attempting to reconnect, The userspace application need to the
+   ioctl VDUSE_DEV_GET_CONFIG,VDUSE_DEV_GET_STATUS,VDUSE_DEV_GET_FEATURES...
+   to get the and confirm if these information are suitable for reconnecting.
+
+5. Start the userspace App.
+   While running, the application should store the relevant information about
+   reconnections in mapped pages.
+   When calling ioctl VDUSE_VQ_GET_INFO from the userspace APP to get vq information, it is necessary
+   to check if this is a reconnection. If a reconnection has occurred, the vq-related information
+   must be get from the mapped pages.
+
+6. When the Userspace App exits, it is necessary to unmap all the reconnect pages.
