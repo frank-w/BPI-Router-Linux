@@ -113,7 +113,6 @@ to ReStructured Text format, or are simply too old.
    :maxdepth: 1
 
    Unsorted documentation <staging/index>
-   RAS/ras
 
 
 Translations
