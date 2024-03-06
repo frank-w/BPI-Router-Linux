@@ -437,16 +437,16 @@ void ht_on_assoc_rsp(struct rtllib_device *ieee)
 	}
 	netdev_dbg(ieee->dev, "%s(): HT_ENABLE\n", __func__);
 
-	if (!memcmp(ht_info->PeerHTCapBuf, EWC11NHTCap, sizeof(EWC11NHTCap)))
-		pPeerHTCap = (struct ht_capab_ele *)(&ht_info->PeerHTCapBuf[4]);
+	if (!memcmp(ht_info->peer_ht_cap_buf, EWC11NHTCap, sizeof(EWC11NHTCap)))
+		pPeerHTCap = (struct ht_capab_ele *)(&ht_info->peer_ht_cap_buf[4]);
 	else
-		pPeerHTCap = (struct ht_capab_ele *)(ht_info->PeerHTCapBuf);
+		pPeerHTCap = (struct ht_capab_ele *)(ht_info->peer_ht_cap_buf);
 
-	if (!memcmp(ht_info->PeerHTInfoBuf, EWC11NHTInfo, sizeof(EWC11NHTInfo)))
+	if (!memcmp(ht_info->peer_ht_info_buf, EWC11NHTInfo, sizeof(EWC11NHTInfo)))
 		pPeerHTInfo = (struct ht_info_ele *)
-			     (&ht_info->PeerHTInfoBuf[4]);
+			     (&ht_info->peer_ht_info_buf[4]);
 	else
-		pPeerHTInfo = (struct ht_info_ele *)(ht_info->PeerHTInfoBuf);
+		pPeerHTInfo = (struct ht_info_ele *)(ht_info->peer_ht_info_buf);
 
 #ifdef VERBOSE_DEBUG
 	print_hex_dump_bytes("%s: ", __func__, DUMP_PREFIX_NONE,
@@ -480,9 +480,9 @@ void ht_on_assoc_rsp(struct rtllib_device *ieee)
 	}
 
 	ht_info->current_mpdu_density = pPeerHTCap->MPDUDensity;
-	if (ht_info->iot_action & HT_IOT_ACT_TX_USE_AMSDU_8K) {
+	if (ht_info->iot_action & HT_IOT_ACT_TX_USE_AMSDU_8K)
 		ht_info->current_ampdu_enable = false;
-	}
+
 	ht_info->cur_rx_reorder_enable = 1;
 
 	if (pPeerHTCap->MCS[0] == 0)
@@ -516,12 +516,12 @@ void ht_initialize_ht_info(struct rtllib_device *ieee)
 	ht_info->current_mpdu_density = 0;
 	ht_info->CurrentAMPDUFactor = ht_info->ampdu_factor;
 
-	memset((void *)(&ht_info->SelfHTCap), 0,
-	       sizeof(ht_info->SelfHTCap));
-	memset((void *)(&ht_info->PeerHTCapBuf), 0,
-	       sizeof(ht_info->PeerHTCapBuf));
-	memset((void *)(&ht_info->PeerHTInfoBuf), 0,
-	       sizeof(ht_info->PeerHTInfoBuf));
+	memset((void *)(&ht_info->self_ht_cap), 0,
+	       sizeof(ht_info->self_ht_cap));
+	memset((void *)(&ht_info->peer_ht_cap_buf), 0,
+	       sizeof(ht_info->peer_ht_cap_buf));
+	memset((void *)(&ht_info->peer_ht_info_buf), 0,
+	       sizeof(ht_info->peer_ht_info_buf));
 
 	ht_info->sw_bw_in_progress = false;
 
@@ -572,15 +572,15 @@ void ht_reset_self_and_save_peer_setting(struct rtllib_device *ieee,
 		ht_info->peer_ht_spec_ver = pNetwork->bssht.bd_ht_spec_ver;
 
 		if (pNetwork->bssht.bd_ht_cap_len > 0 &&
-		    pNetwork->bssht.bd_ht_cap_len <= sizeof(ht_info->PeerHTCapBuf))
-			memcpy(ht_info->PeerHTCapBuf,
+		    pNetwork->bssht.bd_ht_cap_len <= sizeof(ht_info->peer_ht_cap_buf))
+			memcpy(ht_info->peer_ht_cap_buf,
 			       pNetwork->bssht.bd_ht_cap_buf,
 			       pNetwork->bssht.bd_ht_cap_len);
 
 		if (pNetwork->bssht.bd_ht_info_len > 0 &&
 		    pNetwork->bssht.bd_ht_info_len <=
-		    sizeof(ht_info->PeerHTInfoBuf))
-			memcpy(ht_info->PeerHTInfoBuf,
+		    sizeof(ht_info->peer_ht_info_buf))
+			memcpy(ht_info->peer_ht_info_buf,
 			       pNetwork->bssht.bd_ht_info_buf,
 			       pNetwork->bssht.bd_ht_info_len);
 
