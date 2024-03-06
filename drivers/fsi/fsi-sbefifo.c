@@ -113,7 +113,7 @@ enum sbe_state
 #define SBEFIFO_TIMEOUT_IN_RSP		1000
 
 /* Other constants */
-#define SBEFIFO_MAX_USER_CMD_LEN	(0x100000 + PAGE_SIZE)
+#define SBEFIFO_MAX_USER_CMD_LEN       (0x400000 + PAGE_SIZE)
 #define SBEFIFO_RESET_MAGIC		0x52534554 /* "RSET" */
 
 struct sbefifo {
@@ -881,6 +881,13 @@ static ssize_t sbefifo_user_write(struct file *file, const char __user *buf,
 		return -EINVAL;
 
 	mutex_lock(&user->file_lock);
+
+	/* If previous write command is still pending then free it. It is safe
+	 * to do that because read cannot be in progress since we hold the
+	 * lock.
+	 */
+	if (user->pending_cmd)
+		sbefifo_release_command(user);
 
 	/* Can we use the pre-allocate buffer ? If not, allocate */
 	if (len <= PAGE_SIZE)
