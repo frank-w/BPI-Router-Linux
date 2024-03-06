@@ -11,17 +11,12 @@
  *
  */
 
-#define KMSG_COMPONENT "dasd"
-
 #include <linux/interrupt.h>
 #include <linux/major.h>
 #include <linux/fs.h>
 #include <linux/blkpg.h>
 
 #include <linux/uaccess.h>
-
-/* This is ugly... */
-#define PRINTK_HEADER "dasd_gendisk:"
 
 #include "dasd_int.h"
 
@@ -58,7 +53,7 @@ int dasd_gendisk_alloc(struct dasd_block *block)
 	if (rc)
 		return rc;
 
-	gdp = blk_mq_alloc_disk(&block->tag_set, block);
+	gdp = blk_mq_alloc_disk(&block->tag_set, NULL, block);
 	if (IS_ERR(gdp)) {
 		blk_mq_free_tag_set(&block->tag_set);
 		return PTR_ERR(gdp);
