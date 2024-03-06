@@ -606,7 +606,6 @@ static int __init rdinit_setup(char *str)
 __setup("rdinit=", rdinit_setup);
 
 #ifndef CONFIG_SMP
-static const unsigned int setup_max_cpus = NR_CPUS;
 static inline void setup_nr_cpu_ids(void) { }
 static inline void smp_prepare_cpus(unsigned int maxcpus) { }
 #endif
@@ -776,6 +775,10 @@ void __init parse_early_param(void)
 void __init __weak arch_post_acpi_subsys_init(void) { }
 
 void __init __weak smp_setup_processor_id(void)
+{
+}
+
+void __init __weak smp_prepare_boot_cpu(void)
 {
 }
 

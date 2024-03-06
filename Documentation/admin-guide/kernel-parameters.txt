@@ -684,12 +684,6 @@
 			loops can be debugged more effectively on production
 			systems.
 
-	clocksource.max_cswd_read_retries= [KNL]
-			Number of clocksource_watchdog() retries due to
-			external delays before the clock will be marked
-			unstable.  Defaults to two retries, that is,
-			three attempts to read the clock under test.
-
 	clocksource.verify_n_cpus= [KNL]
 			Limit the number of CPUs checked for clocksources
 			marked with CLOCK_SOURCE_VERIFY_PERCPU that
@@ -1104,15 +1098,6 @@
 	disable_tlbie	[PPC]
 			Disable TLBIE instruction. Currently does not work
 			with KVM, with HASH MMU, or with coherent accelerators.
-
-	disable_cpu_apicid= [X86,APIC,SMP]
-			Format: <int>
-			The number of initial APIC ID for the
-			corresponding CPU to be disabled at boot,
-			mostly used for the kdump 2nd kernel to
-			disable BSP to wake up multiple CPUs without
-			causing system reset or hang due to sending
-			INIT from AP to BSP.
 
 	disable_ddw	[PPC/PSERIES]
 			Disable Dynamic DMA Window support. Use this
@@ -1537,6 +1522,12 @@
 			functionally usable PAE implementation.
 			Warning: use of this parameter will taint the kernel
 			and may cause unknown problems.
+
+	fred=		[X86-64]
+			Enable/disable Flexible Return and Event Delivery.
+			Format: { on | off }
+			on: enable FRED when it's present.
+			off: disable FRED, the default setting.
 
 	ftrace=[tracer]
 			[FTRACE] will set and start the specified tracer
@@ -3330,9 +3321,7 @@
 
 	mem_encrypt=	[X86-64] AMD Secure Memory Encryption (SME) control
 			Valid arguments: on, off
-			Default (depends on kernel configuration option):
-			  on  (CONFIG_AMD_MEM_ENCRYPT_ACTIVE_BY_DEFAULT=y)
-			  off (CONFIG_AMD_MEM_ENCRYPT_ACTIVE_BY_DEFAULT=n)
+			Default: off
 			mem_encrypt=on:		Activate SME
 			mem_encrypt=off:	Do not activate SME
 
@@ -3409,6 +3398,7 @@
 					       nospectre_v1 [X86,PPC]
 					       nospectre_v2 [X86,PPC,S390,ARM64]
 					       retbleed=off [X86]
+					       spec_rstack_overflow=off [X86]
 					       spec_store_bypass_disable=off [X86,PPC]
 					       spectre_v2_user=off [X86]
 					       srbds=off [X86,INTEL]
@@ -6043,8 +6033,8 @@
 			Selecting 'on' will, and 'auto' may, choose a
 			mitigation method at run time according to the
 			CPU, the available microcode, the setting of the
-			CONFIG_RETPOLINE configuration option, and the
-			compiler with which the kernel was built.
+			CONFIG_MITIGATION_RETPOLINE configuration option,
+			and the compiler with which the kernel was built.
 
 			Selecting 'on' will also enable the mitigation
 			against user space to user space task attacks.
