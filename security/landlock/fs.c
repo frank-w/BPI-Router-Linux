@@ -7,12 +7,15 @@
  * Copyright © 2021-2022 Microsoft Corporation
  */
 
+#include <asm/ioctls.h>
+#include <kunit/test.h>
 #include <linux/atomic.h>
 #include <linux/bitops.h>
 #include <linux/bits.h>
 #include <linux/compiler_types.h>
 #include <linux/dcache.h>
 #include <linux/err.h>
+#include <linux/falloc.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -28,6 +31,7 @@
 #include <linux/types.h>
 #include <linux/wait_bit.h>
 #include <linux/workqueue.h>
+#include <uapi/linux/fiemap.h>
 #include <uapi/linux/landlock.h>
 
 #include "common.h"
@@ -82,6 +86,186 @@ static void release_inode(struct landlock_object *const object)
 static const struct landlock_object_underops landlock_fs_underops = {
 	.release = release_inode
 };
+
+/* IOCTL helpers */
+
+/*
+ * These are synthetic access rights, which are only used within the kernel, but
+ * not exposed to callers in userspace.  The mapping between these access rights
+ * and IOCTL commands is defined in the get_required_ioctl_access() helper function.
+ */
+#define LANDLOCK_ACCESS_FS_IOCTL_RW (LANDLOCK_LAST_PUBLIC_ACCESS_FS << 1)
+#define LANDLOCK_ACCESS_FS_IOCTL_RW_FILE (LANDLOCK_LAST_PUBLIC_ACCESS_FS << 2)
+
+/* ioctl_groups - all synthetic access rights for IOCTL command groups */
+/* clang-format off */
+#define IOCTL_GROUPS (				\
+	LANDLOCK_ACCESS_FS_IOCTL_RW |		\
+	LANDLOCK_ACCESS_FS_IOCTL_RW_FILE)
+/* clang-format on */
+
+static_assert((IOCTL_GROUPS & LANDLOCK_MASK_ACCESS_FS) == IOCTL_GROUPS);
+
+/**
+ * get_required_ioctl_access(): Determine required IOCTL access rights.
+ *
+ * @cmd: The IOCTL command that is supposed to be run.
+ *
+ * Any new IOCTL commands that are implemented in fs/ioctl.c's do_vfs_ioctl()
+ * should be considered for inclusion here.
+ *
+ * Returns: The access rights that must be granted on an opened file in order to
+ * use the given @cmd.
+ */
+static __attribute_const__ access_mask_t
+get_required_ioctl_access(const unsigned int cmd)
+{
+	switch (cmd) {
+	case FIOCLEX:
+	case FIONCLEX:
+	case FIONBIO:
+	case FIOASYNC:
+		/*
+		 * FIOCLEX, FIONCLEX, FIONBIO and FIOASYNC manipulate the FD's
+		 * close-on-exec and the file's buffered-IO and async flags.
+		 * These operations are also available through fcntl(2), and are
+		 * unconditionally permitted in Landlock.
+		 */
+		return 0;
+	case FIONREAD:
+	case FIOQSIZE:
+	case FIGETBSZ:
+		/*
+		 * FIONREAD returns the number of bytes available for reading.
+		 * FIONREAD returns the number of immediately readable bytes for
+		 * a file.
+		 *
+		 * FIOQSIZE queries the size of a file or directory.
+		 *
+		 * FIGETBSZ queries the file system's block size for a file or
+		 * directory.
+		 *
+		 * These IOCTL commands are permitted for files which are opened
+		 * with LANDLOCK_ACCESS_FS_READ_DIR,
+		 * LANDLOCK_ACCESS_FS_READ_FILE, or
+		 * LANDLOCK_ACCESS_FS_WRITE_FILE.
+		 */
+		return LANDLOCK_ACCESS_FS_IOCTL_RW;
+	case FS_IOC_FIEMAP:
+	case FIBMAP:
+		/*
+		 * FS_IOC_FIEMAP and FIBMAP query information about the
+		 * allocation of blocks within a file.  They are permitted for
+		 * files which are opened with LANDLOCK_ACCESS_FS_READ_FILE or
+		 * LANDLOCK_ACCESS_FS_WRITE_FILE.
+		 */
+		fallthrough;
+	case FIDEDUPERANGE:
+	case FICLONE:
+	case FICLONERANGE:
+		/*
+		 * FIDEDUPERANGE, FICLONE and FICLONERANGE make files share
+		 * their underlying storage ("reflink") between source and
+		 * destination FDs, on file systems which support that.
+		 *
+		 * The underlying implementations are already checking whether
+		 * the involved files are opened with the appropriate read/write
+		 * modes.  We rely on this being implemented correctly.
+		 *
+		 * These IOCTLs are permitted for files which are opened with
+		 * LANDLOCK_ACCESS_FS_READ_FILE or
+		 * LANDLOCK_ACCESS_FS_WRITE_FILE.
+		 */
+		fallthrough;
+	case FS_IOC_RESVSP:
+	case FS_IOC_RESVSP64:
+	case FS_IOC_UNRESVSP:
+	case FS_IOC_UNRESVSP64:
+	case FS_IOC_ZERO_RANGE:
+		/*
+		 * These IOCTLs reserve space, or create holes like
+		 * fallocate(2).  We rely on the implementations checking the
+		 * files' read/write modes.
+		 *
+		 * These IOCTLs are permitted for files which are opened with
+		 * LANDLOCK_ACCESS_FS_READ_FILE or
+		 * LANDLOCK_ACCESS_FS_WRITE_FILE.
+		 */
+		return LANDLOCK_ACCESS_FS_IOCTL_RW_FILE;
+	default:
+		/*
+		 * Other commands are guarded by the catch-all access right.
+		 */
+		return LANDLOCK_ACCESS_FS_IOCTL;
+	}
+}
+
+/**
+ * expand_ioctl() - Return the dst flags from either the src flag or the
+ * %LANDLOCK_ACCESS_FS_IOCTL flag, depending on whether the
+ * %LANDLOCK_ACCESS_FS_IOCTL and src access rights are handled or not.
+ *
+ * @handled: Handled access rights.
+ * @access: The access mask to copy values from.
+ * @src: A single access right to copy from in @access.
+ * @dst: One or more access rights to copy to.
+ *
+ * Returns: @dst, or 0.
+ */
+static __attribute_const__ access_mask_t
+expand_ioctl(const access_mask_t handled, const access_mask_t access,
+	     const access_mask_t src, const access_mask_t dst)
+{
+	access_mask_t copy_from;
+
+	if (!(handled & LANDLOCK_ACCESS_FS_IOCTL))
+		return 0;
+
+	copy_from = (handled & src) ? src : LANDLOCK_ACCESS_FS_IOCTL;
+	if (access & copy_from)
+		return dst;
+
+	return 0;
+}
+
+/**
+ * landlock_expand_access_fs() - Returns @access with the synthetic IOCTL group
+ * flags enabled if necessary.
+ *
+ * @handled: Handled FS access rights.
+ * @access: FS access rights to expand.
+ *
+ * Returns: @access expanded by the necessary flags for the synthetic IOCTL
+ * access rights.
+ */
+static __attribute_const__ access_mask_t landlock_expand_access_fs(
+	const access_mask_t handled, const access_mask_t access)
+{
+	return access |
+	       expand_ioctl(handled, access, LANDLOCK_ACCESS_FS_WRITE_FILE,
+			    LANDLOCK_ACCESS_FS_IOCTL_RW |
+				    LANDLOCK_ACCESS_FS_IOCTL_RW_FILE) |
+	       expand_ioctl(handled, access, LANDLOCK_ACCESS_FS_READ_FILE,
+			    LANDLOCK_ACCESS_FS_IOCTL_RW |
+				    LANDLOCK_ACCESS_FS_IOCTL_RW_FILE) |
+	       expand_ioctl(handled, access, LANDLOCK_ACCESS_FS_READ_DIR,
+			    LANDLOCK_ACCESS_FS_IOCTL_RW);
+}
+
+/**
+ * landlock_expand_handled_access_fs() - add synthetic IOCTL access rights to an
+ * access mask of handled accesses.
+ *
+ * @handled: The handled accesses of a ruleset that is being created.
+ *
+ * Returns: @handled, with the bits for the synthetic IOCTL access rights set,
+ * if %LANDLOCK_ACCESS_FS_IOCTL is handled.
+ */
+__attribute_const__ access_mask_t
+landlock_expand_handled_access_fs(const access_mask_t handled)
+{
+	return landlock_expand_access_fs(handled, handled);
+}
 
 /* Ruleset management */
 
@@ -147,7 +331,8 @@ retry:
 	LANDLOCK_ACCESS_FS_EXECUTE | \
 	LANDLOCK_ACCESS_FS_WRITE_FILE | \
 	LANDLOCK_ACCESS_FS_READ_FILE | \
-	LANDLOCK_ACCESS_FS_TRUNCATE)
+	LANDLOCK_ACCESS_FS_TRUNCATE | \
+	LANDLOCK_ACCESS_FS_IOCTL)
 /* clang-format on */
 
 /*
@@ -157,6 +342,7 @@ int landlock_append_fs_rule(struct landlock_ruleset *const ruleset,
 			    const struct path *const path,
 			    access_mask_t access_rights)
 {
+	access_mask_t handled;
 	int err;
 	struct landlock_id id = {
 		.type = LANDLOCK_KEY_INODE,
@@ -169,9 +355,11 @@ int landlock_append_fs_rule(struct landlock_ruleset *const ruleset,
 	if (WARN_ON_ONCE(ruleset->num_layers != 1))
 		return -EINVAL;
 
+	handled = landlock_get_fs_access_mask(ruleset, 0);
+	/* Expands the synthetic IOCTL groups. */
+	access_rights |= landlock_expand_access_fs(handled, access_rights);
 	/* Transforms relative access rights to absolute ones. */
-	access_rights |= LANDLOCK_MASK_ACCESS_FS &
-			 ~landlock_get_fs_access_mask(ruleset, 0);
+	access_rights |= LANDLOCK_MASK_ACCESS_FS & ~handled;
 	id.key.object = get_inode_object(d_backing_inode(path->dentry));
 	if (IS_ERR(id.key.object))
 		return PTR_ERR(id.key.object);
@@ -311,6 +499,119 @@ static bool no_more_access(
 	return true;
 }
 
+#define NMA_TRUE(...) KUNIT_EXPECT_TRUE(test, no_more_access(__VA_ARGS__))
+#define NMA_FALSE(...) KUNIT_EXPECT_FALSE(test, no_more_access(__VA_ARGS__))
+
+#ifdef CONFIG_SECURITY_LANDLOCK_KUNIT_TEST
+
+static void test_no_more_access(struct kunit *const test)
+{
+	const layer_mask_t rx0[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)] = BIT_ULL(0),
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_READ_FILE)] = BIT_ULL(0),
+	};
+	const layer_mask_t mx0[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)] = BIT_ULL(0),
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_MAKE_REG)] = BIT_ULL(0),
+	};
+	const layer_mask_t x0[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)] = BIT_ULL(0),
+	};
+	const layer_mask_t x1[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)] = BIT_ULL(1),
+	};
+	const layer_mask_t x01[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)] = BIT_ULL(0) |
+							  BIT_ULL(1),
+	};
+	const layer_mask_t allows_all[LANDLOCK_NUM_ACCESS_FS] = {};
+
+	/* Checks without restriction. */
+	NMA_TRUE(&x0, &allows_all, false, &allows_all, NULL, false);
+	NMA_TRUE(&allows_all, &x0, false, &allows_all, NULL, false);
+	NMA_FALSE(&x0, &x0, false, &allows_all, NULL, false);
+
+	/*
+	 * Checks that we can only refer a file if no more access could be
+	 * inherited.
+	 */
+	NMA_TRUE(&x0, &x0, false, &rx0, NULL, false);
+	NMA_TRUE(&rx0, &rx0, false, &rx0, NULL, false);
+	NMA_FALSE(&rx0, &rx0, false, &x0, NULL, false);
+	NMA_FALSE(&rx0, &rx0, false, &x1, NULL, false);
+
+	/* Checks allowed referring with different nested domains. */
+	NMA_TRUE(&x0, &x1, false, &x0, NULL, false);
+	NMA_TRUE(&x1, &x0, false, &x0, NULL, false);
+	NMA_TRUE(&x0, &x01, false, &x0, NULL, false);
+	NMA_TRUE(&x0, &x01, false, &rx0, NULL, false);
+	NMA_TRUE(&x01, &x0, false, &x0, NULL, false);
+	NMA_TRUE(&x01, &x0, false, &rx0, NULL, false);
+	NMA_FALSE(&x01, &x01, false, &x0, NULL, false);
+
+	/* Checks that file access rights are also enforced for a directory. */
+	NMA_FALSE(&rx0, &rx0, true, &x0, NULL, false);
+
+	/* Checks that directory access rights don't impact file referring... */
+	NMA_TRUE(&mx0, &mx0, false, &x0, NULL, false);
+	/* ...but only directory referring. */
+	NMA_FALSE(&mx0, &mx0, true, &x0, NULL, false);
+
+	/* Checks directory exchange. */
+	NMA_TRUE(&mx0, &mx0, true, &mx0, &mx0, true);
+	NMA_TRUE(&mx0, &mx0, true, &mx0, &x0, true);
+	NMA_FALSE(&mx0, &mx0, true, &x0, &mx0, true);
+	NMA_FALSE(&mx0, &mx0, true, &x0, &x0, true);
+	NMA_FALSE(&mx0, &mx0, true, &x1, &x1, true);
+
+	/* Checks file exchange with directory access rights... */
+	NMA_TRUE(&mx0, &mx0, false, &mx0, &mx0, false);
+	NMA_TRUE(&mx0, &mx0, false, &mx0, &x0, false);
+	NMA_TRUE(&mx0, &mx0, false, &x0, &mx0, false);
+	NMA_TRUE(&mx0, &mx0, false, &x0, &x0, false);
+	/* ...and with file access rights. */
+	NMA_TRUE(&rx0, &rx0, false, &rx0, &rx0, false);
+	NMA_TRUE(&rx0, &rx0, false, &rx0, &x0, false);
+	NMA_FALSE(&rx0, &rx0, false, &x0, &rx0, false);
+	NMA_FALSE(&rx0, &rx0, false, &x0, &x0, false);
+	NMA_FALSE(&rx0, &rx0, false, &x1, &x1, false);
+
+	/*
+	 * Allowing the following requests should not be a security risk
+	 * because domain 0 denies execute access, and domain 1 is always
+	 * nested with domain 0.  However, adding an exception for this case
+	 * would mean to check all nested domains to make sure none can get
+	 * more privileges (e.g. processes only sandboxed by domain 0).
+	 * Moreover, this behavior (i.e. composition of N domains) could then
+	 * be inconsistent compared to domain 1's ruleset alone (e.g. it might
+	 * be denied to link/rename with domain 1's ruleset, whereas it would
+	 * be allowed if nested on top of domain 0).  Another drawback would be
+	 * to create a cover channel that could enable sandboxed processes to
+	 * infer most of the filesystem restrictions from their domain.  To
+	 * make it simple, efficient, safe, and more consistent, this case is
+	 * always denied.
+	 */
+	NMA_FALSE(&x1, &x1, false, &x0, NULL, false);
+	NMA_FALSE(&x1, &x1, false, &rx0, NULL, false);
+	NMA_FALSE(&x1, &x1, true, &x0, NULL, false);
+	NMA_FALSE(&x1, &x1, true, &rx0, NULL, false);
+
+	/* Checks the same case of exclusive domains with a file... */
+	NMA_TRUE(&x1, &x1, false, &x01, NULL, false);
+	NMA_FALSE(&x1, &x1, false, &x01, &x0, false);
+	NMA_FALSE(&x1, &x1, false, &x01, &x01, false);
+	NMA_FALSE(&x1, &x1, false, &x0, &x0, false);
+	/* ...and with a directory. */
+	NMA_FALSE(&x1, &x1, false, &x0, &x0, true);
+	NMA_FALSE(&x1, &x1, true, &x0, &x0, false);
+	NMA_FALSE(&x1, &x1, true, &x0, &x0, true);
+}
+
+#endif /* CONFIG_SECURITY_LANDLOCK_KUNIT_TEST */
+
+#undef NMA_TRUE
+#undef NMA_FALSE
+
 /*
  * Removes @layer_masks accesses that are not requested.
  *
@@ -330,6 +631,57 @@ scope_to_request(const access_mask_t access_request,
 		(*layer_masks)[access_bit] = 0;
 	return !memchr_inv(layer_masks, 0, sizeof(*layer_masks));
 }
+
+#ifdef CONFIG_SECURITY_LANDLOCK_KUNIT_TEST
+
+static void test_scope_to_request_with_exec_none(struct kunit *const test)
+{
+	/* Allows everything. */
+	layer_mask_t layer_masks[LANDLOCK_NUM_ACCESS_FS] = {};
+
+	/* Checks and scopes with execute. */
+	KUNIT_EXPECT_TRUE(test, scope_to_request(LANDLOCK_ACCESS_FS_EXECUTE,
+						 &layer_masks));
+	KUNIT_EXPECT_EQ(test, 0,
+			layer_masks[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)]);
+	KUNIT_EXPECT_EQ(test, 0,
+			layer_masks[BIT_INDEX(LANDLOCK_ACCESS_FS_WRITE_FILE)]);
+}
+
+static void test_scope_to_request_with_exec_some(struct kunit *const test)
+{
+	/* Denies execute and write. */
+	layer_mask_t layer_masks[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)] = BIT_ULL(0),
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_WRITE_FILE)] = BIT_ULL(1),
+	};
+
+	/* Checks and scopes with execute. */
+	KUNIT_EXPECT_FALSE(test, scope_to_request(LANDLOCK_ACCESS_FS_EXECUTE,
+						  &layer_masks));
+	KUNIT_EXPECT_EQ(test, BIT_ULL(0),
+			layer_masks[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)]);
+	KUNIT_EXPECT_EQ(test, 0,
+			layer_masks[BIT_INDEX(LANDLOCK_ACCESS_FS_WRITE_FILE)]);
+}
+
+static void test_scope_to_request_without_access(struct kunit *const test)
+{
+	/* Denies execute and write. */
+	layer_mask_t layer_masks[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)] = BIT_ULL(0),
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_WRITE_FILE)] = BIT_ULL(1),
+	};
+
+	/* Checks and scopes without access request. */
+	KUNIT_EXPECT_TRUE(test, scope_to_request(0, &layer_masks));
+	KUNIT_EXPECT_EQ(test, 0,
+			layer_masks[BIT_INDEX(LANDLOCK_ACCESS_FS_EXECUTE)]);
+	KUNIT_EXPECT_EQ(test, 0,
+			layer_masks[BIT_INDEX(LANDLOCK_ACCESS_FS_WRITE_FILE)]);
+}
+
+#endif /* CONFIG_SECURITY_LANDLOCK_KUNIT_TEST */
 
 /*
  * Returns true if there is at least one access right different than
@@ -353,6 +705,51 @@ is_eacces(const layer_mask_t (*const layer_masks)[LANDLOCK_NUM_ACCESS_FS],
 	}
 	return false;
 }
+
+#define IE_TRUE(...) KUNIT_EXPECT_TRUE(test, is_eacces(__VA_ARGS__))
+#define IE_FALSE(...) KUNIT_EXPECT_FALSE(test, is_eacces(__VA_ARGS__))
+
+#ifdef CONFIG_SECURITY_LANDLOCK_KUNIT_TEST
+
+static void test_is_eacces_with_none(struct kunit *const test)
+{
+	const layer_mask_t layer_masks[LANDLOCK_NUM_ACCESS_FS] = {};
+
+	IE_FALSE(&layer_masks, 0);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_REFER);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_EXECUTE);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_WRITE_FILE);
+}
+
+static void test_is_eacces_with_refer(struct kunit *const test)
+{
+	const layer_mask_t layer_masks[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_REFER)] = BIT_ULL(0),
+	};
+
+	IE_FALSE(&layer_masks, 0);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_REFER);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_EXECUTE);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_WRITE_FILE);
+}
+
+static void test_is_eacces_with_write(struct kunit *const test)
+{
+	const layer_mask_t layer_masks[LANDLOCK_NUM_ACCESS_FS] = {
+		[BIT_INDEX(LANDLOCK_ACCESS_FS_WRITE_FILE)] = BIT_ULL(0),
+	};
+
+	IE_FALSE(&layer_masks, 0);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_REFER);
+	IE_FALSE(&layer_masks, LANDLOCK_ACCESS_FS_EXECUTE);
+
+	IE_TRUE(&layer_masks, LANDLOCK_ACCESS_FS_WRITE_FILE);
+}
+
+#endif /* CONFIG_SECURITY_LANDLOCK_KUNIT_TEST */
+
+#undef IE_TRUE
+#undef IE_FALSE
 
 /**
  * is_access_to_paths_allowed - Check accesses for requests with a common path
@@ -1123,7 +1520,9 @@ static int hook_file_open(struct file *const file)
 {
 	layer_mask_t layer_masks[LANDLOCK_NUM_ACCESS_FS] = {};
 	access_mask_t open_access_request, full_access_request, allowed_access;
-	const access_mask_t optional_access = LANDLOCK_ACCESS_FS_TRUNCATE;
+	const access_mask_t optional_access = LANDLOCK_ACCESS_FS_TRUNCATE |
+					      LANDLOCK_ACCESS_FS_IOCTL |
+					      IOCTL_GROUPS;
 	const struct landlock_ruleset *const dom = get_current_fs_domain();
 
 	if (!dom)
@@ -1166,6 +1565,16 @@ static int hook_file_open(struct file *const file)
 	}
 
 	/*
+	 * Named pipes should be treated just like anonymous pipes.
+	 * Therefore, we permit all IOCTLs on them.
+	 */
+	if (S_ISFIFO(file_inode(file)->i_mode)) {
+		allowed_access |= LANDLOCK_ACCESS_FS_IOCTL |
+				  LANDLOCK_ACCESS_FS_IOCTL_RW |
+				  LANDLOCK_ACCESS_FS_IOCTL_RW_FILE;
+	}
+
+	/*
 	 * For operations on already opened files (i.e. ftruncate()), it is the
 	 * access rights at the time of open() which decide whether the
 	 * operation is permitted. Therefore, we record the relevant subset of
@@ -1196,6 +1605,25 @@ static int hook_file_truncate(struct file *const file)
 	return -EACCES;
 }
 
+static int hook_file_ioctl(struct file *file, unsigned int cmd,
+			   unsigned long arg)
+{
+	const access_mask_t required_access = get_required_ioctl_access(cmd);
+	const access_mask_t allowed_access =
+		landlock_file(file)->allowed_access;
+
+	/*
+	 * It is the access rights at the time of opening the file which
+	 * determine whether IOCTL can be used on the opened file later.
+	 *
+	 * The access right is attached to the opened file in hook_file_open().
+	 */
+	if ((allowed_access & required_access) == required_access)
+		return 0;
+
+	return -EACCES;
+}
+
 static struct security_hook_list landlock_hooks[] __ro_after_init = {
 	LSM_HOOK_INIT(inode_free_security, hook_inode_free_security),
 
@@ -1218,6 +1646,7 @@ static struct security_hook_list landlock_hooks[] __ro_after_init = {
 	LSM_HOOK_INIT(file_alloc_security, hook_file_alloc_security),
 	LSM_HOOK_INIT(file_open, hook_file_open),
 	LSM_HOOK_INIT(file_truncate, hook_file_truncate),
+	LSM_HOOK_INIT(file_ioctl, hook_file_ioctl),
 };
 
 __init void landlock_add_fs_hooks(void)
@@ -1225,3 +1654,27 @@ __init void landlock_add_fs_hooks(void)
 	security_add_hooks(landlock_hooks, ARRAY_SIZE(landlock_hooks),
 			   &landlock_lsmid);
 }
+
+#ifdef CONFIG_SECURITY_LANDLOCK_KUNIT_TEST
+
+/* clang-format off */
+static struct kunit_case test_cases[] = {
+	KUNIT_CASE(test_no_more_access),
+	KUNIT_CASE(test_scope_to_request_with_exec_none),
+	KUNIT_CASE(test_scope_to_request_with_exec_some),
+	KUNIT_CASE(test_scope_to_request_without_access),
+	KUNIT_CASE(test_is_eacces_with_none),
+	KUNIT_CASE(test_is_eacces_with_refer),
+	KUNIT_CASE(test_is_eacces_with_write),
+	{}
+};
+/* clang-format on */
+
+static struct kunit_suite test_suite = {
+	.name = "landlock_fs",
+	.test_cases = test_cases,
+};
+
+kunit_test_suite(test_suite);
+
+#endif /* CONFIG_SECURITY_LANDLOCK_KUNIT_TEST */

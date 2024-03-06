@@ -19,11 +19,12 @@ unexpected/malicious behaviors in user space applications.  Landlock empowers
 any process, including unprivileged ones, to securely restrict themselves.
 
 We can quickly make sure that Landlock is enabled in the running system by
-looking for "landlock: Up and running" in kernel logs (as root): ``dmesg | grep
-landlock || journalctl -kg landlock`` .  Developers can also easily check for
-Landlock support with a :ref:`related system call <landlock_abi_versions>`.  If
-Landlock is not currently supported, we need to :ref:`configure the kernel
-appropriately <kernel_support>`.
+looking for "landlock: Up and running" in kernel logs (as root):
+``dmesg | grep landlock || journalctl -kb -g landlock`` .
+Developers can also easily check for Landlock support with a
+:ref:`related system call <landlock_abi_versions>`.
+If Landlock is not currently supported, we need to
+:ref:`configure the kernel appropriately <kernel_support>`.
 
 Landlock rules
 ==============
@@ -75,7 +76,8 @@ to be explicit about the denied-by-default access rights.
             LANDLOCK_ACCESS_FS_MAKE_BLOCK |
             LANDLOCK_ACCESS_FS_MAKE_SYM |
             LANDLOCK_ACCESS_FS_REFER |
-            LANDLOCK_ACCESS_FS_TRUNCATE,
+            LANDLOCK_ACCESS_FS_TRUNCATE |
+            LANDLOCK_ACCESS_FS_IOCTL,
         .handled_access_net =
             LANDLOCK_ACCESS_NET_BIND_TCP |
             LANDLOCK_ACCESS_NET_CONNECT_TCP,
@@ -84,10 +86,10 @@ to be explicit about the denied-by-default access rights.
 Because we may not know on which kernel version an application will be
 executed, it is safer to follow a best-effort security approach.  Indeed, we
 should try to protect users as much as possible whatever the kernel they are
-using.  To avoid binary enforcement (i.e. either all security features or
-none), we can leverage a dedicated Landlock command to get the current version
-of the Landlock ABI and adapt the handled accesses.  Let's check if we should
-remove access rights which are only supported in higher versions of the ABI.
+using.
+
+To be compatible with older Linux versions, we detect the available Landlock ABI
+version, and only use the available subset of access rights:
 
 .. code-block:: c
 
@@ -113,6 +115,10 @@ remove access rights which are only supported in higher versions of the ABI.
         ruleset_attr.handled_access_net &=
             ~(LANDLOCK_ACCESS_NET_BIND_TCP |
               LANDLOCK_ACCESS_NET_CONNECT_TCP);
+        __attribute__((fallthrough));
+    case 4:
+        /* Removes LANDLOCK_ACCESS_FS_IOCTL for ABI < 5 */
+        ruleset_attr.handled_access_fs &= ~LANDLOCK_ACCESS_FS_IOCTL;
     }
 
 This enables to create an inclusive ruleset that will contain our rules.
@@ -224,6 +230,7 @@ access rights per directory enables to change the location of such directory
 without relying on the destination directory access rights (except those that
 are required for this operation, see ``LANDLOCK_ACCESS_FS_REFER``
 documentation).
+
 Having self-sufficient hierarchies also helps to tighten the required access
 rights to the minimal set of data.  This also helps avoid sinkhole directories,
 i.e.  directories where data can be linked to but not linked from.  However,
@@ -317,18 +324,72 @@ It should also be noted that truncating files does not require the
 system call, this can also be done through :manpage:`open(2)` with the flags
 ``O_RDONLY | O_TRUNC``.
 
-When opening a file, the availability of the ``LANDLOCK_ACCESS_FS_TRUNCATE``
-right is associated with the newly created file descriptor and will be used for
-subsequent truncation attempts using :manpage:`ftruncate(2)`.  The behavior is
-similar to opening a file for reading or writing, where permissions are checked
-during :manpage:`open(2)`, but not during the subsequent :manpage:`read(2)` and
+The truncate right is associated with the opened file (see below).
+
+Rights associated with file descriptors
+---------------------------------------
+
+When opening a file, the availability of the ``LANDLOCK_ACCESS_FS_TRUNCATE`` and
+``LANDLOCK_ACCESS_FS_IOCTL`` rights is associated with the newly created file
+descriptor and will be used for subsequent truncation and ioctl attempts using
+:manpage:`ftruncate(2)` and :manpage:`ioctl(2)`.  The behavior is similar to
+opening a file for reading or writing, where permissions are checked during
+:manpage:`open(2)`, but not during the subsequent :manpage:`read(2)` and
 :manpage:`write(2)` calls.
 
-As a consequence, it is possible to have multiple open file descriptors for the
-same file, where one grants the right to truncate the file and the other does
-not.  It is also possible to pass such file descriptors between processes,
-keeping their Landlock properties, even when these processes do not have an
-enforced Landlock ruleset.
+As a consequence, it is possible that a process has multiple open file
+descriptors referring to the same file, but Landlock enforces different things
+when operating with these file descriptors.  This can happen when a Landlock
+ruleset gets enforced and the process keeps file descriptors which were opened
+both before and after the enforcement.  It is also possible to pass such file
+descriptors between processes, keeping their Landlock properties, even when some
+of the involved processes do not have an enforced Landlock ruleset.
+
+Restricting IOCTL commands
+--------------------------
+
+When the ``LANDLOCK_ACCESS_FS_IOCTL`` right is handled, Landlock will restrict
+the invocation of IOCTL commands.  However, to *allow* these IOCTL commands
+again, some of these IOCTL commands are then granted through other, preexisting
+access rights.
+
+For example, consider a program which handles ``LANDLOCK_ACCESS_FS_IOCTL`` and
+``LANDLOCK_ACCESS_FS_READ_FILE``.  The program *allows*
+``LANDLOCK_ACCESS_FS_READ_FILE`` on a file ``foo.log``.
+
+By virtue of granting this access on the ``foo.log`` file, it is now possible to
+use common and harmless IOCTL commands which are useful when reading files, such
+as ``FIONREAD``.
+
+When both ``LANDLOCK_ACCESS_FS_IOCTL`` and other access rights are
+handled in the ruleset, these other access rights may start governing
+the use of individual IOCTL commands instead of
+``LANDLOCK_ACCESS_FS_IOCTL``.  For instance, if both
+``LANDLOCK_ACCESS_FS_IOCTL`` and ``LANDLOCK_ACCESS_FS_READ_FILE`` are
+handled, allowing ``LANDLOCK_ACCESS_FS_READ_FILE`` will make it
+possible to use ``FIONREAD`` and other IOCTL commands.
+
+The following table illustrates how IOCTL attempts for ``FIONREAD`` are
+filtered, depending on how a Landlock ruleset handles and allows the
+``LANDLOCK_ACCESS_FS_IOCTL`` and ``LANDLOCK_ACCESS_FS_READ_FILE`` rights:
+
++-------------------------+--------------+--------------+--------------+
+|                         | ``FS_IOCTL`` | ``FS_IOCTL`` | ``FS_IOCTL`` |
+|                         | not handled  | handled and  | handled and  |
+|                         |              | allowed      | not allowed  |
++-------------------------+--------------+--------------+--------------+
+| ``FS_READ_FILE``        | allow        | allow        | deny         |
+| not handled             |              |              |              |
++-------------------------+              +--------------+--------------+
+| ``FS_READ_FILE``        |              | allow                       |
+| handled and allowed     |              |                             |
++-------------------------+              +-----------------------------+
+| ``FS_READ_FILE``        |              | deny                        |
+| handled and not allowed |              |                             |
++-------------------------+--------------+-----------------------------+
+
+The full list of IOCTL commands and the access rights which affect them is
+documented below.
 
 Compatibility
 =============
@@ -457,6 +518,27 @@ Memory usage
 Kernel memory allocated to create rulesets is accounted and can be restricted
 by the Documentation/admin-guide/cgroup-v1/memory.rst.
 
+IOCTL support
+-------------
+
+The ``LANDLOCK_ACCESS_FS_IOCTL`` right restricts the use of :manpage:`ioctl(2)`,
+but it only applies to newly opened files.  This means specifically that
+pre-existing file descriptors like stdin, stdout and stderr are unaffected.
+
+Users should be aware that TTY devices have traditionally permitted to control
+other processes on the same TTY through the ``TIOCSTI`` and ``TIOCLINUX`` IOCTL
+commands.  It is therefore recommended to close inherited TTY file descriptors,
+or to reopen them from ``/proc/self/fd/*`` without the
+``LANDLOCK_ACCESS_FS_IOCTL`` right, if possible.  The :manpage:`isatty(3)`
+function checks whether a given file descriptor is a TTY.
+
+Landlock's IOCTL support is coarse-grained at the moment, but may become more
+fine-grained in the future.  Until then, users are advised to establish the
+guarantees that they need through the file hierarchy, by only allowing the
+``LANDLOCK_ACCESS_FS_IOCTL`` right on files where it is really harmless.  In
+cases where you can control the mounts, the ``nodev`` mount option can help to
+rule out that device files can be accessed.
+
 Previous limitations
 ====================
 
@@ -494,10 +576,23 @@ bind and connect actions to only a set of allowed ports thanks to the new
 ``LANDLOCK_ACCESS_NET_BIND_TCP`` and ``LANDLOCK_ACCESS_NET_CONNECT_TCP``
 access rights.
 
+IOCTL (ABI < 5)
+---------------
+
+IOCTL operations could not be denied before the fifth Landlock ABI, so
+:manpage:`ioctl(2)` is always allowed when using a kernel that only supports an
+earlier ABI.
+
+Starting with the Landlock ABI version 5, it is possible to restrict the use of
+:manpage:`ioctl(2)` using the new ``LANDLOCK_ACCESS_FS_IOCTL`` access right.
+
 .. _kernel_support:
 
 Kernel support
 ==============
+
+Build time configuration
+------------------------
 
 Landlock was first introduced in Linux 5.13 but it must be configured at build
 time with ``CONFIG_SECURITY_LANDLOCK=y``.  Landlock must also be enabled at boot
@@ -507,10 +602,51 @@ contains ``CONFIG_LSM=landlock,[...]`` with ``[...]``  as the list of other
 potentially useful security modules for the running system (see the
 ``CONFIG_LSM`` help).
 
+Boot time configuration
+-----------------------
+
 If the running kernel does not have ``landlock`` in ``CONFIG_LSM``, then we can
-still enable it by adding ``lsm=landlock,[...]`` to
+enable Landlock by adding ``lsm=landlock,[...]`` to
 Documentation/admin-guide/kernel-parameters.rst thanks to the bootloader
 configuration.
+
+For example, if the current built-in configuration is:
+
+.. code-block:: console
+
+    $ zgrep -h "^CONFIG_LSM=" "/boot/config-$(uname -r)" /proc/config.gz 2>/dev/null
+    CONFIG_LSM="lockdown,yama,integrity,apparmor"
+
+...and if the cmdline doesn't contain ``landlock`` either:
+
+.. code-block:: console
+
+    $ sed -n 's/.*\(\<lsm=\S\+\).*/\1/p' /proc/cmdline
+    lsm=lockdown,yama,integrity,apparmor
+
+...we should configure the bootloader to set a cmdline extending the ``lsm``
+list with the ``landlock,`` prefix::
+
+  lsm=landlock,lockdown,yama,integrity,apparmor
+
+After a reboot, we can check that Landlock is up and running by looking at
+kernel logs:
+
+.. code-block:: console
+
+    # dmesg | grep landlock || journalctl -kb -g landlock
+    [    0.000000] Command line: [...] lsm=landlock,lockdown,yama,integrity,apparmor
+    [    0.000000] Kernel command line: [...] lsm=landlock,lockdown,yama,integrity,apparmor
+    [    0.000000] LSM: initializing lsm=lockdown,capability,landlock,yama,integrity,apparmor
+    [    0.000000] landlock: Up and running.
+
+Note that according to the built time kernel configuration,
+``lockdown,capability,`` may always stay at the beginning of the ``LSM:
+initializing lsm=`` list even if they are not configured with the bootloader,
+which is OK.
+
+Network support
+---------------
 
 To be able to explicitly allow TCP operations (e.g., adding a network rule with
 ``LANDLOCK_ACCESS_NET_BIND_TCP``), the kernel must support TCP
