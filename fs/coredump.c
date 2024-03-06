@@ -920,7 +920,10 @@ static struct page *dump_page_copy(struct page *src, struct page *dst)
 
 #define dump_page_alloc() ((struct page *)8) // Not NULL
 #define dump_page_free(x) do { } while (0)
-#define dump_page_copy(src, dst) ((dst), (src))
+static struct page *dump_page_copy(struct page *src, struct page *dst)
+{
+        return src;
+}
 
 #endif
 
