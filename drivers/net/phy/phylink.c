@@ -3366,6 +3366,11 @@ static void phylink_sfp_link_up(void *upstream)
  */
 static bool phylink_phy_no_inband(struct phy_device *phy)
 {
+	if (phy->is_c45 && (phy->c45_ids.device_ids[1] == 0x001cc838 ||
+			    phy_id_compare(phy->c45_ids.device_ids[1],
+					   0x001cc840, 0xfffffff0)))
+		return true;
+
 	return phy->is_c45 && phy_id_compare(phy->c45_ids.device_ids[1],
 					     0xae025150, 0xfffffff0);
 }
