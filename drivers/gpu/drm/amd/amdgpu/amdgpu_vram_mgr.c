@@ -77,7 +77,16 @@ static inline bool amdgpu_is_vram_mgr_blocks_contiguous(struct list_head *head)
 	return true;
 }
 
+static inline u64 amdgpu_vram_mgr_blocks_size(struct list_head *head)
+{
+	struct drm_buddy_block *block;
+	u64 size = 0;
 
+	list_for_each_entry(block, head, link)
+		size += amdgpu_vram_mgr_block_size(block);
+
+	return size;
+}
 
 /**
  * DOC: mem_info_vram_total
@@ -212,8 +221,23 @@ static struct attribute *amdgpu_vram_mgr_attributes[] = {
 	NULL
 };
 
+static umode_t amdgpu_vram_attrs_is_visible(struct kobject *kobj,
+					    struct attribute *attr, int i)
+{
+	struct device *dev = kobj_to_dev(kobj);
+	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct amdgpu_device *adev = drm_to_adev(ddev);
+
+	if (attr == &dev_attr_mem_info_vram_vendor.attr &&
+	    !adev->gmc.vram_vendor)
+		return 0;
+
+	return attr->mode;
+}
+
 const struct attribute_group amdgpu_vram_mgr_attr_group = {
-	.attrs = amdgpu_vram_mgr_attributes
+	.attrs = amdgpu_vram_mgr_attributes,
+	.is_visible = amdgpu_vram_attrs_is_visible
 };
 
 /**
@@ -516,6 +540,8 @@ static int amdgpu_vram_mgr_new(struct ttm_resource_manager *man,
 	mutex_unlock(&mgr->lock);
 
 	vres->base.start = 0;
+	size = max_t(u64, amdgpu_vram_mgr_blocks_size(&vres->blocks),
+		     vres->base.size);
 	list_for_each_entry(block, &vres->blocks, link) {
 		unsigned long start;
 
@@ -523,8 +549,8 @@ static int amdgpu_vram_mgr_new(struct ttm_resource_manager *man,
 			amdgpu_vram_mgr_block_size(block);
 		start >>= PAGE_SHIFT;
 
-		if (start > PFN_UP(vres->base.size))
-			start -= PFN_UP(vres->base.size);
+		if (start > PFN_UP(size))
+			start -= PFN_UP(size);
 		else
 			start = 0;
 		vres->base.start = max(vres->base.start, start);

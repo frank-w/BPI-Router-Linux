@@ -260,7 +260,7 @@ static int kona_pwmc_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 			return err;
 	}
 
-	err = kona_pwmc_config(pwm->chip, pwm, state->duty_cycle, state->period);
+	err = kona_pwmc_config(chip, pwm, state->duty_cycle, state->period);
 	if (err && !pwm->state.enabled)
 		clk_disable_unprepare(kp->clk);
 
@@ -269,7 +269,6 @@ static int kona_pwmc_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 static const struct pwm_ops kona_pwm_ops = {
 	.apply = kona_pwmc_apply,
-	.owner = THIS_MODULE,
 };
 
 static int kona_pwmc_probe(struct platform_device *pdev)

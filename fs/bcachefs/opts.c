@@ -12,11 +12,6 @@
 
 #define x(t, n, ...) [n] = #t,
 
-const char * const bch2_iops_measurements[] = {
-	BCH_IOPS_MEASUREMENTS()
-	NULL
-};
-
 const char * const bch2_error_actions[] = {
 	BCH_ERROR_ACTIONS()
 	NULL
@@ -42,9 +37,8 @@ const char * const bch2_sb_compat[] = {
 	NULL
 };
 
-const char * const bch2_btree_ids[] = {
+const char * const __bch2_btree_ids[] = {
 	BCH_BTREE_IDS()
-	"interior btree node",
 	NULL
 };
 
@@ -58,7 +52,7 @@ const char * const bch2_csum_opts[] = {
 	NULL
 };
 
-const char * const bch2_compression_types[] = {
+const char * const __bch2_compression_types[] = {
 	BCH_COMPRESSION_TYPES()
 	NULL
 };
@@ -78,7 +72,7 @@ const char * const bch2_str_hash_opts[] = {
 	NULL
 };
 
-const char * const bch2_data_types[] = {
+const char * const __bch2_data_types[] = {
 	BCH_DATA_TYPES()
 	NULL
 };
@@ -271,29 +265,32 @@ int bch2_opt_validate(const struct bch_option *opt, u64 v, struct printbuf *err)
 		if (err)
 			prt_printf(err, "%s: too small (min %llu)",
 			       opt->attr.name, opt->min);
-		return -ERANGE;
+		return -BCH_ERR_ERANGE_option_too_small;
 	}
 
 	if (opt->max && v >= opt->max) {
 		if (err)
 			prt_printf(err, "%s: too big (max %llu)",
 			       opt->attr.name, opt->max);
-		return -ERANGE;
+		return -BCH_ERR_ERANGE_option_too_big;
 	}
 
 	if ((opt->flags & OPT_SB_FIELD_SECTORS) && (v & 511)) {
 		if (err)
 			prt_printf(err, "%s: not a multiple of 512",
 			       opt->attr.name);
-		return -EINVAL;
+		return -BCH_ERR_opt_parse_error;
 	}
 
 	if ((opt->flags & OPT_MUST_BE_POW_2) && !is_power_of_2(v)) {
 		if (err)
 			prt_printf(err, "%s: must be a power of two",
 			       opt->attr.name);
-		return -EINVAL;
+		return -BCH_ERR_opt_parse_error;
 	}
+
+	if (opt->fn.validate)
+		return opt->fn.validate(v, err);
 
 	return 0;
 }

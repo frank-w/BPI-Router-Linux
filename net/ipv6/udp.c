@@ -79,9 +79,6 @@ u32 udp6_ehashfn(const struct net *net,
 		 const struct in6_addr *faddr,
 		 const __be16 fport)
 {
-	static u32 udp6_ehash_secret __read_mostly;
-	static u32 udp_ipv6_hash_secret __read_mostly;
-
 	u32 lhash, fhash;
 
 	net_get_random_once(&udp6_ehash_secret,
@@ -1101,11 +1098,12 @@ void udp_v6_early_demux(struct sk_buff *skb)
 	else
 		return;
 
-	if (!sk || !refcount_inc_not_zero(&sk->sk_refcnt))
+	if (!sk)
 		return;
 
 	skb->sk = sk;
-	skb->destructor = sock_efree;
+	DEBUG_NET_WARN_ON_ONCE(sk_is_refcounted(sk));
+	skb->destructor = sock_pfree;
 	dst = rcu_dereference(sk->sk_rx_dst);
 
 	if (dst)
@@ -1135,7 +1133,7 @@ static void udp_v6_flush_pending_frames(struct sock *sk)
 		udp_flush_pending_frames(sk);
 	else if (up->pending) {
 		up->len = 0;
-		up->pending = 0;
+		WRITE_ONCE(up->pending, 0);
 		ip6_flush_pending_frames(sk);
 	}
 }
@@ -1313,7 +1311,7 @@ static int udp_v6_push_pending_frames(struct sock *sk)
 			      &inet_sk(sk)->cork.base);
 out:
 	up->len = 0;
-	up->pending = 0;
+	WRITE_ONCE(up->pending, 0);
 	return err;
 }
 
@@ -1370,7 +1368,7 @@ int udpv6_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 		default:
 			return -EINVAL;
 		}
-	} else if (!up->pending) {
+	} else if (!READ_ONCE(up->pending)) {
 		if (sk->sk_state != TCP_ESTABLISHED)
 			return -EDESTADDRREQ;
 		daddr = &sk->sk_v6_daddr;
@@ -1401,8 +1399,8 @@ do_udp_sendmsg:
 		return -EMSGSIZE;
 
 	getfrag  =  is_udplite ?  udplite_getfrag : ip_generic_getfrag;
-	if (up->pending) {
-		if (up->pending == AF_INET)
+	if (READ_ONCE(up->pending)) {
+		if (READ_ONCE(up->pending) == AF_INET)
 			return udp_sendmsg(sk, msg, len);
 		/*
 		 * There are pending frames.
@@ -1541,10 +1539,10 @@ do_udp_sendmsg:
 		connected = false;
 
 	if (!fl6->flowi6_oif && ipv6_addr_is_multicast(&fl6->daddr)) {
-		fl6->flowi6_oif = np->mcast_oif;
+		fl6->flowi6_oif = READ_ONCE(np->mcast_oif);
 		connected = false;
 	} else if (!fl6->flowi6_oif)
-		fl6->flowi6_oif = np->ucast_oif;
+		fl6->flowi6_oif = READ_ONCE(np->ucast_oif);
 
 	security_sk_classify_flow(sk, flowi6_to_flowi_common(fl6));
 
@@ -1593,7 +1591,7 @@ back_from_confirm:
 		goto out;
 	}
 
-	up->pending = AF_INET6;
+	WRITE_ONCE(up->pending, AF_INET6);
 
 do_append_data:
 	if (ipc6.dontfrag < 0)
@@ -1607,7 +1605,7 @@ do_append_data:
 	else if (!corkreq)
 		err = udp_v6_push_pending_frames(sk);
 	else if (unlikely(skb_queue_empty(&sk->sk_write_queue)))
-		up->pending = 0;
+		WRITE_ONCE(up->pending, 0);
 
 	if (err > 0)
 		err = inet6_test_bit(RECVERR6, sk) ? net_xmit_errno(err) : 0;
@@ -1648,7 +1646,7 @@ static void udpv6_splice_eof(struct socket *sock)
 	struct sock *sk = sock->sk;
 	struct udp_sock *up = udp_sk(sk);
 
-	if (!up->pending || udp_test_bit(CORK, sk))
+	if (!READ_ONCE(up->pending) || udp_test_bit(CORK, sk))
 		return;
 
 	lock_sock(sk);
@@ -1702,11 +1700,6 @@ int udpv6_getsockopt(struct sock *sk, int level, int optname,
 	return ipv6_getsockopt(sk, level, optname, optval, optlen);
 }
 
-static const struct inet6_protocol udpv6_protocol = {
-	.handler	=	udpv6_rcv,
-	.err_handler	=	udpv6_err,
-	.flags		=	INET6_PROTO_NOPOLICY|INET6_PROTO_FINAL,
-};
 
 /* ------------------------------------------------------------------------ */
 #ifdef CONFIG_PROC_FS
@@ -1803,7 +1796,12 @@ int __init udpv6_init(void)
 {
 	int ret;
 
-	ret = inet6_add_protocol(&udpv6_protocol, IPPROTO_UDP);
+	net_hotdata.udpv6_protocol = (struct inet6_protocol) {
+		.handler     = udpv6_rcv,
+		.err_handler = udpv6_err,
+		.flags	     = INET6_PROTO_NOPOLICY | INET6_PROTO_FINAL,
+	};
+	ret = inet6_add_protocol(&net_hotdata.udpv6_protocol, IPPROTO_UDP);
 	if (ret)
 		goto out;
 
@@ -1814,12 +1812,12 @@ out:
 	return ret;
 
 out_udpv6_protocol:
-	inet6_del_protocol(&udpv6_protocol, IPPROTO_UDP);
+	inet6_del_protocol(&net_hotdata.udpv6_protocol, IPPROTO_UDP);
 	goto out;
 }
 
 void udpv6_exit(void)
 {
 	inet6_unregister_protosw(&udpv6_protosw);
-	inet6_del_protocol(&udpv6_protocol, IPPROTO_UDP);
+	inet6_del_protocol(&net_hotdata.udpv6_protocol, IPPROTO_UDP);
 }

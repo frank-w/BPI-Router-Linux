@@ -5,7 +5,7 @@
 enum bkey_invalid_flags;
 
 void bch2_snapshot_tree_to_text(struct printbuf *, struct bch_fs *, struct bkey_s_c);
-int bch2_snapshot_tree_invalid(const struct bch_fs *, struct bkey_s_c,
+int bch2_snapshot_tree_invalid(struct bch_fs *, struct bkey_s_c,
 			       enum bkey_invalid_flags, struct printbuf *);
 
 #define bch2_bkey_ops_snapshot_tree ((struct bkey_ops) {	\
@@ -19,15 +19,15 @@ struct bkey_i_snapshot_tree *__bch2_snapshot_tree_create(struct btree_trans *);
 int bch2_snapshot_tree_lookup(struct btree_trans *, u32, struct bch_snapshot_tree *);
 
 void bch2_snapshot_to_text(struct printbuf *, struct bch_fs *, struct bkey_s_c);
-int bch2_snapshot_invalid(const struct bch_fs *, struct bkey_s_c,
+int bch2_snapshot_invalid(struct bch_fs *, struct bkey_s_c,
 			  enum bkey_invalid_flags, struct printbuf *);
 int bch2_mark_snapshot(struct btree_trans *, enum btree_id, unsigned,
-		       struct bkey_s_c, struct bkey_s_c, unsigned);
+		       struct bkey_s_c, struct bkey_s, unsigned);
 
 #define bch2_bkey_ops_snapshot ((struct bkey_ops) {		\
 	.key_invalid	= bch2_snapshot_invalid,		\
 	.val_to_text	= bch2_snapshot_to_text,		\
-	.atomic_trigger	= bch2_mark_snapshot,			\
+	.trigger	= bch2_mark_snapshot,			\
 	.min_val_size	= 24,					\
 })
 
@@ -202,8 +202,6 @@ static inline bool bch2_snapshot_has_children(struct bch_fs *c, u32 id)
 
 static inline bool snapshot_list_has_id(snapshot_id_list *s, u32 id)
 {
-	u32 *i;
-
 	darray_for_each(*s, i)
 		if (*i == id)
 			return true;
@@ -212,8 +210,6 @@ static inline bool snapshot_list_has_id(snapshot_id_list *s, u32 id)
 
 static inline bool snapshot_list_has_ancestor(struct bch_fs *c, snapshot_id_list *s, u32 id)
 {
-	u32 *i;
-
 	darray_for_each(*s, i)
 		if (bch2_snapshot_is_ancestor(c, id, *i))
 			return true;
@@ -244,8 +240,6 @@ int bch2_check_snapshot_trees(struct bch_fs *);
 int bch2_check_snapshots(struct bch_fs *);
 
 int bch2_snapshot_node_set_deleted(struct btree_trans *, u32);
-int bch2_delete_dead_snapshots_hook(struct btree_trans *,
-				    struct btree_trans_commit_hook *);
 void bch2_delete_dead_snapshots_work(struct work_struct *);
 
 int __bch2_key_has_snapshot_overwrites(struct btree_trans *, enum btree_id, struct bpos);

@@ -155,8 +155,20 @@ unsigned int dml2_util_get_maximum_odm_combine_for_output(bool force_odm_4to1, e
 
 bool is_dp2p0_output_encoder(const struct pipe_ctx *pipe_ctx)
 {
+	if (pipe_ctx == NULL || pipe_ctx->stream == NULL)
+		return false;
+
 	/* If this assert is hit then we have a link encoder dynamic management issue */
 	ASSERT(pipe_ctx->stream_res.hpo_dp_stream_enc ? pipe_ctx->link_res.hpo_dp_link_enc != NULL : true);
+
+	/* Count MST hubs once by treating only 1st remote sink in topology as an encoder */
+	if (pipe_ctx->stream->link && pipe_ctx->stream->link->remote_sinks[0]) {
+		return (pipe_ctx->stream_res.hpo_dp_stream_enc &&
+			pipe_ctx->link_res.hpo_dp_link_enc &&
+			dc_is_dp_signal(pipe_ctx->stream->signal) &&
+			(pipe_ctx->stream->link->remote_sinks[0]->sink_id == pipe_ctx->stream->sink->sink_id));
+	}
+
 	return (pipe_ctx->stream_res.hpo_dp_stream_enc &&
 		pipe_ctx->link_res.hpo_dp_link_enc &&
 		dc_is_dp_signal(pipe_ctx->stream->signal));
@@ -209,10 +221,11 @@ static int find_dml_pipe_idx_by_plane_id(struct dml2_context *ctx, unsigned int 
 	return -1;
 }
 
-static bool get_plane_id(const struct dc_state *state, const struct dc_plane_state *plane,
-	unsigned int stream_id, unsigned int *plane_id)
+static bool get_plane_id(struct dml2_context *dml2, const struct dc_state *state, const struct dc_plane_state *plane,
+	unsigned int stream_id, unsigned int plane_index, unsigned int *plane_id)
 {
 	int i, j;
+	bool is_plane_duplicate = dml2->v20.scratch.plane_duplicate_exists;
 
 	if (!plane_id)
 		return false;
@@ -220,7 +233,8 @@ static bool get_plane_id(const struct dc_state *state, const struct dc_plane_sta
 	for (i = 0; i < state->stream_count; i++) {
 		if (state->streams[i]->stream_id == stream_id) {
 			for (j = 0; j < state->stream_status[i].plane_count; j++) {
-				if (state->stream_status[i].plane_states[j] == plane) {
+				if (state->stream_status[i].plane_states[j] == plane &&
+					(!is_plane_duplicate || (is_plane_duplicate && (j == plane_index)))) {
 					*plane_id = (i << 16) | j;
 					return true;
 				}
@@ -273,6 +287,7 @@ static void populate_pipe_ctx_dlg_params_from_dml(struct pipe_ctx *pipe_ctx, str
 void dml2_calculate_rq_and_dlg_params(const struct dc *dc, struct dc_state *context, struct resource_context *out_new_hw_state, struct dml2_context *in_ctx, unsigned int pipe_cnt)
 {
 	unsigned int dc_pipe_ctx_index, dml_pipe_idx, plane_id;
+	enum mall_stream_type pipe_mall_type;
 	bool unbounded_req_enabled = false;
 	struct dml2_calculate_rq_and_dlg_params_scratch *s = &in_ctx->v20.scratch.calculate_rq_and_dlg_params_scratch;
 
@@ -304,8 +319,9 @@ void dml2_calculate_rq_and_dlg_params(const struct dc *dc, struct dc_state *cont
 		 * there is a need to know which DML pipe index maps to which DC pipe. The code below
 		 * finds a dml_pipe_index from the plane id if a plane is valid. If a plane is not valid then
 		 * it finds a dml_pipe_index from the stream id. */
-		if (get_plane_id(context, context->res_ctx.pipe_ctx[dc_pipe_ctx_index].plane_state,
-			context->res_ctx.pipe_ctx[dc_pipe_ctx_index].stream->stream_id, &plane_id)) {
+		if (get_plane_id(in_ctx, context, context->res_ctx.pipe_ctx[dc_pipe_ctx_index].plane_state,
+			context->res_ctx.pipe_ctx[dc_pipe_ctx_index].stream->stream_id,
+			in_ctx->v20.scratch.dml_to_dc_pipe_mapping.dml_pipe_idx_to_plane_index[context->res_ctx.pipe_ctx[dc_pipe_ctx_index].pipe_idx], &plane_id)) {
 			dml_pipe_idx = find_dml_pipe_idx_by_plane_id(in_ctx, plane_id);
 		} else {
 			dml_pipe_idx = dml2_helper_find_dml_pipe_idx_by_stream_id(in_ctx, context->res_ctx.pipe_ctx[dc_pipe_ctx_index].stream->stream_id);
@@ -319,7 +335,8 @@ void dml2_calculate_rq_and_dlg_params(const struct dc *dc, struct dc_state *cont
 		 */
 		populate_pipe_ctx_dlg_params_from_dml(&context->res_ctx.pipe_ctx[dc_pipe_ctx_index], &context->bw_ctx.dml2->v20.dml_core_ctx, dml_pipe_idx);
 
-		if (context->res_ctx.pipe_ctx[dc_pipe_ctx_index].stream->mall_stream_config.type == SUBVP_PHANTOM) {
+		pipe_mall_type = dc_state_get_pipe_subvp_type(context, &context->res_ctx.pipe_ctx[dc_pipe_ctx_index]);
+		if (pipe_mall_type == SUBVP_PHANTOM) {
 			// Phantom pipe requires that DET_SIZE = 0 and no unbounded requests
 			context->res_ctx.pipe_ctx[dc_pipe_ctx_index].det_buffer_size_kb = 0;
 			context->res_ctx.pipe_ctx[dc_pipe_ctx_index].unbounded_req = false;
@@ -346,7 +363,7 @@ void dml2_calculate_rq_and_dlg_params(const struct dc *dc, struct dc_state *cont
 			context->res_ctx.pipe_ctx[dc_pipe_ctx_index].plane_state != context->res_ctx.pipe_ctx[dc_pipe_ctx_index].top_pipe->plane_state) &&
 			context->res_ctx.pipe_ctx[dc_pipe_ctx_index].prev_odm_pipe == NULL) {
 			/* SS: all active surfaces stored in MALL */
-			if (context->res_ctx.pipe_ctx[dc_pipe_ctx_index].stream->mall_stream_config.type != SUBVP_PHANTOM) {
+			if (pipe_mall_type != SUBVP_PHANTOM) {
 				context->bw_ctx.bw.dcn.mall_ss_size_bytes += context->res_ctx.pipe_ctx[dc_pipe_ctx_index].surface_size_in_mall_bytes;
 			} else {
 				/* SUBVP: phantom surfaces only stored in MALL */
@@ -445,8 +462,9 @@ bool dml2_verify_det_buffer_configuration(struct dml2_context *in_ctx, struct dc
 	for (i = 0; i < MAX_PIPES; i++) {
 		if (!display_state->res_ctx.pipe_ctx[i].stream)
 			continue;
-		if (get_plane_id(display_state, display_state->res_ctx.pipe_ctx[i].plane_state,
-			display_state->res_ctx.pipe_ctx[i].stream->stream_id, &plane_id))
+		if (get_plane_id(in_ctx, display_state, display_state->res_ctx.pipe_ctx[i].plane_state,
+			display_state->res_ctx.pipe_ctx[i].stream->stream_id,
+			in_ctx->v20.scratch.dml_to_dc_pipe_mapping.dml_pipe_idx_to_plane_index[display_state->res_ctx.pipe_ctx[i].pipe_idx], &plane_id))
 			dml_pipe_idx = find_dml_pipe_idx_by_plane_id(in_ctx, plane_id);
 		else
 			dml_pipe_idx = dml2_helper_find_dml_pipe_idx_by_stream_id(in_ctx, display_state->res_ctx.pipe_ctx[i].stream->stream_id);
@@ -464,7 +482,7 @@ bool dml2_verify_det_buffer_configuration(struct dml2_context *in_ctx, struct dc
 	return need_recalculation;
 }
 
-bool dml2_is_stereo_timing(struct dc_stream_state *stream)
+bool dml2_is_stereo_timing(const struct dc_stream_state *stream)
 {
 	bool is_stereo = false;
 

@@ -142,7 +142,8 @@ enum dp_test_link_rate {
 	DP_TEST_LINK_RATE_HBR3		= 0x1E,
 	DP_TEST_LINK_RATE_UHBR10	= 0x01,
 	DP_TEST_LINK_RATE_UHBR20	= 0x02,
-	DP_TEST_LINK_RATE_UHBR13_5	= 0x03,
+	DP_TEST_LINK_RATE_UHBR13_5_LEGACY	= 0x03, /* For backward compatibility*/
+	DP_TEST_LINK_RATE_UHBR13_5	= 0x04,
 };
 
 struct dc_link_settings {
@@ -1375,6 +1376,12 @@ struct dp_trace {
 #endif
 #ifndef DP_TUNNELING_STATUS
 #define DP_TUNNELING_STATUS				0xE0025 /* 1.4a */
+#endif
+#ifndef DP_TUNNELING_MAX_LINK_RATE
+#define DP_TUNNELING_MAX_LINK_RATE			0xE0028 /* 1.4a */
+#endif
+#ifndef DP_TUNNELING_MAX_LANE_COUNT
+#define DP_TUNNELING_MAX_LANE_COUNT			0xE0029 /* 1.4a */
 #endif
 #ifndef DPTX_BW_ALLOCATION_MODE_CONTROL
 #define DPTX_BW_ALLOCATION_MODE_CONTROL			0xE0030 /* 1.4a */

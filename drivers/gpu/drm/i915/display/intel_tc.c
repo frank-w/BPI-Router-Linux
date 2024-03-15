@@ -58,7 +58,7 @@ struct intel_tc_port {
 	struct delayed_work link_reset_work;
 	int link_refcount;
 	bool legacy_port:1;
-	char port_name[8];
+	const char *port_name;
 	enum tc_port_mode mode;
 	enum tc_port_mode init_mode;
 	enum phy_fia phy_fia;
@@ -1030,18 +1030,25 @@ static bool xelpdp_tc_phy_enable_tcss_power(struct intel_tc_port *tc, bool enabl
 
 	__xelpdp_tc_phy_enable_tcss_power(tc, enable);
 
-	if ((!tc_phy_wait_for_ready(tc) ||
-	     !xelpdp_tc_phy_wait_for_tcss_power(tc, enable)) &&
-	    !drm_WARN_ON(&i915->drm, tc->mode == TC_PORT_LEGACY)) {
-		if (enable) {
-			__xelpdp_tc_phy_enable_tcss_power(tc, false);
-			xelpdp_tc_phy_wait_for_tcss_power(tc, false);
-		}
+	if (enable && !tc_phy_wait_for_ready(tc))
+		goto out_disable;
 
-		return false;
-	}
+	if (!xelpdp_tc_phy_wait_for_tcss_power(tc, enable))
+		goto out_disable;
 
 	return true;
+
+out_disable:
+	if (drm_WARN_ON(&i915->drm, tc->mode == TC_PORT_LEGACY))
+		return false;
+
+	if (!enable)
+		return false;
+
+	__xelpdp_tc_phy_enable_tcss_power(tc, false);
+	xelpdp_tc_phy_wait_for_tcss_power(tc, false);
+
+	return false;
 }
 
 static void xelpdp_tc_phy_take_ownership(struct intel_tc_port *tc, bool take)
@@ -1875,8 +1882,12 @@ int intel_tc_port_init(struct intel_digital_port *dig_port, bool is_legacy)
 	else
 		tc->phy_ops = &icl_tc_phy_ops;
 
-	snprintf(tc->port_name, sizeof(tc->port_name),
-		 "%c/TC#%d", port_name(port), tc_port + 1);
+	tc->port_name = kasprintf(GFP_KERNEL, "%c/TC#%d", port_name(port),
+				  tc_port + 1);
+	if (!tc->port_name) {
+		kfree(tc);
+		return -ENOMEM;
+	}
 
 	mutex_init(&tc->lock);
 	/* TODO: Combine the two works */
@@ -1897,6 +1908,7 @@ void intel_tc_port_cleanup(struct intel_digital_port *dig_port)
 {
 	intel_tc_port_suspend(dig_port);
 
+	kfree(dig_port->tc->port_name);
 	kfree(dig_port->tc);
 	dig_port->tc = NULL;
 }

@@ -523,7 +523,8 @@ static noinline_for_stack struct btrfs_backref_node *build_backref_tree(
 	if (handle_useless_nodes(rc, node))
 		node = NULL;
 out:
-	btrfs_backref_iter_free(iter);
+	btrfs_free_path(iter->path);
+	kfree(iter);
 	btrfs_free_path(path);
 	if (err) {
 		btrfs_backref_error_cleanup(cache, node);
@@ -2895,7 +2896,7 @@ static noinline_for_stack int prealloc_file_extent_cluster(
 		 * will re-read the whole page anyway.
 		 */
 		if (page) {
-			btrfs_subpage_clear_uptodate(fs_info, page, i_size,
+			btrfs_subpage_clear_uptodate(fs_info, page_folio(page), i_size,
 					round_up(i_size, PAGE_SIZE) - i_size);
 			unlock_page(page);
 			put_page(page);
@@ -2951,7 +2952,7 @@ static noinline_for_stack int setup_relocation_extent_mapping(struct inode *inod
 	em->len = end + 1 - start;
 	em->block_len = em->len;
 	em->block_start = block_start;
-	set_bit(EXTENT_FLAG_PINNED, &em->flags);
+	em->flags |= EXTENT_FLAG_PINNED;
 
 	lock_extent(&BTRFS_I(inode)->io_tree, start, end, &cached_state);
 	ret = btrfs_replace_extent_map_range(BTRFS_I(inode), em, false);
@@ -2987,7 +2988,7 @@ static int relocate_one_page(struct inode *inode, struct file_ra_state *ra,
 			     const struct file_extent_cluster *cluster,
 			     int *cluster_nr, unsigned long page_index)
 {
-	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
+	struct btrfs_fs_info *fs_info = inode_to_fs_info(inode);
 	u64 offset = BTRFS_I(inode)->index_cnt;
 	const unsigned long last_index = (cluster->end - offset) >> PAGE_SHIFT;
 	gfp_t mask = btrfs_alloc_write_mask(inode->i_mapping);
@@ -3070,7 +3071,8 @@ static int relocate_one_page(struct inode *inode, struct file_ra_state *ra,
 						       clamped_len);
 			goto release_page;
 		}
-		btrfs_page_set_dirty(fs_info, page, clamped_start, clamped_len);
+		btrfs_folio_set_dirty(fs_info, page_folio(page),
+				      clamped_start, clamped_len);
 
 		/*
 		 * Set the boundary if it's inside the page.

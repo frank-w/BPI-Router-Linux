@@ -579,7 +579,7 @@ static void amd_pmu_cpu_starting(int cpu)
 	if (!x86_pmu.amd_nb_constraints)
 		return;
 
-	nb_id = topology_die_id(cpu);
+	nb_id = topology_amd_node_id(cpu);
 	WARN_ON_ONCE(nb_id == BAD_APICID);
 
 	for_each_online_cpu(i) {
@@ -940,7 +940,7 @@ static int amd_pmu_v2_handle_irq(struct pt_regs *regs)
 			continue;
 
 		if (has_branch_stack(event))
-			perf_sample_save_brstack(&data, event, &cpuc->lbr_stack);
+			perf_sample_save_brstack(&data, event, &cpuc->lbr_stack, NULL);
 
 		if (perf_event_overflow(event, &data, regs))
 			x86_pmu_stop(event, 0);
@@ -1184,7 +1184,7 @@ static void amd_put_event_constraints_f17h(struct cpu_hw_events *cpuc,
  * period of each one and given that the BRS saturates, it would not be possible
  * to guarantee correlated content for all events. Therefore, in situations
  * where multiple events want to use BRS, the kernel enforces mutual exclusion.
- * Exclusion is enforced by chosing only one counter for events using BRS.
+ * Exclusion is enforced by choosing only one counter for events using BRS.
  * The event scheduling logic will then automatically multiplex the
  * events and ensure that at most one event is actively using BRS.
  *

@@ -2001,47 +2001,6 @@ bool ata_dev_power_init_tf(struct ata_device *dev, struct ata_taskfile *tf,
 	return true;
 }
 
-/**
- *	ata_dev_power_set_standby - Set a device power mode to standby
- *	@dev: target device
- *
- *	Issue a STANDBY IMMEDIATE command to set a device power mode to standby.
- *	For an HDD device, this spins down the disks.
- *
- *	LOCKING:
- *	Kernel thread context (may sleep).
- */
-void ata_dev_power_set_standby(struct ata_device *dev)
-{
-	unsigned long ap_flags = dev->link->ap->flags;
-	struct ata_taskfile tf;
-	unsigned int err_mask;
-
-	/*
-	 * Some odd clown BIOSes issue spindown on power off (ACPI S4 or S5)
-	 * causing some drives to spin up and down again. For these, do nothing
-	 * if we are being called on shutdown.
-	 */
-	if ((ap_flags & ATA_FLAG_NO_POWEROFF_SPINDOWN) &&
-	    system_state == SYSTEM_POWER_OFF)
-		return;
-
-	if ((ap_flags & ATA_FLAG_NO_HIBERNATE_SPINDOWN) &&
-	    system_entering_hibernation())
-		return;
-
-	/* Issue STANDBY IMMEDIATE command only if supported by the device */
-	if (!ata_dev_power_init_tf(dev, &tf, false))
-		return;
-
-	ata_dev_notice(dev, "Entering standby power mode\n");
-
-	err_mask = ata_exec_internal(dev, &tf, NULL, DMA_NONE, NULL, 0, 0);
-	if (err_mask)
-		ata_dev_err(dev, "STANDBY IMMEDIATE failed (err_mask=0x%x)\n",
-			    err_mask);
-}
-
 static bool ata_dev_power_is_active(struct ata_device *dev)
 {
 	struct ata_taskfile tf;
@@ -2067,6 +2026,52 @@ static bool ata_dev_power_is_active(struct ata_device *dev)
 
 	/* Active or idle */
 	return tf.nsect == 0xff;
+}
+
+/**
+ *	ata_dev_power_set_standby - Set a device power mode to standby
+ *	@dev: target device
+ *
+ *	Issue a STANDBY IMMEDIATE command to set a device power mode to standby.
+ *	For an HDD device, this spins down the disks.
+ *
+ *	LOCKING:
+ *	Kernel thread context (may sleep).
+ */
+void ata_dev_power_set_standby(struct ata_device *dev)
+{
+	unsigned long ap_flags = dev->link->ap->flags;
+	struct ata_taskfile tf;
+	unsigned int err_mask;
+
+	/* If the device is already sleeping or in standby, do nothing. */
+	if ((dev->flags & ATA_DFLAG_SLEEPING) ||
+	    !ata_dev_power_is_active(dev))
+		return;
+
+	/*
+	 * Some odd clown BIOSes issue spindown on power off (ACPI S4 or S5)
+	 * causing some drives to spin up and down again. For these, do nothing
+	 * if we are being called on shutdown.
+	 */
+	if ((ap_flags & ATA_FLAG_NO_POWEROFF_SPINDOWN) &&
+	    system_state == SYSTEM_POWER_OFF)
+		return;
+
+	if ((ap_flags & ATA_FLAG_NO_HIBERNATE_SPINDOWN) &&
+	    system_entering_hibernation())
+		return;
+
+	/* Issue STANDBY IMMEDIATE command only if supported by the device */
+	if (!ata_dev_power_init_tf(dev, &tf, false))
+		return;
+
+	ata_dev_notice(dev, "Entering standby power mode\n");
+
+	err_mask = ata_exec_internal(dev, &tf, NULL, DMA_NONE, NULL, 0, 0);
+	if (err_mask)
+		ata_dev_err(dev, "STANDBY IMMEDIATE failed (err_mask=0x%x)\n",
+			    err_mask);
 }
 
 /**
@@ -6180,24 +6185,10 @@ EXPORT_SYMBOL_GPL(ata_pci_remove_one);
 void ata_pci_shutdown_one(struct pci_dev *pdev)
 {
 	struct ata_host *host = pci_get_drvdata(pdev);
-	struct ata_port *ap;
-	unsigned long flags;
 	int i;
 
-	/* Tell EH to disable all devices */
 	for (i = 0; i < host->n_ports; i++) {
-		ap = host->ports[i];
-		spin_lock_irqsave(ap->lock, flags);
-		ap->pflags |= ATA_PFLAG_UNLOADING;
-		ata_port_schedule_eh(ap);
-		spin_unlock_irqrestore(ap->lock, flags);
-	}
-
-	for (i = 0; i < host->n_ports; i++) {
-		ap = host->ports[i];
-
-		/* Wait for EH to complete before freezing the port */
-		ata_port_wait_eh(ap);
+		struct ata_port *ap = host->ports[i];
 
 		ap->pflags |= ATA_PFLAG_FROZEN;
 

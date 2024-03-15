@@ -17,6 +17,7 @@
 #include <asm/nospec-branch.h>
 #include <asm/text-patching.h>
 #include <asm/unwind.h>
+#include <asm/cfi.h>
 
 static bool all_callee_regs_used[4] = {true, true, true, true};
 
@@ -51,9 +52,11 @@ static u8 *emit_code(u8 *ptr, u32 bytes, unsigned int len)
 	do { EMIT4(b1, b2, b3, b4); EMIT(off, 4); } while (0)
 
 #ifdef CONFIG_X86_KERNEL_IBT
-#define EMIT_ENDBR()	EMIT(gen_endbr(), 4)
+#define EMIT_ENDBR()		EMIT(gen_endbr(), 4)
+#define EMIT_ENDBR_POISON()	EMIT(gen_endbr_poison(), 4)
 #else
 #define EMIT_ENDBR()
+#define EMIT_ENDBR_POISON()
 #endif
 
 static bool is_imm8(int value)
@@ -110,6 +113,7 @@ static int bpf_size_to_x86_bytes(int bpf_size)
 /* Pick a register outside of BPF range for JIT internal work */
 #define AUX_REG (MAX_BPF_JIT_REG + 1)
 #define X86_REG_R9 (MAX_BPF_JIT_REG + 2)
+#define X86_REG_R12 (MAX_BPF_JIT_REG + 3)
 
 /*
  * The following table maps BPF registers to x86-64 registers.
@@ -136,6 +140,7 @@ static const int reg2hex[] = {
 	[BPF_REG_AX] = 2, /* R10 temp register */
 	[AUX_REG] = 3,    /* R11 temp register */
 	[X86_REG_R9] = 1, /* R9 register, 6th function argument */
+	[X86_REG_R12] = 4, /* R12 callee saved */
 };
 
 static const int reg2pt_regs[] = {
@@ -164,6 +169,7 @@ static bool is_ereg(u32 reg)
 			     BIT(BPF_REG_8) |
 			     BIT(BPF_REG_9) |
 			     BIT(X86_REG_R9) |
+			     BIT(X86_REG_R12) |
 			     BIT(BPF_REG_AX));
 }
 
@@ -197,6 +203,17 @@ static u8 add_2mod(u8 byte, u32 r1, u32 r2)
 {
 	if (is_ereg(r1))
 		byte |= 1;
+	if (is_ereg(r2))
+		byte |= 4;
+	return byte;
+}
+
+static u8 add_3mod(u8 byte, u32 r1, u32 r2, u32 index)
+{
+	if (is_ereg(r1))
+		byte |= 1;
+	if (is_ereg(index))
+		byte |= 2;
 	if (is_ereg(r2))
 		byte |= 4;
 	return byte;
@@ -304,6 +321,88 @@ static void pop_callee_regs(u8 **pprog, bool *callee_regs_used)
 	*pprog = prog;
 }
 
+static void emit_nops(u8 **pprog, int len)
+{
+	u8 *prog = *pprog;
+	int i, noplen;
+
+	while (len > 0) {
+		noplen = len;
+
+		if (noplen > ASM_NOP_MAX)
+			noplen = ASM_NOP_MAX;
+
+		for (i = 0; i < noplen; i++)
+			EMIT1(x86_nops[noplen][i]);
+		len -= noplen;
+	}
+
+	*pprog = prog;
+}
+
+/*
+ * Emit the various CFI preambles, see asm/cfi.h and the comments about FineIBT
+ * in arch/x86/kernel/alternative.c
+ */
+
+static void emit_fineibt(u8 **pprog, u32 hash)
+{
+	u8 *prog = *pprog;
+
+	EMIT_ENDBR();
+	EMIT3_off32(0x41, 0x81, 0xea, hash);		/* subl $hash, %r10d	*/
+	EMIT2(0x74, 0x07);				/* jz.d8 +7		*/
+	EMIT2(0x0f, 0x0b);				/* ud2			*/
+	EMIT1(0x90);					/* nop			*/
+	EMIT_ENDBR_POISON();
+
+	*pprog = prog;
+}
+
+static void emit_kcfi(u8 **pprog, u32 hash)
+{
+	u8 *prog = *pprog;
+
+	EMIT1_off32(0xb8, hash);			/* movl $hash, %eax	*/
+#ifdef CONFIG_CALL_PADDING
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+	EMIT1(0x90);
+#endif
+	EMIT_ENDBR();
+
+	*pprog = prog;
+}
+
+static void emit_cfi(u8 **pprog, u32 hash)
+{
+	u8 *prog = *pprog;
+
+	switch (cfi_mode) {
+	case CFI_FINEIBT:
+		emit_fineibt(&prog, hash);
+		break;
+
+	case CFI_KCFI:
+		emit_kcfi(&prog, hash);
+		break;
+
+	default:
+		EMIT_ENDBR();
+		break;
+	}
+
+	*pprog = prog;
+}
+
 /*
  * Emit x86-64 prologue code for BPF program.
  * bpf_tail_call helper will skip the first X86_TAIL_CALL_OFFSET bytes
@@ -315,12 +414,11 @@ static void emit_prologue(u8 **pprog, u32 stack_depth, bool ebpf_from_cbpf,
 {
 	u8 *prog = *pprog;
 
+	emit_cfi(&prog, is_subprog ? cfi_bpf_subprog_hash : cfi_bpf_hash);
 	/* BPF trampoline can be made to work without these nops,
 	 * but let's waste 5 bytes for now and optimize later
 	 */
-	EMIT_ENDBR();
-	memcpy(prog, x86_nops[5], X86_PATCH_SIZE);
-	prog += X86_PATCH_SIZE;
+	emit_nops(&prog, X86_PATCH_SIZE);
 	if (!ebpf_from_cbpf) {
 		if (tail_call_reachable && !is_subprog)
 			/* When it's the entry of the whole tailcall context,
@@ -469,7 +567,7 @@ static void emit_indirect_jump(u8 **pprog, int reg, u8 *ip)
 			emit_jump(&prog, &__x86_indirect_thunk_array[reg], ip);
 	} else {
 		EMIT2(0xFF, 0xE0 + reg);	/* jmp *%\reg */
-		if (IS_ENABLED(CONFIG_RETPOLINE) || IS_ENABLED(CONFIG_SLS))
+		if (IS_ENABLED(CONFIG_MITIGATION_RETPOLINE) || IS_ENABLED(CONFIG_MITIGATION_SLS))
 			EMIT1(0xCC);		/* int3 */
 	}
 
@@ -484,7 +582,7 @@ static void emit_return(u8 **pprog, u8 *ip)
 		emit_jump(&prog, x86_return_thunk, ip);
 	} else {
 		EMIT1(0xC3);		/* ret */
-		if (IS_ENABLED(CONFIG_SLS))
+		if (IS_ENABLED(CONFIG_MITIGATION_SLS))
 			EMIT1(0xCC);	/* int3 */
 	}
 
@@ -561,6 +659,8 @@ static void emit_bpf_tail_call_indirect(struct bpf_prog *bpf_prog,
 		pop_r12(&prog);
 	} else {
 		pop_callee_regs(&prog, callee_regs_used);
+		if (bpf_arena_get_kern_vm_start(bpf_prog->aux->arena))
+			pop_r12(&prog);
 	}
 
 	EMIT1(0x58);                              /* pop rax */
@@ -620,14 +720,15 @@ static void emit_bpf_tail_call_direct(struct bpf_prog *bpf_prog,
 		pop_r12(&prog);
 	} else {
 		pop_callee_regs(&prog, callee_regs_used);
+		if (bpf_arena_get_kern_vm_start(bpf_prog->aux->arena))
+			pop_r12(&prog);
 	}
 
 	EMIT1(0x58);                                  /* pop rax */
 	if (stack_depth)
 		EMIT3_off32(0x48, 0x81, 0xC4, round_up(stack_depth, 8));
 
-	memcpy(prog, x86_nops[5], X86_PATCH_SIZE);
-	prog += X86_PATCH_SIZE;
+	emit_nops(&prog, X86_PATCH_SIZE);
 
 	/* out: */
 	ctx->tail_call_direct_label = prog - start;
@@ -804,6 +905,18 @@ static void emit_insn_suffix(u8 **pprog, u32 ptr_reg, u32 val_reg, int off)
 	*pprog = prog;
 }
 
+static void emit_insn_suffix_SIB(u8 **pprog, u32 ptr_reg, u32 val_reg, u32 index_reg, int off)
+{
+	u8 *prog = *pprog;
+
+	if (is_imm8(off)) {
+		EMIT3(add_2reg(0x44, BPF_REG_0, val_reg), add_2reg(0, ptr_reg, index_reg) /* SIB */, off);
+	} else {
+		EMIT2_off32(add_2reg(0x84, BPF_REG_0, val_reg), add_2reg(0, ptr_reg, index_reg) /* SIB */, off);
+	}
+	*pprog = prog;
+}
+
 /*
  * Emit a REX byte if it will be necessary to address these registers
  */
@@ -885,6 +998,37 @@ static void emit_ldsx(u8 **pprog, u32 size, u32 dst_reg, u32 src_reg, int off)
 	*pprog = prog;
 }
 
+static void emit_ldx_index(u8 **pprog, u32 size, u32 dst_reg, u32 src_reg, u32 index_reg, int off)
+{
+	u8 *prog = *pprog;
+
+	switch (size) {
+	case BPF_B:
+		/* movzx rax, byte ptr [rax + r12 + off] */
+		EMIT3(add_3mod(0x40, src_reg, dst_reg, index_reg), 0x0F, 0xB6);
+		break;
+	case BPF_H:
+		/* movzx rax, word ptr [rax + r12 + off] */
+		EMIT3(add_3mod(0x40, src_reg, dst_reg, index_reg), 0x0F, 0xB7);
+		break;
+	case BPF_W:
+		/* mov eax, dword ptr [rax + r12 + off] */
+		EMIT2(add_3mod(0x40, src_reg, dst_reg, index_reg), 0x8B);
+		break;
+	case BPF_DW:
+		/* mov rax, qword ptr [rax + r12 + off] */
+		EMIT2(add_3mod(0x48, src_reg, dst_reg, index_reg), 0x8B);
+		break;
+	}
+	emit_insn_suffix_SIB(&prog, src_reg, dst_reg, index_reg, off);
+	*pprog = prog;
+}
+
+static void emit_ldx_r12(u8 **pprog, u32 size, u32 dst_reg, u32 src_reg, int off)
+{
+	emit_ldx_index(pprog, size, dst_reg, src_reg, X86_REG_R12, off);
+}
+
 /* STX: *(u8*)(dst_reg + off) = src_reg */
 static void emit_stx(u8 **pprog, u32 size, u32 dst_reg, u32 src_reg, int off)
 {
@@ -917,6 +1061,71 @@ static void emit_stx(u8 **pprog, u32 size, u32 dst_reg, u32 src_reg, int off)
 	}
 	emit_insn_suffix(&prog, dst_reg, src_reg, off);
 	*pprog = prog;
+}
+
+/* STX: *(u8*)(dst_reg + index_reg + off) = src_reg */
+static void emit_stx_index(u8 **pprog, u32 size, u32 dst_reg, u32 src_reg, u32 index_reg, int off)
+{
+	u8 *prog = *pprog;
+
+	switch (size) {
+	case BPF_B:
+		/* mov byte ptr [rax + r12 + off], al */
+		EMIT2(add_3mod(0x40, dst_reg, src_reg, index_reg), 0x88);
+		break;
+	case BPF_H:
+		/* mov word ptr [rax + r12 + off], ax */
+		EMIT3(0x66, add_3mod(0x40, dst_reg, src_reg, index_reg), 0x89);
+		break;
+	case BPF_W:
+		/* mov dword ptr [rax + r12 + 1], eax */
+		EMIT2(add_3mod(0x40, dst_reg, src_reg, index_reg), 0x89);
+		break;
+	case BPF_DW:
+		/* mov qword ptr [rax + r12 + 1], rax */
+		EMIT2(add_3mod(0x48, dst_reg, src_reg, index_reg), 0x89);
+		break;
+	}
+	emit_insn_suffix_SIB(&prog, dst_reg, src_reg, index_reg, off);
+	*pprog = prog;
+}
+
+static void emit_stx_r12(u8 **pprog, u32 size, u32 dst_reg, u32 src_reg, int off)
+{
+	emit_stx_index(pprog, size, dst_reg, src_reg, X86_REG_R12, off);
+}
+
+/* ST: *(u8*)(dst_reg + index_reg + off) = imm32 */
+static void emit_st_index(u8 **pprog, u32 size, u32 dst_reg, u32 index_reg, int off, int imm)
+{
+	u8 *prog = *pprog;
+
+	switch (size) {
+	case BPF_B:
+		/* mov byte ptr [rax + r12 + off], imm8 */
+		EMIT2(add_3mod(0x40, dst_reg, 0, index_reg), 0xC6);
+		break;
+	case BPF_H:
+		/* mov word ptr [rax + r12 + off], imm16 */
+		EMIT3(0x66, add_3mod(0x40, dst_reg, 0, index_reg), 0xC7);
+		break;
+	case BPF_W:
+		/* mov dword ptr [rax + r12 + 1], imm32 */
+		EMIT2(add_3mod(0x40, dst_reg, 0, index_reg), 0xC7);
+		break;
+	case BPF_DW:
+		/* mov qword ptr [rax + r12 + 1], imm32 */
+		EMIT2(add_3mod(0x48, dst_reg, 0, index_reg), 0xC7);
+		break;
+	}
+	emit_insn_suffix_SIB(&prog, dst_reg, 0, index_reg, off);
+	EMIT(imm, bpf_size_to_x86_bytes(size));
+	*pprog = prog;
+}
+
+static void emit_st_r12(u8 **pprog, u32 size, u32 dst_reg, int off, int imm)
+{
+	emit_st_index(pprog, size, dst_reg, X86_REG_R12, off, imm);
 }
 
 static int emit_atomic(u8 **pprog, u8 atomic_op,
@@ -960,12 +1169,15 @@ static int emit_atomic(u8 **pprog, u8 atomic_op,
 	return 0;
 }
 
+#define DONT_CLEAR 1
+
 bool ex_handler_bpf(const struct exception_table_entry *x, struct pt_regs *regs)
 {
 	u32 reg = x->fixup >> 8;
 
 	/* jump over faulting load and clear dest register */
-	*(unsigned long *)((void *)regs + reg) = 0;
+	if (reg != DONT_CLEAR)
+		*(unsigned long *)((void *)regs + reg) = 0;
 	regs->ip += x->fixup & 0xff;
 	return true;
 }
@@ -987,25 +1199,6 @@ static void detect_reg_usage(struct bpf_insn *insn, int insn_cnt,
 		if (insn->dst_reg == BPF_REG_9 || insn->src_reg == BPF_REG_9)
 			regs_used[3] = true;
 	}
-}
-
-static void emit_nops(u8 **pprog, int len)
-{
-	u8 *prog = *pprog;
-	int i, noplen;
-
-	while (len > 0) {
-		noplen = len;
-
-		if (noplen > ASM_NOP_MAX)
-			noplen = ASM_NOP_MAX;
-
-		for (i = 0; i < noplen; i++)
-			EMIT1(x86_nops[noplen][i]);
-		len -= noplen;
-	}
-
-	*pprog = prog;
 }
 
 /* emit the 3-byte VEX prefix
@@ -1083,10 +1276,14 @@ static int do_jit(struct bpf_prog *bpf_prog, int *addrs, u8 *image, u8 *rw_image
 	bool tail_call_seen = false;
 	bool seen_exit = false;
 	u8 temp[BPF_MAX_INSN_SIZE + BPF_INSN_SAFETY];
+	u64 arena_vm_start, user_vm_start;
 	int i, excnt = 0;
 	int ilen, proglen = 0;
 	u8 *prog = temp;
 	int err;
+
+	arena_vm_start = bpf_arena_get_kern_vm_start(bpf_prog->aux->arena);
+	user_vm_start = bpf_arena_get_user_vm_start(bpf_prog->aux->arena);
 
 	detect_reg_usage(insn, insn_cnt, callee_regs_used,
 			 &tail_call_seen);
@@ -1108,8 +1305,13 @@ static int do_jit(struct bpf_prog *bpf_prog, int *addrs, u8 *image, u8 *rw_image
 		push_r12(&prog);
 		push_callee_regs(&prog, all_callee_regs_used);
 	} else {
+		if (arena_vm_start)
+			push_r12(&prog);
 		push_callee_regs(&prog, callee_regs_used);
 	}
+	if (arena_vm_start)
+		emit_mov_imm64(&prog, X86_REG_R12,
+			       arena_vm_start >> 32, (u32) arena_vm_start);
 
 	ilen = prog - temp;
 	if (rw_image)
@@ -1149,6 +1351,40 @@ static int do_jit(struct bpf_prog *bpf_prog, int *addrs, u8 *image, u8 *rw_image
 			break;
 
 		case BPF_ALU64 | BPF_MOV | BPF_X:
+			if (insn->off == BPF_ADDR_SPACE_CAST &&
+			    insn->imm == 1U << 16) {
+				if (dst_reg != src_reg)
+					/* 32-bit mov */
+					emit_mov_reg(&prog, false, dst_reg, src_reg);
+				/* shl dst_reg, 32 */
+				maybe_emit_1mod(&prog, dst_reg, true);
+				EMIT3(0xC1, add_1reg(0xE0, dst_reg), 32);
+
+				/* or dst_reg, user_vm_start */
+				maybe_emit_1mod(&prog, dst_reg, true);
+				if (is_axreg(dst_reg))
+					EMIT1_off32(0x0D,  user_vm_start >> 32);
+				else
+					EMIT2_off32(0x81, add_1reg(0xC8, dst_reg),  user_vm_start >> 32);
+
+				/* rol dst_reg, 32 */
+				maybe_emit_1mod(&prog, dst_reg, true);
+				EMIT3(0xC1, add_1reg(0xC0, dst_reg), 32);
+
+				/* xor r11, r11 */
+				EMIT3(0x4D, 0x31, 0xDB);
+
+				/* test dst_reg32, dst_reg32; check if lower 32-bit are zero */
+				maybe_emit_mod(&prog, dst_reg, dst_reg, false);
+				EMIT2(0x85, add_2reg(0xC0, dst_reg, dst_reg));
+
+				/* cmove r11, dst_reg; if so, set dst_reg to zero */
+				/* WARNING: Intel swapped src/dst register encoding in CMOVcc !!! */
+				maybe_emit_mod(&prog, AUX_REG, dst_reg, true);
+				EMIT3(0x0F, 0x44, add_2reg(0xC0, AUX_REG, dst_reg));
+				break;
+			}
+			fallthrough;
 		case BPF_ALU | BPF_MOV | BPF_X:
 			if (insn->off == 0)
 				emit_mov_reg(&prog,
@@ -1498,6 +1734,56 @@ st:			if (is_imm8(insn->off))
 		case BPF_STX | BPF_MEM | BPF_W:
 		case BPF_STX | BPF_MEM | BPF_DW:
 			emit_stx(&prog, BPF_SIZE(insn->code), dst_reg, src_reg, insn->off);
+			break;
+
+		case BPF_ST | BPF_PROBE_MEM32 | BPF_B:
+		case BPF_ST | BPF_PROBE_MEM32 | BPF_H:
+		case BPF_ST | BPF_PROBE_MEM32 | BPF_W:
+		case BPF_ST | BPF_PROBE_MEM32 | BPF_DW:
+			start_of_ldx = prog;
+			emit_st_r12(&prog, BPF_SIZE(insn->code), dst_reg, insn->off, insn->imm);
+			goto populate_extable;
+
+			/* LDX: dst_reg = *(u8*)(src_reg + r12 + off) */
+		case BPF_LDX | BPF_PROBE_MEM32 | BPF_B:
+		case BPF_LDX | BPF_PROBE_MEM32 | BPF_H:
+		case BPF_LDX | BPF_PROBE_MEM32 | BPF_W:
+		case BPF_LDX | BPF_PROBE_MEM32 | BPF_DW:
+		case BPF_STX | BPF_PROBE_MEM32 | BPF_B:
+		case BPF_STX | BPF_PROBE_MEM32 | BPF_H:
+		case BPF_STX | BPF_PROBE_MEM32 | BPF_W:
+		case BPF_STX | BPF_PROBE_MEM32 | BPF_DW:
+			start_of_ldx = prog;
+			if (BPF_CLASS(insn->code) == BPF_LDX)
+				emit_ldx_r12(&prog, BPF_SIZE(insn->code), dst_reg, src_reg, insn->off);
+			else
+				emit_stx_r12(&prog, BPF_SIZE(insn->code), dst_reg, src_reg, insn->off);
+populate_extable:
+			{
+				struct exception_table_entry *ex;
+				u8 *_insn = image + proglen + (start_of_ldx - temp);
+				s64 delta;
+
+				if (!bpf_prog->aux->extable)
+					break;
+
+				if (excnt >= bpf_prog->aux->num_exentries) {
+					pr_err("mem32 extable bug\n");
+					return -EFAULT;
+				}
+				ex = &bpf_prog->aux->extable[excnt++];
+
+				delta = _insn - (u8 *)&ex->insn;
+				/* switch ex to rw buffer for writes */
+				ex = (void *)rw_image + ((void *)ex - (void *)image);
+
+				ex->insn = delta;
+
+				ex->data = EX_TYPE_BPF;
+
+				ex->fixup = (prog - start_of_ldx) |
+					((BPF_CLASS(insn->code) == BPF_LDX ? reg2pt_regs[dst_reg] : DONT_CLEAR) << 8);
+			}
 			break;
 
 			/* LDX: dst_reg = *(u8*)(src_reg + off) */
@@ -1972,6 +2258,8 @@ emit_jmp:
 				pop_r12(&prog);
 			} else {
 				pop_callee_regs(&prog, callee_regs_used);
+				if (arena_vm_start)
+					pop_r12(&prog);
 			}
 			EMIT1(0xC9);         /* leave */
 			emit_return(&prog, image + addrs[i - 1] + (prog - temp));
@@ -2143,7 +2431,7 @@ static void save_args(const struct btf_func_model *m, u8 **prog,
 		} else {
 			/* Only copy the arguments on-stack to current
 			 * 'stack_size' and ignore the regs, used to
-			 * prepare the arguments on-stack for orign call.
+			 * prepare the arguments on-stack for origin call.
 			 */
 			if (for_call_origin) {
 				nr_regs += arg_regs;
@@ -2198,7 +2486,8 @@ static void restore_regs(const struct btf_func_model *m, u8 **prog,
 
 static int invoke_bpf_prog(const struct btf_func_model *m, u8 **pprog,
 			   struct bpf_tramp_link *l, int stack_size,
-			   int run_ctx_off, bool save_ret)
+			   int run_ctx_off, bool save_ret,
+			   void *image, void *rw_image)
 {
 	u8 *prog = *pprog;
 	u8 *jmp_insn;
@@ -2226,7 +2515,7 @@ static int invoke_bpf_prog(const struct btf_func_model *m, u8 **pprog,
 	else
 		EMIT4(0x48, 0x8D, 0x75, -run_ctx_off);
 
-	if (emit_rsb_call(&prog, bpf_trampoline_enter(p), prog))
+	if (emit_rsb_call(&prog, bpf_trampoline_enter(p), image + (prog - (u8 *)rw_image)))
 		return -EINVAL;
 	/* remember prog start time returned by __bpf_prog_enter */
 	emit_mov_reg(&prog, true, BPF_REG_6, BPF_REG_0);
@@ -2250,7 +2539,7 @@ static int invoke_bpf_prog(const struct btf_func_model *m, u8 **pprog,
 			       (long) p->insnsi >> 32,
 			       (u32) (long) p->insnsi);
 	/* call JITed bpf program or interpreter */
-	if (emit_rsb_call(&prog, p->bpf_func, prog))
+	if (emit_rsb_call(&prog, p->bpf_func, image + (prog - (u8 *)rw_image)))
 		return -EINVAL;
 
 	/*
@@ -2277,7 +2566,7 @@ static int invoke_bpf_prog(const struct btf_func_model *m, u8 **pprog,
 		EMIT3_off32(0x48, 0x8D, 0x95, -run_ctx_off);
 	else
 		EMIT4(0x48, 0x8D, 0x55, -run_ctx_off);
-	if (emit_rsb_call(&prog, bpf_trampoline_exit(p), prog))
+	if (emit_rsb_call(&prog, bpf_trampoline_exit(p), image + (prog - (u8 *)rw_image)))
 		return -EINVAL;
 
 	*pprog = prog;
@@ -2312,14 +2601,15 @@ static int emit_cond_near_jump(u8 **pprog, void *func, void *ip, u8 jmp_cond)
 
 static int invoke_bpf(const struct btf_func_model *m, u8 **pprog,
 		      struct bpf_tramp_links *tl, int stack_size,
-		      int run_ctx_off, bool save_ret)
+		      int run_ctx_off, bool save_ret,
+		      void *image, void *rw_image)
 {
 	int i;
 	u8 *prog = *pprog;
 
 	for (i = 0; i < tl->nr_links; i++) {
 		if (invoke_bpf_prog(m, &prog, tl->links[i], stack_size,
-				    run_ctx_off, save_ret))
+				    run_ctx_off, save_ret, image, rw_image))
 			return -EINVAL;
 	}
 	*pprog = prog;
@@ -2328,7 +2618,8 @@ static int invoke_bpf(const struct btf_func_model *m, u8 **pprog,
 
 static int invoke_bpf_mod_ret(const struct btf_func_model *m, u8 **pprog,
 			      struct bpf_tramp_links *tl, int stack_size,
-			      int run_ctx_off, u8 **branches)
+			      int run_ctx_off, u8 **branches,
+			      void *image, void *rw_image)
 {
 	u8 *prog = *pprog;
 	int i;
@@ -2339,7 +2630,8 @@ static int invoke_bpf_mod_ret(const struct btf_func_model *m, u8 **pprog,
 	emit_mov_imm32(&prog, false, BPF_REG_0, 0);
 	emit_stx(&prog, BPF_DW, BPF_REG_FP, BPF_REG_0, -8);
 	for (i = 0; i < tl->nr_links; i++) {
-		if (invoke_bpf_prog(m, &prog, tl->links[i], stack_size, run_ctx_off, true))
+		if (invoke_bpf_prog(m, &prog, tl->links[i], stack_size, run_ctx_off, true,
+				    image, rw_image))
 			return -EINVAL;
 
 		/* mod_ret prog stored return value into [rbp - 8]. Emit:
@@ -2422,10 +2714,11 @@ static int invoke_bpf_mod_ret(const struct btf_func_model *m, u8 **pprog,
  * add rsp, 8                      // skip eth_type_trans's frame
  * ret                             // return to its caller
  */
-int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *image_end,
-				const struct btf_func_model *m, u32 flags,
-				struct bpf_tramp_links *tlinks,
-				void *func_addr)
+static int __arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *rw_image,
+					 void *rw_image_end, void *image,
+					 const struct btf_func_model *m, u32 flags,
+					 struct bpf_tramp_links *tlinks,
+					 void *func_addr)
 {
 	int i, ret, nr_regs = m->nr_args, stack_size = 0;
 	int regs_off, nregs_off, ip_off, run_ctx_off, arg_stack_off, rbx_off;
@@ -2437,10 +2730,19 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 	u8 *prog;
 	bool save_ret;
 
+	/*
+	 * F_INDIRECT is only compatible with F_RET_FENTRY_RET, it is
+	 * explicitly incompatible with F_CALL_ORIG | F_SKIP_FRAME | F_IP_ARG
+	 * because @func_addr.
+	 */
+	WARN_ON_ONCE((flags & BPF_TRAMP_F_INDIRECT) &&
+		     (flags & ~(BPF_TRAMP_F_INDIRECT | BPF_TRAMP_F_RET_FENTRY_RET)));
+
 	/* extra registers for struct arguments */
-	for (i = 0; i < m->nr_args; i++)
+	for (i = 0; i < m->nr_args; i++) {
 		if (m->arg_flags[i] & BTF_FMODEL_STRUCT_ARG)
 			nr_regs += (m->arg_size[i] + 7) / 8 - 1;
+	}
 
 	/* x86-64 supports up to MAX_BPF_FUNC_ARGS arguments. 1-6
 	 * are passed through regs, the remains are through stack.
@@ -2521,22 +2823,29 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 		orig_call += X86_PATCH_SIZE;
 	}
 
-	prog = image;
+	prog = rw_image;
 
-	EMIT_ENDBR();
-	/*
-	 * This is the direct-call trampoline, as such it needs accounting
-	 * for the __fentry__ call.
-	 */
-	x86_call_depth_emit_accounting(&prog, NULL);
+	if (flags & BPF_TRAMP_F_INDIRECT) {
+		/*
+		 * Indirect call for bpf_struct_ops
+		 */
+		emit_cfi(&prog, cfi_get_func_hash(func_addr));
+	} else {
+		/*
+		 * Direct-call fentry stub, as such it needs accounting for the
+		 * __fentry__ call.
+		 */
+		x86_call_depth_emit_accounting(&prog, NULL);
+	}
 	EMIT1(0x55);		 /* push rbp */
 	EMIT3(0x48, 0x89, 0xE5); /* mov rbp, rsp */
-	if (!is_imm8(stack_size))
+	if (!is_imm8(stack_size)) {
 		/* sub rsp, stack_size */
 		EMIT3_off32(0x48, 0x81, 0xEC, stack_size);
-	else
+	} else {
 		/* sub rsp, stack_size */
 		EMIT4(0x48, 0x83, 0xEC, stack_size);
+	}
 	if (flags & BPF_TRAMP_F_TAIL_CALL_CTX)
 		EMIT1(0x50);		/* push rax */
 	/* mov QWORD PTR [rbp - rbx_off], rbx */
@@ -2563,16 +2872,18 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 	if (flags & BPF_TRAMP_F_CALL_ORIG) {
 		/* arg1: mov rdi, im */
 		emit_mov_imm64(&prog, BPF_REG_1, (long) im >> 32, (u32) (long) im);
-		if (emit_rsb_call(&prog, __bpf_tramp_enter, prog)) {
+		if (emit_rsb_call(&prog, __bpf_tramp_enter,
+				  image + (prog - (u8 *)rw_image))) {
 			ret = -EINVAL;
 			goto cleanup;
 		}
 	}
 
-	if (fentry->nr_links)
+	if (fentry->nr_links) {
 		if (invoke_bpf(m, &prog, fentry, regs_off, run_ctx_off,
-			       flags & BPF_TRAMP_F_RET_FENTRY_RET))
+			       flags & BPF_TRAMP_F_RET_FENTRY_RET, image, rw_image))
 			return -EINVAL;
+	}
 
 	if (fmod_ret->nr_links) {
 		branches = kcalloc(fmod_ret->nr_links, sizeof(u8 *),
@@ -2581,7 +2892,7 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 			return -ENOMEM;
 
 		if (invoke_bpf_mod_ret(m, &prog, fmod_ret, regs_off,
-				       run_ctx_off, branches)) {
+				       run_ctx_off, branches, image, rw_image)) {
 			ret = -EINVAL;
 			goto cleanup;
 		}
@@ -2591,27 +2902,27 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 		restore_regs(m, &prog, regs_off);
 		save_args(m, &prog, arg_stack_off, true);
 
-		if (flags & BPF_TRAMP_F_TAIL_CALL_CTX)
+		if (flags & BPF_TRAMP_F_TAIL_CALL_CTX) {
 			/* Before calling the original function, restore the
 			 * tail_call_cnt from stack to rax.
 			 */
 			RESTORE_TAIL_CALL_CNT(stack_size);
+		}
 
 		if (flags & BPF_TRAMP_F_ORIG_STACK) {
 			emit_ldx(&prog, BPF_DW, BPF_REG_6, BPF_REG_FP, 8);
 			EMIT2(0xff, 0xd3); /* call *rbx */
 		} else {
 			/* call original function */
-			if (emit_rsb_call(&prog, orig_call, prog)) {
+			if (emit_rsb_call(&prog, orig_call, image + (prog - (u8 *)rw_image))) {
 				ret = -EINVAL;
 				goto cleanup;
 			}
 		}
 		/* remember return value in a stack for bpf prog to access */
 		emit_stx(&prog, BPF_DW, BPF_REG_FP, BPF_REG_0, -8);
-		im->ip_after_call = prog;
-		memcpy(prog, x86_nops[5], X86_PATCH_SIZE);
-		prog += X86_PATCH_SIZE;
+		im->ip_after_call = image + (prog - (u8 *)rw_image);
+		emit_nops(&prog, X86_PATCH_SIZE);
 	}
 
 	if (fmod_ret->nr_links) {
@@ -2624,16 +2935,19 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 		/* Update the branches saved in invoke_bpf_mod_ret with the
 		 * aligned address of do_fexit.
 		 */
-		for (i = 0; i < fmod_ret->nr_links; i++)
-			emit_cond_near_jump(&branches[i], prog, branches[i],
-					    X86_JNE);
+		for (i = 0; i < fmod_ret->nr_links; i++) {
+			emit_cond_near_jump(&branches[i], image + (prog - (u8 *)rw_image),
+					    image + (branches[i] - (u8 *)rw_image), X86_JNE);
+		}
 	}
 
-	if (fexit->nr_links)
-		if (invoke_bpf(m, &prog, fexit, regs_off, run_ctx_off, false)) {
+	if (fexit->nr_links) {
+		if (invoke_bpf(m, &prog, fexit, regs_off, run_ctx_off,
+			       false, image, rw_image)) {
 			ret = -EINVAL;
 			goto cleanup;
 		}
+	}
 
 	if (flags & BPF_TRAMP_F_RESTORE_REGS)
 		restore_regs(m, &prog, regs_off);
@@ -2643,18 +2957,19 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 	 * restored to R0.
 	 */
 	if (flags & BPF_TRAMP_F_CALL_ORIG) {
-		im->ip_epilogue = prog;
+		im->ip_epilogue = image + (prog - (u8 *)rw_image);
 		/* arg1: mov rdi, im */
 		emit_mov_imm64(&prog, BPF_REG_1, (long) im >> 32, (u32) (long) im);
-		if (emit_rsb_call(&prog, __bpf_tramp_exit, prog)) {
+		if (emit_rsb_call(&prog, __bpf_tramp_exit, image + (prog - (u8 *)rw_image))) {
 			ret = -EINVAL;
 			goto cleanup;
 		}
-	} else if (flags & BPF_TRAMP_F_TAIL_CALL_CTX)
+	} else if (flags & BPF_TRAMP_F_TAIL_CALL_CTX) {
 		/* Before running the original function, restore the
 		 * tail_call_cnt from stack to rax.
 		 */
 		RESTORE_TAIL_CALL_CNT(stack_size);
+	}
 
 	/* restore return value of orig_call or fentry prog back into RAX */
 	if (save_ret)
@@ -2662,19 +2977,91 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *i
 
 	emit_ldx(&prog, BPF_DW, BPF_REG_6, BPF_REG_FP, -rbx_off);
 	EMIT1(0xC9); /* leave */
-	if (flags & BPF_TRAMP_F_SKIP_FRAME)
+	if (flags & BPF_TRAMP_F_SKIP_FRAME) {
 		/* skip our return address and return to parent */
 		EMIT4(0x48, 0x83, 0xC4, 8); /* add rsp, 8 */
-	emit_return(&prog, prog);
+	}
+	emit_return(&prog, image + (prog - (u8 *)rw_image));
 	/* Make sure the trampoline generation logic doesn't overflow */
-	if (WARN_ON_ONCE(prog > (u8 *)image_end - BPF_INSN_SAFETY)) {
+	if (WARN_ON_ONCE(prog > (u8 *)rw_image_end - BPF_INSN_SAFETY)) {
 		ret = -EFAULT;
 		goto cleanup;
 	}
-	ret = prog - (u8 *)image;
+	ret = prog - (u8 *)rw_image + BPF_INSN_SAFETY;
 
 cleanup:
 	kfree(branches);
+	return ret;
+}
+
+void *arch_alloc_bpf_trampoline(unsigned int size)
+{
+	return bpf_prog_pack_alloc(size, jit_fill_hole);
+}
+
+void arch_free_bpf_trampoline(void *image, unsigned int size)
+{
+	bpf_prog_pack_free(image, size);
+}
+
+void arch_protect_bpf_trampoline(void *image, unsigned int size)
+{
+}
+
+void arch_unprotect_bpf_trampoline(void *image, unsigned int size)
+{
+}
+
+int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image, void *image_end,
+				const struct btf_func_model *m, u32 flags,
+				struct bpf_tramp_links *tlinks,
+				void *func_addr)
+{
+	void *rw_image, *tmp;
+	int ret;
+	u32 size = image_end - image;
+
+	/* rw_image doesn't need to be in module memory range, so we can
+	 * use kvmalloc.
+	 */
+	rw_image = kvmalloc(size, GFP_KERNEL);
+	if (!rw_image)
+		return -ENOMEM;
+
+	ret = __arch_prepare_bpf_trampoline(im, rw_image, rw_image + size, image, m,
+					    flags, tlinks, func_addr);
+	if (ret < 0)
+		goto out;
+
+	tmp = bpf_arch_text_copy(image, rw_image, size);
+	if (IS_ERR(tmp))
+		ret = PTR_ERR(tmp);
+out:
+	kvfree(rw_image);
+	return ret;
+}
+
+int arch_bpf_trampoline_size(const struct btf_func_model *m, u32 flags,
+			     struct bpf_tramp_links *tlinks, void *func_addr)
+{
+	struct bpf_tramp_image im;
+	void *image;
+	int ret;
+
+	/* Allocate a temporary buffer for __arch_prepare_bpf_trampoline().
+	 * This will NOT cause fragmentation in direct map, as we do not
+	 * call set_memory_*() on this buffer.
+	 *
+	 * We cannot use kvmalloc here, because we need image to be in
+	 * module memory range.
+	 */
+	image = bpf_jit_alloc_exec(PAGE_SIZE);
+	if (!image)
+		return -ENOMEM;
+
+	ret = __arch_prepare_bpf_trampoline(&im, image, image + PAGE_SIZE, image,
+					    m, flags, tlinks, func_addr);
+	bpf_jit_free_exec(image);
 	return ret;
 }
 
@@ -2935,9 +3322,16 @@ out_image:
 			jit_data->header = header;
 			jit_data->rw_header = rw_header;
 		}
-		prog->bpf_func = (void *)image;
+		/*
+		 * ctx.prog_offset is used when CFI preambles put code *before*
+		 * the function. See emit_cfi(). For FineIBT specifically this code
+		 * can also be executed and bpf_prog_kallsyms_add() will
+		 * generate an additional symbol to cover this, hence also
+		 * decrement proglen.
+		 */
+		prog->bpf_func = (void *)image + cfi_get_offset();
 		prog->jited = 1;
-		prog->jited_len = proglen;
+		prog->jited_len = proglen - cfi_get_offset();
 	} else {
 		prog = orig_prog;
 	}
@@ -2992,6 +3386,7 @@ void bpf_jit_free(struct bpf_prog *prog)
 			kvfree(jit_data->addrs);
 			kfree(jit_data);
 		}
+		prog->bpf_func = (void *)prog->bpf_func - cfi_get_offset();
 		hdr = bpf_jit_binary_pack_hdr(prog);
 		bpf_jit_binary_pack_free(hdr, NULL);
 		WARN_ON_ONCE(!bpf_prog_kallsyms_verify_off(prog));
@@ -3024,4 +3419,60 @@ void arch_bpf_stack_walk(bool (*consume_fn)(void *cookie, u64 ip, u64 sp, u64 bp
 	return;
 #endif
 	WARN(1, "verification of programs using bpf_throw should have failed\n");
+}
+
+void bpf_arch_poke_desc_update(struct bpf_jit_poke_descriptor *poke,
+			       struct bpf_prog *new, struct bpf_prog *old)
+{
+	u8 *old_addr, *new_addr, *old_bypass_addr;
+	int ret;
+
+	old_bypass_addr = old ? NULL : poke->bypass_addr;
+	old_addr = old ? (u8 *)old->bpf_func + poke->adj_off : NULL;
+	new_addr = new ? (u8 *)new->bpf_func + poke->adj_off : NULL;
+
+	/*
+	 * On program loading or teardown, the program's kallsym entry
+	 * might not be in place, so we use __bpf_arch_text_poke to skip
+	 * the kallsyms check.
+	 */
+	if (new) {
+		ret = __bpf_arch_text_poke(poke->tailcall_target,
+					   BPF_MOD_JUMP,
+					   old_addr, new_addr);
+		BUG_ON(ret < 0);
+		if (!old) {
+			ret = __bpf_arch_text_poke(poke->tailcall_bypass,
+						   BPF_MOD_JUMP,
+						   poke->bypass_addr,
+						   NULL);
+			BUG_ON(ret < 0);
+		}
+	} else {
+		ret = __bpf_arch_text_poke(poke->tailcall_bypass,
+					   BPF_MOD_JUMP,
+					   old_bypass_addr,
+					   poke->bypass_addr);
+		BUG_ON(ret < 0);
+		/* let other CPUs finish the execution of program
+		 * so that it will not possible to expose them
+		 * to invalid nop, stack unwind, nop state
+		 */
+		if (!ret)
+			synchronize_rcu();
+		ret = __bpf_arch_text_poke(poke->tailcall_target,
+					   BPF_MOD_JUMP,
+					   old_addr, NULL);
+		BUG_ON(ret < 0);
+	}
+}
+
+bool bpf_jit_supports_arena(void)
+{
+	return true;
+}
+
+bool bpf_jit_supports_ptr_xchg(void)
+{
+	return true;
 }

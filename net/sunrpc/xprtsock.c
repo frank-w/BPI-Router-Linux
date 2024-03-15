@@ -1181,6 +1181,7 @@ static void xs_sock_reset_state_flags(struct rpc_xprt *xprt)
 {
 	struct sock_xprt *transport = container_of(xprt, struct sock_xprt, xprt);
 
+	transport->xprt_err = 0;
 	clear_bit(XPRT_SOCK_DATA_READY, &transport->sock_state);
 	clear_bit(XPRT_SOCK_WAKE_ERROR, &transport->sock_state);
 	clear_bit(XPRT_SOCK_WAKE_WRITE, &transport->sock_state);
@@ -2772,18 +2773,13 @@ static void xs_wake_error(struct sock_xprt *transport)
 {
 	int sockerr;
 
-	if (!test_bit(XPRT_SOCK_WAKE_ERROR, &transport->sock_state))
-		return;
-	mutex_lock(&transport->recv_mutex);
-	if (transport->sock == NULL)
-		goto out;
 	if (!test_and_clear_bit(XPRT_SOCK_WAKE_ERROR, &transport->sock_state))
-		goto out;
+		return;
 	sockerr = xchg(&transport->xprt_err, 0);
-	if (sockerr < 0)
+	if (sockerr < 0) {
 		xprt_wake_pending_tasks(&transport->xprt, sockerr);
-out:
-	mutex_unlock(&transport->recv_mutex);
+		xs_tcp_force_close(&transport->xprt);
+	}
 }
 
 static void xs_wake_pending(struct sock_xprt *transport)
@@ -2991,19 +2987,10 @@ static int bc_send_request(struct rpc_rqst *req)
 	return len;
 }
 
-/*
- * The close routine. Since this is client initiated, we do nothing
- */
-
 static void bc_close(struct rpc_xprt *xprt)
 {
 	xprt_disconnect_done(xprt);
 }
-
-/*
- * The xprt destroy routine. Again, because this connection is client
- * initiated, we do nothing
- */
 
 static void bc_destroy(struct rpc_xprt *xprt)
 {

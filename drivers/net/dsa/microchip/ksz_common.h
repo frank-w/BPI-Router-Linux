@@ -14,6 +14,7 @@
 #include <linux/regmap.h>
 #include <net/dsa.h>
 #include <linux/irq.h>
+#include <linux/platform_data/microchip-ksz.h>
 
 #include "ksz_ptp.h"
 
@@ -109,6 +110,7 @@ struct ksz_switch_macaddr {
 struct ksz_port {
 	bool remove_tag;		/* Remove Tag flag set, for ksz8795 only */
 	bool learning;
+	bool isolated;
 	int stp_state;
 	struct phy_device phydev;
 
@@ -134,6 +136,7 @@ struct ksz_port {
 	ktime_t tstamp_msg;
 	struct completion tstamp_msg_comp;
 #endif
+	bool manual_flow;
 };
 
 struct ksz_device {
@@ -185,6 +188,7 @@ struct ksz_device {
 /* List of supported models */
 enum ksz_model {
 	KSZ8563,
+	KSZ8567,
 	KSZ8795,
 	KSZ8794,
 	KSZ8765,
@@ -200,25 +204,6 @@ enum ksz_model {
 	LAN9372,
 	LAN9373,
 	LAN9374,
-};
-
-enum ksz_chip_id {
-	KSZ8563_CHIP_ID = 0x8563,
-	KSZ8795_CHIP_ID = 0x8795,
-	KSZ8794_CHIP_ID = 0x8794,
-	KSZ8765_CHIP_ID = 0x8765,
-	KSZ8830_CHIP_ID = 0x8830,
-	KSZ9477_CHIP_ID = 0x00947700,
-	KSZ9896_CHIP_ID = 0x00989600,
-	KSZ9897_CHIP_ID = 0x00989700,
-	KSZ9893_CHIP_ID = 0x00989300,
-	KSZ9563_CHIP_ID = 0x00956300,
-	KSZ9567_CHIP_ID = 0x00956700,
-	LAN9370_CHIP_ID = 0x00937000,
-	LAN9371_CHIP_ID = 0x00937100,
-	LAN9372_CHIP_ID = 0x00937200,
-	LAN9373_CHIP_ID = 0x00937300,
-	LAN9374_CHIP_ID = 0x00937400,
 };
 
 enum ksz_regs {

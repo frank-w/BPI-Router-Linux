@@ -52,26 +52,20 @@ struct readpages_iter {
 static int readpages_iter_init(struct readpages_iter *iter,
 			       struct readahead_control *ractl)
 {
-	struct folio **fi;
-	int ret;
+	struct folio *folio;
 
-	memset(iter, 0, sizeof(*iter));
+	*iter = (struct readpages_iter) { ractl->mapping };
 
-	iter->mapping = ractl->mapping;
+	while ((folio = __readahead_folio(ractl))) {
+		if (!bch2_folio_create(folio, GFP_KERNEL) ||
+		    darray_push(&iter->folios, folio)) {
+			bch2_folio_release(folio);
+			ractl->_nr_pages += folio_nr_pages(folio);
+			ractl->_index -= folio_nr_pages(folio);
+			return iter->folios.nr ? 0 : -ENOMEM;
+		}
 
-	ret = bch2_filemap_get_contig_folios_d(iter->mapping,
-				ractl->_index << PAGE_SHIFT,
-				(ractl->_index + ractl->_nr_pages) << PAGE_SHIFT,
-				0, mapping_gfp_mask(iter->mapping),
-				&iter->folios);
-	if (ret)
-		return ret;
-
-	darray_for_each(iter->folios, fi) {
-		ractl->_nr_pages -= 1U << folio_order(*fi);
-		__bch2_folio_create(*fi, __GFP_NOFAIL|GFP_KERNEL);
-		folio_put(*fi);
-		folio_put(*fi);
+		folio_put(folio);
 	}
 
 	return 0;
@@ -273,12 +267,12 @@ void bch2_readahead(struct readahead_control *ractl)
 	struct btree_trans *trans = bch2_trans_get(c);
 	struct folio *folio;
 	struct readpages_iter readpages_iter;
-	int ret;
 
 	bch2_inode_opts_get(&opts, c, &inode->ei_inode);
 
-	ret = readpages_iter_init(&readpages_iter, ractl);
-	BUG_ON(ret);
+	int ret = readpages_iter_init(&readpages_iter, ractl);
+	if (ret)
+		return;
 
 	bch2_pagecache_add_get(inode);
 
@@ -309,18 +303,6 @@ void bch2_readahead(struct readahead_control *ractl)
 	darray_exit(&readpages_iter.folios);
 }
 
-static void __bchfs_readfolio(struct bch_fs *c, struct bch_read_bio *rbio,
-			     subvol_inum inum, struct folio *folio)
-{
-	bch2_folio_create(folio, __GFP_NOFAIL);
-
-	rbio->bio.bi_opf = REQ_OP_READ|REQ_SYNC;
-	rbio->bio.bi_iter.bi_sector = folio_sector(folio);
-	BUG_ON(!bio_add_folio(&rbio->bio, folio, folio_size(folio), 0));
-
-	bch2_trans_run(c, (bchfs_read(trans, rbio, inum, NULL), 0));
-}
-
 static void bch2_read_single_folio_end_io(struct bio *bio)
 {
 	complete(bio->bi_private);
@@ -335,6 +317,9 @@ int bch2_read_single_folio(struct folio *folio, struct address_space *mapping)
 	int ret;
 	DECLARE_COMPLETION_ONSTACK(done);
 
+	if (!bch2_folio_create(folio, GFP_KERNEL))
+		return -ENOMEM;
+
 	bch2_inode_opts_get(&opts, c, &inode->ei_inode);
 
 	rbio = rbio_init(bio_alloc_bioset(NULL, 1, REQ_OP_READ, GFP_KERNEL, &c->bio_read),
@@ -342,7 +327,11 @@ int bch2_read_single_folio(struct folio *folio, struct address_space *mapping)
 	rbio->bio.bi_private = &done;
 	rbio->bio.bi_end_io = bch2_read_single_folio_end_io;
 
-	__bchfs_readfolio(c, rbio, inode_inum(inode), folio);
+	rbio->bio.bi_opf = REQ_OP_READ|REQ_SYNC;
+	rbio->bio.bi_iter.bi_sector = folio_sector(folio);
+	BUG_ON(!bio_add_folio(&rbio->bio, folio, folio_size(folio), 0));
+
+	bch2_trans_run(c, (bchfs_read(trans, rbio, inode_inum(inode), NULL), 0));
 	wait_for_completion(&done);
 
 	ret = blk_status_to_errno(rbio->bio.bi_status);
@@ -387,6 +376,21 @@ static inline struct bch_writepage_state bch_writepage_state_init(struct bch_fs 
 
 	bch2_inode_opts_get(&ret.opts, c, &inode->ei_inode);
 	return ret;
+}
+
+/*
+ * Determine when a writepage io is full. We have to limit writepage bios to a
+ * single page per bvec (i.e. 1MB with 4k pages) because that is the limit to
+ * what the bounce path in bch2_write_extent() can handle. In theory we could
+ * loosen this restriction for non-bounce I/O, but we don't have that context
+ * here. Ideally, we can up this limit and make it configurable in the future
+ * when the bounce path can be enhanced to accommodate larger source bios.
+ */
+static inline bool bch_io_full(struct bch_writepage_io *io, unsigned len)
+{
+	struct bio *bio = &io->op.wbio.bio;
+	return bio_full(bio, len) ||
+		(bio->bi_iter.bi_size + len > BIO_MAX_VECS * PAGE_SIZE);
 }
 
 static void bch2_writepage_io_done(struct bch_write_op *op)
@@ -606,9 +610,7 @@ do_io:
 
 		if (w->io &&
 		    (w->io->op.res.nr_replicas != nr_replicas_this_write ||
-		     bio_full(&w->io->op.wbio.bio, sectors << 9) ||
-		     w->io->op.wbio.bio.bi_iter.bi_size + (sectors << 9) >=
-		     (BIO_MAX_VECS * PAGE_SIZE) ||
+		     bch_io_full(w->io, sectors << 9) ||
 		     bio_end_sector(&w->io->op.wbio.bio) != sector))
 			bch2_writepage_do_io(w);
 
@@ -625,7 +627,7 @@ do_io:
 		/* Check for writing past i_size: */
 		WARN_ONCE((bio_end_sector(&w->io->op.wbio.bio) << 9) >
 			  round_up(i_size, block_bytes(c)) &&
-			  !test_bit(BCH_FS_EMERGENCY_RO, &c->flags),
+			  !test_bit(BCH_FS_emergency_ro, &c->flags),
 			  "writing past i_size: %llu > %llu (unrounded %llu)\n",
 			  bio_end_sector(&w->io->op.wbio.bio) << 9,
 			  round_up(i_size, block_bytes(c)),
@@ -813,7 +815,7 @@ static int __bch2_buffered_write(struct bch_inode_info *inode,
 	struct bch_fs *c = inode->v.i_sb->s_fs_info;
 	struct bch2_folio_reservation res;
 	folios fs;
-	struct folio **fi, *f;
+	struct folio *f;
 	unsigned copied = 0, f_offset, f_copied;
 	u64 end = pos + len, f_pos, f_len;
 	loff_t last_folio_pos = inode->v.i_size;

@@ -348,6 +348,9 @@ static int calc_disk_capacity(struct ubi_volume_info *vi, u64 *disk_capacity)
 
 int ubiblock_create(struct ubi_volume_info *vi)
 {
+	struct queue_limits lim = {
+		.max_segments		= UBI_MAX_SG_COUNT,
+	};
 	struct ubiblock *dev;
 	struct gendisk *gd;
 	u64 disk_capacity;
@@ -393,7 +396,7 @@ int ubiblock_create(struct ubi_volume_info *vi)
 
 
 	/* Initialize the gendisk of this ubiblock device */
-	gd = blk_mq_alloc_disk(&dev->tag_set, dev);
+	gd = blk_mq_alloc_disk(&dev->tag_set, &lim, dev);
 	if (IS_ERR(gd)) {
 		ret = PTR_ERR(gd);
 		goto out_free_tags;
@@ -416,7 +419,6 @@ int ubiblock_create(struct ubi_volume_info *vi)
 	dev->gd = gd;
 
 	dev->rq = gd->queue;
-	blk_queue_max_segments(dev->rq, UBI_MAX_SG_COUNT);
 
 	list_add_tail(&dev->list, &ubiblock_devices);
 
@@ -434,7 +436,7 @@ out_remove_minor:
 	list_del(&dev->list);
 	idr_remove(&ubiblock_minor_idr, gd->first_minor);
 out_cleanup_disk:
-	put_disk(dev->gd);
+	put_disk(gd);
 out_free_tags:
 	blk_mq_free_tag_set(&dev->tag_set);
 out_free_dev:
@@ -447,13 +449,15 @@ out_unlock:
 
 static void ubiblock_cleanup(struct ubiblock *dev)
 {
+	int id = dev->gd->first_minor;
+
 	/* Stop new requests to arrive */
 	del_gendisk(dev->gd);
 	/* Finally destroy the blk queue */
 	dev_info(disk_to_dev(dev->gd), "released");
 	put_disk(dev->gd);
 	blk_mq_free_tag_set(&dev->tag_set);
-	idr_remove(&ubiblock_minor_idr, dev->gd->first_minor);
+	idr_remove(&ubiblock_minor_idr, id);
 }
 
 int ubiblock_remove(struct ubi_volume_info *vi)

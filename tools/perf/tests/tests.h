@@ -145,6 +145,7 @@ DECLARE_SUITE(dlfilter);
 DECLARE_SUITE(sigtrap);
 DECLARE_SUITE(event_groups);
 DECLARE_SUITE(symbols);
+DECLARE_SUITE(util);
 
 /*
  * PowerPC and S390 do not support creation of instruction breakpoints using the
@@ -206,5 +207,6 @@ DECLARE_WORKLOAD(brstack);
 DECLARE_WORKLOAD(datasym);
 
 extern const char *dso_to_test;
+extern const char *test_objdump_path;
 
 #endif /* TESTS_H */

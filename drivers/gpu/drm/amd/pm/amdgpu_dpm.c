@@ -181,12 +181,29 @@ int amdgpu_dpm_set_mp1_state(struct amdgpu_device *adev,
 	return ret;
 }
 
+int amdgpu_dpm_notify_rlc_state(struct amdgpu_device *adev, bool en)
+{
+	int ret = 0;
+	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
+
+	if (pp_funcs && pp_funcs->notify_rlc_state) {
+		mutex_lock(&adev->pm.mutex);
+
+		ret = pp_funcs->notify_rlc_state(
+				adev->powerplay.pp_handle,
+				en);
+
+		mutex_unlock(&adev->pm.mutex);
+	}
+
+	return ret;
+}
+
 bool amdgpu_dpm_is_baco_supported(struct amdgpu_device *adev)
 {
 	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
 	void *pp_handle = adev->powerplay.pp_handle;
-	bool baco_cap;
-	int ret = 0;
+	bool ret;
 
 	if (!pp_funcs || !pp_funcs->get_asic_baco_capability)
 		return false;
@@ -204,12 +221,11 @@ bool amdgpu_dpm_is_baco_supported(struct amdgpu_device *adev)
 
 	mutex_lock(&adev->pm.mutex);
 
-	ret = pp_funcs->get_asic_baco_capability(pp_handle,
-						 &baco_cap);
+	ret = pp_funcs->get_asic_baco_capability(pp_handle);
 
 	mutex_unlock(&adev->pm.mutex);
 
-	return ret ? false : baco_cap;
+	return ret;
 }
 
 int amdgpu_dpm_mode2_reset(struct amdgpu_device *adev)
@@ -491,7 +507,7 @@ int amdgpu_dpm_read_sensor(struct amdgpu_device *adev, enum amd_pp_sensors senso
 int amdgpu_dpm_get_apu_thermal_limit(struct amdgpu_device *adev, uint32_t *limit)
 {
 	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
-	int ret = -EINVAL;
+	int ret = -EOPNOTSUPP;
 
 	if (pp_funcs && pp_funcs->get_apu_thermal_limit) {
 		mutex_lock(&adev->pm.mutex);
@@ -505,7 +521,7 @@ int amdgpu_dpm_get_apu_thermal_limit(struct amdgpu_device *adev, uint32_t *limit
 int amdgpu_dpm_set_apu_thermal_limit(struct amdgpu_device *adev, uint32_t limit)
 {
 	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
-	int ret = -EINVAL;
+	int ret = -EOPNOTSUPP;
 
 	if (pp_funcs && pp_funcs->set_apu_thermal_limit) {
 		mutex_lock(&adev->pm.mutex);
@@ -597,6 +613,16 @@ void amdgpu_dpm_enable_jpeg(struct amdgpu_device *adev, bool enable)
 	ret = amdgpu_dpm_set_powergating_by_smu(adev, AMD_IP_BLOCK_TYPE_JPEG, !enable);
 	if (ret)
 		DRM_ERROR("Dpm %s jpeg failed, ret = %d. \n",
+			  enable ? "enable" : "disable", ret);
+}
+
+void amdgpu_dpm_enable_vpe(struct amdgpu_device *adev, bool enable)
+{
+	int ret = 0;
+
+	ret = amdgpu_dpm_set_powergating_by_smu(adev, AMD_IP_BLOCK_TYPE_VPE, !enable);
+	if (ret)
+		DRM_ERROR("Dpm %s vpe failed, ret = %d.\n",
 			  enable ? "enable" : "disable", ret);
 }
 
@@ -1182,7 +1208,7 @@ int amdgpu_dpm_get_sclk_od(struct amdgpu_device *adev)
 	int ret = 0;
 
 	if (!pp_funcs->get_sclk_od)
-		return 0;
+		return -EOPNOTSUPP;
 
 	mutex_lock(&adev->pm.mutex);
 	ret = pp_funcs->get_sclk_od(adev->powerplay.pp_handle);
@@ -1196,7 +1222,7 @@ int amdgpu_dpm_set_sclk_od(struct amdgpu_device *adev, uint32_t value)
 	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
 
 	if (is_support_sw_smu(adev))
-		return 0;
+		return -EOPNOTSUPP;
 
 	mutex_lock(&adev->pm.mutex);
 	if (pp_funcs->set_sclk_od)
@@ -1219,7 +1245,7 @@ int amdgpu_dpm_get_mclk_od(struct amdgpu_device *adev)
 	int ret = 0;
 
 	if (!pp_funcs->get_mclk_od)
-		return 0;
+		return -EOPNOTSUPP;
 
 	mutex_lock(&adev->pm.mutex);
 	ret = pp_funcs->get_mclk_od(adev->powerplay.pp_handle);
@@ -1233,7 +1259,7 @@ int amdgpu_dpm_set_mclk_od(struct amdgpu_device *adev, uint32_t value)
 	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
 
 	if (is_support_sw_smu(adev))
-		return 0;
+		return -EOPNOTSUPP;
 
 	mutex_lock(&adev->pm.mutex);
 	if (pp_funcs->set_mclk_od)
@@ -1296,6 +1322,23 @@ int amdgpu_dpm_get_gpu_metrics(struct amdgpu_device *adev, void **table)
 	mutex_lock(&adev->pm.mutex);
 	ret = pp_funcs->get_gpu_metrics(adev->powerplay.pp_handle,
 					table);
+	mutex_unlock(&adev->pm.mutex);
+
+	return ret;
+}
+
+ssize_t amdgpu_dpm_get_pm_metrics(struct amdgpu_device *adev, void *pm_metrics,
+				  size_t size)
+{
+	const struct amd_pm_funcs *pp_funcs = adev->powerplay.pp_funcs;
+	int ret = 0;
+
+	if (!pp_funcs->get_pm_metrics)
+		return -EOPNOTSUPP;
+
+	mutex_lock(&adev->pm.mutex);
+	ret = pp_funcs->get_pm_metrics(adev->powerplay.pp_handle, pm_metrics,
+				       size);
 	mutex_unlock(&adev->pm.mutex);
 
 	return ret;

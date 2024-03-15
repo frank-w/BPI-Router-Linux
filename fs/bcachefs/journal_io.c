@@ -4,6 +4,7 @@
 #include "alloc_foreground.h"
 #include "btree_io.h"
 #include "btree_update_interior.h"
+#include "btree_write_buffer.h"
 #include "buckets.h"
 #include "checksum.h"
 #include "disk_groups.h"
@@ -26,11 +27,15 @@ static struct nonce journal_nonce(const struct jset *jset)
 	}};
 }
 
-static bool jset_csum_good(struct bch_fs *c, struct jset *j)
+static bool jset_csum_good(struct bch_fs *c, struct jset *j, struct bch_csum *csum)
 {
-	return bch2_checksum_type_valid(c, JSET_CSUM_TYPE(j)) &&
-		!bch2_crc_cmp(j->csum,
-			      csum_vstruct(c, JSET_CSUM_TYPE(j), journal_nonce(j), j));
+	if (!bch2_checksum_type_valid(c, JSET_CSUM_TYPE(j))) {
+		*csum = (struct bch_csum) {};
+		return false;
+	}
+
+	*csum = csum_vstruct(c, JSET_CSUM_TYPE(j), journal_nonce(j), j);
+	return !bch2_crc_cmp(j->csum, *csum);
 }
 
 static inline u32 journal_entry_radix_idx(struct bch_fs *c, u64 seq)
@@ -140,7 +145,8 @@ static int journal_entry_add(struct bch_fs *c, struct bch_dev *ca,
 		if (!dup->csum_good)
 			goto replace;
 
-		fsck_err(c, "found duplicate but non identical journal entries (seq %llu)",
+		fsck_err(c, journal_entry_replicas_data_mismatch,
+			 "found duplicate but non identical journal entries (seq %llu)",
 			 le64_to_cpu(j->seq));
 		i = dup;
 		goto found;
@@ -235,7 +241,7 @@ static void journal_entry_err_msg(struct printbuf *out,
 	prt_str(out, ": ");
 }
 
-#define journal_entry_err(c, version, jset, entry, msg, ...)		\
+#define journal_entry_err(c, version, jset, entry, _err, msg, ...)	\
 ({									\
 	struct printbuf _buf = PRINTBUF;				\
 									\
@@ -244,9 +250,10 @@ static void journal_entry_err_msg(struct printbuf *out,
 									\
 	switch (flags & BKEY_INVALID_WRITE) {				\
 	case READ:							\
-		mustfix_fsck_err(c, "%s", _buf.buf);			\
+		mustfix_fsck_err(c, _err, "%s", _buf.buf);		\
 		break;							\
 	case WRITE:							\
+		bch2_sb_error_count(c, BCH_FSCK_ERR_##_err);		\
 		bch_err(c, "corrupt metadata before write: %s\n", _buf.buf);\
 		if (bch2_fs_inconsistent(c)) {				\
 			ret = -BCH_ERR_fsck_errors_not_fixed;		\
@@ -259,8 +266,8 @@ static void journal_entry_err_msg(struct printbuf *out,
 	true;								\
 })
 
-#define journal_entry_err_on(cond, c, version, jset, entry, msg, ...)	\
-	((cond) ? journal_entry_err(c, version, jset, entry, msg, ##__VA_ARGS__) : false)
+#define journal_entry_err_on(cond, ...)					\
+	((cond) ? journal_entry_err(__VA_ARGS__) : false)
 
 #define FSCK_DELETED_KEY	5
 
@@ -277,7 +284,10 @@ static int journal_validate_key(struct bch_fs *c,
 	struct printbuf buf = PRINTBUF;
 	int ret = 0;
 
-	if (journal_entry_err_on(!k->k.u64s, c, version, jset, entry, "k->u64s 0")) {
+	if (journal_entry_err_on(!k->k.u64s,
+				 c, version, jset, entry,
+				 journal_entry_bkey_u64s_0,
+				 "k->u64s 0")) {
 		entry->u64s = cpu_to_le16((u64 *) k - entry->_data);
 		journal_entry_null_range(vstruct_next(entry), next);
 		return FSCK_DELETED_KEY;
@@ -286,6 +296,7 @@ static int journal_validate_key(struct bch_fs *c,
 	if (journal_entry_err_on((void *) bkey_next(k) >
 				 (void *) vstruct_next(entry),
 				 c, version, jset, entry,
+				 journal_entry_bkey_past_end,
 				 "extends past end of journal entry")) {
 		entry->u64s = cpu_to_le16((u64 *) k - entry->_data);
 		journal_entry_null_range(vstruct_next(entry), next);
@@ -294,6 +305,7 @@ static int journal_validate_key(struct bch_fs *c,
 
 	if (journal_entry_err_on(k->k.format != KEY_FORMAT_CURRENT,
 				 c, version, jset, entry,
+				 journal_entry_bkey_bad_format,
 				 "bad format %u", k->k.format)) {
 		le16_add_cpu(&entry->u64s, -((u16) k->k.u64s));
 		memmove(k, bkey_next(k), next - (void *) bkey_next(k));
@@ -317,7 +329,8 @@ static int journal_validate_key(struct bch_fs *c,
 		bch2_bkey_invalid(c, bkey_i_to_s_c(k),
 				  __btree_node_type(level, btree_id), write, &buf);
 
-		mustfix_fsck_err(c, "%s", buf.buf);
+		mustfix_fsck_err(c, journal_entry_bkey_invalid,
+				 "%s", buf.buf);
 
 		le16_add_cpu(&entry->u64s, -((u16) k->k.u64s));
 		memmove(k, bkey_next(k), next - (void *) bkey_next(k));
@@ -369,7 +382,7 @@ static void journal_entry_btree_keys_to_text(struct printbuf *out, struct bch_fs
 			prt_newline(out);
 			prt_printf(out, "%s: ", bch2_jset_entry_types[entry->type]);
 		}
-		prt_printf(out, "btree=%s l=%u ", bch2_btree_ids[entry->btree_id], entry->level);
+		prt_printf(out, "btree=%s l=%u ", bch2_btree_id_str(entry->btree_id), entry->level);
 		bch2_bkey_val_to_text(out, c, bkey_i_to_s_c(k));
 		first = false;
 	}
@@ -387,6 +400,7 @@ static int journal_entry_btree_root_validate(struct bch_fs *c,
 	if (journal_entry_err_on(!entry->u64s ||
 				 le16_to_cpu(entry->u64s) != k->k.u64s,
 				 c, version, jset, entry,
+				 journal_entry_btree_root_bad_size,
 				 "invalid btree root journal entry: wrong number of keys")) {
 		void *next = vstruct_next(entry);
 		/*
@@ -399,8 +413,10 @@ static int journal_entry_btree_root_validate(struct bch_fs *c,
 		return 0;
 	}
 
-	return journal_validate_key(c, jset, entry, 1, entry->btree_id, k,
-				    version, big_endian, flags);
+	ret = journal_validate_key(c, jset, entry, 1, entry->btree_id, k,
+				   version, big_endian, flags);
+	if (ret == FSCK_DELETED_KEY)
+		ret = 0;
 fsck_err:
 	return ret;
 }
@@ -436,6 +452,7 @@ static int journal_entry_blacklist_validate(struct bch_fs *c,
 
 	if (journal_entry_err_on(le16_to_cpu(entry->u64s) != 1,
 				 c, version, jset, entry,
+				 journal_entry_blacklist_bad_size,
 		"invalid journal seq blacklist entry: bad size")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 	}
@@ -463,6 +480,7 @@ static int journal_entry_blacklist_v2_validate(struct bch_fs *c,
 
 	if (journal_entry_err_on(le16_to_cpu(entry->u64s) != 2,
 				 c, version, jset, entry,
+				 journal_entry_blacklist_v2_bad_size,
 		"invalid journal seq blacklist entry: bad size")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 		goto out;
@@ -473,6 +491,7 @@ static int journal_entry_blacklist_v2_validate(struct bch_fs *c,
 	if (journal_entry_err_on(le64_to_cpu(bl_entry->start) >
 				 le64_to_cpu(bl_entry->end),
 				 c, version, jset, entry,
+				 journal_entry_blacklist_v2_start_past_end,
 		"invalid journal seq blacklist entry: start > end")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 	}
@@ -505,6 +524,7 @@ static int journal_entry_usage_validate(struct bch_fs *c,
 
 	if (journal_entry_err_on(bytes < sizeof(*u),
 				 c, version, jset, entry,
+				 journal_entry_usage_bad_size,
 				 "invalid journal entry usage: bad size")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 		return ret;
@@ -534,17 +554,28 @@ static int journal_entry_data_usage_validate(struct bch_fs *c,
 	struct jset_entry_data_usage *u =
 		container_of(entry, struct jset_entry_data_usage, entry);
 	unsigned bytes = jset_u64s(le16_to_cpu(entry->u64s)) * sizeof(u64);
+	struct printbuf err = PRINTBUF;
 	int ret = 0;
 
 	if (journal_entry_err_on(bytes < sizeof(*u) ||
 				 bytes < sizeof(*u) + u->r.nr_devs,
 				 c, version, jset, entry,
+				 journal_entry_data_usage_bad_size,
 				 "invalid journal entry usage: bad size")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
-		return ret;
+		goto out;
 	}
 
+	if (journal_entry_err_on(bch2_replicas_entry_validate(&u->r, c->disk_sb.sb, &err),
+				 c, version, jset, entry,
+				 journal_entry_data_usage_bad_size,
+				 "invalid journal entry usage: %s", err.buf)) {
+		journal_entry_null_range(entry, vstruct_next(entry));
+		goto out;
+	}
+out:
 fsck_err:
+	printbuf_exit(&err);
 	return ret;
 }
 
@@ -570,13 +601,17 @@ static int journal_entry_clock_validate(struct bch_fs *c,
 	int ret = 0;
 
 	if (journal_entry_err_on(bytes != sizeof(*clock),
-				 c, version, jset, entry, "bad size")) {
+				 c, version, jset, entry,
+				 journal_entry_clock_bad_size,
+				 "bad size")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 		return ret;
 	}
 
 	if (journal_entry_err_on(clock->rw > 1,
-				 c, version, jset, entry, "bad rw")) {
+				 c, version, jset, entry,
+				 journal_entry_clock_bad_rw,
+				 "bad rw")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 		return ret;
 	}
@@ -608,7 +643,9 @@ static int journal_entry_dev_usage_validate(struct bch_fs *c,
 	int ret = 0;
 
 	if (journal_entry_err_on(bytes < expected,
-				 c, version, jset, entry, "bad size (%u < %u)",
+				 c, version, jset, entry,
+				 journal_entry_dev_usage_bad_size,
+				 "bad size (%u < %u)",
 				 bytes, expected)) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 		return ret;
@@ -617,13 +654,17 @@ static int journal_entry_dev_usage_validate(struct bch_fs *c,
 	dev = le32_to_cpu(u->dev);
 
 	if (journal_entry_err_on(!bch2_dev_exists2(c, dev),
-				 c, version, jset, entry, "bad dev")) {
+				 c, version, jset, entry,
+				 journal_entry_dev_usage_bad_dev,
+				 "bad dev")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 		return ret;
 	}
 
 	if (journal_entry_err_on(u->pad,
-				 c, version, jset, entry, "bad pad")) {
+				 c, version, jset, entry,
+				 journal_entry_dev_usage_bad_pad,
+				 "bad pad")) {
 		journal_entry_null_range(entry, vstruct_next(entry));
 		return ret;
 	}
@@ -642,17 +683,12 @@ static void journal_entry_dev_usage_to_text(struct printbuf *out, struct bch_fs 
 	prt_printf(out, "dev=%u", le32_to_cpu(u->dev));
 
 	for (i = 0; i < nr_types; i++) {
-		if (i < BCH_DATA_NR)
-			prt_printf(out, " %s", bch2_data_types[i]);
-		else
-			prt_printf(out, " (unknown data type %u)", i);
+		bch2_prt_data_type(out, i);
 		prt_printf(out, ": buckets=%llu sectors=%llu fragmented=%llu",
 		       le64_to_cpu(u->d[i].buckets),
 		       le64_to_cpu(u->d[i].sectors),
 		       le64_to_cpu(u->d[i].fragmented));
 	}
-
-	prt_printf(out, " buckets_ec: %llu", le64_to_cpu(u->buckets_ec));
 }
 
 static int journal_entry_log_validate(struct bch_fs *c,
@@ -684,6 +720,22 @@ static int journal_entry_overwrite_validate(struct bch_fs *c,
 }
 
 static void journal_entry_overwrite_to_text(struct printbuf *out, struct bch_fs *c,
+					    struct jset_entry *entry)
+{
+	journal_entry_btree_keys_to_text(out, c, entry);
+}
+
+static int journal_entry_write_buffer_keys_validate(struct bch_fs *c,
+				struct jset *jset,
+				struct jset_entry *entry,
+				unsigned version, int big_endian,
+				enum bkey_invalid_flags flags)
+{
+	return journal_entry_btree_keys_validate(c, jset, entry,
+				version, big_endian, READ);
+}
+
+static void journal_entry_write_buffer_keys_to_text(struct printbuf *out, struct bch_fs *c,
 					    struct jset_entry *entry)
 {
 	journal_entry_btree_keys_to_text(out, c, entry);
@@ -732,13 +784,13 @@ void bch2_journal_entry_to_text(struct printbuf *out, struct bch_fs *c,
 static int jset_validate_entries(struct bch_fs *c, struct jset *jset,
 				 enum bkey_invalid_flags flags)
 {
-	struct jset_entry *entry;
 	unsigned version = le32_to_cpu(jset->version);
 	int ret = 0;
 
 	vstruct_for_each(jset, entry) {
 		if (journal_entry_err_on(vstruct_next(entry) > vstruct_last(jset),
-					 c, version, jset, entry,
+				c, version, jset, entry,
+				journal_entry_past_jset_end,
 				"journal entry extends past end of jset")) {
 			jset->u64s = cpu_to_le32((u64 *) entry - jset->_data);
 			break;
@@ -767,6 +819,7 @@ static int jset_validate(struct bch_fs *c,
 	version = le32_to_cpu(jset->version);
 	if (journal_entry_err_on(!bch2_version_compatible(version),
 			c, version, jset, NULL,
+			jset_unsupported_version,
 			"%s sector %llu seq %llu: incompatible journal entry version %u.%u",
 			ca ? ca->name : c->name,
 			sector, le64_to_cpu(jset->seq),
@@ -777,7 +830,8 @@ static int jset_validate(struct bch_fs *c,
 	}
 
 	if (journal_entry_err_on(!bch2_checksum_type_valid(c, JSET_CSUM_TYPE(jset)),
-				 c, version, jset, NULL,
+			c, version, jset, NULL,
+			jset_unknown_csum,
 			"%s sector %llu seq %llu: journal entry with unknown csum type %llu",
 			ca ? ca->name : c->name,
 			sector, le64_to_cpu(jset->seq),
@@ -788,6 +842,7 @@ static int jset_validate(struct bch_fs *c,
 	if (journal_entry_err_on(!JSET_NO_FLUSH(jset) &&
 				 le64_to_cpu(jset->last_seq) > le64_to_cpu(jset->seq),
 				 c, version, jset, NULL,
+				 jset_last_seq_newer_than_seq,
 				 "invalid journal entry: last_seq > seq (%llu > %llu)",
 				 le64_to_cpu(jset->last_seq),
 				 le64_to_cpu(jset->seq))) {
@@ -816,7 +871,8 @@ static int jset_validate_early(struct bch_fs *c,
 
 	version = le32_to_cpu(jset->version);
 	if (journal_entry_err_on(!bch2_version_compatible(version),
-			 c, version, jset, NULL,
+			c, version, jset, NULL,
+			jset_unsupported_version,
 			"%s sector %llu seq %llu: unknown journal entry version %u.%u",
 			ca ? ca->name : c->name,
 			sector, le64_to_cpu(jset->seq),
@@ -831,7 +887,8 @@ static int jset_validate_early(struct bch_fs *c,
 		return JOURNAL_ENTRY_REREAD;
 
 	if (journal_entry_err_on(bytes > bucket_sectors_left << 9,
-			 c, version, jset, NULL,
+			c, version, jset, NULL,
+			jset_past_bucket_end,
 			"%s sector %llu seq %llu: journal entry too big (%zu bytes)",
 			ca ? ca->name : c->name,
 			sector, le64_to_cpu(jset->seq), bytes))
@@ -878,6 +935,7 @@ static int journal_read_bucket(struct bch_dev *ca,
 	u64 offset = bucket_to_sector(ca, ja->buckets[bucket]),
 	    end = offset + ca->mi.bucket_size;
 	bool saw_bad = false, csum_good;
+	struct printbuf err = PRINTBUF;
 	int ret = 0;
 
 	pr_debug("reading %u", bucket);
@@ -900,7 +958,7 @@ reread:
 			ret = submit_bio_wait(bio);
 			kfree(bio);
 
-			if (bch2_dev_io_err_on(ret, ca,
+			if (bch2_dev_io_err_on(ret, ca, BCH_MEMBER_ERROR_read,
 					       "journal read error: sector %llu",
 					       offset) ||
 			    bch2_meta_read_fault("journal")) {
@@ -910,7 +968,7 @@ reread:
 				 * found on a different device, and missing or
 				 * no journal entries will be handled later
 				 */
-				return 0;
+				goto out;
 			}
 
 			j = buf->data;
@@ -927,12 +985,12 @@ reread:
 				ret = journal_read_buf_realloc(buf,
 							vstruct_bytes(j));
 				if (ret)
-					return ret;
+					goto err;
 			}
 			goto reread;
 		case JOURNAL_ENTRY_NONE:
 			if (!saw_bad)
-				return 0;
+				goto out;
 			/*
 			 * On checksum error we don't really trust the size
 			 * field of the journal entry we read, so try reading
@@ -941,7 +999,7 @@ reread:
 			sectors = block_sectors(c);
 			goto next_block;
 		default:
-			return ret;
+			goto err;
 		}
 
 		/*
@@ -951,19 +1009,28 @@ reread:
 		 * bucket:
 		 */
 		if (le64_to_cpu(j->seq) < ja->bucket_seq[bucket])
-			return 0;
+			goto out;
 
 		ja->bucket_seq[bucket] = le64_to_cpu(j->seq);
 
-		csum_good = jset_csum_good(c, j);
-		if (!csum_good)
+		enum bch_csum_type csum_type = JSET_CSUM_TYPE(j);
+		struct bch_csum csum;
+		csum_good = jset_csum_good(c, j, &csum);
+
+		if (bch2_dev_io_err_on(!csum_good, ca, BCH_MEMBER_ERROR_checksum,
+				       "%s",
+				       (printbuf_reset(&err),
+					prt_str(&err, "journal "),
+					bch2_csum_err_msg(&err, csum_type, j->csum, csum),
+					err.buf)))
 			saw_bad = true;
 
 		ret = bch2_encrypt(c, JSET_CSUM_TYPE(j), journal_nonce(j),
 			     j->encrypted_start,
 			     vstruct_end(j) - (void *) j->encrypted_start);
 		bch2_fs_fatal_err_on(ret, c,
-				"error decrypting journal entry: %i", ret);
+				"error decrypting journal entry: %s",
+				bch2_err_str(ret));
 
 		mutex_lock(&jlist->lock);
 		ret = journal_entry_add(c, ca, (struct journal_ptr) {
@@ -982,7 +1049,7 @@ reread:
 		case JOURNAL_ENTRY_ADD_OUT_OF_RANGE:
 			break;
 		default:
-			return ret;
+			goto err;
 		}
 next_block:
 		pr_debug("next");
@@ -991,13 +1058,16 @@ next_block:
 		j = ((void *) j) + (sectors << 9);
 	}
 
-	return 0;
+out:
+	ret = 0;
+err:
+	printbuf_exit(&err);
+	return ret;
 }
 
-static void bch2_journal_read_device(struct closure *cl)
+static CLOSURE_CALLBACK(bch2_journal_read_device)
 {
-	struct journal_device *ja =
-		container_of(cl, struct journal_device, read);
+	closure_type(ja, struct journal_device, read);
 	struct bch_dev *ca = container_of(ja, struct bch_dev, journal);
 	struct bch_fs *c = ca->fs;
 	struct journal_list *jlist =
@@ -1048,6 +1118,12 @@ found:
 
 	if (ja->bucket_seq[ja->cur_idx] &&
 	    ja->sectors_free == ca->mi.bucket_size) {
+#if 0
+		/*
+		 * Debug code for ZNS support, where we (probably) want to be
+		 * correlated where we stopped in the journal to the zone write
+		 * points:
+		 */
 		bch_err(c, "ja->sectors_free == ca->mi.bucket_size");
 		bch_err(c, "cur_idx %u/%u", ja->cur_idx, ja->nr);
 		for (i = 0; i < 3; i++) {
@@ -1055,6 +1131,7 @@ found:
 
 			bch_err(c, "bucket_seq[%u] = %llu", idx, ja->bucket_seq[idx]);
 		}
+#endif
 		ja->sectors_free = 0;
 	}
 
@@ -1107,8 +1184,6 @@ int bch2_journal_read(struct bch_fs *c,
 	struct journal_list jlist;
 	struct journal_replay *i, **_i, *prev = NULL;
 	struct genradix_iter radix_iter;
-	struct bch_dev *ca;
-	unsigned iter;
 	struct printbuf buf = PRINTBUF;
 	bool degraded = false, last_write_torn = false;
 	u64 seq;
@@ -1119,7 +1194,7 @@ int bch2_journal_read(struct bch_fs *c,
 	jlist.last_seq = 0;
 	jlist.ret = 0;
 
-	for_each_member_device(ca, c, iter) {
+	for_each_member_device(c, ca) {
 		if (!c->opts.fsck &&
 		    !(bch2_dev_has_data(c, ca) & (1 << BCH_DATA_journal)))
 			continue;
@@ -1172,6 +1247,7 @@ int bch2_journal_read(struct bch_fs *c,
 
 		if (journal_entry_err_on(le64_to_cpu(i->j.last_seq) > le64_to_cpu(i->j.seq),
 					 c, le32_to_cpu(i->j.version), &i->j, NULL,
+					 jset_last_seq_newer_than_seq,
 					 "invalid journal entry: last_seq > seq (%llu > %llu)",
 					 le64_to_cpu(i->j.last_seq),
 					 le64_to_cpu(i->j.seq)))
@@ -1188,7 +1264,8 @@ int bch2_journal_read(struct bch_fs *c,
 	}
 
 	if (!*last_seq) {
-		fsck_err(c, "journal read done, but no entries found after dropping non-flushes");
+		fsck_err(c, dirty_but_no_journal_entries_post_drop_nonflushes,
+			 "journal read done, but no entries found after dropping non-flushes");
 		return 0;
 	}
 
@@ -1214,6 +1291,7 @@ int bch2_journal_read(struct bch_fs *c,
 
 		if (bch2_journal_seq_is_blacklisted(c, seq, true)) {
 			fsck_err_on(!JSET_NO_FLUSH(&i->j), c,
+				    jset_seq_blacklisted,
 				    "found blacklisted journal entry %llu", seq);
 			i->ignore = true;
 		}
@@ -1254,7 +1332,8 @@ int bch2_journal_read(struct bch_fs *c,
 			bch2_journal_ptrs_to_text(&buf2, c, i);
 
 			missing_end = seq - 1;
-			fsck_err(c, "journal entries %llu-%llu missing! (replaying %llu-%llu)\n"
+			fsck_err(c, journal_entries_missing,
+				 "journal entries %llu-%llu missing! (replaying %llu-%llu)\n"
 				 "  prev at %s\n"
 				 "  next at %s",
 				 missing_start, missing_end,
@@ -1281,7 +1360,7 @@ int bch2_journal_read(struct bch_fs *c,
 			continue;
 
 		for (ptr = 0; ptr < i->nr_ptrs; ptr++) {
-			ca = bch_dev_bkey_exists(c, i->ptrs[ptr].dev);
+			struct bch_dev *ca = bch_dev_bkey_exists(c, i->ptrs[ptr].dev);
 
 			if (!i->ptrs[ptr].csum_good)
 				bch_err_dev_offset(ca, i->ptrs[ptr].sector,
@@ -1309,7 +1388,8 @@ int bch2_journal_read(struct bch_fs *c,
 		if (!degraded &&
 		    !bch2_replicas_marked(c, &replicas.e) &&
 		    (le64_to_cpu(i->j.seq) == *last_seq ||
-		     fsck_err(c, "superblock not marked as containing replicas for journal entry %llu\n  %s",
+		     fsck_err(c, journal_entry_replicas_not_marked,
+			      "superblock not marked as containing replicas for journal entry %llu\n  %s",
 			      le64_to_cpu(i->j.seq), buf.buf))) {
 			ret = bch2_mark_replicas(c, &replicas.e);
 			if (ret)
@@ -1398,6 +1478,8 @@ static int journal_write_alloc(struct journal *j, struct journal_buf *w)
 		c->opts.foreground_target;
 	unsigned i, replicas = 0, replicas_want =
 		READ_ONCE(c->opts.metadata_replicas);
+	unsigned replicas_need = min_t(unsigned, replicas_want,
+				       READ_ONCE(c->opts.metadata_replicas_required));
 
 	rcu_read_lock();
 retry:
@@ -1446,16 +1528,23 @@ done:
 
 	BUG_ON(bkey_val_u64s(&w->key.k) > BCH_REPLICAS_MAX);
 
-	return replicas >= c->opts.metadata_replicas_required ? 0 : -EROFS;
+	return replicas >= replicas_need ? 0 : -EROFS;
 }
 
 static void journal_buf_realloc(struct journal *j, struct journal_buf *buf)
 {
+	struct bch_fs *c = container_of(j, struct bch_fs, journal);
+
 	/* we aren't holding j->lock: */
 	unsigned new_size = READ_ONCE(j->buf_size_want);
 	void *new_buf;
 
 	if (buf->buf_size >= new_size)
+		return;
+
+	size_t btree_write_buffer_size = new_size / 64;
+
+	if (bch2_btree_write_buffer_resize(c, btree_write_buffer_size))
 		return;
 
 	new_buf = kvpmalloc(new_size, GFP_NOFS|__GFP_NOWARN);
@@ -1477,9 +1566,9 @@ static inline struct journal_buf *journal_last_unwritten_buf(struct journal *j)
 	return j->buf + (journal_last_unwritten_seq(j) & JOURNAL_BUF_MASK);
 }
 
-static void journal_write_done(struct closure *cl)
+static CLOSURE_CALLBACK(journal_write_done)
 {
-	struct journal *j = container_of(cl, struct journal, io);
+	closure_type(j, struct journal, io);
 	struct bch_fs *c = container_of(j, struct bch_fs, journal);
 	struct journal_buf *w = journal_last_unwritten_buf(j);
 	struct bch_replicas_padded replicas;
@@ -1547,7 +1636,11 @@ static void journal_write_done(struct closure *cl)
 	} while ((v = atomic64_cmpxchg(&j->reservations.counter,
 				       old.v, new.v)) != old.v);
 
+	bch2_journal_reclaim_fast(j);
 	bch2_journal_space_available(j);
+
+	track_event_change(&c->times[BCH_TIME_blocked_journal_max_in_flight],
+			   &j->max_in_flight_start, false);
 
 	closure_wake_up(&w->wait);
 	journal_wake(j);
@@ -1581,7 +1674,8 @@ static void journal_write_endio(struct bio *bio)
 	struct journal_buf *w = journal_last_unwritten_buf(j);
 	unsigned long flags;
 
-	if (bch2_dev_io_err_on(bio->bi_status, ca, "error writing journal entry %llu: %s",
+	if (bch2_dev_io_err_on(bio->bi_status, ca, BCH_MEMBER_ERROR_write,
+			       "error writing journal entry %llu: %s",
 			       le64_to_cpu(w->data->seq),
 			       bch2_blk_status_to_str(bio->bi_status)) ||
 	    bch2_meta_write_fault("journal")) {
@@ -1594,13 +1688,12 @@ static void journal_write_endio(struct bio *bio)
 	percpu_ref_put(&ca->io_ref);
 }
 
-static void do_journal_write(struct closure *cl)
+static CLOSURE_CALLBACK(do_journal_write)
 {
-	struct journal *j = container_of(cl, struct journal, io);
+	closure_type(j, struct journal, io);
 	struct bch_fs *c = container_of(j, struct bch_fs, journal);
 	struct bch_dev *ca;
 	struct journal_buf *w = journal_last_unwritten_buf(j);
-	struct bch_extent_ptr *ptr;
 	struct bio *bio;
 	unsigned sectors = vstruct_sectors(w->data, c->block_bits);
 
@@ -1641,9 +1734,17 @@ static void do_journal_write(struct closure *cl)
 	continue_at(cl, journal_write_done, c->io_complete_wq);
 }
 
-static void bch2_journal_entries_postprocess(struct bch_fs *c, struct jset *jset)
+static int bch2_journal_write_prep(struct journal *j, struct journal_buf *w)
 {
-	struct jset_entry *i, *next, *prev = NULL;
+	struct bch_fs *c = container_of(j, struct bch_fs, journal);
+	struct jset_entry *start, *end;
+	struct jset *jset = w->data;
+	struct journal_keys_to_wb wb = { NULL };
+	unsigned sectors, bytes, u64s;
+	unsigned long btree_roots_have = 0;
+	bool validate_before_checksum = false;
+	u64 seq = le64_to_cpu(jset->seq);
+	int ret;
 
 	/*
 	 * Simple compaction, dropping empty jset_entries (from journal
@@ -1653,63 +1754,113 @@ static void bch2_journal_entries_postprocess(struct bch_fs *c, struct jset *jset
 	 * If we wanted to be really fancy here, we could sort all the keys in
 	 * the jset and drop keys that were overwritten - probably not worth it:
 	 */
-	vstruct_for_each_safe(jset, i, next) {
+	vstruct_for_each(jset, i) {
 		unsigned u64s = le16_to_cpu(i->u64s);
 
 		/* Empty entry: */
 		if (!u64s)
 			continue;
 
-		if (i->type == BCH_JSET_ENTRY_btree_root)
+		/*
+		 * New btree roots are set by journalling them; when the journal
+		 * entry gets written we have to propagate them to
+		 * c->btree_roots
+		 *
+		 * But, every journal entry we write has to contain all the
+		 * btree roots (at least for now); so after we copy btree roots
+		 * to c->btree_roots we have to get any missing btree roots and
+		 * add them to this journal entry:
+		 */
+		switch (i->type) {
+		case BCH_JSET_ENTRY_btree_root:
 			bch2_journal_entry_to_btree_root(c, i);
+			__set_bit(i->btree_id, &btree_roots_have);
+			break;
+		case BCH_JSET_ENTRY_write_buffer_keys:
+			EBUG_ON(!w->need_flush_to_write_buffer);
 
-		/* Can we merge with previous entry? */
-		if (prev &&
-		    i->btree_id == prev->btree_id &&
-		    i->level	== prev->level &&
-		    i->type	== prev->type &&
-		    i->type	== BCH_JSET_ENTRY_btree_keys &&
-		    le16_to_cpu(prev->u64s) + u64s <= U16_MAX) {
-			memmove_u64s_down(vstruct_next(prev),
-					  i->_data,
-					  u64s);
-			le16_add_cpu(&prev->u64s, u64s);
-			continue;
+			if (!wb.wb)
+				bch2_journal_keys_to_write_buffer_start(c, &wb, seq);
+
+			struct bkey_i *k;
+			jset_entry_for_each_key(i, k) {
+				ret = bch2_journal_key_to_wb(c, &wb, i->btree_id, k);
+				if (ret) {
+					bch2_fs_fatal_error(c, "-ENOMEM flushing journal keys to btree write buffer");
+					bch2_journal_keys_to_write_buffer_end(c, &wb);
+					return ret;
+				}
+			}
+			i->type = BCH_JSET_ENTRY_btree_keys;
+			break;
 		}
-
-		/* Couldn't merge, move i into new position (after prev): */
-		prev = prev ? vstruct_next(prev) : jset->start;
-		if (i != prev)
-			memmove_u64s_down(prev, i, jset_u64s(u64s));
 	}
 
-	prev = prev ? vstruct_next(prev) : jset->start;
-	jset->u64s = cpu_to_le32((u64 *) prev - jset->_data);
+	if (wb.wb)
+		bch2_journal_keys_to_write_buffer_end(c, &wb);
+	w->need_flush_to_write_buffer = false;
+
+	start = end = vstruct_last(jset);
+
+	end	= bch2_btree_roots_to_journal_entries(c, end, btree_roots_have);
+
+	bch2_journal_super_entries_add_common(c, &end, seq);
+	u64s	= (u64 *) end - (u64 *) start;
+	BUG_ON(u64s > j->entry_u64s_reserved);
+
+	le32_add_cpu(&jset->u64s, u64s);
+
+	sectors = vstruct_sectors(jset, c->block_bits);
+	bytes	= vstruct_bytes(jset);
+
+	if (sectors > w->sectors) {
+		bch2_fs_fatal_error(c, "aieeee! journal write overran available space, %zu > %u (extra %u reserved %u/%u)",
+				    vstruct_bytes(jset), w->sectors << 9,
+				    u64s, w->u64s_reserved, j->entry_u64s_reserved);
+		return -EINVAL;
+	}
+
+	jset->magic		= cpu_to_le64(jset_magic(c));
+	jset->version		= cpu_to_le32(c->sb.version);
+
+	SET_JSET_BIG_ENDIAN(jset, CPU_BIG_ENDIAN);
+	SET_JSET_CSUM_TYPE(jset, bch2_meta_checksum_type(c));
+
+	if (!JSET_NO_FLUSH(jset) && journal_entry_empty(jset))
+		j->last_empty_seq = seq;
+
+	if (bch2_csum_type_is_encryption(JSET_CSUM_TYPE(jset)))
+		validate_before_checksum = true;
+
+	if (le32_to_cpu(jset->version) < bcachefs_metadata_version_current)
+		validate_before_checksum = true;
+
+	if (validate_before_checksum &&
+	    (ret = jset_validate(c, NULL, jset, 0, WRITE)))
+		return ret;
+
+	ret = bch2_encrypt(c, JSET_CSUM_TYPE(jset), journal_nonce(jset),
+		    jset->encrypted_start,
+		    vstruct_end(jset) - (void *) jset->encrypted_start);
+	if (bch2_fs_fatal_err_on(ret, c,
+			"error decrypting journal entry: %i", ret))
+		return ret;
+
+	jset->csum = csum_vstruct(c, JSET_CSUM_TYPE(jset),
+				  journal_nonce(jset), jset);
+
+	if (!validate_before_checksum &&
+	    (ret = jset_validate(c, NULL, jset, 0, WRITE)))
+		return ret;
+
+	memset((void *) jset + bytes, 0, (sectors << 9) - bytes);
+	return 0;
 }
 
-void bch2_journal_write(struct closure *cl)
+static int bch2_journal_write_pick_flush(struct journal *j, struct journal_buf *w)
 {
-	struct journal *j = container_of(cl, struct journal, io);
 	struct bch_fs *c = container_of(j, struct bch_fs, journal);
-	struct bch_dev *ca;
-	struct journal_buf *w = journal_last_unwritten_buf(j);
-	struct bch_replicas_padded replicas;
-	struct jset_entry *start, *end;
-	struct jset *jset;
-	struct bio *bio;
-	struct printbuf journal_debug_buf = PRINTBUF;
-	bool validate_before_checksum = false;
-	unsigned i, sectors, bytes, u64s, nr_rw_members = 0;
-	int ret;
-
-	BUG_ON(BCH_SB_CLEAN(c->disk_sb.sb));
-
-	journal_buf_realloc(j, w);
-	jset = w->data;
-
-	j->write_start_time = local_clock();
-
-	spin_lock(&j->lock);
+	int error = bch2_journal_error(j);
 
 	/*
 	 * If the journal is in an error state - we did an emergency shutdown -
@@ -1727,108 +1878,78 @@ void bch2_journal_write(struct closure *cl)
 	 * So if we're in an error state, and we're still starting up, we don't
 	 * write anything at all.
 	 */
-	if (!test_bit(JOURNAL_NEED_FLUSH_WRITE, &j->flags) &&
-	    (bch2_journal_error(j) ||
-	     w->noflush ||
-	     (!w->must_flush &&
-	      (jiffies - j->last_flush_write) < msecs_to_jiffies(c->opts.journal_flush_delay) &&
-	      test_bit(JOURNAL_MAY_SKIP_FLUSH, &j->flags)))) {
+	if (error && test_bit(JOURNAL_NEED_FLUSH_WRITE, &j->flags))
+		return -EIO;
+
+	if (error ||
+	    w->noflush ||
+	    (!w->must_flush &&
+	     (jiffies - j->last_flush_write) < msecs_to_jiffies(c->opts.journal_flush_delay) &&
+	     test_bit(JOURNAL_MAY_SKIP_FLUSH, &j->flags))) {
 		w->noflush = true;
-		SET_JSET_NO_FLUSH(jset, true);
-		jset->last_seq	= 0;
-		w->last_seq	= 0;
+		SET_JSET_NO_FLUSH(w->data, true);
+		w->data->last_seq	= 0;
+		w->last_seq		= 0;
 
 		j->nr_noflush_writes++;
-	} else if (!bch2_journal_error(j)) {
+	} else {
 		j->last_flush_write = jiffies;
 		j->nr_flush_writes++;
 		clear_bit(JOURNAL_NEED_FLUSH_WRITE, &j->flags);
-	} else {
-		spin_unlock(&j->lock);
-		goto err;
-	}
-	spin_unlock(&j->lock);
-
-	/*
-	 * New btree roots are set by journalling them; when the journal entry
-	 * gets written we have to propagate them to c->btree_roots
-	 *
-	 * But, every journal entry we write has to contain all the btree roots
-	 * (at least for now); so after we copy btree roots to c->btree_roots we
-	 * have to get any missing btree roots and add them to this journal
-	 * entry:
-	 */
-
-	bch2_journal_entries_postprocess(c, jset);
-
-	start = end = vstruct_last(jset);
-
-	end	= bch2_btree_roots_to_journal_entries(c, jset->start, end);
-
-	bch2_journal_super_entries_add_common(c, &end,
-				le64_to_cpu(jset->seq));
-	u64s	= (u64 *) end - (u64 *) start;
-	BUG_ON(u64s > j->entry_u64s_reserved);
-
-	le32_add_cpu(&jset->u64s, u64s);
-
-	sectors = vstruct_sectors(jset, c->block_bits);
-	bytes	= vstruct_bytes(jset);
-
-	if (sectors > w->sectors) {
-		bch2_fs_fatal_error(c, "aieeee! journal write overran available space, %zu > %u (extra %u reserved %u/%u)",
-				    vstruct_bytes(jset), w->sectors << 9,
-				    u64s, w->u64s_reserved, j->entry_u64s_reserved);
-		goto err;
 	}
 
-	jset->magic		= cpu_to_le64(jset_magic(c));
-	jset->version		= cpu_to_le32(c->sb.version);
+	return 0;
+}
 
-	SET_JSET_BIG_ENDIAN(jset, CPU_BIG_ENDIAN);
-	SET_JSET_CSUM_TYPE(jset, bch2_meta_checksum_type(c));
+CLOSURE_CALLBACK(bch2_journal_write)
+{
+	closure_type(j, struct journal, io);
+	struct bch_fs *c = container_of(j, struct bch_fs, journal);
+	struct journal_buf *w = journal_last_unwritten_buf(j);
+	struct bch_replicas_padded replicas;
+	struct bio *bio;
+	struct printbuf journal_debug_buf = PRINTBUF;
+	unsigned nr_rw_members = 0;
+	int ret;
 
-	if (!JSET_NO_FLUSH(jset) && journal_entry_empty(jset))
-		j->last_empty_seq = le64_to_cpu(jset->seq);
+	BUG_ON(BCH_SB_CLEAN(c->disk_sb.sb));
 
-	if (bch2_csum_type_is_encryption(JSET_CSUM_TYPE(jset)))
-		validate_before_checksum = true;
+	j->write_start_time = local_clock();
 
-	if (le32_to_cpu(jset->version) < bcachefs_metadata_version_current)
-		validate_before_checksum = true;
-
-	if (validate_before_checksum &&
-	    jset_validate(c, NULL, jset, 0, WRITE))
-		goto err;
-
-	ret = bch2_encrypt(c, JSET_CSUM_TYPE(jset), journal_nonce(jset),
-		    jset->encrypted_start,
-		    vstruct_end(jset) - (void *) jset->encrypted_start);
-	if (bch2_fs_fatal_err_on(ret, c,
-			"error decrypting journal entry: %i", ret))
-		goto err;
-
-	jset->csum = csum_vstruct(c, JSET_CSUM_TYPE(jset),
-				  journal_nonce(jset), jset);
-
-	if (!validate_before_checksum &&
-	    jset_validate(c, NULL, jset, 0, WRITE))
-		goto err;
-
-	memset((void *) jset + bytes, 0, (sectors << 9) - bytes);
-
-retry_alloc:
 	spin_lock(&j->lock);
-	ret = journal_write_alloc(j, w);
+	ret = bch2_journal_write_pick_flush(j, w);
+	spin_unlock(&j->lock);
+	if (ret)
+		goto err;
 
-	if (ret && j->can_discard) {
+	mutex_lock(&j->buf_lock);
+	journal_buf_realloc(j, w);
+
+	ret = bch2_journal_write_prep(j, w);
+	mutex_unlock(&j->buf_lock);
+	if (ret)
+		goto err;
+
+	j->entry_bytes_written += vstruct_bytes(w->data);
+
+	while (1) {
+		spin_lock(&j->lock);
+		ret = journal_write_alloc(j, w);
+		if (!ret || !j->can_discard)
+			break;
+
 		spin_unlock(&j->lock);
 		bch2_journal_do_discards(j);
-		goto retry_alloc;
 	}
 
-	if (ret)
+	if (ret) {
 		__bch2_journal_debug_to_text(&journal_debug_buf, j);
+		spin_unlock(&j->lock);
+		bch_err(c, "Unable to allocate journal write:\n%s",
+			journal_debug_buf.buf);
+		printbuf_exit(&journal_debug_buf);
+		goto err;
+	}
 
 	/*
 	 * write is allocated, no longer need to account for it in
@@ -1843,19 +1964,12 @@ retry_alloc:
 	bch2_journal_space_available(j);
 	spin_unlock(&j->lock);
 
-	if (ret) {
-		bch_err(c, "Unable to allocate journal write:\n%s",
-			journal_debug_buf.buf);
-		printbuf_exit(&journal_debug_buf);
-		goto err;
-	}
-
 	w->devs_written = bch2_bkey_devs(bkey_i_to_s_c(&w->key));
 
 	if (c->opts.nochanges)
 		goto no_io;
 
-	for_each_rw_member(ca, c, i)
+	for_each_rw_member(c, ca)
 		nr_rw_members++;
 
 	if (nr_rw_members > 1)
@@ -1871,12 +1985,13 @@ retry_alloc:
 	if (ret)
 		goto err;
 
-	if (!JSET_NO_FLUSH(jset) && w->separate_flush) {
-		for_each_rw_member(ca, c, i) {
+	if (!JSET_NO_FLUSH(w->data) && w->separate_flush) {
+		for_each_rw_member(c, ca) {
 			percpu_ref_get(&ca->io_ref);
 
 			bio = ca->journal.bio;
-			bio_reset(bio, ca->disk_sb.bdev, REQ_OP_FLUSH);
+			bio_reset(bio, ca->disk_sb.bdev,
+				  REQ_OP_WRITE|REQ_PREFLUSH);
 			bio->bi_end_io		= journal_write_endio;
 			bio->bi_private		= ca;
 			closure_bio_submit(bio, cl);

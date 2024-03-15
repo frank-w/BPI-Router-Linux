@@ -6,7 +6,7 @@
  * Copyright 2007-2010	Johannes Berg <johannes@sipsolutions.net>
  * Copyright 2013-2014  Intel Mobile Communications GmbH
  * Copyright(c) 2015 - 2017 Intel Deutschland GmbH
- * Copyright (C) 2018-2023 Intel Corporation
+ * Copyright (C) 2018-2024 Intel Corporation
  */
 
 #include <linux/jiffies.h>
@@ -19,6 +19,7 @@
 #include <linux/export.h>
 #include <linux/kcov.h>
 #include <linux/bitops.h>
+#include <kunit/visibility.h>
 #include <net/mac80211.h>
 #include <net/ieee80211_radiotap.h>
 #include <asm/unaligned.h>
@@ -566,7 +567,8 @@ ieee80211_add_rx_radiotap_header(struct ieee80211_local *local,
 
 	if (local->hw.radiotap_timestamp.units_pos >= 0) {
 		u16 accuracy = 0;
-		u8 flags = IEEE80211_RADIOTAP_TIMESTAMP_FLAG_32BIT;
+		u8 flags;
+		u64 ts;
 
 		rthdr->it_present |=
 			cpu_to_le32(BIT(IEEE80211_RADIOTAP_TIMESTAMP));
@@ -575,7 +577,15 @@ ieee80211_add_rx_radiotap_header(struct ieee80211_local *local,
 		while ((pos - (u8 *)rthdr) & 7)
 			pos++;
 
-		put_unaligned_le64(status->device_timestamp, pos);
+		if (status->flag & RX_FLAG_MACTIME_IS_RTAP_TS64) {
+			flags = IEEE80211_RADIOTAP_TIMESTAMP_FLAG_64BIT;
+			ts = status->mactime;
+		} else {
+			flags = IEEE80211_RADIOTAP_TIMESTAMP_FLAG_32BIT;
+			ts = status->device_timestamp;
+		}
+
+		put_unaligned_le64(ts, pos);
 		pos += sizeof(u64);
 
 		if (local->hw.radiotap_timestamp.accuracy >= 0) {
@@ -920,7 +930,7 @@ static void ieee80211_parse_qos(struct ieee80211_rx_data *rx)
  * Drivers always need to pass packets that are aligned to two-byte boundaries
  * to the stack.
  *
- * Additionally, should, if possible, align the payload data in a way that
+ * Additionally, they should, if possible, align the payload data in a way that
  * guarantees that the contained IP header is aligned to a four-byte
  * boundary. In the case of regular frames, this simply means aligning the
  * payload to a four-byte boundary (because either the IP header is directly
@@ -936,7 +946,7 @@ static void ieee80211_parse_qos(struct ieee80211_rx_data *rx)
  * subframe to a length that is a multiple of four.
  *
  * Padding like Atheros hardware adds which is between the 802.11 header and
- * the payload is not supported, the driver is required to move the 802.11
+ * the payload is not supported; the driver is required to move the 802.11
  * header to be directly in front of the payload in that case.
  */
 static void ieee80211_verify_alignment(struct ieee80211_rx_data *rx)
@@ -1241,8 +1251,7 @@ static bool ieee80211_sta_manage_reorder_buf(struct ieee80211_sub_if_data *sdata
 {
 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *) skb->data;
 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(skb);
-	u16 sc = le16_to_cpu(hdr->seq_ctrl);
-	u16 mpdu_seq_num = (sc & IEEE80211_SCTL_SEQ) >> 4;
+	u16 mpdu_seq_num = ieee80211_get_sn(hdr);
 	u16 head_seq_num, buf_size;
 	int index;
 	bool ret = true;
@@ -1425,12 +1434,30 @@ ieee80211_rx_h_check_dup(struct ieee80211_rx_data *rx)
 		return RX_CONTINUE;
 
 	if (ieee80211_is_ctl(hdr->frame_control) ||
-	    ieee80211_is_any_nullfunc(hdr->frame_control) ||
-	    is_multicast_ether_addr(hdr->addr1))
+	    ieee80211_is_any_nullfunc(hdr->frame_control))
 		return RX_CONTINUE;
 
 	if (!rx->sta)
 		return RX_CONTINUE;
+
+	if (unlikely(is_multicast_ether_addr(hdr->addr1))) {
+		struct ieee80211_sub_if_data *sdata = rx->sdata;
+		u16 sn = ieee80211_get_sn(hdr);
+
+		if (!ieee80211_is_data_present(hdr->frame_control))
+			return RX_CONTINUE;
+
+		if (!ieee80211_vif_is_mld(&sdata->vif) ||
+		    sdata->vif.type != NL80211_IFTYPE_STATION)
+			return RX_CONTINUE;
+
+		if (sdata->u.mgd.mcast_seq_last != IEEE80211_SN_MODULO &&
+		    ieee80211_sn_less_eq(sn, sdata->u.mgd.mcast_seq_last))
+			return RX_DROP_U_DUP;
+
+		sdata->u.mgd.mcast_seq_last = sn;
+		return RX_CONTINUE;
+	}
 
 	if (unlikely(ieee80211_has_retry(hdr->frame_control) &&
 		     rx->sta->last_seq_ctrl[rx->seqno_idx] == hdr->seq_ctrl)) {
@@ -2405,7 +2432,7 @@ static int ieee80211_drop_unencrypted(struct ieee80211_rx_data *rx, __le16 fc)
 	return 0;
 }
 
-static ieee80211_rx_result
+VISIBLE_IF_MAC80211_KUNIT ieee80211_rx_result
 ieee80211_drop_unencrypted_mgmt(struct ieee80211_rx_data *rx)
 {
 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
@@ -2484,6 +2511,7 @@ ieee80211_drop_unencrypted_mgmt(struct ieee80211_rx_data *rx)
 
 	return RX_CONTINUE;
 }
+EXPORT_SYMBOL_IF_MAC80211_KUNIT(ieee80211_drop_unencrypted_mgmt);
 
 static ieee80211_rx_result
 __ieee80211_data_to_8023(struct ieee80211_rx_data *rx, bool *port_control)
@@ -3358,8 +3386,7 @@ ieee80211_rx_check_bss_color_collision(struct ieee80211_rx_data *rx)
 				      IEEE80211_HE_OPERATION_BSS_COLOR_MASK);
 		if (color == bss_conf->he_bss_color.color)
 			ieee80211_obss_color_collision_notify(&rx->sdata->vif,
-							      BIT_ULL(color),
-							      GFP_ATOMIC);
+							      BIT_ULL(color));
 	}
 }
 
@@ -3748,6 +3775,28 @@ ieee80211_rx_h_action(struct ieee80211_rx_data *rx)
 			if (ieee80211_process_rx_twt_action(rx))
 				goto queue;
 			break;
+		default:
+			break;
+		}
+		break;
+	case WLAN_CATEGORY_PROTECTED_EHT:
+		switch (mgmt->u.action.u.ttlm_req.action_code) {
+		case WLAN_PROTECTED_EHT_ACTION_TTLM_REQ:
+			if (sdata->vif.type != NL80211_IFTYPE_STATION)
+				break;
+
+			if (len < offsetofend(typeof(*mgmt),
+					      u.action.u.ttlm_req))
+				goto invalid;
+			goto queue;
+		case WLAN_PROTECTED_EHT_ACTION_TTLM_RES:
+			if (sdata->vif.type != NL80211_IFTYPE_STATION)
+				break;
+
+			if (len < offsetofend(typeof(*mgmt),
+					      u.action.u.ttlm_res))
+				goto invalid;
+			goto queue;
 		default:
 			break;
 		}
@@ -5181,7 +5230,6 @@ static void __ieee80211_rx_handle_packet(struct ieee80211_hw *hw,
 			 */
 
 			if (!status->link_valid && pubsta->mlo) {
-				struct ieee80211_hdr *hdr = (void *)skb->data;
 				struct link_sta_info *link_sta;
 
 				link_sta = link_sta_info_get_bss(rx.sdata,

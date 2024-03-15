@@ -1368,9 +1368,13 @@ rcu_torture_writer(void *arg)
 	struct rcu_torture *rp;
 	struct rcu_torture *old_rp;
 	static DEFINE_TORTURE_RANDOM(rand);
+	unsigned long stallsdone = jiffies;
 	bool stutter_waited;
 	unsigned long ulo[NUM_ACTIVE_RCU_POLL_OLDSTATE];
 
+	// If a new stall test is added, this must be adjusted.
+	if (stall_cpu_holdoff + stall_gp_kthread + stall_cpu)
+		stallsdone += (stall_cpu_holdoff + stall_gp_kthread + stall_cpu + 60) * HZ;
 	VERBOSE_TOROUT_STRING("rcu_torture_writer task started");
 	if (!can_expedite)
 		pr_alert("%s" TORTURE_FLAG
@@ -1576,11 +1580,11 @@ rcu_torture_writer(void *arg)
 		    !atomic_read(&rcu_fwd_cb_nodelay) &&
 		    !cur_ops->slow_gps &&
 		    !torture_must_stop() &&
-		    boot_ended)
+		    boot_ended &&
+		    time_after(jiffies, stallsdone))
 			for (i = 0; i < ARRAY_SIZE(rcu_tortures); i++)
 				if (list_empty(&rcu_tortures[i].rtort_free) &&
-				    rcu_access_pointer(rcu_torture_current) !=
-				    &rcu_tortures[i]) {
+				    rcu_access_pointer(rcu_torture_current) != &rcu_tortures[i]) {
 					tracing_off();
 					show_rcu_gp_kthreads();
 					WARN(1, "%s: rtort_pipe_count: %d\n", __func__, rcu_tortures[i].rtort_pipe_count);
@@ -2441,7 +2445,8 @@ static struct notifier_block rcu_torture_stall_block = {
 
 /*
  * CPU-stall kthread.  It waits as specified by stall_cpu_holdoff, then
- * induces a CPU stall for the time specified by stall_cpu.
+ * induces a CPU stall for the time specified by stall_cpu.  If a new
+ * stall test is added, stallsdone in rcu_torture_writer() must be adjusted.
  */
 static int rcu_torture_stall(void *args)
 {
@@ -2450,10 +2455,12 @@ static int rcu_torture_stall(void *args)
 	unsigned long stop_at;
 
 	VERBOSE_TOROUT_STRING("rcu_torture_stall task started");
-	ret = rcu_stall_chain_notifier_register(&rcu_torture_stall_block);
-	if (ret)
-		pr_info("%s: rcu_stall_chain_notifier_register() returned %d, %sexpected.\n",
-			__func__, ret, !IS_ENABLED(CONFIG_RCU_STALL_COMMON) ? "un" : "");
+	if (rcu_cpu_stall_notifiers) {
+		ret = rcu_stall_chain_notifier_register(&rcu_torture_stall_block);
+		if (ret)
+			pr_info("%s: rcu_stall_chain_notifier_register() returned %d, %sexpected.\n",
+				__func__, ret, !IS_ENABLED(CONFIG_RCU_STALL_COMMON) ? "un" : "");
+	}
 	if (stall_cpu_holdoff > 0) {
 		VERBOSE_TOROUT_STRING("rcu_torture_stall begin holdoff");
 		schedule_timeout_interruptible(stall_cpu_holdoff * HZ);
@@ -2497,7 +2504,7 @@ static int rcu_torture_stall(void *args)
 		cur_ops->readunlock(idx);
 	}
 	pr_alert("%s end.\n", __func__);
-	if (!ret) {
+	if (rcu_cpu_stall_notifiers && !ret) {
 		ret = rcu_stall_chain_notifier_unregister(&rcu_torture_stall_block);
 		if (ret)
 			pr_info("%s: rcu_stall_chain_notifier_unregister() returned %d.\n", __func__, ret);
@@ -3872,7 +3879,9 @@ rcu_torture_init(void)
 	}
 	if (fqs_duration < 0)
 		fqs_duration = 0;
-	if (fqs_duration) {
+	if (fqs_holdoff < 0)
+		fqs_holdoff = 0;
+	if (fqs_duration && fqs_holdoff) {
 		/* Create the fqs thread */
 		firsterr = torture_create_kthread(rcu_torture_fqs, NULL,
 						  fqs_task);

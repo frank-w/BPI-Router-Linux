@@ -50,18 +50,6 @@
 #define EVENT_STATUS_OTHER BIT(7)
 
 /*
- * User register flags are not allowed yet, keep them here until we are
- * ready to expose them out to the user ABI.
- */
-enum user_reg_flag {
-	/* Event will not delete upon last reference closing */
-	USER_EVENT_REG_PERSIST		= 1U << 0,
-
-	/* This value or above is currently non-ABI */
-	USER_EVENT_REG_MAX		= 1U << 1,
-};
-
-/*
  * Stores the system name, tables, and locks for a group of events. This
  * allows isolation for events by various means.
  */
@@ -218,6 +206,17 @@ static int destroy_user_event(struct user_event *user);
 static u32 user_event_key(char *name)
 {
 	return jhash(name, strlen(name), 0);
+}
+
+static bool user_event_capable(u16 reg_flags)
+{
+	/* Persistent events require CAP_PERFMON / CAP_SYS_ADMIN */
+	if (reg_flags & USER_EVENT_REG_PERSIST) {
+		if (!perfmon_capable())
+			return false;
+	}
+
+	return true;
 }
 
 static struct user_event *user_event_get(struct user_event *user)
@@ -1811,6 +1810,9 @@ static int user_event_free(struct dyn_event *ev)
 	if (!user_event_last_ref(user))
 		return -EBUSY;
 
+	if (!user_event_capable(user->reg_flags))
+		return -EPERM;
+
 	return destroy_user_event(user);
 }
 
@@ -1926,9 +1928,12 @@ static int user_event_parse(struct user_event_group *group, char *name,
 	int argc = 0;
 	char **argv;
 
-	/* User register flags are not ready yet */
-	if (reg_flags != 0 || flags != NULL)
+	/* Currently don't support any text based flags */
+	if (flags != NULL)
 		return -EINVAL;
+
+	if (!user_event_capable(reg_flags))
+		return -EPERM;
 
 	/* Prevent dyn_event from racing */
 	mutex_lock(&event_mutex);
@@ -2062,6 +2067,9 @@ static int delete_user_event(struct user_event_group *group, char *name)
 	if (!user_event_last_ref(user))
 		return -EBUSY;
 
+	if (!user_event_capable(user->reg_flags))
+		return -EPERM;
+
 	return destroy_user_event(user);
 }
 
@@ -2169,14 +2177,12 @@ static int user_events_open(struct inode *node, struct file *file)
 static ssize_t user_events_write(struct file *file, const char __user *ubuf,
 				 size_t count, loff_t *ppos)
 {
-	struct iovec iov;
 	struct iov_iter i;
 
 	if (unlikely(*ppos != 0))
 		return -EFAULT;
 
-	if (unlikely(import_single_range(ITER_SOURCE, (char __user *)ubuf,
-					 count, &iov, &i)))
+	if (unlikely(import_ubuf(ITER_SOURCE, (char __user *)ubuf, count, &i)))
 		return -EFAULT;
 
 	return user_events_write_core(file, &i);

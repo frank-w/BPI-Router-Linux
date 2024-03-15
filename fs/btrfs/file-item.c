@@ -10,17 +10,14 @@
 #include <linux/sched/mm.h>
 #include <crypto/hash.h>
 #include "messages.h"
-#include "misc.h"
 #include "ctree.h"
 #include "disk-io.h"
 #include "transaction.h"
 #include "bio.h"
-#include "print-tree.h"
 #include "compression.h"
 #include "fs.h"
 #include "accessors.h"
 #include "file-item.h"
-#include "super.h"
 
 #define __MAX_CSUM_ITEMS(r, size) ((unsigned long)(((BTRFS_LEAF_DATA_SIZE(r) - \
 				   sizeof(struct btrfs_item) * 2) / \
@@ -59,7 +56,7 @@ void btrfs_inode_safe_disk_i_size_write(struct btrfs_inode *inode, u64 new_i_siz
 		goto out_unlock;
 	}
 
-	ret = find_contiguous_extent_bit(&inode->file_extent_tree, 0, &start,
+	ret = find_contiguous_extent_bit(inode->file_extent_tree, 0, &start,
 					 &end, EXTENT_DIRTY);
 	if (!ret && start == 0)
 		i_size = min(i_size, end + 1);
@@ -94,7 +91,7 @@ int btrfs_inode_set_file_extent_range(struct btrfs_inode *inode, u64 start,
 
 	if (btrfs_fs_incompat(inode->root->fs_info, NO_HOLES))
 		return 0;
-	return set_extent_bit(&inode->file_extent_tree, start, start + len - 1,
+	return set_extent_bit(inode->file_extent_tree, start, start + len - 1,
 			      EXTENT_DIRTY, NULL);
 }
 
@@ -123,7 +120,7 @@ int btrfs_inode_clear_file_extent_range(struct btrfs_inode *inode, u64 start,
 
 	if (btrfs_fs_incompat(inode->root->fs_info, NO_HOLES))
 		return 0;
-	return clear_extent_bit(&inode->file_extent_tree, start,
+	return clear_extent_bit(inode->file_extent_tree, start,
 				start + len - 1, EXTENT_DIRTY, NULL);
 }
 
@@ -179,7 +176,6 @@ int btrfs_insert_hole_extent(struct btrfs_trans_handle *trans,
 				      sizeof(*item));
 	if (ret < 0)
 		goto out;
-	BUG_ON(ret); /* Can't happen */
 	leaf = path->nodes[0];
 	item = btrfs_item_ptr(leaf, path->slots[0],
 			      struct btrfs_file_extent_item);
@@ -1229,8 +1225,6 @@ insert:
 				      ins_size);
 	if (ret < 0)
 		goto out;
-	if (WARN_ON(ret != 0))
-		goto out;
 	leaf = path->nodes[0];
 csum:
 	item = btrfs_item_ptr(leaf, path->slots[0], struct btrfs_csum_item);
@@ -1294,8 +1288,7 @@ void btrfs_extent_item_to_extent_map(struct btrfs_inode *inode,
 			return;
 		}
 		if (compress_type != BTRFS_COMPRESS_NONE) {
-			set_bit(EXTENT_FLAG_COMPRESSED, &em->flags);
-			em->compress_type = compress_type;
+			extent_map_set_compression(em, compress_type);
 			em->block_start = bytenr;
 			em->block_len = em->orig_block_len;
 		} else {
@@ -1303,7 +1296,7 @@ void btrfs_extent_item_to_extent_map(struct btrfs_inode *inode,
 			em->block_start = bytenr;
 			em->block_len = em->len;
 			if (type == BTRFS_FILE_EXTENT_PREALLOC)
-				set_bit(EXTENT_FLAG_PREALLOC, &em->flags);
+				em->flags |= EXTENT_FLAG_PREALLOC;
 		}
 	} else if (type == BTRFS_FILE_EXTENT_INLINE) {
 		em->block_start = EXTENT_MAP_INLINE;
@@ -1315,9 +1308,7 @@ void btrfs_extent_item_to_extent_map(struct btrfs_inode *inode,
 		 */
 		em->orig_start = EXTENT_MAP_HOLE;
 		em->block_len = (u64)-1;
-		em->compress_type = compress_type;
-		if (compress_type != BTRFS_COMPRESS_NONE)
-			set_bit(EXTENT_FLAG_COMPRESSED, &em->flags);
+		extent_map_set_compression(em, compress_type);
 	} else {
 		btrfs_err(fs_info,
 			  "unknown file extent item type %d, inode %llu, offset %llu, "

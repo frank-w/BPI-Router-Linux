@@ -24,6 +24,8 @@ struct tcf_walker {
 
 int register_tcf_proto_ops(struct tcf_proto_ops *ops);
 void unregister_tcf_proto_ops(struct tcf_proto_ops *ops);
+#define NET_CLS_ALIAS_PREFIX "net-cls-"
+#define MODULE_ALIAS_NET_CLS(kind)	MODULE_ALIAS(NET_CLS_ALIAS_PREFIX kind)
 
 struct tcf_block_ext_info {
 	enum flow_block_binder_type binder_type;
@@ -152,12 +154,6 @@ static inline unsigned long
 __cls_set_class(unsigned long *clp, unsigned long cl)
 {
 	return xchg(clp, cl);
-}
-
-static inline void tcf_set_drop_reason(struct tcf_result *res,
-				       enum skb_drop_reason reason)
-{
-	res->drop_reason = reason;
 }
 
 static inline void

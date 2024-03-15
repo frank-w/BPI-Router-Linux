@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /*
- * Copyright (C) 2012-2015, 2018-2023 Intel Corporation
+ * Copyright (C) 2012-2015, 2018-2024 Intel Corporation
  * Copyright (C) 2013-2015 Intel Mobile Communications GmbH
  * Copyright (C) 2016-2017 Intel Deutschland GmbH
  */
@@ -71,7 +71,7 @@ u32 iwl_mvm_get_sta_ampdu_dens(struct ieee80211_link_sta *link_sta,
 		mpdu_dens = link_sta->ht_cap.ampdu_density;
 	}
 
-	if (link_conf->chandef.chan->band == NL80211_BAND_6GHZ) {
+	if (link_conf->chanreq.oper.chan->band == NL80211_BAND_6GHZ) {
 		/* overwrite HT values on 6 GHz */
 		mpdu_dens = le16_get_bits(link_sta->he_6ghz_capa.capa,
 					  IEEE80211_HE_6GHZ_CAP_MIN_MPDU_START);
@@ -208,7 +208,7 @@ int iwl_mvm_sta_send_to_fw(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
 	}
 
 	if (sta->deflink.ht_cap.ht_supported ||
-	    mvm_sta->vif->bss_conf.chandef.chan->band == NL80211_BAND_6GHZ)
+	    mvm_sta->vif->bss_conf.chanreq.oper.chan->band == NL80211_BAND_6GHZ)
 		add_sta_cmd.station_flags_msk |=
 			cpu_to_le32(STA_FLG_MAX_AGG_SIZE_MSK |
 				    STA_FLG_AGG_MPDU_DENS_MSK);
@@ -1502,6 +1502,34 @@ out_err:
 	return ret;
 }
 
+int iwl_mvm_sta_ensure_queue(struct iwl_mvm *mvm,
+			     struct ieee80211_txq *txq)
+{
+	struct iwl_mvm_txq *mvmtxq = iwl_mvm_txq_from_mac80211(txq);
+	int ret = -EINVAL;
+
+	lockdep_assert_held(&mvm->mutex);
+
+	if (likely(test_bit(IWL_MVM_TXQ_STATE_READY, &mvmtxq->state)) ||
+	    !txq->sta) {
+		return 0;
+	}
+
+	if (!iwl_mvm_sta_alloc_queue(mvm, txq->sta, txq->ac, txq->tid)) {
+		set_bit(IWL_MVM_TXQ_STATE_READY, &mvmtxq->state);
+		ret = 0;
+	}
+
+	local_bh_disable();
+	spin_lock(&mvm->add_stream_lock);
+	if (!list_empty(&mvmtxq->list))
+		list_del_init(&mvmtxq->list);
+	spin_unlock(&mvm->add_stream_lock);
+	local_bh_enable();
+
+	return ret;
+}
+
 void iwl_mvm_add_new_dqa_stream_wk(struct work_struct *wk)
 {
 	struct iwl_mvm *mvm = container_of(wk, struct iwl_mvm,
@@ -2550,7 +2578,7 @@ int iwl_mvm_add_mcast_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif)
 
 	if (WARN_ON(vif->type != NL80211_IFTYPE_AP &&
 		    vif->type != NL80211_IFTYPE_ADHOC))
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	/*
 	 * In IBSS, ieee80211_check_queues() sets the cab_queue to be
@@ -2989,16 +3017,6 @@ int iwl_mvm_sta_rx_agg(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
 		RCU_INIT_POINTER(mvm->baid_map[baid], NULL);
 		kfree_rcu(baid_data, rcu_head);
 		IWL_DEBUG_HT(mvm, "BAID %d is free\n", baid);
-
-		/*
-		 * After we've deleted it, do another queue sync
-		 * so if an IWL_MVM_RXQ_NSSN_SYNC was concurrently
-		 * running it won't find a new session in the old
-		 * BAID. It can find the NULL pointer for the BAID,
-		 * but we must not have it find a different session.
-		 */
-		iwl_mvm_sync_rx_queues_internal(mvm, IWL_MVM_RXQ_EMPTY,
-						true, NULL, 0);
 	}
 	return 0;
 
@@ -3234,7 +3252,7 @@ int iwl_mvm_sta_tx_agg_oper(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 		 * should be updated as well.
 		 */
 		if (buf_size < IWL_FRAME_LIMIT)
-			return -ENOTSUPP;
+			return -EOPNOTSUPP;
 
 		ret = iwl_mvm_sta_tx_agg(mvm, sta, tid, queue, true);
 		if (ret)
@@ -3558,6 +3576,9 @@ static int iwl_mvm_send_sta_key(struct iwl_mvm *mvm,
 		 STA_KEY_FLG_KEYID_MSK;
 	key_flags = cpu_to_le16(keyidx);
 	key_flags |= cpu_to_le16(STA_KEY_FLG_WEP_KEY_MAP);
+
+	if (key->flags & IEEE80211_KEY_FLAG_SPP_AMSDU)
+		key_flags |= cpu_to_le16(STA_KEY_FLG_AMSDU_SPP);
 
 	switch (key->cipher) {
 	case WLAN_CIPHER_SUITE_TKIP:
@@ -4111,10 +4132,8 @@ void iwl_mvm_sta_modify_sleep_tx_count(struct iwl_mvm *mvm,
 	}
 
 	/* block the Tx queues until the FW updated the sleep Tx count */
-	iwl_trans_block_txq_ptrs(mvm->trans, true);
-
 	ret = iwl_mvm_send_cmd_pdu(mvm, ADD_STA,
-				   CMD_ASYNC | CMD_WANT_ASYNC_CALLBACK,
+				   CMD_ASYNC | CMD_BLOCK_TXQS,
 				   iwl_mvm_add_sta_cmd_size(mvm), &cmd);
 	if (ret)
 		IWL_ERR(mvm, "Failed to send ADD_STA command (%d)\n", ret);
@@ -4152,7 +4171,8 @@ void iwl_mvm_sta_modify_disable_tx(struct iwl_mvm *mvm,
 	int ret;
 
 	if (mvm->mld_api_is_used) {
-		iwl_mvm_mld_sta_modify_disable_tx(mvm, mvmsta, disable);
+		if (!iwl_mvm_has_no_host_disable_tx(mvm))
+			iwl_mvm_mld_sta_modify_disable_tx(mvm, mvmsta, disable);
 		return;
 	}
 
@@ -4169,7 +4189,8 @@ void iwl_mvm_sta_modify_disable_tx_ap(struct iwl_mvm *mvm,
 	struct iwl_mvm_sta *mvm_sta = iwl_mvm_sta_from_mac80211(sta);
 
 	if (mvm->mld_api_is_used) {
-		iwl_mvm_mld_sta_modify_disable_tx_ap(mvm, sta, disable);
+		if (!iwl_mvm_has_no_host_disable_tx(mvm))
+			iwl_mvm_mld_sta_modify_disable_tx_ap(mvm, sta, disable);
 		return;
 	}
 
@@ -4224,7 +4245,9 @@ void iwl_mvm_modify_all_sta_disable_tx(struct iwl_mvm *mvm,
 	int i;
 
 	if (mvm->mld_api_is_used) {
-		iwl_mvm_mld_modify_all_sta_disable_tx(mvm, mvmvif, disable);
+		if (!iwl_mvm_has_no_host_disable_tx(mvm))
+			iwl_mvm_mld_modify_all_sta_disable_tx(mvm, mvmvif,
+							      disable);
 		return;
 	}
 
@@ -4296,12 +4319,12 @@ u16 iwl_mvm_tid_queued(struct iwl_mvm *mvm, struct iwl_mvm_tid_data *tid_data)
 
 int iwl_mvm_add_pasn_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 			 struct iwl_mvm_int_sta *sta, u8 *addr, u32 cipher,
-			 u8 *key, u32 key_len)
+			 u8 *key, u32 key_len,
+			 struct ieee80211_key_conf *keyconf)
 {
 	int ret;
 	u16 queue;
 	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
-	struct ieee80211_key_conf *keyconf;
 	unsigned int wdg_timeout =
 		iwl_mvm_get_wd_timeout(mvm, vif, false, false);
 	bool mld = iwl_mvm_has_mld_api(mvm->fw);
@@ -4326,12 +4349,6 @@ int iwl_mvm_add_pasn_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 	if (ret)
 		goto out;
 
-	keyconf = kzalloc(sizeof(*keyconf) + key_len, GFP_KERNEL);
-	if (!keyconf) {
-		ret = -ENOBUFS;
-		goto out;
-	}
-
 	keyconf->cipher = cipher;
 	memcpy(keyconf->key, key, key_len);
 	keyconf->keylen = key_len;
@@ -4352,10 +4369,9 @@ int iwl_mvm_add_pasn_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 					   0, NULL, 0, 0, true);
 	}
 
-	kfree(keyconf);
-	return 0;
 out:
-	iwl_mvm_dealloc_int_sta(mvm, sta);
+	if (ret)
+		iwl_mvm_dealloc_int_sta(mvm, sta);
 	return ret;
 }
 

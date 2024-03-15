@@ -59,17 +59,18 @@ const struct bch_sb_field_ops bch_sb_field_ops_quota = {
 	.to_text	= bch2_sb_quota_to_text,
 };
 
-int bch2_quota_invalid(const struct bch_fs *c, struct bkey_s_c k,
+int bch2_quota_invalid(struct bch_fs *c, struct bkey_s_c k,
 		       enum bkey_invalid_flags flags,
 		       struct printbuf *err)
 {
-	if (k.k->p.inode >= QTYP_NR) {
-		prt_printf(err, "invalid quota type (%llu >= %u)",
-		       k.k->p.inode, QTYP_NR);
-		return -BCH_ERR_invalid_bkey;
-	}
+	int ret = 0;
 
-	return 0;
+	bkey_fsck_err_on(k.k->p.inode >= QTYP_NR, c, err,
+			 quota_type_invalid,
+			 "invalid quota type (%llu >= %u)",
+			 k.k->p.inode, QTYP_NR);
+fsck_err:
+	return ret;
 }
 
 void bch2_quota_to_text(struct printbuf *out, struct bch_fs *c,
@@ -598,14 +599,9 @@ advance:
 
 int bch2_fs_quota_read(struct bch_fs *c)
 {
-	struct bch_sb_field_quota *sb_quota;
-	struct btree_trans *trans;
-	struct btree_iter iter;
-	struct bkey_s_c k;
-	int ret;
 
 	mutex_lock(&c->sb_lock);
-	sb_quota = bch2_sb_get_or_create_quota(&c->disk_sb);
+	struct bch_sb_field_quota *sb_quota = bch2_sb_get_or_create_quota(&c->disk_sb);
 	if (!sb_quota) {
 		mutex_unlock(&c->sb_lock);
 		return -BCH_ERR_ENOSPC_sb_quota;
@@ -614,19 +610,14 @@ int bch2_fs_quota_read(struct bch_fs *c)
 	bch2_sb_quota_read(c);
 	mutex_unlock(&c->sb_lock);
 
-	trans = bch2_trans_get(c);
-
-	ret = for_each_btree_key2(trans, iter, BTREE_ID_quotas,
-			POS_MIN, BTREE_ITER_PREFETCH, k,
-		__bch2_quota_set(c, k, NULL)) ?:
-	      for_each_btree_key2(trans, iter, BTREE_ID_inodes,
-			POS_MIN, BTREE_ITER_PREFETCH|BTREE_ITER_ALL_SNAPSHOTS, k,
-		bch2_fs_quota_read_inode(trans, &iter, k));
-
-	bch2_trans_put(trans);
-
-	if (ret)
-		bch_err_fn(c, ret);
+	int ret = bch2_trans_run(c,
+		for_each_btree_key(trans, iter, BTREE_ID_quotas, POS_MIN,
+				   BTREE_ITER_PREFETCH, k,
+			__bch2_quota_set(c, k, NULL)) ?:
+		for_each_btree_key(trans, iter, BTREE_ID_inodes, POS_MIN,
+				   BTREE_ITER_PREFETCH|BTREE_ITER_ALL_SNAPSHOTS, k,
+			bch2_fs_quota_read_inode(trans, &iter, k)));
+	bch_err_fn(c, ret);
 	return ret;
 }
 

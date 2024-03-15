@@ -195,6 +195,21 @@ void gen6_ggtt_invalidate(struct i915_ggtt *ggtt)
 	spin_unlock_irq(&uncore->lock);
 }
 
+static bool needs_wc_ggtt_mapping(struct drm_i915_private *i915)
+{
+	/*
+	 * On BXT+/ICL+ writes larger than 64 bit to the GTT pagetable range
+	 * will be dropped. For WC mappings in general we have 64 byte burst
+	 * writes when the WC buffer is flushed, so we can't use it, but have to
+	 * resort to an uncached mapping. The WC issue is easily caught by the
+	 * readback check when writing GTT PTE entries.
+	 */
+	if (!IS_GEN9_LP(i915) && GRAPHICS_VER(i915) < 11)
+		return true;
+
+	return false;
+}
+
 static void gen8_ggtt_invalidate(struct i915_ggtt *ggtt)
 {
 	struct intel_uncore *uncore = ggtt->vm.gt->uncore;
@@ -202,8 +217,12 @@ static void gen8_ggtt_invalidate(struct i915_ggtt *ggtt)
 	/*
 	 * Note that as an uncached mmio write, this will flush the
 	 * WCB of the writes into the GGTT before it triggers the invalidate.
+	 *
+	 * Only perform this when GGTT is mapped as WC, see ggtt_probe_common().
 	 */
-	intel_uncore_write_fw(uncore, GFX_FLSH_CNTL_GEN6, GFX_FLSH_CNTL_EN);
+	if (needs_wc_ggtt_mapping(ggtt->vm.i915))
+		intel_uncore_write_fw(uncore, GFX_FLSH_CNTL_GEN6,
+				      GFX_FLSH_CNTL_EN);
 }
 
 static void guc_ggtt_ct_invalidate(struct intel_gt *gt)
@@ -226,16 +245,15 @@ static void guc_ggtt_invalidate(struct i915_ggtt *ggtt)
 	gen8_ggtt_invalidate(ggtt);
 
 	list_for_each_entry(gt, &ggtt->gt_list, ggtt_link) {
-		if (intel_guc_tlb_invalidation_is_available(&gt->uc.guc)) {
+		if (intel_guc_tlb_invalidation_is_available(&gt->uc.guc))
 			guc_ggtt_ct_invalidate(gt);
-		} else if (GRAPHICS_VER(i915) >= 12) {
+		else if (GRAPHICS_VER(i915) >= 12)
 			intel_uncore_write_fw(gt->uncore,
 					      GEN12_GUC_TLB_INV_CR,
 					      GEN12_GUC_TLB_INV_CR_INVALIDATE);
-		} else {
+		else
 			intel_uncore_write_fw(gt->uncore,
 					      GEN8_GTCR, GEN8_GTCR_INVALIDATE);
-		}
 	}
 }
 
@@ -278,7 +296,7 @@ static bool should_update_ggtt_with_bind(struct i915_ggtt *ggtt)
 	return intel_gt_is_bind_context_ready(gt);
 }
 
-static struct intel_context *gen8_ggtt_bind_get_ce(struct i915_ggtt *ggtt)
+static struct intel_context *gen8_ggtt_bind_get_ce(struct i915_ggtt *ggtt, intel_wakeref_t *wakeref)
 {
 	struct intel_context *ce;
 	struct intel_gt *gt = ggtt->vm.gt;
@@ -295,7 +313,8 @@ static struct intel_context *gen8_ggtt_bind_get_ce(struct i915_ggtt *ggtt)
 	 * would conflict with fs_reclaim trying to allocate memory while
 	 * doing rpm_resume().
 	 */
-	if (!intel_gt_pm_get_if_awake(gt))
+	*wakeref = intel_gt_pm_get_if_awake(gt);
+	if (!*wakeref)
 		return NULL;
 
 	intel_engine_pm_get(ce->engine);
@@ -303,10 +322,10 @@ static struct intel_context *gen8_ggtt_bind_get_ce(struct i915_ggtt *ggtt)
 	return ce;
 }
 
-static void gen8_ggtt_bind_put_ce(struct intel_context *ce)
+static void gen8_ggtt_bind_put_ce(struct intel_context *ce, intel_wakeref_t wakeref)
 {
 	intel_engine_pm_put(ce->engine);
-	intel_gt_pm_put(ce->engine->gt);
+	intel_gt_pm_put(ce->engine->gt, wakeref);
 }
 
 static bool gen8_ggtt_bind_ptes(struct i915_ggtt *ggtt, u32 offset,
@@ -319,12 +338,13 @@ static bool gen8_ggtt_bind_ptes(struct i915_ggtt *ggtt, u32 offset,
 	struct sgt_iter iter;
 	struct i915_request *rq;
 	struct intel_context *ce;
+	intel_wakeref_t wakeref;
 	u32 *cs;
 
 	if (!num_entries)
 		return true;
 
-	ce = gen8_ggtt_bind_get_ce(ggtt);
+	ce = gen8_ggtt_bind_get_ce(ggtt, &wakeref);
 	if (!ce)
 		return false;
 
@@ -400,13 +420,13 @@ queue_err_rq:
 		offset += n_ptes;
 	}
 
-	gen8_ggtt_bind_put_ce(ce);
+	gen8_ggtt_bind_put_ce(ce, wakeref);
 	return true;
 
 err_rq:
 	i915_request_put(rq);
 put_ce:
-	gen8_ggtt_bind_put_ce(ce);
+	gen8_ggtt_bind_put_ce(ce, wakeref);
 	return false;
 }
 
@@ -1140,17 +1160,11 @@ static int ggtt_probe_common(struct i915_ggtt *ggtt, u64 size)
 	GEM_WARN_ON(pci_resource_len(pdev, GEN4_GTTMMADR_BAR) != gen6_gttmmadr_size(i915));
 	phys_addr = pci_resource_start(pdev, GEN4_GTTMMADR_BAR) + gen6_gttadr_offset(i915);
 
-	/*
-	 * On BXT+/ICL+ writes larger than 64 bit to the GTT pagetable range
-	 * will be dropped. For WC mappings in general we have 64 byte burst
-	 * writes when the WC buffer is flushed, so we can't use it, but have to
-	 * resort to an uncached mapping. The WC issue is easily caught by the
-	 * readback check when writing GTT PTE entries.
-	 */
-	if (IS_GEN9_LP(i915) || GRAPHICS_VER(i915) >= 11)
-		ggtt->gsm = ioremap(phys_addr, size);
-	else
+	if (needs_wc_ggtt_mapping(i915))
 		ggtt->gsm = ioremap_wc(phys_addr, size);
+	else
+		ggtt->gsm = ioremap(phys_addr, size);
+
 	if (!ggtt->gsm) {
 		drm_err(&i915->drm, "Failed to map the ggtt page table\n");
 		return -ENOMEM;
