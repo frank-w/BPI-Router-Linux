@@ -438,16 +438,6 @@ static void sfp_quirk_disable_autoneg(const struct sfp_eeprom_id *id,
 	linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, modes);
 }
 
-static void sfp_quirk_oem_2_5g(const struct sfp_eeprom_id *id,
-			       unsigned long *modes,
-			       unsigned long *interfaces)
-{
-	/* Copper 2.5G SFP */
-	linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT, modes);
-	__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
-	sfp_quirk_disable_autoneg(id, modes, interfaces);
-}
-
 static void sfp_quirk_ubnt_uf_instant(const struct sfp_eeprom_id *id,
 				      unsigned long *modes,
 				      unsigned long *interfaces)
@@ -496,7 +486,7 @@ static const struct sfp_quirk sfp_quirks[] = {
 		  sfp_fixup_ignore_tx_fault),
 
 	// FS 2.5G Base-T
-	SFP_QUIRK_M("FS", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
+	SFP_QUIRK_F("FS", "SFP-2.5G-T", sfp_fixup_oem_2_5gbaset),
 
 	// Lantech 8330-262D-E can operate at 2500base-X, but incorrectly report
 	// 2500MBd NRZ in their EEPROM
