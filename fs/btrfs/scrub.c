@@ -863,7 +863,7 @@ static void scrub_stripe_report_errors(struct scrub_ctx *sctx,
 	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL,
 				      DEFAULT_RATELIMIT_BURST);
 	struct btrfs_fs_info *fs_info = sctx->fs_info;
-	struct btrfs_device *dev = NULL;
+	struct btrfs_device *dev = stripe->dev;
 	u64 stripe_physical = stripe->physical;
 	int nr_data_sectors = 0;
 	int nr_meta_sectors = 0;
@@ -874,35 +874,7 @@ static void scrub_stripe_report_errors(struct scrub_ctx *sctx,
 	if (test_bit(SCRUB_STRIPE_FLAG_NO_REPORT, &stripe->state))
 		return;
 
-	/*
-	 * Init needed infos for error reporting.
-	 *
-	 * Although our scrub_stripe infrastructure is mostly based on btrfs_submit_bio()
-	 * thus no need for dev/physical, error reporting still needs dev and physical.
-	 */
-	if (!bitmap_empty(&stripe->init_error_bitmap, stripe->nr_sectors)) {
-		u64 mapped_len = fs_info->sectorsize;
-		struct btrfs_io_context *bioc = NULL;
-		int stripe_index = stripe->mirror_num - 1;
-		int ret;
-
-		/* For scrub, our mirror_num should always start at 1. */
-		ASSERT(stripe->mirror_num >= 1);
-		ret = btrfs_map_block(fs_info, BTRFS_MAP_GET_READ_MIRRORS,
-				      stripe->logical, &mapped_len, &bioc,
-				      NULL, NULL);
-		/*
-		 * If we failed, dev will be NULL, and later detailed reports
-		 * will just be skipped.
-		 */
-		if (ret < 0)
-			goto skip;
-		stripe_physical = bioc->stripes[stripe_index].physical;
-		dev = bioc->stripes[stripe_index].dev;
-		btrfs_put_bioc(bioc);
-	}
-
-skip:
+	ASSERT(dev);
 	for_each_set_bit(sector_nr, &stripe->extent_sector_bitmap, stripe->nr_sectors) {
 		const u64 logical = stripe->logical +
 				    (sector_nr << fs_info->sectorsize_bits);
@@ -933,41 +905,29 @@ skip:
 		 * output the message of repaired message.
 		 */
 		if (repaired) {
-			if (dev) {
-				btrfs_err_rl_in_rcu(fs_info,
+			btrfs_err_rl_in_rcu(fs_info,
 			"fixed up error at logical %llu on dev %s physical %llu",
 					    logical, btrfs_dev_name(dev),
 					    physical);
-			} else {
-				btrfs_err_rl_in_rcu(fs_info,
-			"fixed up error at logical %llu on mirror %u",
-					    logical, stripe->mirror_num);
-			}
 			continue;
 		}
 
 		/* The remaining are all for unrepaired. */
-		if (dev) {
-			btrfs_err_rl_in_rcu(fs_info,
+		btrfs_err_rl_in_rcu(fs_info,
 	"unable to fixup (regular) error at logical %llu on dev %s physical %llu",
 					    logical, btrfs_dev_name(dev),
 					    physical);
-		} else {
-			btrfs_err_rl_in_rcu(fs_info,
-	"unable to fixup (regular) error at logical %llu on mirror %u",
-					    logical, stripe->mirror_num);
-		}
 
 		if (test_bit(sector_nr, &stripe->io_error_bitmap))
-			if (__ratelimit(&rs) && dev)
+			if (__ratelimit(&rs))
 				scrub_print_common_warning("i/o error", dev,
 						     logical, physical);
 		if (test_bit(sector_nr, &stripe->csum_error_bitmap))
-			if (__ratelimit(&rs) && dev)
+			if (__ratelimit(&rs))
 				scrub_print_common_warning("checksum error", dev,
 						     logical, physical);
 		if (test_bit(sector_nr, &stripe->meta_error_bitmap))
-			if (__ratelimit(&rs) && dev)
+			if (__ratelimit(&rs))
 				scrub_print_common_warning("header error", dev,
 						     logical, physical);
 	}
