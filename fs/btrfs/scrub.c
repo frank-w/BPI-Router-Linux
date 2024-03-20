@@ -476,7 +476,7 @@ err:
 }
 
 static void scrub_print_common_warning(const char *errstr, struct btrfs_device *dev,
-				       bool is_super, u64 logical, u64 physical)
+				       u64 logical, u64 physical)
 {
 	struct btrfs_fs_info *fs_info = dev->fs_info;
 	struct btrfs_path *path;
@@ -488,12 +488,6 @@ static void scrub_print_common_warning(const char *errstr, struct btrfs_device *
 	u32 item_size;
 	int ret;
 
-	/* Super block error, no need to search extent tree. */
-	if (is_super) {
-		btrfs_warn_in_rcu(fs_info, "%s on device %s, physical %llu",
-				  errstr, btrfs_dev_name(dev), physical);
-		return;
-	}
 	path = btrfs_alloc_path();
 	if (!path)
 		return;
@@ -966,15 +960,15 @@ skip:
 
 		if (test_bit(sector_nr, &stripe->io_error_bitmap))
 			if (__ratelimit(&rs) && dev)
-				scrub_print_common_warning("i/o error", dev, false,
+				scrub_print_common_warning("i/o error", dev,
 						     logical, physical);
 		if (test_bit(sector_nr, &stripe->csum_error_bitmap))
 			if (__ratelimit(&rs) && dev)
-				scrub_print_common_warning("checksum error", dev, false,
+				scrub_print_common_warning("checksum error", dev,
 						     logical, physical);
 		if (test_bit(sector_nr, &stripe->meta_error_bitmap))
 			if (__ratelimit(&rs) && dev)
-				scrub_print_common_warning("header error", dev, false,
+				scrub_print_common_warning("header error", dev,
 						     logical, physical);
 	}
 
