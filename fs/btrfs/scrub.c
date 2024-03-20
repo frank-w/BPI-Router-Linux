@@ -427,7 +427,7 @@ static int scrub_print_warning_inode(u64 inum, u64 offset, u64 num_bytes,
 	 * hold all of the paths here
 	 */
 	for (i = 0; i < ipath->fspath->elem_cnt; ++i) {
-		btrfs_warn_in_rcu(fs_info,
+		btrfs_warn_rl_in_rcu(fs_info,
 "%s at logical %llu on dev %s, physical %llu, root %llu, inode %llu, offset %llu, path: %s",
 				  swarn->errstr, swarn->logical,
 				  btrfs_dev_name(swarn->dev),
@@ -442,7 +442,7 @@ static int scrub_print_warning_inode(u64 inum, u64 offset, u64 num_bytes,
 	return 0;
 
 err:
-	btrfs_warn_in_rcu(fs_info,
+	btrfs_warn_rl_in_rcu(fs_info,
 			  "%s at logical %llu on dev %s, physical %llu, root %llu, inode %llu, offset %llu: path resolving failed with ret=%d",
 			  swarn->errstr, swarn->logical,
 			  btrfs_dev_name(swarn->dev),
@@ -500,7 +500,7 @@ static void scrub_print_common_warning(const char *errstr, struct btrfs_device *
 				break;
 			if (ret > 0)
 				break;
-			btrfs_warn_in_rcu(fs_info,
+			btrfs_warn_rl_in_rcu(fs_info,
 "%s at logical %llu on dev %s, physical %llu: metadata %s (level %d) in tree %llu",
 				errstr, swarn.logical, btrfs_dev_name(dev),
 				swarn.physical, (ref_level ? "node" : "leaf"),
@@ -508,7 +508,7 @@ static void scrub_print_common_warning(const char *errstr, struct btrfs_device *
 			swarn.message_printed = true;
 		}
 		if (!swarn.message_printed)
-			btrfs_warn_in_rcu(fs_info,
+			btrfs_warn_rl_in_rcu(fs_info,
 			"%s at metadata, logical %llu on dev %s physical %llu",
 					  errstr, swarn.logical,
 					  btrfs_dev_name(dev), swarn.physical);
@@ -527,7 +527,7 @@ static void scrub_print_common_warning(const char *errstr, struct btrfs_device *
 
 		iterate_extent_inodes(&ctx, true, scrub_print_warning_inode, &swarn);
 		if (!swarn.message_printed)
-			btrfs_warn_in_rcu(fs_info,
+			btrfs_warn_rl_in_rcu(fs_info,
 	"%s at data, filename unresolved, logical %llu on dev %s physical %llu",
 					  errstr, swarn.logical,
 					  btrfs_dev_name(dev), swarn.physical);
@@ -846,8 +846,6 @@ static void scrub_stripe_submit_repair_read(struct scrub_stripe *stripe,
 static void scrub_stripe_report_errors(struct scrub_ctx *sctx,
 				       struct scrub_stripe *stripe)
 {
-	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL,
-				      DEFAULT_RATELIMIT_BURST);
 	struct btrfs_fs_info *fs_info = sctx->fs_info;
 	struct btrfs_device *dev = stripe->dev;
 	u64 stripe_physical = stripe->physical;
@@ -899,22 +897,14 @@ static void scrub_stripe_report_errors(struct scrub_ctx *sctx,
 		}
 
 		/* The remaining are all for unrepaired. */
-		btrfs_err_rl_in_rcu(fs_info,
-	"unable to fixup (regular) error at logical %llu on dev %s physical %llu",
-					    logical, btrfs_dev_name(dev),
-					    physical);
-
 		if (test_bit(sector_nr, &stripe->io_error_bitmap))
-			if (__ratelimit(&rs))
-				scrub_print_common_warning("i/o error", dev,
+			scrub_print_common_warning("i/o error", dev,
 						     logical, physical);
 		if (test_bit(sector_nr, &stripe->csum_error_bitmap))
-			if (__ratelimit(&rs))
-				scrub_print_common_warning("checksum error", dev,
+			scrub_print_common_warning("checksum error", dev,
 						     logical, physical);
 		if (test_bit(sector_nr, &stripe->meta_error_bitmap))
-			if (__ratelimit(&rs))
-				scrub_print_common_warning("header error", dev,
+			scrub_print_common_warning("header error", dev,
 						     logical, physical);
 	}
 
