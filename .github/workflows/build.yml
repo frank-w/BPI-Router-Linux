@@ -38,7 +38,7 @@ jobs:
       - name: Install depencies
         run: |
           sudo apt update
-          sudo apt install ccache libssl-dev u-boot-tools python3-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler libncurses5-dev
+          sudo apt install ccache libssl-dev u-boot-tools python3-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler libncurses5-dev libelf-dev
 
       - name: Setup env
         run: |
