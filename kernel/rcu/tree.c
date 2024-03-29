@@ -3791,6 +3791,7 @@ void kvfree_call_rcu(struct rcu_head *head, void *ptr)
 	unsigned long flags;
 	struct kfree_rcu_cpu *krcp;
 	bool success;
+	bool wakeup = false;
 
 	/*
 	 * Please note there is a limitation for the head-less
@@ -3841,10 +3842,12 @@ void kvfree_call_rcu(struct rcu_head *head, void *ptr)
 
 	// Set timer to drain after KFREE_DRAIN_JIFFIES.
 	if (rcu_scheduler_active == RCU_SCHEDULER_RUNNING)
-		schedule_delayed_monitor_work(krcp);
+		wakeup = true;
 
 unlock_return:
 	krc_this_cpu_unlock(krcp, flags);
+	if (wakeup)
+		schedule_delayed_monitor_work(krcp);
 
 	/*
 	 * Inline kvfree() after synchronize_rcu(). We can do
