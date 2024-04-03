@@ -1828,6 +1828,7 @@ void btrfs_reclaim_bgs_work(struct work_struct *work)
 	list_sort(NULL, &fs_info->reclaim_bgs, reclaim_bgs_cmp);
 	while (!list_empty(&fs_info->reclaim_bgs)) {
 		u64 zone_unusable;
+		u64 reclaimed;
 		int ret = 0;
 
 		bg = list_first_entry(&fs_info->reclaim_bgs,
@@ -1920,11 +1921,20 @@ void btrfs_reclaim_bgs_work(struct work_struct *work)
 				div64_u64(bg->used * 100, bg->length),
 				div64_u64(zone_unusable * 100, bg->length));
 		trace_btrfs_reclaim_block_group(bg);
+		reclaimed = bg->used;
 		ret = btrfs_relocate_chunk(fs_info, bg->start);
 		if (ret) {
 			btrfs_dec_block_group_ro(bg);
 			btrfs_err(fs_info, "error relocating chunk %llu",
 				  bg->start);
+			spin_lock(&space_info->lock);
+			space_info->reclaim_count++;
+			spin_unlock(&space_info->lock);
+		} else {
+			spin_lock(&space_info->lock);
+			space_info->reclaim_count++;
+			space_info->reclaim_bytes += reclaimed;
+			spin_unlock(&space_info->lock);
 		}
 
 next:
