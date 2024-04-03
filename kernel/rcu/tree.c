@@ -1463,14 +1463,11 @@ static void rcu_poll_gp_seq_end_unlocked(unsigned long *snap)
  * for this new grace period. Given that there are a fixed
  * number of wait nodes, if all wait nodes are in use
  * (which can happen when kworker callback processing
- * is delayed) and additional grace period is requested.
- * This means, a system is slow in processing callbacks.
- *
- * TODO: If a slow processing is detected, a first node
- * in the llist should be used as a wait-tail for this
- * grace period, therefore users which should wait due
- * to a slow process are handled by _this_ grace period
- * and not next.
+ * is delayed), first node in the llist is used as wait
+ * tail for this grace period. This means, the first node
+ * has to go through additional grace periods before it is
+ * part of the wait callbacks. This should be ok, as
+ * the system is slow in processing callbacks anyway.
  *
  * Below is an illustration of how the done and wait
  * tail pointers move from one set of rcu_synchronize nodes
@@ -1639,7 +1636,6 @@ static void rcu_sr_normal_gp_cleanup_work(struct work_struct *work)
 	if (!done)
 		return;
 
-	WARN_ON_ONCE(!rcu_sr_is_wait_head(done));
 	head = done->next;
 	done->next = NULL;
 
@@ -1676,13 +1672,21 @@ static void rcu_sr_normal_gp_cleanup(void)
 
 	rcu_state.srs_wait_tail = NULL;
 	ASSERT_EXCLUSIVE_WRITER(rcu_state.srs_wait_tail);
-	WARN_ON_ONCE(!rcu_sr_is_wait_head(wait_tail));
 
 	/*
 	 * Process (a) and (d) cases. See an illustration.
 	 */
 	llist_for_each_safe(rcu, next, wait_tail->next) {
-		if (rcu_sr_is_wait_head(rcu))
+		/*
+		 * The done tail may reference a rcu_synchronize node.
+		 * Stop at done tail, as using rcu_sr_normal_complete()
+		 * from this path can result in use-after-free. This
+		 * may occur if, following the wake-up of the synchronize_rcu()
+		 * wait contexts and freeing up of node memory,
+		 * rcu_sr_normal_gp_cleanup_work() accesses the done tail and
+		 * its subsequent nodes.
+		 */
+		if (wait_tail->next == rcu_state.srs_done_tail)
 			break;
 
 		rcu_sr_normal_complete(rcu);
@@ -1719,14 +1723,16 @@ static bool rcu_sr_normal_gp_init(void)
 		return start_new_poll;
 
 	wait_head = rcu_sr_get_wait_head();
-	if (!wait_head) {
-		// Kick another GP to retry.
+	if (wait_head) {
+		/* Inject a wait-dummy-node. */
+		llist_add(wait_head, &rcu_state.srs_next);
+	} else {
+		// Kick another GP for first node.
 		start_new_poll = true;
-		return start_new_poll;
+		if (first == rcu_state.srs_done_tail)
+			return start_new_poll;
+		wait_head = first;
 	}
-
-	/* Inject a wait-dummy-node. */
-	llist_add(wait_head, &rcu_state.srs_next);
 
 	/*
 	 * A waiting list of rcu_synchronize nodes should be empty on
