@@ -14,7 +14,7 @@
 #include <linux/phy.h>
 #include <linux/firmware.h>
 #include <linux/property.h>
-#include <linux/wordpart.h>
+//#include <linux/wordpart.h>
 #include <asm/unaligned.h>
 
 #define EN8811H_PHY_ID		0x03a2a411
