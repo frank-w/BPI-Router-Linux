@@ -3516,7 +3516,7 @@ int mt7996_mcu_set_eeprom(struct mt7996_dev *dev)
 				 &req, sizeof(req), true);
 }
 
-int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset)
+int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *read_buf)
 {
 	struct {
 		u8 _rsv[4];
@@ -3534,7 +3534,8 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset)
 	};
 	struct sk_buff *skb;
 	bool valid;
-	int ret;
+	int ret=0;
+	u8 *buf = read_buf;
 
 	ret = mt76_mcu_send_and_get_msg(&dev->mt76,
 					MCU_WM_UNI_CMD_QUERY(EFUSE_CTRL),
@@ -3545,7 +3546,9 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset)
 	valid = le32_to_cpu(*(__le32 *)(skb->data + 16));
 	if (valid) {
 		u32 addr = le32_to_cpu(*(__le32 *)(skb->data + 12));
-		u8 *buf = (u8 *)dev->mt76.eeprom.data + addr;
+
+		if (!buf)
+			buf = (u8 *)dev->mt76.eeprom.data + addr;
 
 		skb_pull(skb, 48);
 		memcpy(buf, skb->data, MT7996_EEPROM_BLOCK_SIZE);
