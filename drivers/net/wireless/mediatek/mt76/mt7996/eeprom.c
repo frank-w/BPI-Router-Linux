@@ -219,6 +219,10 @@ int mt7996_eeprom_init(struct mt7996_dev *dev)
 {
 	int ret;
 
+	ret = mt7996_get_chip_sku(dev);
+	if (ret)
+		return ret;
+
 	ret = mt7996_eeprom_load(dev);
 	if (ret < 0) {
 		if (ret != -EINVAL)

@@ -88,6 +88,25 @@ struct mt7996_sta;
 struct mt7996_dfs_pulse;
 struct mt7996_dfs_pattern;
 
+enum mt7996_fem_type {
+	MT7996_FEM_UNSET,
+	MT7996_FEM_EXT,
+	MT7996_FEM_INT,
+	MT7996_FEM_MIX,
+};
+
+enum mt7996_sku_type {
+	MT7996_SKU_404,
+	MT7996_SKU_444,
+	MT7996_SKU_233,
+};
+
+enum mt7992_sku_type {
+	MT7992_SKU_23,
+	MT7992_SKU_24,
+	MT7992_SKU_44,
+};
+
 enum mt7996_ram_type {
 	MT7996_RAM_TYPE_WM,
 	MT7996_RAM_TYPE_WA,
@@ -256,6 +275,9 @@ struct mt7996_dev {
 	/* monitor rx chain configured channel */
 	struct cfg80211_chan_def rdd2_chandef;
 	struct mt7996_phy *rdd2_phy;
+
+	u8 chip_sku;
+	u8 fem_type;
 
 	u16 chainmask;
 	u8 chainshift[__MT_MAX_BAND];
@@ -437,6 +459,7 @@ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx,
 			  int n_desc, int ring_base, struct mtk_wed_device *wed);
 void mt7996_init_txpower(struct mt7996_phy *phy);
 int mt7996_txbf_init(struct mt7996_dev *dev);
+int mt7996_get_chip_sku(struct mt7996_dev *dev);
 void mt7996_reset(struct mt7996_dev *dev);
 int mt7996_run(struct ieee80211_hw *hw);
 int mt7996_mcu_init(struct mt7996_dev *dev);
