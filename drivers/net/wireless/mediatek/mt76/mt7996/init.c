@@ -893,10 +893,12 @@ int mt7996_get_chip_sku(struct mt7996_dev *dev)
 	u32 regval, val = mt76_rr(dev, MT_PAD_GPIO);
 	u16 adie_chip_id, adie_chip_ver;
 	u8 adie_comb, adie_num, adie_idx = 0;
-
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	switch (mt76_chip(&dev->mt76)) {
 	case 0x7990:
+		printk(KERN_ALERT "DEBUG: Passed %s %d mt7990\n",__FUNCTION__,__LINE__);
 		if (FIELD_GET(MT_PAD_GPIO_2ADIE_TBTC, val)) {
+			printk(KERN_ALERT "DEBUG: Passed %s %d MT_PAD_GPIO_2ADIE_TBTC (SKU_233)\n",__FUNCTION__,__LINE__);
 			dev->chip_sku = MT7996_SKU_233;
 			dev->fem_type = MT7996_FEM_INT;
 			return 0;
@@ -909,6 +911,7 @@ int mt7996_get_chip_sku(struct mt7996_dev *dev)
 			dev->chip_sku = MT7996_SKU_404;
 		break;
 	case 0x7992:
+		printk(KERN_ALERT "DEBUG: Passed %s %d mt7992\n",__FUNCTION__,__LINE__);
 		adie_comb = FIELD_GET(MT_PAD_GPIO_ADIE_COMB_7992, val);
 		adie_num = FIELD_GET(MT_PAD_GPIO_ADIE_NUM_7992, val);
 		adie_idx = !adie_num;
@@ -920,6 +923,7 @@ int mt7996_get_chip_sku(struct mt7996_dev *dev)
 			dev->chip_sku = MT7992_SKU_24;
 		break;
 	default:
+		printk(KERN_ALERT "DEBUG: Passed %s %d default einval\n",__FUNCTION__,__LINE__);
 		return -EINVAL;
 	}
 
