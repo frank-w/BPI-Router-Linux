@@ -17,6 +17,11 @@
 		_fw = MT7992_##name;				\
 		break;						\
 	case 0x7990:						\
+		if ((_dev)->chip_sku == MT7996_SKU_233)		\
+			_fw = MT7996_##name##_233;		\
+		else						\
+			_fw = MT7996_##name;			\
+		break;						\
 	default:						\
 		_fw = MT7996_##name;				\
 		break;						\
@@ -2661,6 +2666,7 @@ static int mt7996_load_patch(struct mt7996_dev *dev)
 		return -EAGAIN;
 	}
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d load rom_patch %s\n",__FUNCTION__,__LINE__,fw_name(dev, ROM_PATCH));
 	ret = request_firmware(&fw, fw_name(dev, ROM_PATCH), dev->mt76.dev);
 	if (ret)
 		goto out;
@@ -2824,16 +2830,19 @@ static int mt7996_load_ram(struct mt7996_dev *dev)
 {
 	int ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d load WM firmware %s\n",__FUNCTION__,__LINE__,fw_name(dev, FIRMWARE_WM));
 	ret = __mt7996_load_ram(dev, "WM", fw_name(dev, FIRMWARE_WM),
 				MT7996_RAM_TYPE_WM);
 	if (ret)
 		return ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d load DSP firmware %s\n",__FUNCTION__,__LINE__,fw_name(dev, FIRMWARE_DSP));
 	ret = __mt7996_load_ram(dev, "DSP", fw_name(dev, FIRMWARE_DSP),
 				MT7996_RAM_TYPE_DSP);
 	if (ret)
 		return ret;
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d load WA firmware %s\n",__FUNCTION__,__LINE__,fw_name(dev, FIRMWARE_WA));
 	return __mt7996_load_ram(dev, "WA", fw_name(dev, FIRMWARE_WA),
 				 MT7996_RAM_TYPE_WA);
 }
