@@ -247,6 +247,14 @@
 			#size-cells = <0>;
 			reg = <0>;
 
+			pcf8563: rtc@51 {
+				compatible = "nxp,pcf8563";
+				reg = <0x51>;
+				//interrupts = <&pio 6 IRQ_TYPE_LEVEL_LOW>;
+				#clock-cells = <0>;
+				//status = "disabled";
+			};
+
 			eeprom@57 {
 				compatible = "atmel,24c02";
 				reg = <0x57>;
@@ -255,13 +263,6 @@
 				size = <256>;
 			};
 
-			pcf8563: rtc@50 {
-				compatible = "nxp,pcf8563";
-				reg = <0x50>;
-				interrupts = <&pio 6 IRQ_TYPE_LEVEL_LOW>;
-				#clock-cells = <0>;
-				status = "disabled";
-			};
 		};
 
 		i2c_sfp1: i2c@1 {
