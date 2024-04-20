@@ -3066,7 +3066,7 @@ bailout:
 			struct sockaddr MacAddr;
 			UINT_32 u4SetInfoLen = 0;
 
-			kalMemZero(MacAddr.sa_data, sizeof(MacAddr.sa_data));
+			kalMemZero(MacAddr.sa_data, sizeof(MacAddr.sa_data_min));
 			rStatus = kalIoctl(prGlueInfo,
 					   wlanoidQueryCurrentAddr,
 					   &MacAddr.sa_data,
