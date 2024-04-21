@@ -1272,9 +1272,10 @@ static int mtk_init_fq_dma(struct mtk_eth *eth)
 {
 	const struct mtk_soc_data *soc = eth->soc;
 	dma_addr_t phy_ring_tail;
-	int cnt = MTK_QDMA_RING_SIZE;
+	int cnt = soc->txrx.fq_dma_size;
 	dma_addr_t dma_addr;
-	int i;
+	u64 addr64 = 0;
+	int i, j, len;
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SRAM))
 		eth->scratch_ring = eth->sram_base;
@@ -1283,40 +1284,51 @@ static int mtk_init_fq_dma(struct mtk_eth *eth)
 						       cnt * soc->txrx.txd_size,
 						       &eth->phy_scratch_ring,
 						       GFP_KERNEL);
+
 	if (unlikely(!eth->scratch_ring))
-		return -ENOMEM;
-
-	eth->scratch_head = kcalloc(cnt, MTK_QDMA_PAGE_SIZE, GFP_KERNEL);
-	if (unlikely(!eth->scratch_head))
-		return -ENOMEM;
-
-	dma_addr = dma_map_single(eth->dma_dev,
-				  eth->scratch_head, cnt * MTK_QDMA_PAGE_SIZE,
-				  DMA_FROM_DEVICE);
-	if (unlikely(dma_mapping_error(eth->dma_dev, dma_addr)))
 		return -ENOMEM;
 
 	phy_ring_tail = eth->phy_scratch_ring + soc->txrx.txd_size * (cnt - 1);
 
-	for (i = 0; i < cnt; i++) {
-		dma_addr_t addr = dma_addr + i * MTK_QDMA_PAGE_SIZE;
-		struct mtk_tx_dma_v2 *txd;
+	for (j = 0; j < DIV_ROUND_UP(soc->txrx.fq_dma_size, MTK_FQ_DMA_LENGTH); j++) {
+		len = min_t(int, cnt - j * MTK_FQ_DMA_LENGTH, MTK_FQ_DMA_LENGTH);
+		eth->scratch_head[j] = kcalloc(len, MTK_QDMA_PAGE_SIZE, GFP_KERNEL);
 
-		txd = eth->scratch_ring + i * soc->txrx.txd_size;
-		txd->txd1 = addr;
-		if (i < cnt - 1)
-			txd->txd2 = eth->phy_scratch_ring +
-				    (i + 1) * soc->txrx.txd_size;
+		if (unlikely(!eth->scratch_head[j]))
+			return -ENOMEM;
 
-		txd->txd3 = TX_DMA_PLEN0(MTK_QDMA_PAGE_SIZE);
-		if (MTK_HAS_CAPS(soc->caps, MTK_36BIT_DMA))
-			txd->txd3 |= TX_DMA_PREP_ADDR64(addr);
-		txd->txd4 = 0;
-		if (mtk_is_netsys_v2_or_greater(eth)) {
-			txd->txd5 = 0;
-			txd->txd6 = 0;
-			txd->txd7 = 0;
-			txd->txd8 = 0;
+		dma_addr = dma_map_single(eth->dma_dev,
+					  eth->scratch_head[j], len * MTK_QDMA_PAGE_SIZE,
+					  DMA_FROM_DEVICE);
+
+		if (unlikely(dma_mapping_error(eth->dma_dev, dma_addr)))
+			return -ENOMEM;
+
+		for (i = 0; i < cnt; i++) {
+			//dma_addr_t addr = dma_addr + i * MTK_QDMA_PAGE_SIZE;
+			struct mtk_tx_dma_v2 *txd;
+
+			txd = eth->scratch_ring + (j * MTK_FQ_DMA_LENGTH + i) * soc->txrx.txd_size;
+			txd->txd1 = dma_addr + i * MTK_QDMA_PAGE_SIZE;
+			if (j * MTK_FQ_DMA_LENGTH + i < cnt)
+				txd->txd2 = eth->phy_scratch_ring +
+					    (j * MTK_FQ_DMA_LENGTH + i + 1) * soc->txrx.txd_size;
+
+			addr64 = (MTK_HAS_CAPS(eth->soc->caps, MTK_8GB_ADDRESSING)) ?
+				  TX_DMA_SDP1(dma_addr + i * MTK_QDMA_PAGE_SIZE) : 0;
+
+			txd->txd3 = TX_DMA_PLEN0(MTK_QDMA_PAGE_SIZE) | addr64;
+
+			if (MTK_HAS_CAPS(soc->caps, MTK_36BIT_DMA))
+				txd->txd3 |= TX_DMA_PREP_ADDR64(addr64);
+
+			txd->txd4 = 0;
+			if (mtk_is_netsys_v2_or_greater(eth)) {
+				txd->txd5 = 0;
+				txd->txd6 = 0;
+				txd->txd7 = 0;
+				txd->txd8 = 0;
+			}
 		}
 	}
 
@@ -2598,7 +2610,7 @@ static int mtk_tx_alloc(struct mtk_eth *eth)
 	if (MTK_HAS_CAPS(soc->caps, MTK_QDMA))
 		ring_size = MTK_QDMA_RING_SIZE;
 	else
-		ring_size = MTK_DMA_SIZE;
+		ring_size = soc->txrx.tx_dma_size;
 
 	ring->buf = kcalloc(ring_size, sizeof(*ring->buf),
 			       GFP_KERNEL);
@@ -2606,8 +2618,8 @@ static int mtk_tx_alloc(struct mtk_eth *eth)
 		goto no_tx_mem;
 
 	if (MTK_HAS_CAPS(soc->caps, MTK_SRAM)) {
-		ring->dma = eth->sram_base + ring_size * sz;
-		ring->phys = eth->phy_scratch_ring + ring_size * (dma_addr_t)sz;
+		ring->dma = eth->sram_base + soc->txrx.fq_dma_size * sz;
+		ring->phys = eth->phy_scratch_ring + soc->txrx.fq_dma_size * (dma_addr_t)sz;
 	} else {
 		ring->dma = dma_alloc_coherent(eth->dma_dev, ring_size * sz,
 					       &ring->phys, GFP_KERNEL);
@@ -2729,6 +2741,7 @@ static void mtk_tx_clean(struct mtk_eth *eth)
 static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 {
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
+	const struct mtk_soc_data *soc = eth->soc;
 	struct mtk_rx_ring *ring;
 	int rx_data_len, rx_dma_size, tx_ring_size;
 	int i;
@@ -2736,7 +2749,7 @@ static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_QDMA))
 		tx_ring_size = MTK_QDMA_RING_SIZE;
 	else
-		tx_ring_size = MTK_DMA_SIZE;
+		tx_ring_size = soc->txrx.tx_dma_size;
 
 	if (rx_flag == MTK_RX_FLAGS_QDMA) {
 		if (ring_no)
@@ -2751,7 +2764,7 @@ static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 		rx_dma_size = MTK_HW_LRO_DMA_SIZE;
 	} else {
 		rx_data_len = ETH_DATA_LEN;
-		rx_dma_size = MTK_DMA_SIZE;
+		rx_dma_size = soc->txrx.rx_dma_size;
 	}
 
 	ring->frag_size = mtk_max_frag_size(rx_data_len);
@@ -3280,7 +3293,10 @@ static void mtk_dma_free(struct mtk_eth *eth)
 			mtk_rx_clean(eth, &eth->rx_ring[i], false);
 	}
 
-	kfree(eth->scratch_head);
+	for (i = 0; i < DIV_ROUND_UP(soc->txrx.fq_dma_size, MTK_FQ_DMA_LENGTH); i++) {
+		kfree(eth->scratch_head[i]);
+		eth->scratch_head[i] = NULL;
+	}
 }
 
 static bool mtk_hw_reset_check(struct mtk_eth *eth)
@@ -5317,6 +5333,9 @@ static const struct mtk_soc_data mt2701_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
+		.tx_dma_size = MTK_DMA_SIZE(2K),
+		.rx_dma_size = MTK_DMA_SIZE(2K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
@@ -5337,6 +5356,9 @@ static const struct mtk_soc_data mt7621_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
+		.tx_dma_size = MTK_DMA_SIZE(2K),
+		.rx_dma_size = MTK_DMA_SIZE(2K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
@@ -5359,6 +5381,9 @@ static const struct mtk_soc_data mt7622_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
+		.tx_dma_size = MTK_DMA_SIZE(2K),
+		.rx_dma_size = MTK_DMA_SIZE(2K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
@@ -5380,6 +5405,9 @@ static const struct mtk_soc_data mt7623_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
+		.tx_dma_size = MTK_DMA_SIZE(2K),
+		.rx_dma_size = MTK_DMA_SIZE(2K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
@@ -5399,6 +5427,9 @@ static const struct mtk_soc_data mt7629_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
+		.tx_dma_size = MTK_DMA_SIZE(2K),
+		.rx_dma_size = MTK_DMA_SIZE(2K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
@@ -5421,6 +5452,9 @@ static const struct mtk_soc_data mt7981_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma_v2),
 		.rxd_size = sizeof(struct mtk_rx_dma_v2),
+		.tx_dma_size = MTK_DMA_SIZE(4K),
+		.rx_dma_size = MTK_DMA_SIZE(1K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT_V2,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_V2,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
@@ -5443,6 +5477,9 @@ static const struct mtk_soc_data mt7986_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma_v2),
 		.rxd_size = sizeof(struct mtk_rx_dma_v2),
+		.tx_dma_size = MTK_DMA_SIZE(4K),
+		.rx_dma_size = MTK_DMA_SIZE(1K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT_V2,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_V2,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
@@ -5465,6 +5502,9 @@ static const struct mtk_soc_data mt7988_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma_v2),
 		.rxd_size = sizeof(struct mtk_rx_dma_v2),
+		.tx_dma_size = MTK_DMA_SIZE(4K),
+		.rx_dma_size = MTK_DMA_SIZE(1K),
+		.fq_dma_size = MTK_DMA_SIZE(4K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT_V2,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_V2,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
@@ -5482,6 +5522,9 @@ static const struct mtk_soc_data rt5350_data = {
 	.txrx = {
 		.txd_size = sizeof(struct mtk_tx_dma),
 		.rxd_size = sizeof(struct mtk_rx_dma),
+		.tx_dma_size = MTK_DMA_SIZE(2K),
+		.rx_dma_size = MTK_DMA_SIZE(2K),
+		.fq_dma_size = MTK_DMA_SIZE(2K),
 		.rx_irq_done_mask = MTK_RX_DONE_INT,
 		.rx_dma_l4_valid = RX_DMA_L4_VALID_PDMA,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,

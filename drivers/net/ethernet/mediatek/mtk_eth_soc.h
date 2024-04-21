@@ -33,7 +33,10 @@
 #define MTK_TX_DMA_BUF_LEN	0x3fff
 #define MTK_TX_DMA_BUF_LEN_V2	0xffff
 #define MTK_QDMA_RING_SIZE	2048
-#define MTK_DMA_SIZE		512
+//#define MTK_DMA_SIZE		512
+#define MTK_DMA_SIZE(x)		(SZ_##x)
+#define MTK_FQ_DMA_HEAD		32
+#define MTK_FQ_DMA_LENGTH	2048
 #define MTK_RX_ETH_HLEN		(ETH_HLEN + ETH_FCS_LEN)
 #define MTK_RX_HLEN		(NET_SKB_PAD + MTK_RX_ETH_HLEN + NET_IP_ALIGN)
 #define MTK_DMA_DUMMY_DESC	0xffffffff
@@ -340,6 +343,7 @@
 # define TX_DMA_GET_ADDR64(x)	(0)
 # define TX_DMA_PREP_ADDR64(x)	(0)
 #endif
+#define TX_DMA_SDP1(_x)		((((u64)(_x)) >> 32) & 0xf)
 
 /* PDMA on MT7628 */
 #define TX_DMA_DONE		BIT(31)
@@ -983,6 +987,7 @@ enum mkt_eth_capabilities {
 	MTK_U3_COPHY_V2_BIT,
 	MTK_SRAM_BIT,
 	MTK_36BIT_DMA_BIT,
+	MTK_8GB_ADDRESSING_BIT,
 
 	/* MUX BITS*/
 	MTK_ETH_MUX_GDM1_TO_GMAC1_ESW_BIT,
@@ -1030,6 +1035,7 @@ enum mkt_eth_capabilities {
 #define MTK_U3_COPHY_V2		BIT_ULL(MTK_U3_COPHY_V2_BIT)
 #define MTK_SRAM		BIT_ULL(MTK_SRAM_BIT)
 #define MTK_36BIT_DMA	BIT_ULL(MTK_36BIT_DMA_BIT)
+#define MTK_8GB_ADDRESSING	BIT_ULL(MTK_8GB_ADDRESSING_BIT)
 
 #define MTK_ETH_MUX_GDM1_TO_GMAC1_ESW		\
 	BIT_ULL(MTK_ETH_MUX_GDM1_TO_GMAC1_ESW_BIT)
@@ -1240,6 +1246,9 @@ struct mtk_soc_data {
 	struct {
 		u32	txd_size;
 		u32	rxd_size;
+		u32	tx_dma_size;
+		u32	rx_dma_size;
+		u32	fq_dma_size;
 		u32	rx_irq_done_mask;
 		u32	rx_dma_l4_valid;
 		u32	dma_max_len;
@@ -1325,7 +1334,7 @@ struct mtk_eth {
 	struct napi_struct		rx_napi;
 	void				*scratch_ring;
 	dma_addr_t			phy_scratch_ring;
-	void				*scratch_head;
+	void				*scratch_head[MTK_FQ_DMA_HEAD];
 	struct clk			*clks[MTK_CLK_MAX];
 
 	struct mii_bus			*mii_bus;
