@@ -29,7 +29,7 @@
 				algo = "sha1";
 			};
 		};
-		fdt-base-mini {
+		/*fdt-base-mini {
 			description = "Flattened Device Tree blob for r3 mini";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-mini.dtb");
 			type = "flat_dt";
@@ -39,7 +39,7 @@
 			hash-1 {
 				algo = "sha1";
 			};
-		};
+		};*/
 		fdt-ov-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dtbo");
@@ -92,7 +92,7 @@
 				algo = "sha1";
 			};
 		};
-		conf-emmc-mini {
+		/*conf-emmc-mini {
 			description = "Boot Linux kernel with R3mini + EMMC FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-base-mini", "fdt-ov-emmc";
@@ -100,7 +100,7 @@
 			hash-1 {
 				algo = "sha1";
 			};
-		};
+		};*/
 		conf-sd-nand {
 			description = "Boot Linux kernel with SD+NAND FDT blob";
 			kernel = "kernel-1";
