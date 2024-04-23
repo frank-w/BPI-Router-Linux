@@ -446,6 +446,13 @@ static void sfp_quirk_oem_2_5g(const struct sfp_eeprom_id *id,
 	sfp_quirk_disable_autoneg(id, modes, interfaces);
 }
 
+// For 2.5GBASE-T short-reach modules
+static void sfp_fixup_oem_2_5gbaset(struct sfp *sfp)
+{
+	sfp_fixup_rollball(sfp);
+	sfp->id.base.extended_cc = SFF8024_ECC_2_5GBASE_T;
+}
+
 static void sfp_quirk_ubnt_uf_instant(const struct sfp_eeprom_id *id,
 				      unsigned long *modes,
 				      unsigned long *interfaces)
@@ -510,7 +517,7 @@ static const struct sfp_quirk sfp_quirks[] = {
 	SFP_QUIRK_F("Walsun", "HXSX-ATRI-1", sfp_fixup_fs_10gt),
 
 	SFP_QUIRK_F("OEM", "SFP-10G-T", sfp_fixup_rollball_cc),
-	SFP_QUIRK_M("OEM", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
+	SFP_QUIRK_F("OEM", "SFP-2.5G-T", sfp_fixup_oem_2_5gbaset),
 	SFP_QUIRK_F("OEM", "RTSFP-10", sfp_fixup_rollball_cc),
 	SFP_QUIRK_F("OEM", "RTSFP-10G", sfp_fixup_rollball_cc),
 	SFP_QUIRK_F("Turris", "RTSFP-2.5G", sfp_fixup_rollball),
