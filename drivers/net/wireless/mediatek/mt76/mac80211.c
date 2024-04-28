@@ -426,6 +426,7 @@ mt76_phy_init(struct mt76_phy *phy, struct ieee80211_hw *hw)
 	struct mt76_dev *dev = phy->dev;
 	struct wiphy *wiphy = hw->wiphy;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	INIT_LIST_HEAD(&phy->tx_list);
 	spin_lock_init(&phy->tx_lock);
 
@@ -476,6 +477,7 @@ mt76_phy_init(struct mt76_phy *phy, struct ieee80211_hw *hw)
 	ieee80211_hw_set(hw, AP_LINK_PS);
 	ieee80211_hw_set(hw, REPORTS_TX_ACK_STATUS);
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
@@ -519,29 +521,34 @@ int mt76_register_phy(struct mt76_phy *phy, bool vht,
 	int ret;
 
 	ret = mt76_phy_init(phy, phy->hw);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	if (phy->cap.has_2ghz) {
 		ret = mt76_init_sband_2g(phy, rates, n_rates);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
 
 	if (phy->cap.has_5ghz) {
 		ret = mt76_init_sband_5g(phy, rates + 4, n_rates - 4, vht);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
 
 	if (phy->cap.has_6ghz) {
 		ret = mt76_init_sband_6g(phy, rates + 4, n_rates - 4);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
 
 	if (IS_ENABLED(CONFIG_MT76_LEDS)) {
 		ret = mt76_led_init(phy);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
@@ -552,12 +559,14 @@ int mt76_register_phy(struct mt76_phy *phy, bool vht,
 	mt76_check_sband(phy, &phy->sband_6g, NL80211_BAND_6GHZ);
 
 	ret = ieee80211_register_hw(phy->hw);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	set_bit(MT76_STATE_REGISTERED, &phy->state);
 	phy->dev->phys[phy->band_idx] = phy;
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mt76_register_phy);
@@ -637,6 +646,7 @@ mt76_alloc_device(struct device *pdev, unsigned int size,
 	int i;
 
 	hw = ieee80211_alloc_hw(size, ops);
+printk(KERN_ALERT "DEBUG: Passed %s %d hw:%p\n",__FUNCTION__,__LINE__,hw);
 	if (!hw)
 		return NULL;
 
@@ -713,23 +723,27 @@ int mt76_register_device(struct mt76_dev *dev, bool vht,
 	dev_set_drvdata(dev->dev, dev);
 	mt76_wcid_init(&dev->global_wcid);
 	ret = mt76_phy_init(phy, hw);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	if (phy->cap.has_2ghz) {
 		ret = mt76_init_sband_2g(phy, rates, n_rates);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
 
 	if (phy->cap.has_5ghz) {
 		ret = mt76_init_sband_5g(phy, rates + 4, n_rates - 4, vht);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
 
 	if (phy->cap.has_6ghz) {
 		ret = mt76_init_sband_6g(phy, rates + 4, n_rates - 4);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
@@ -741,11 +755,13 @@ int mt76_register_device(struct mt76_dev *dev, bool vht,
 
 	if (IS_ENABLED(CONFIG_MT76_LEDS)) {
 		ret = mt76_led_init(phy);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
 
 	ret = ieee80211_register_hw(hw);
+printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
@@ -753,6 +769,7 @@ int mt76_register_device(struct mt76_dev *dev, bool vht,
 	set_bit(MT76_STATE_REGISTERED, &phy->state);
 	sched_set_fifo_low(dev->tx_worker.task);
 
+printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mt76_register_device);
