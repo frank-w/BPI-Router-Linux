@@ -398,6 +398,11 @@ static int mt7996_config(struct ieee80211_hw *hw, u32 changed)
 	int ret;
 
 	if (changed & IEEE80211_CONF_CHANGE_CHANNEL) {
+		if (!mt76_testmode_enabled(phy->mt76)) {
+			ret = mt7996_mcu_edcca_enable(phy, true);
+			if (ret)
+				return ret;
+		}
 		ieee80211_stop_queues(hw);
 		ret = mt7996_set_channel(phy);
 		if (ret)
