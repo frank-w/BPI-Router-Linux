@@ -435,8 +435,7 @@ mt7996_band_valid(struct mt7996_dev *dev, u8 band)
 		return band <= MT_BAND1;
 
 	/* tri-band support */
-	if (band <= MT_BAND2 &&
-	    mt76_get_field(dev, MT_PAD_GPIO, MT_PAD_GPIO_ADIE_COMB) <= 1)
+	if (band <= MT_BAND2 && dev->chip_sku)
 		return true;
 
 	return band == MT_BAND0 || band == MT_BAND2;
