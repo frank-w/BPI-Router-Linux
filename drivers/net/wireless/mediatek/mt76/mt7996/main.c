@@ -292,6 +292,7 @@ int mt7996_set_channel(struct mt7996_phy *phy)
 	mt76_set_channel(phy->mt76);
 
 	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
+	printk(KERN_ALERT "DEBUG: Passed %s %d mt7996_set_chaninfo:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		goto out;
 
@@ -398,13 +399,14 @@ static int mt7996_config(struct ieee80211_hw *hw, u32 changed)
 	int ret;
 
 	if (changed & IEEE80211_CONF_CHANGE_CHANNEL) {
-		if (!mt76_testmode_enabled(phy->mt76)) {
+		/*if (!mt76_testmode_enabled(phy->mt76)) {
 			ret = mt7996_mcu_edcca_enable(phy, true);
 			if (ret)
 				return ret;
-		}
+		}*/
 		ieee80211_stop_queues(hw);
 		ret = mt7996_set_channel(phy);
+		printk(KERN_ALERT "DEBUG: Passed %s %d mt7996_set_channel:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 		ieee80211_wake_queues(hw);
@@ -413,6 +415,7 @@ static int mt7996_config(struct ieee80211_hw *hw, u32 changed)
 	if (changed & (IEEE80211_CONF_CHANGE_POWER |
 		       IEEE80211_CONF_CHANGE_CHANNEL)) {
 		ret = mt7996_mcu_set_txpower_sku(phy);
+		printk(KERN_ALERT "DEBUG: Passed %s %d mt7996_mcu_set_txpower_sku:%d\n",__FUNCTION__,__LINE__,ret);
 		if (ret)
 			return ret;
 	}
@@ -434,6 +437,7 @@ static int mt7996_config(struct ieee80211_hw *hw, u32 changed)
 
 	mutex_unlock(&dev->mt76.mutex);
 
+	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
