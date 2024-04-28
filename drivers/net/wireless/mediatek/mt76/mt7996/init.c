@@ -563,24 +563,22 @@ static int mt7996_register_phy(struct mt7996_dev *dev, struct mt7996_phy *phy,
 	u32 mac_ofs, hif1_ofs = 0;
 	int ret;
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
-	printk(KERN_ALERT "DEBUG: Passed %s %d valid:%d (band == MT_BAND0:%d)\n",__FUNCTION__,__LINE__,mt7996_band_valid(dev, band),band == MT_BAND0);
+
 	if (!mt7996_band_valid(dev, band) || band == MT_BAND0)
 		return 0;
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 
 	if (phy)
 		return 0;
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 	if (is_mt7996(&dev->mt76) && band == MT_BAND2 && dev->hif2) {
 		hif1_ofs = MT_WFDMA0_PCIE1(0) - MT_WFDMA0(0);
 		wed = &dev->mt76.mmio.wed_hif2;
 	}
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 	mphy = mt76_alloc_phy(&dev->mt76, sizeof(*phy), &mt7996_ops, band);
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (!mphy)
 		return -ENOMEM;
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 	phy = mphy->priv;
 	phy->dev = dev;
 	phy->mt76 = mphy;
@@ -589,7 +587,6 @@ static int mt7996_register_phy(struct mt7996_dev *dev, struct mt7996_phy *phy,
 	INIT_DELAYED_WORK(&mphy->mac_work, mt7996_mac_work);
 
 	ret = mt7996_eeprom_parse_hw_cap(dev, phy);
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (ret)
 		goto error;
 
@@ -607,7 +604,7 @@ static int mt7996_register_phy(struct mt7996_dev *dev, struct mt7996_phy *phy,
 			mphy->macaddr[0] ^= BIT(6);
 	}
 	mt76_eeprom_override(mphy);
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
+
 	/* init wiphy according to mphy and phy */
 	mt7996_init_wiphy(mphy->hw, wed);
 	ret = mt7996_init_tx_queues(mphy->priv,
@@ -615,14 +612,11 @@ static int mt7996_register_phy(struct mt7996_dev *dev, struct mt7996_phy *phy,
 				    MT7996_TX_RING_SIZE,
 				    MT_TXQ_RING_BASE(band) + hif1_ofs,
 				    wed);
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (ret)
 		goto error;
 
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	ret = mt76_register_phy(mphy, true, mt76_rates,
 				ARRAY_SIZE(mt76_rates));
-	printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	if (ret)
 		goto error;
 
@@ -974,29 +968,24 @@ static int mt7996_init_hardware(struct mt7996_dev *dev)
 	spin_lock_init(&dev->wed_rro.lock);
 
 	ret = mt7996_get_chip_sku(dev);
-printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_dma_init(dev);
-printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	set_bit(MT76_STATE_INITIALIZED, &dev->mphy.state);
 
 	ret = mt7996_mcu_init(dev);
-printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_wed_rro_init(dev);
-printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_eeprom_init(dev);
-printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret < 0)
 		return ret;
 
@@ -1010,7 +999,6 @@ printk(KERN_ALERT "DEBUG: Passed %s %d ret:%d\n",__FUNCTION__,__LINE__,ret);
 	dev->mt76.global_wcid.tx_info |= MT_WCID_TX_INFO_SET;
 	rcu_assign_pointer(dev->mt76.wcid[idx], &dev->mt76.global_wcid);
 
-printk(KERN_ALERT "DEBUG: Passed %s %d\n",__FUNCTION__,__LINE__);
 	return 0;
 }
 
@@ -1408,7 +1396,6 @@ int mt7996_register_device(struct mt7996_dev *dev)
 
 	ret = mt76_register_device(&dev->mt76, true, mt76_rates,
 				   ARRAY_SIZE(mt76_rates));
-	printk(KERN_ALERT "DEBUG: Passed %s %d register device ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
@@ -1417,12 +1404,10 @@ int mt7996_register_device(struct mt7996_dev *dev)
 		return ret;
 
 	ret = mt7996_register_phy(dev, mt7996_phy2(dev), MT_BAND1);
-	printk(KERN_ALERT "DEBUG: Passed %s %d phy2 register ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = mt7996_register_phy(dev, mt7996_phy3(dev), MT_BAND2);
-	printk(KERN_ALERT "DEBUG: Passed %s %d phy3 register ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		return ret;
 
@@ -1435,7 +1420,6 @@ int mt7996_register_device(struct mt7996_dev *dev)
 		goto error;
 
 	ret = mt7996_coredump_register(dev);
-	printk(KERN_ALERT "DEBUG: Passed %s %d coredump register ret:%d\n",__FUNCTION__,__LINE__,ret);
 	if (ret)
 		goto error;
 
