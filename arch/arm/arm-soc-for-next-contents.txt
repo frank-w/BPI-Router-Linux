@@ -1,4 +1,6 @@
 soc/arm
+	imx/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-6.10
 
 soc/dt
 	renesas/dt-bindings
@@ -49,10 +51,46 @@ soc/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/microchip-dt64-6.10
 
 soc/drivers
+	renesas/driver
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-drivers-for-v6.10-tag1
+	hisi/drivers
+		https://github.com/hisilicon/linux-hisi tags/hisi-drivers-for-6.10
+	stm32/firewall
+		git://git.kernel.org/pub/scm/linux/kernel/git/atorgue/stm32 tags/stm32-bus-firewall-for-v6.10-1
+	tegra/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.10-soc
+	qcom/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.10
+	omap/ti-sysc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/drivers-ti-sysc-for-v6.10-signed
+	drivers/memory
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-mem-ctrl tags/memory-controller-drv-6.10
+	mediatek/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/mediatek/linux tags/mtk-soc-for-v6.10
+	driver/optee
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/optee-convert-platform-remove-callback-for-v6.10
+	tee/ts
+		https://git.linaro.org/people/jens.wiklander/linux-tee tags/tee-ts-for-v6.10
+	firmware/scmi
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-6.10
+	firmware/ffa
+		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/ffa-updates-6.10
 
 soc/defconfig
+	rockchip/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.10-rockchip-defconfig64
+	sunxi/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/sunxi/linux tags/sunxi-config-for-6.10-1
+	tegra/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-6.10-arm64-defconfig
+	qcom/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-6.10
+	imx/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.10
 
 soc/late
 
 arm/fixes
+	<no branch> (ab6cd6bb33cc0bbb8dbf8cc264a1013b2019561e)
+		https://git.kernel.org/pub/scm/linux/kernel/git/mediatek/linux tags/mtk-soc-fixes-for-v6.9
 
