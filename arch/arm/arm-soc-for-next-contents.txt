@@ -49,6 +49,10 @@ soc/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux-dt tags/dt-cleanup-6.10
 	microchip/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/at91/linux tags/microchip-dt64-6.10
+	broadcom/dt
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/devicetree
+	broadcom/dt64
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/devicetree-arm64
 
 soc/drivers
 	renesas/driver
@@ -75,6 +79,8 @@ soc/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/scmi-updates-6.10
 	firmware/ffa
 		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/ffa-updates-6.10
+	broadcom/drivers
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/drivers
 
 soc/defconfig
 	rockchip/defconfig
@@ -87,10 +93,16 @@ soc/defconfig
 		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-6.10
 	imx/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-defconfig-6.10
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v6.10-tag1
+	broadcom/defconfig
+		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/defconfig-arm64
 
 soc/late
 
 arm/fixes
 	<no branch> (ab6cd6bb33cc0bbb8dbf8cc264a1013b2019561e)
 		https://git.kernel.org/pub/scm/linux/kernel/git/mediatek/linux tags/mtk-soc-fixes-for-v6.9
+	<no branch> (3aa20d1f7bcb19a79b8062e49153eb3b16a88adb)
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-soc-fixes-for-v6.9-rc6
 
