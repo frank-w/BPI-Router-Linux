@@ -193,6 +193,19 @@ mt7530_probe(struct mdio_device *mdiodev)
 			return PTR_ERR(priv->io_pwr);
 	}
 
+	/* Only MDIO bus address 7, 15, 23 and 31 are valid options */
+	if (~(mdiodev->addr & 0x7) & 0x7) {
+		/* If the address in DT must be wrong, make a good guess about
+		 * the most likely intention, and issue a warning.
+		 */
+		int correct_addr = ((((mdiodev->addr - 7) & ~0x7) % 0x20) + 7) & 0x1f;
+
+		dev_warn(&mdiodev->dev, FW_WARN
+			 "impossible switch MDIO address in device tree: %d, assuming %d\n",
+			 mdiodev->addr, correct_addr);
+		mdiodev->addr = correct_addr;
+	}
+
 	regmap_config = devm_kzalloc(&mdiodev->dev, sizeof(*regmap_config),
 				     GFP_KERNEL);
 	if (!regmap_config)
