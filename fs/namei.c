@@ -2416,9 +2416,13 @@ static const char *path_init(struct nameidata *nd, unsigned flags)
 		}
 	} else {
 		/* Caller must check execute permissions on the starting path component */
-		struct fd f = fdget_raw(nd->dfd);
+		struct fd f;
 		struct dentry *dentry;
 
+		if ((flags & LOOKUP_NO_FMODE_PATH) && !*s)
+			f = fdget(nd->dfd);
+		else
+			f = fdget_raw(nd->dfd);
 		if (!f.file)
 			return ERR_PTR(-EBADF);
 

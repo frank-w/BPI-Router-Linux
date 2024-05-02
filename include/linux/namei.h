@@ -21,6 +21,7 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LAST_DOTDOT};
 #define LOOKUP_FOLLOW		0x0001	/* follow links at the end */
 #define LOOKUP_DIRECTORY	0x0002	/* require a directory */
 #define LOOKUP_AUTOMOUNT	0x0004  /* force terminal automount */
+#define LOOKUP_NO_FMODE_PATH	0x2000	/* Disallow FMODE_PATH fds */
 #define LOOKUP_EMPTY		0x4000	/* accept empty path [user_... only] */
 #define LOOKUP_DOWN		0x8000	/* follow mounts in the starting point */
 #define LOOKUP_MOUNTPOINT	0x0080	/* follow mounts in the end */
