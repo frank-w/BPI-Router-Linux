@@ -53,6 +53,14 @@ soc/dt
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/devicetree
 	broadcom/dt64
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/devicetree-arm64
+	patch
+		arm64: dts: Add/fix /memory node unit-addresses
+	sophgo/dt
+		https://github.com/sophgo/linux tags/riscv-sophgo-dt-for-v6.10
+	ti/dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-dt-for-v6.10
+	ti/k3-dt
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.10
 
 soc/drivers
 	renesas/driver
@@ -81,6 +89,8 @@ soc/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/sudeep.holla/linux tags/ffa-updates-6.10
 	broadcom/drivers
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/drivers
+	ti/k3-drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.10
 
 soc/defconfig
 	rockchip/defconfig
