@@ -1331,7 +1331,6 @@ static int mtk_init_fq_dma(struct mtk_eth *eth)
 	dma_addr_t phy_ring_tail;
 	int cnt = soc->txrx.fq_dma_size;
 	dma_addr_t dma_addr;
-	u64 addr64 = 0;
 	int i, j, len;
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SRAM))
@@ -1362,7 +1361,7 @@ static int mtk_init_fq_dma(struct mtk_eth *eth)
 			return -ENOMEM;
 
 		for (i = 0; i < cnt; i++) {
-			//dma_addr_t addr = dma_addr + i * MTK_QDMA_PAGE_SIZE;
+			dma_addr_t addr = dma_addr + i * MTK_QDMA_PAGE_SIZE;
 			struct mtk_tx_dma_v2 *txd;
 
 			txd = eth->scratch_ring + (j * MTK_FQ_DMA_LENGTH + i) * soc->txrx.txd_size;
@@ -1371,13 +1370,9 @@ static int mtk_init_fq_dma(struct mtk_eth *eth)
 				txd->txd2 = eth->phy_scratch_ring +
 					    (j * MTK_FQ_DMA_LENGTH + i + 1) * soc->txrx.txd_size;
 
-			addr64 = (MTK_HAS_CAPS(eth->soc->caps, MTK_8GB_ADDRESSING)) ?
-				  TX_DMA_SDP1(dma_addr + i * MTK_QDMA_PAGE_SIZE) : 0;
-
-			txd->txd3 = TX_DMA_PLEN0(MTK_QDMA_PAGE_SIZE) | addr64;
-
+			txd->txd3 = TX_DMA_PLEN0(MTK_QDMA_PAGE_SIZE);
 			if (MTK_HAS_CAPS(soc->caps, MTK_36BIT_DMA))
-				txd->txd3 |= TX_DMA_PREP_ADDR64(addr64);
+				txd->txd3 |= TX_DMA_PREP_ADDR64(addr);
 
 			txd->txd4 = 0;
 			if (mtk_is_netsys_v2_or_greater(eth)) {
