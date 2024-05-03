@@ -5,13 +5,12 @@
  *
  * Copyright (c) 2021, Google LLC.
  */
-#define _GNU_SOURCE
-
 #include "arch_timer.h"
 #include "delay.h"
 #include "gic.h"
 #include "processor.h"
 #include "timer_test.h"
+#include "ucall_common.h"
 #include "vgic.h"
 
 #define GICD_BASE_GPA			0x8000000ULL
