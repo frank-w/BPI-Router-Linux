@@ -67,6 +67,15 @@
 		vin-supply = <&dcin>;
 	};
 
+	usb_vbus: regulator-usb-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb_vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpios = <&pio 20 GPIO_ACTIVE_LOW>;
+		regulator-boot-on;
+	};
+
 	en8811_a: regulator-phy1 {
 		compatible = "regulator-fixed";
 		regulator-name = "phy1";
@@ -354,6 +363,39 @@
 		};
 	};
 
+	usb_ngff_pins: usb-ngff-pins {
+		ngff-gnss-off-conf {
+			pins = "GPIO_6";
+			drive-strength = <8>;
+			mediatek,pull-up-adv = <1>;
+		};
+		ngff-pe-rst-conf {
+			pins = "GPIO_7";
+			drive-strength = <8>;
+			mediatek,pull-up-adv = <1>;
+		};
+		ngff-wwan-off-conf {
+			pins = "GPIO_8";
+			drive-strength = <8>;
+			mediatek,pull-up-adv = <1>;
+		};
+		ngff-pwr-off-conf {
+			pins = "GPIO_9";
+			drive-strength = <8>;
+			mediatek,pull-up-adv = <1>;
+		};
+		ngff-rst-conf {
+			pins = "GPIO_10";
+			drive-strength = <8>;
+			mediatek,pull-up-adv = <1>;
+		};
+		ngff-coex-conf {
+			pins = "SPI1_CS";
+			drive-strength = <8>;
+			mediatek,pull-up-adv = <1>;
+		};
+	};
+
 	wf_2g_5g_pins: wf-2g-5g-pins {
 		mux {
 			function = "wifi";
@@ -409,6 +451,10 @@
 };
 
 &ssusb {
+	pinctrl-names = "default";
+	pinctrl-0 = <&usb_ngff_pins>;
+	vusb33-supply = <&reg_3p3v>;
+	vbus-supply = <&usb_vbus>;
 	status = "okay";
 };
 
