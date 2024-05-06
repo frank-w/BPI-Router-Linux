@@ -2361,8 +2361,8 @@ static const struct hid_usage_entry hid_usage_table[] = {
 		{ 0x82, 0x0048, "TopCornerDistortionBalance" },
 		{ 0x82, 0x004a, "BottomCornerDistortionControl" },
 		{ 0x82, 0x004c, "BottomCornerDistortionBalance" },
-		{ 0x82, 0x0056, "HorizontalMoir" },
-		{ 0x82, 0x0058, "VerticalMoir" },
+		{ 0x82, 0x0056, "HorizontalMoire" },
+		{ 0x82, 0x0058, "VerticalMoire" },
 		{ 0x82, 0x005e, "InputLevelSelect" },
 		{ 0x82, 0x0060, "InputSourceSelect" },
 		{ 0x82, 0x006c, "RedVideoBlackLevel" },
@@ -3572,18 +3572,51 @@ static const char *software[SW_CNT] = {
 	[SW_MACHINE_COVER] = "MachineCover",
 };
 
+static const char *force[FF_CNT] = {
+	[FF_RUMBLE] = "FF_RUMBLE",
+	[FF_PERIODIC] = "FF_PERIODIC",
+	[FF_CONSTANT] = "FF_CONSTANT",
+	[FF_SPRING] = "FF_SPRING",
+	[FF_FRICTION] = "FF_FRICTION",
+	[FF_DAMPER] = "FF_DAMPER",
+	[FF_INERTIA] = "FF_INERTIA",
+	[FF_RAMP] = "FF_RAMP",
+	[FF_SQUARE] = "FF_SQUARE",
+	[FF_TRIANGLE] = "FF_TRIANGLE",
+	[FF_SINE] = "FF_SINE",
+	[FF_SAW_UP] = "FF_SAW_UP",
+	[FF_SAW_DOWN] = "FF_SAW_DOWN",
+	[FF_CUSTOM] = "FF_CUSTOM",
+	[FF_GAIN] = "FF_GAIN",
+	[FF_AUTOCENTER] = "FF_AUTOCENTER",
+	[FF_MAX] = "FF_MAX",
+};
+
+static const char *force_status[FF_STATUS_MAX + 1] = {
+	[FF_STATUS_STOPPED] = "FF_STATUS_STOPPED",
+	[FF_STATUS_PLAYING] = "FF_STATUS_PLAYING",
+};
+
 static const char **names[EV_MAX + 1] = {
 	[EV_SYN] = syncs,			[EV_KEY] = keys,
 	[EV_REL] = relatives,			[EV_ABS] = absolutes,
 	[EV_MSC] = misc,			[EV_LED] = leds,
 	[EV_SND] = sounds,			[EV_REP] = repeats,
-	[EV_SW]  = software,
+	[EV_SW]  = software,			[EV_FF] = force,
+	[EV_FF_STATUS] = force_status,
 };
 
 static void hid_resolv_event(__u8 type, __u16 code, struct seq_file *f)
 {
-	seq_printf(f, "%s.%s", events[type] ? events[type] : "?",
-		names[type] ? (names[type][code] ? names[type][code] : "?") : "?");
+	if (events[type])
+		seq_printf(f, "%s.", events[type]);
+	else
+		seq_printf(f, "%02x.", type);
+
+	if (names[type] && names[type][code])
+		seq_printf(f, "%s", names[type][code]);
+	else
+		seq_printf(f, "%04x", code);
 }
 
 static void hid_dump_input_mapping(struct hid_device *hid, struct seq_file *f)
