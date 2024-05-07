@@ -1,6 +1,8 @@
 soc/arm
 	imx/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/shawnguo/linux tags/imx-soc-6.10
+	mvebu/arm
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-arm-6.10-1
 
 soc/dt
 	renesas/dt-bindings
@@ -61,6 +63,12 @@ soc/dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-keystone-dt-for-v6.10
 	ti/k3-dt
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-k3-dt-for-v6.10
+	mvebu/dt64
+		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-dt64-6.10-1
+	<no branch> (cd81d3a0695cc54ad6ac0ef4bbb67a7c8f55d592)
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.10-rockchip-dts64-2
+	samsung/dt64-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.10-2
 
 soc/drivers
 	renesas/driver
@@ -91,6 +99,8 @@ soc/drivers
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/drivers
 	ti/k3-drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.10
+	riscv/drivers
+		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-config-for-v6.10
 
 soc/defconfig
 	rockchip/defconfig
@@ -107,6 +117,8 @@ soc/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/geert/renesas-devel tags/renesas-arm-defconfig-for-v6.10-tag1
 	broadcom/defconfig
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/defconfig-arm64
+	amlogic/defconfig
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-defconfig-for-v6.10
 
 soc/late
 
@@ -115,4 +127,12 @@ arm/fixes
 		https://git.kernel.org/pub/scm/linux/kernel/git/mediatek/linux tags/mtk-soc-fixes-for-v6.9
 	<no branch> (3aa20d1f7bcb19a79b8062e49153eb3b16a88adb)
 		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-soc-fixes-for-v6.9-rc6
+	<no branch> (819fe8c96a5172dfd960e5945e8f00f8fed32953)
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-fixes-for-6.9-2
+
+soc/dt-late
+	amlogic/dt64
+		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-arm64-dt-for-v6.10
+	aspeed/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/joel/bmc tags/aspeed-6.10-devicetree
 
