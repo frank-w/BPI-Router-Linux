@@ -69,6 +69,8 @@ soc/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v6.10-rockchip-dts64-2
 	samsung/dt64-2
 		https://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/samsung-dt64-6.10-2
+	qcom/dt-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-for-6.10-2
 
 soc/drivers
 	renesas/driver
@@ -101,6 +103,8 @@ soc/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/ti/linux tags/ti-driver-soc-for-v6.10
 	riscv/drivers
 		https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux tags/riscv-config-for-v6.10
+	qcom/drivers-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-6.10-2
 
 soc/defconfig
 	rockchip/defconfig
@@ -119,6 +123,8 @@ soc/defconfig
 		https://github.com/Broadcom/stblinux tags/arm-soc/for-6.10/defconfig-arm64
 	amlogic/defconfig
 		https://git.kernel.org/pub/scm/linux/kernel/git/amlogic/linux tags/amlogic-defconfig-for-v6.10
+	qcom/defconfig-2
+		https://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-arm64-defconfig-for-6.10-2
 
 soc/late
 
