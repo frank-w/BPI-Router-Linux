@@ -67,6 +67,24 @@
 #define VEND1_THERMAL_PROV_LOW_TEMP_FAIL	0xc422
 #define VEND1_THERMAL_PROV_HIGH_TEMP_WARN	0xc423
 #define VEND1_THERMAL_PROV_LOW_TEMP_WARN	0xc424
+
+#define VEND1_GLOBAL_LED_PROV			0xc430
+#define AQR_LED_PROV(x)				(VEND1_GLOBAL_LED_PROV + x)
+#define VEND1_GLOBAL_LED_PROV_ACT_STRETCH	GENMASK(0, 1)
+#define VEND1_GLOBAL_LED_PROV_TX_ACT		BIT(2)
+#define VEND1_GLOBAL_LED_PROV_RX_ACT		BIT(3)
+#define VEND1_GLOBAL_LED_PROV_LINK_MASK		(GENMASK(15, 14) | GENMASK(8, 5))
+#define VEND1_GLOBAL_LED_PROV_LINK100		BIT(5)
+#define VEND1_GLOBAL_LED_PROV_LINK1000		BIT(6)
+#define VEND1_GLOBAL_LED_PROV_LINK10000		BIT(7)
+#define VEND1_GLOBAL_LED_PROV_FORCE_ON		BIT(8)
+#define VEND1_GLOBAL_LED_PROV_LINK2500		BIT(14)
+#define VEND1_GLOBAL_LED_PROV_LINK5000		BIT(15)
+
+#define VEND1_GLOBAL_LED_DRIVE			0xc438
+#define VEND1_GLOBAL_LED_DRIVE_VDD		BIT(1)
+#define AQR_LED_DRIVE(x)			(VEND1_GLOBAL_LED_DRIVE + x)
+
 #define VEND1_THERMAL_STAT1			0xc820
 #define VEND1_THERMAL_STAT2			0xc821
 #define VEND1_THERMAL_STAT2_VALID		BIT(0)
@@ -113,6 +131,48 @@
 #define VEND1_GLOBAL_INT_VEND_MASK_GLOBAL2	BIT(1)
 #define VEND1_GLOBAL_INT_VEND_MASK_GLOBAL3	BIT(0)
 
+/* MDIO_MMD_C22EXT */
+#define MDIO_C22EXT_STAT_SGMII_RX_GOOD_FRAMES		0xd292
+#define MDIO_C22EXT_STAT_SGMII_RX_BAD_FRAMES		0xd294
+#define MDIO_C22EXT_STAT_SGMII_RX_FALSE_CARRIER		0xd297
+#define MDIO_C22EXT_STAT_SGMII_TX_GOOD_FRAMES		0xd313
+#define MDIO_C22EXT_STAT_SGMII_TX_BAD_FRAMES		0xd315
+#define MDIO_C22EXT_STAT_SGMII_TX_FALSE_CARRIER		0xd317
+#define MDIO_C22EXT_STAT_SGMII_TX_COLLISIONS		0xd318
+#define MDIO_C22EXT_STAT_SGMII_TX_LINE_COLLISIONS	0xd319
+#define MDIO_C22EXT_STAT_SGMII_TX_FRAME_ALIGN_ERR	0xd31a
+#define MDIO_C22EXT_STAT_SGMII_TX_RUNT_FRAMES		0xd31b
+
+#define AQR_NUM_LEDS				3
+
+struct aqr107_hw_stat {
+	const char *name;
+	int reg;
+	int size;
+};
+
+#define SGMII_STAT(n, r, s) { n, MDIO_C22EXT_STAT_SGMII_ ## r, s }
+static const struct aqr107_hw_stat aqr107_hw_stats[] = {
+	SGMII_STAT("sgmii_rx_good_frames",	    RX_GOOD_FRAMES,	26),
+	SGMII_STAT("sgmii_rx_bad_frames",	    RX_BAD_FRAMES,	26),
+	SGMII_STAT("sgmii_rx_false_carrier_events", RX_FALSE_CARRIER,	 8),
+	SGMII_STAT("sgmii_tx_good_frames",	    TX_GOOD_FRAMES,	26),
+	SGMII_STAT("sgmii_tx_bad_frames",	    TX_BAD_FRAMES,	26),
+	SGMII_STAT("sgmii_tx_false_carrier_events", TX_FALSE_CARRIER,	 8),
+	SGMII_STAT("sgmii_tx_collisions",	    TX_COLLISIONS,	 8),
+	SGMII_STAT("sgmii_tx_line_collisions",	    TX_LINE_COLLISIONS,	 8),
+	SGMII_STAT("sgmii_tx_frame_alignment_err",  TX_FRAME_ALIGN_ERR,	16),
+	SGMII_STAT("sgmii_tx_runt_frames",	    TX_RUNT_FRAMES,	22),
+};
+#define AQR107_SGMII_STAT_SZ ARRAY_SIZE(aqr107_hw_stats)
+
+struct aqr107_priv {
+	u64 sgmii_stats[AQR107_SGMII_STAT_SZ];
+#if IS_ENABLED(CONFIG_PHYLIB_LEDS)
+	unsigned int led_polarities;
+#endif
+};
+
 #if IS_REACHABLE(CONFIG_HWMON)
 int aqr_hwmon_probe(struct phy_device *phydev);
 #else
@@ -120,3 +180,27 @@ static inline int aqr_hwmon_probe(struct phy_device *phydev) { return 0; }
 #endif
 
 int aqr_firmware_load(struct phy_device *phydev);
+
+#if IS_ENABLED(CONFIG_PHYLIB_LEDS)
+int aqr_phy_led_blink_set(struct phy_device *phydev, u8 index,
+			 unsigned long *delay_on,
+			 unsigned long *delay_off);
+
+int aqr_phy_led_brightness_set(struct phy_device *phydev,
+			       u8 index, enum led_brightness value);
+
+int aqr_phy_led_hw_is_supported(struct phy_device *phydev, u8 index,
+				unsigned long rules);
+
+int aqr_phy_led_hw_control_get(struct phy_device *phydev, u8 index,
+			       unsigned long *rules);
+
+int aqr_phy_led_hw_control_set(struct phy_device *phydev, u8 index,
+			       unsigned long rules);
+
+int aqr_phy_led_polarity_apply(struct phy_device *phydev, int index);
+
+int aqr_phy_led_polarity_set(struct phy_device *phydev, int index, unsigned long modes);
+#else
+static inline int aqr_phy_led_polarity_apply(struct phy_device *phydev, int index) { return 0 };
+#endif

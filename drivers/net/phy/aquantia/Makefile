@@ -3,4 +3,7 @@ aquantia-objs			+= aquantia_main.o aquantia_firmware.o
 ifdef CONFIG_HWMON
 aquantia-objs			+= aquantia_hwmon.o
 endif
+ifdef CONFIG_PHYLIB_LEDS
+aquantia-objs			+= aquantia_leds.o
+endif
 obj-$(CONFIG_AQUANTIA_PHY)	+= aquantia.o
