@@ -1053,6 +1053,8 @@ void mtk_ppe_start(struct mtk_ppe *ppe)
 	      MTK_PPE_GLO_CFG_IP4_L4_CS_DROP |
 	      MTK_PPE_GLO_CFG_IP4_CS_DROP |
 	      MTK_PPE_GLO_CFG_FLOW_DROP_UPDATE;
+	if (mtk_is_netsys_v2_or_greater(ppe->eth))
+		val |= MTK_PPE_GLO_CFG_SP_CMP_EN;
 	ppe_w32(ppe, MTK_PPE_GLO_CFG, val);
 
 	ppe_w32(ppe, MTK_PPE_DEFAULT_CPU_PORT, 0);
