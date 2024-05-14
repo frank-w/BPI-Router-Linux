@@ -7848,11 +7848,28 @@ static void btrfs_dio_submit_io(const struct iomap_iter *iter, struct bio *bio,
 	 * remaining pages is blocked on the outstanding ordered extent.
 	 */
 	if (iter->flags & IOMAP_WRITE) {
+		struct btrfs_ordered_extent *oe = dio_data->ordered;
 		int ret;
 
-		ret = btrfs_extract_ordered_extent(bbio, dio_data->ordered);
+		ret = btrfs_extract_ordered_extent(bbio, oe);
 		if (ret) {
-			btrfs_finish_ordered_extent(dio_data->ordered, NULL,
+			/*
+			 * If this is a COW write it means we created new extent
+			 * maps for the range and they point to an unwritten
+			 * location since we got an error and we don't submit
+			 * a bio. We must drop any extent maps within the range,
+			 * otherwise a fast fsync would log them and after a
+			 * crash and log replay we would have file extent items
+			 * that point to unwritten locations (garbage).
+			 */
+			if (!test_bit(BTRFS_ORDERED_NOCOW, &oe->flags)) {
+				const u64 start = oe->file_offset;
+				const u64 end = start + oe->num_bytes - 1;
+
+				btrfs_drop_extent_map_range(bbio->inode, start, end, false);
+			}
+
+			btrfs_finish_ordered_extent(oe, NULL,
 						    file_offset, dip->bytes,
 						    !ret);
 			bio->bi_status = errno_to_blk_status(ret);
