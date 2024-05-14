@@ -7829,6 +7829,8 @@ static void btrfs_dio_submit_io(const struct iomap_iter *iter, struct bio *bio,
 	struct btrfs_dio_private *dip =
 		container_of(bbio, struct btrfs_dio_private, bbio);
 	struct btrfs_dio_data *dio_data = iter->private;
+	struct btrfs_ordered_extent *oe = dio_data->ordered;
+	int ret;
 
 	btrfs_bio_init(bbio, BTRFS_I(iter->inode)->root->fs_info,
 		       btrfs_dio_end_io, bio->bi_private);
@@ -7840,6 +7842,8 @@ static void btrfs_dio_submit_io(const struct iomap_iter *iter, struct bio *bio,
 
 	dio_data->submitted += bio->bi_iter.bi_size;
 
+	if (!(iter->flags & IOMAP_WRITE))
+		goto submit_bio;
 	/*
 	 * Check if we are doing a partial write.  If we are, we need to split
 	 * the ordered extent to match the submitted bio.  Hang on to the
@@ -7847,37 +7851,31 @@ static void btrfs_dio_submit_io(const struct iomap_iter *iter, struct bio *bio,
 	 * cancelled in iomap_end to avoid a deadlock wherein faulting the
 	 * remaining pages is blocked on the outstanding ordered extent.
 	 */
-	if (iter->flags & IOMAP_WRITE) {
-		struct btrfs_ordered_extent *oe = dio_data->ordered;
-		int ret;
+	ret = btrfs_extract_ordered_extent(bbio, oe);
+	if (!ret)
+		goto submit_bio;
 
-		ret = btrfs_extract_ordered_extent(bbio, oe);
-		if (ret) {
-			/*
-			 * If this is a COW write it means we created new extent
-			 * maps for the range and they point to an unwritten
-			 * location since we got an error and we don't submit
-			 * a bio. We must drop any extent maps within the range,
-			 * otherwise a fast fsync would log them and after a
-			 * crash and log replay we would have file extent items
-			 * that point to unwritten locations (garbage).
-			 */
-			if (!test_bit(BTRFS_ORDERED_NOCOW, &oe->flags)) {
-				const u64 start = oe->file_offset;
-				const u64 end = start + oe->num_bytes - 1;
+	/*
+	 * If this is a COW write it means we created new extent maps for the
+	 * range and they point to an unwritten location since we got an error
+	 * and we don't submit a bio. We must drop any extent maps within the
+	 * range, otherwise a fast fsync would log them and after a crash and
+	 * log replay we would have file extent items that point to unwritten
+	 * locations (garbage).
+	 */
+	if (!test_bit(BTRFS_ORDERED_NOCOW, &oe->flags)) {
+		const u64 start = oe->file_offset;
+		const u64 end = start + oe->num_bytes - 1;
 
-				btrfs_drop_extent_map_range(bbio->inode, start, end, false);
-			}
-
-			btrfs_finish_ordered_extent(oe, NULL,
-						    file_offset, dip->bytes,
-						    !ret);
-			bio->bi_status = errno_to_blk_status(ret);
-			iomap_dio_bio_end_io(bio);
-			return;
-		}
+		btrfs_drop_extent_map_range(bbio->inode, start, end, false);
 	}
 
+	btrfs_finish_ordered_extent(oe, NULL, file_offset, dip->bytes, false);
+	bio->bi_status = errno_to_blk_status(ret);
+	iomap_dio_bio_end_io(bio);
+	return;
+
+submit_bio:
 	btrfs_submit_bio(bbio, 0);
 }
 
