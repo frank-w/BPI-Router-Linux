@@ -325,7 +325,7 @@ static bool rcu_dynticks_in_eqs(int snap)
  */
 static bool rcu_dynticks_in_eqs_since(struct rcu_data *rdp, int snap)
 {
-	return snap != rcu_dynticks_snap(rdp->cpu);
+	return snap != ct_dynticks_cpu_acquire(rdp->cpu);
 }
 
 /*
