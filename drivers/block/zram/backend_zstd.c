@@ -7,14 +7,18 @@
 
 #include "backend_zstd.h"
 
+struct zstd_ctx_data {
+	zstd_custom_mem ctx_mem;
+	zstd_cdict *cdict;
+	zstd_ddict *ddict;
+};
+
 struct zstd_ctx {
 	zstd_cctx *cctx;
 	zstd_dctx *dctx;
 	void *cctx_mem;
 	void *dctx_mem;
-	zstd_custom_mem ctx_mem;
-	zstd_cdict *cdict;
-	zstd_ddict *ddict;
+	struct zstd_ctx_data *ctx_data;
 	s32 level;
 };
 
@@ -38,32 +42,81 @@ static void zstd_ctx_free(void *opaque, void *address)
 
 static int zstd_init_config(struct zcomp_config *config)
 {
+	struct zstd_ctx_data *ctx_data = config->private;
+	zstd_compression_parameters params;
+
+	/* Already initialized */
+	if (ctx_data)
+		return 0;
+
 	if (config->level == ZCOMP_CONFIG_NO_LEVEL)
 		config->level = zstd_default_clevel();
 
+	if (config->dict_sz == 0)
+		return 0;
+
+	ctx_data = kzalloc(sizeof(*ctx_data), GFP_KERNEL);
+	if (!ctx_data)
+		return -ENOMEM;
+
+	ctx_data->ctx_mem.customAlloc = zstd_ctx_alloc;
+	ctx_data->ctx_mem.customFree = zstd_ctx_free;
+
+	params = zstd_get_cparams(config->level, PAGE_SIZE, config->dict_sz);
+
+	ctx_data->cdict = zstd_create_cdict_advanced(config->dict,
+						     config->dict_sz,
+						     ZSTD_dlm_byRef,
+						     ZSTD_dct_auto,
+						     params,
+						     ctx_data->ctx_mem);
+	if (!ctx_data->cdict)
+		goto error;
+
+	ctx_data->ddict = zstd_create_ddict_advanced(config->dict,
+						     config->dict_sz,
+						     ZSTD_dlm_byRef,
+						     ZSTD_dct_auto,
+						     ctx_data->ctx_mem);
+	if (!ctx_data->ddict)
+		goto error;
+
+	config->private = ctx_data;
 	return 0;
+
+error:
+	zstd_free_cdict(ctx_data->cdict);
+	zstd_free_ddict(ctx_data->ddict);
+	kfree(ctx_data);
+	return -EINVAL;
 }
 
 static void zstd_release_config(struct zcomp_config *config)
 {
+	struct zstd_ctx_data *ctx_data = config->private;
+
+	if (!ctx_data)
+		return;
+
+	config->private = NULL;
+	zstd_free_cdict(ctx_data->cdict);
+	zstd_free_ddict(ctx_data->ddict);
+	kfree(ctx_data);
 }
 
 static void zstd_destroy(void *ctx)
 {
 	struct zstd_ctx *zctx = ctx;
 
+	/* Don't free zctx->ctx_data, it's done in release_config() */
 	if (zctx->cctx_mem)
 		vfree(zctx->cctx_mem);
 	else
 		zstd_free_cctx(zctx->cctx);
-
 	if (zctx->dctx_mem)
 		vfree(zctx->dctx_mem);
 	else
 		zstd_free_dctx(zctx->dctx);
-
-	zstd_free_cdict(zctx->cdict);
-	zstd_free_ddict(zctx->ddict);
 	kfree(zctx);
 }
 
@@ -75,9 +128,8 @@ static void *zstd_create(struct zcomp_config *config)
 	if (!ctx)
 		return NULL;
 
+	ctx->ctx_data = config->private;
 	ctx->level = config->level;
-	ctx->ctx_mem.customAlloc = zstd_ctx_alloc;
-	ctx->ctx_mem.customFree = zstd_ctx_free;
 
 	if (config->dict_sz == 0) {
 		zstd_parameters params;
@@ -102,34 +154,14 @@ static void *zstd_create(struct zcomp_config *config)
 		if (!ctx->dctx)
 			goto error;
 	} else {
-		zstd_compression_parameters params;
+		struct zstd_ctx_data *ctx_data = ctx->ctx_data;
 
-		ctx->cctx = zstd_create_cctx_advanced(ctx->ctx_mem);
+		ctx->cctx = zstd_create_cctx_advanced(ctx_data->ctx_mem);
 		if (!ctx->cctx)
 			goto error;
 
-		ctx->dctx = zstd_create_dctx_advanced(ctx->ctx_mem);
+		ctx->dctx = zstd_create_dctx_advanced(ctx_data->ctx_mem);
 		if (!ctx->dctx)
-			goto error;
-
-		params = zstd_get_cparams(ctx->level, PAGE_SIZE,
-					  config->dict_sz);
-
-		ctx->cdict = zstd_create_cdict_advanced(config->dict,
-							config->dict_sz,
-							ZSTD_dlm_byRef,
-							ZSTD_dct_auto,
-							params,
-							ctx->ctx_mem);
-		if (!ctx->cdict)
-			goto error;
-
-		ctx->ddict = zstd_create_ddict_advanced(config->dict,
-							config->dict_sz,
-							ZSTD_dlm_byRef,
-							ZSTD_dct_auto,
-							ctx->ctx_mem);
-		if (!ctx->ddict)
 			goto error;
 	}
 
@@ -144,15 +176,17 @@ static int zstd_compress(void *ctx, const unsigned char *src,
 			 unsigned char *dst, size_t *dst_len)
 {
 	struct zstd_ctx *zctx = ctx;
+	struct zstd_ctx_data *ctx_data = zctx->ctx_data;
 	const zstd_parameters params = zstd_get_params(zctx->level, PAGE_SIZE);
 	size_t ret;
 
-	if (!zctx->cdict)
+	if (!ctx_data)
 		ret = zstd_compress_cctx(zctx->cctx, dst, *dst_len,
 					 src, PAGE_SIZE, &params);
 	else
 		ret = zstd_compress_using_cdict(zctx->cctx, dst, *dst_len,
-						src, PAGE_SIZE, zctx->cdict);
+						src, PAGE_SIZE,
+						ctx_data->cdict);
 	if (zstd_is_error(ret))
 		return -EINVAL;
 	*dst_len = ret;
@@ -163,14 +197,16 @@ static int zstd_decompress(void *ctx, const unsigned char *src, size_t src_len,
 			   unsigned char *dst)
 {
 	struct zstd_ctx *zctx = ctx;
+	struct zstd_ctx_data *ctx_data = zctx->ctx_data;
 	size_t ret;
 
-	if (!zctx->ddict)
+	if (!ctx_data)
 		ret = zstd_decompress_dctx(zctx->dctx, dst, PAGE_SIZE,
 					   src, src_len);
 	else
 		ret = zstd_decompress_using_ddict(zctx->dctx, dst, PAGE_SIZE,
-						  src, src_len, zctx->ddict);
+						  src, src_len,
+						  ctx_data->ddict);
 	if (zstd_is_error(ret))
 		return -EINVAL;
 	return 0;
