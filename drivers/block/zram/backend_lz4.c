@@ -10,6 +10,18 @@ struct lz4_ctx {
 	s32 level;
 };
 
+static int lz4_init_config(struct zcomp_config *config)
+{
+	if (config->level == ZCOMP_CONFIG_NO_LEVEL)
+		config->level = LZ4_ACCELERATION_DEFAULT;
+
+	return 0;
+}
+
+static void lz4_release_config(struct zcomp_config *config)
+{
+}
+
 static void lz4_destroy(void *ctx)
 {
 	struct lz4_ctx *zctx = ctx;
@@ -26,11 +38,7 @@ static void *lz4_create(struct zcomp_config *config)
 	if (!ctx)
 		return NULL;
 
-	if (config->level != ZCOMP_CONFIG_NO_LEVEL)
-		ctx->level = config->level;
-	else
-		ctx->level = LZ4_ACCELERATION_DEFAULT;
-
+	ctx->level = config->level;
 	ctx->mem = vmalloc(LZ4_MEM_COMPRESS);
 	if (!ctx->mem)
 		goto error;
@@ -72,5 +80,7 @@ struct zcomp_backend backend_lz4 = {
 	.decompress	= lz4_decompress,
 	.create_ctx	= lz4_create,
 	.destroy_ctx	= lz4_destroy,
+	.init_config	= lz4_init_config,
+	.release_config	= lz4_release_config,
 	.name		= "lz4",
 };
