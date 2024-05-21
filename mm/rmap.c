@@ -1630,6 +1630,7 @@ static bool try_to_unmap_one(struct folio *folio, struct vm_area_struct *vma,
 	enum ttu_flags flags = (enum ttu_flags)(long)arg;
 	unsigned long pfn;
 	unsigned long hsz = 0;
+	bool pmd_mapped = false;
 
 	/*
 	 * When racing against e.g. zap_pte_range() on another cpu,
@@ -1677,18 +1678,26 @@ static bool try_to_unmap_one(struct folio *folio, struct vm_area_struct *vma,
 			goto walk_done_err;
 		}
 
-		if (!pvmw.pte && (flags & TTU_SPLIT_HUGE_PMD)) {
-			/*
-			 * We temporarily have to drop the PTL and start once
-			 * again from that now-PTE-mapped page table.
-			 */
-			split_huge_pmd_locked(vma, range.start, pvmw.pmd, false,
-					      folio);
-			pvmw.pmd = NULL;
-			spin_unlock(pvmw.ptl);
-			pvmw.ptl = NULL;
-			flags &= ~TTU_SPLIT_HUGE_PMD;
-			continue;
+		if (!pvmw.pte) {
+			pmd_mapped = true;
+			if (unmap_huge_pmd_locked(vma, range.start, pvmw.pmd,
+						  folio))
+				goto walk_done;
+
+			if (flags & TTU_SPLIT_HUGE_PMD) {
+				/*
+				 * We temporarily have to drop the PTL and start
+				 * once again from that now-PTE-mapped page
+				 * table.
+				 */
+				split_huge_pmd_locked(vma, range.start,
+						      pvmw.pmd, false, folio);
+				pvmw.pmd = NULL;
+				spin_unlock(pvmw.ptl);
+				pvmw.ptl = NULL;
+				flags &= ~TTU_SPLIT_HUGE_PMD;
+				continue;
+			}
 		}
 
 		/* Unexpected PMD-mapped THP? */
@@ -1816,7 +1825,13 @@ static bool try_to_unmap_one(struct folio *folio, struct vm_area_struct *vma,
 			 */
 			if (unlikely(folio_test_swapbacked(folio) !=
 					folio_test_swapcache(folio))) {
-				WARN_ON_ONCE(1);
+				/*
+				 * unmap_huge_pmd_locked() will unmark a
+				 * PMD-mapped folio as lazyfree if the folio or
+				 * its PMD was redirtied.
+				 */
+				if (!pmd_mapped)
+					WARN_ON_ONCE(1);
 				goto walk_done_err;
 			}
 
