@@ -7835,8 +7835,7 @@ void mem_cgroup_migrate(struct folio *old, struct folio *new)
 	 * In addition, the old folio is about to be freed after migration, so
 	 * removing from the split queue a bit earlier seems reasonable.
 	 */
-	if (folio_test_large(old) && folio_test_large_rmappable(old))
-		folio_undo_large_rmappable(old);
+	folio_undo_large_rmappable(old);
 	old->memcg_data = 0;
 }
 
