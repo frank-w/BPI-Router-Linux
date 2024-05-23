@@ -1565,10 +1565,11 @@ static int mtk_tx_map(struct sk_buff *skb, struct net_device *dev,
 	int queue = skb_get_queue_mapping(skb);
 	int k = 0;
 
-	if (skb->len < 32) {
+	if (skb->len <= 40) {
 		if (skb_put_padto(skb, MTK_MIN_TX_LENGTH))
 			return -ENOMEM;
 
+		txd_info.last = !skb_is_nonlinear(skb);
 		txd_info.size = skb_headlen(skb);
 	}
 
