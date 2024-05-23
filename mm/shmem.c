@@ -748,12 +748,6 @@ static long shmem_unused_huge_count(struct super_block *sb,
 
 #define shmem_huge SHMEM_HUGE_DENY
 
-bool shmem_is_huge(struct inode *inode, pgoff_t index, bool shmem_huge_force,
-		   struct mm_struct *mm, unsigned long vm_flags)
-{
-	return false;
-}
-
 static unsigned long shmem_unused_huge_shrink(struct shmem_sb_info *sbinfo,
 		struct shrink_control *sc, unsigned long nr_to_split)
 {
@@ -1913,7 +1907,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	 * Some architectures may have to restore extra metadata to the
 	 * folio after reading from swap.
 	 */
-	arch_swap_restore(swap, folio);
+	arch_swap_restore(folio_swap(swap, folio), folio);
 
 	if (shmem_should_replace_folio(folio, gfp)) {
 		error = shmem_replace_folio(&folio, gfp, info, index);
@@ -2273,8 +2267,6 @@ unsigned long shmem_get_unmapped_area(struct file *file,
 				      unsigned long uaddr, unsigned long len,
 				      unsigned long pgoff, unsigned long flags)
 {
-	unsigned long (*get_area)(struct file *,
-		unsigned long, unsigned long, unsigned long, unsigned long);
 	unsigned long addr;
 	unsigned long offset;
 	unsigned long inflated_len;
@@ -2284,8 +2276,8 @@ unsigned long shmem_get_unmapped_area(struct file *file,
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
-	get_area = current->mm->get_unmapped_area;
-	addr = get_area(file, uaddr, len, pgoff, flags);
+	addr = mm_get_unmapped_area(current->mm, file, uaddr, len, pgoff,
+				    flags);
 
 	if (!IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE))
 		return addr;
@@ -2342,7 +2334,8 @@ unsigned long shmem_get_unmapped_area(struct file *file,
 	if (inflated_len < len)
 		return addr;
 
-	inflated_addr = get_area(NULL, uaddr, inflated_len, 0, flags);
+	inflated_addr = mm_get_unmapped_area(current->mm, NULL, uaddr,
+					     inflated_len, 0, flags);
 	if (IS_ERR_VALUE(inflated_addr))
 		return addr;
 	if (inflated_addr & ~PAGE_MASK)
@@ -3473,8 +3466,7 @@ static int shmem_rename2(struct mnt_idmap *idmap,
 			return error;
 	}
 
-	simple_offset_remove(shmem_get_offset_ctx(old_dir), old_dentry);
-	error = simple_offset_add(shmem_get_offset_ctx(new_dir), old_dentry);
+	error = simple_offset_rename(old_dir, old_dentry, new_dir, new_dentry);
 	if (error)
 		return error;
 
@@ -4298,6 +4290,24 @@ static int shmem_show_options(struct seq_file *seq, struct dentry *root)
 	mpol_put(mpol);
 	if (sbinfo->noswap)
 		seq_printf(seq, ",noswap");
+#ifdef CONFIG_TMPFS_QUOTA
+	if (sb_has_quota_active(root->d_sb, USRQUOTA))
+		seq_printf(seq, ",usrquota");
+	if (sb_has_quota_active(root->d_sb, GRPQUOTA))
+		seq_printf(seq, ",grpquota");
+	if (sbinfo->qlimits.usrquota_bhardlimit)
+		seq_printf(seq, ",usrquota_block_hardlimit=%lld",
+			   sbinfo->qlimits.usrquota_bhardlimit);
+	if (sbinfo->qlimits.grpquota_bhardlimit)
+		seq_printf(seq, ",grpquota_block_hardlimit=%lld",
+			   sbinfo->qlimits.grpquota_bhardlimit);
+	if (sbinfo->qlimits.usrquota_ihardlimit)
+		seq_printf(seq, ",usrquota_inode_hardlimit=%lld",
+			   sbinfo->qlimits.usrquota_ihardlimit);
+	if (sbinfo->qlimits.grpquota_ihardlimit)
+		seq_printf(seq, ",grpquota_inode_hardlimit=%lld",
+			   sbinfo->qlimits.grpquota_ihardlimit);
+#endif
 	return 0;
 }
 
@@ -4789,7 +4799,7 @@ unsigned long shmem_get_unmapped_area(struct file *file,
 				      unsigned long addr, unsigned long len,
 				      unsigned long pgoff, unsigned long flags)
 {
-	return current->mm->get_unmapped_area(file, addr, len, pgoff, flags);
+	return mm_get_unmapped_area(current->mm, file, addr, len, pgoff, flags);
 }
 #endif
 

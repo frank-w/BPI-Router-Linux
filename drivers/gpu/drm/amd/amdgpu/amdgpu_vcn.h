@@ -306,7 +306,7 @@ struct amdgpu_vcn_ras {
 struct amdgpu_vcn {
 	unsigned		fw_version;
 	struct delayed_work	idle_work;
-	const struct firmware	*fw;	/* VCN firmware */
+	const struct firmware	*fw[AMDGPU_MAX_VCN_INSTANCES];	/* VCN firmware */
 	unsigned		num_enc_rings;
 	enum amd_powergating_state cur_state;
 	bool			indirect_sram;
@@ -452,6 +452,16 @@ struct amdgpu_vcn_rb_metadata {
 	uint8_t version;
 	uint8_t ring_id;
 	uint8_t pad[26];
+};
+
+struct amdgpu_vcn5_fw_shared {
+	uint32_t present_flag_0;
+	uint8_t pad[12];
+	struct amdgpu_fw_shared_unified_queue_struct sq;
+	uint8_t pad1[8];
+	struct amdgpu_fw_shared_fw_logging fw_log;
+	struct amdgpu_fw_shared_rb_setup rb_setup;
+	uint8_t pad2[4];
 };
 
 #define VCN_BLOCK_ENCODE_DISABLE_MASK 0x80

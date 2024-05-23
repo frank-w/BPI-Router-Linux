@@ -6,12 +6,15 @@
 #include "replicas.h"
 #include "super-io.h"
 
+#include <linux/sort.h>
+
 static int bch2_cpu_replicas_to_sb_replicas(struct bch_fs *,
 					    struct bch_replicas_cpu *);
 
 /* Some (buggy!) compilers don't allow memcmp to be passed as a pointer */
-static int bch2_memcmp(const void *l, const void *r, size_t size)
+static int bch2_memcmp(const void *l, const void *r,  const void *priv)
 {
+	size_t size = (size_t) priv;
 	return memcmp(l, r, size);
 }
 
@@ -39,7 +42,8 @@ void bch2_replicas_entry_sort(struct bch_replicas_entry_v1 *e)
 
 static void bch2_cpu_replicas_sort(struct bch_replicas_cpu *r)
 {
-	eytzinger0_sort(r->entries, r->nr, r->entry_size, bch2_memcmp, NULL);
+	eytzinger0_sort_r(r->entries, r->nr, r->entry_size,
+			  bch2_memcmp, NULL, (void *)(size_t)r->entry_size);
 }
 
 static void bch2_replicas_entry_v0_to_text(struct printbuf *out,
@@ -80,7 +84,7 @@ int bch2_replicas_entry_validate(struct bch_replicas_entry_v1 *r,
 	}
 
 	for (unsigned i = 0; i < r->nr_devs; i++)
-		if (!bch2_dev_exists(sb, r->devs[i])) {
+		if (!bch2_member_exists(sb, r->devs[i])) {
 			prt_printf(err, "invalid device %u in entry ", r->devs[i]);
 			goto bad;
 		}
@@ -196,7 +200,7 @@ cpu_replicas_add_entry(struct bch_fs *c,
 	};
 
 	for (i = 0; i < new_entry->nr_devs; i++)
-		BUG_ON(!bch2_dev_exists2(c, new_entry->devs[i]));
+		BUG_ON(!bch2_dev_exists(c, new_entry->devs[i]));
 
 	BUG_ON(!new_entry->data_type);
 	verify_replicas_entry(new_entry);
@@ -228,7 +232,7 @@ static inline int __replicas_entry_idx(struct bch_replicas_cpu *r,
 
 	verify_replicas_entry(search);
 
-#define entry_cmp(_l, _r, size)	memcmp(_l, _r, entry_size)
+#define entry_cmp(_l, _r)	memcmp(_l, _r, entry_size)
 	idx = eytzinger0_find(r->entries, r->nr, r->entry_size,
 			      entry_cmp, search);
 #undef entry_cmp
@@ -824,10 +828,11 @@ static int bch2_cpu_replicas_validate(struct bch_replicas_cpu *cpu_r,
 {
 	unsigned i;
 
-	sort_cmp_size(cpu_r->entries,
-		      cpu_r->nr,
-		      cpu_r->entry_size,
-		      bch2_memcmp, NULL);
+	sort_r(cpu_r->entries,
+	       cpu_r->nr,
+	       cpu_r->entry_size,
+	       bch2_memcmp, NULL,
+	       (void *)(size_t)cpu_r->entry_size);
 
 	for (i = 0; i < cpu_r->nr; i++) {
 		struct bch_replicas_entry_v1 *e =
@@ -855,7 +860,7 @@ static int bch2_cpu_replicas_validate(struct bch_replicas_cpu *cpu_r,
 }
 
 static int bch2_sb_replicas_validate(struct bch_sb *sb, struct bch_sb_field *f,
-				     struct printbuf *err)
+				     enum bch_validate_flags flags, struct printbuf *err)
 {
 	struct bch_sb_field_replicas *sb_r = field_to_type(f, replicas);
 	struct bch_replicas_cpu cpu_r;
@@ -894,7 +899,7 @@ const struct bch_sb_field_ops bch_sb_field_ops_replicas = {
 };
 
 static int bch2_sb_replicas_v0_validate(struct bch_sb *sb, struct bch_sb_field *f,
-					struct printbuf *err)
+					enum bch_validate_flags flags, struct printbuf *err)
 {
 	struct bch_sb_field_replicas_v0 *sb_r = field_to_type(f, replicas_v0);
 	struct bch_replicas_cpu cpu_r;
@@ -942,18 +947,20 @@ bool bch2_have_enough_devs(struct bch_fs *c, struct bch_devs_mask devs,
 
 	percpu_down_read(&c->mark_lock);
 	for_each_cpu_replicas_entry(&c->replicas, e) {
-		unsigned i, nr_online = 0, nr_failed = 0, dflags = 0;
+		unsigned nr_online = 0, nr_failed = 0, dflags = 0;
 		bool metadata = e->data_type < BCH_DATA_user;
 
 		if (e->data_type == BCH_DATA_cached)
 			continue;
 
-		for (i = 0; i < e->nr_devs; i++) {
-			struct bch_dev *ca = bch_dev_bkey_exists(c, e->devs[i]);
-
+		rcu_read_lock();
+		for (unsigned i = 0; i < e->nr_devs; i++) {
 			nr_online += test_bit(e->devs[i], devs.d);
-			nr_failed += ca->mi.state == BCH_MEMBER_STATE_failed;
+
+			struct bch_dev *ca = bch2_dev_rcu(c, e->devs[i]);
+			nr_failed += ca && ca->mi.state == BCH_MEMBER_STATE_failed;
 		}
+		rcu_read_unlock();
 
 		if (nr_failed == e->nr_devs)
 			continue;

@@ -15,6 +15,7 @@
 #include "test_util.h"
 #include "kvm_util.h"
 #include "kselftest.h"
+#include "ucall_common.h"
 
 enum mop_target {
 	LOGICAL,
@@ -515,6 +516,8 @@ static __uint128_t rotate(int size, __uint128_t val, int amount)
 
 	amount = (amount + bits) % bits;
 	val = cut_to_size(size, val);
+	if (!amount)
+		return val;
 	return (val << (bits - amount)) | (val >> amount);
 }
 

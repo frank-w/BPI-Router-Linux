@@ -1053,6 +1053,11 @@ static int psp_asd_initialize(struct psp_context *psp)
 	if (amdgpu_sriov_vf(psp->adev) || !psp->asd_context.bin_desc.size_bytes)
 		return 0;
 
+	/* bypass asd if display hardware is not available */
+	if (!amdgpu_device_has_display_hardware(psp->adev) &&
+	    amdgpu_ip_version(psp->adev, MP0_HWIP, 0) >= IP_VERSION(13, 0, 10))
+		return 0;
+
 	psp->asd_context.mem_context.shared_mc_addr  = 0;
 	psp->asd_context.mem_context.shared_mem_size = PSP_ASD_SHARED_MEM_SIZE;
 	psp->asd_context.ta_load_type                = GFX_CMD_ID_LOAD_ASD;
@@ -1830,6 +1835,10 @@ static int psp_hdcp_initialize(struct psp_context *psp)
 	if (amdgpu_sriov_vf(psp->adev))
 		return 0;
 
+	/* bypass hdcp initialization if dmu is harvested */
+	if (!amdgpu_device_has_display_hardware(psp->adev))
+		return 0;
+
 	if (!psp->hdcp_context.context.bin_desc.size_bytes ||
 	    !psp->hdcp_context.context.bin_desc.start_addr) {
 		dev_info(psp->adev->dev, "HDCP: optional hdcp ta ucode is not available\n");
@@ -1860,6 +1869,9 @@ int psp_hdcp_invoke(struct psp_context *psp, uint32_t ta_cmd_id)
 	 * TODO: bypass the loading in sriov for now
 	 */
 	if (amdgpu_sriov_vf(psp->adev))
+		return 0;
+
+	if (!psp->hdcp_context.context.initialized)
 		return 0;
 
 	return psp_ta_invoke(psp, ta_cmd_id, &psp->hdcp_context.context);
@@ -1897,6 +1909,10 @@ static int psp_dtm_initialize(struct psp_context *psp)
 	if (amdgpu_sriov_vf(psp->adev))
 		return 0;
 
+	/* bypass dtm initialization if dmu is harvested */
+	if (!amdgpu_device_has_display_hardware(psp->adev))
+		return 0;
+
 	if (!psp->dtm_context.context.bin_desc.size_bytes ||
 	    !psp->dtm_context.context.bin_desc.start_addr) {
 		dev_info(psp->adev->dev, "DTM: optional dtm ta ucode is not available\n");
@@ -1927,6 +1943,9 @@ int psp_dtm_invoke(struct psp_context *psp, uint32_t ta_cmd_id)
 	 * TODO: bypass the loading in sriov for now
 	 */
 	if (amdgpu_sriov_vf(psp->adev))
+		return 0;
+
+	if (!psp->dtm_context.context.initialized)
 		return 0;
 
 	return psp_ta_invoke(psp, ta_cmd_id, &psp->dtm_context.context);
@@ -2061,6 +2080,10 @@ static int psp_securedisplay_initialize(struct psp_context *psp)
 	 * TODO: bypass the initialize in sriov for now
 	 */
 	if (amdgpu_sriov_vf(psp->adev))
+		return 0;
+
+	/* bypass securedisplay initialization if dmu is harvested */
+	if (!amdgpu_device_has_display_hardware(psp->adev))
 		return 0;
 
 	if (!psp->securedisplay_context.context.bin_desc.size_bytes ||
@@ -2238,6 +2261,15 @@ static int psp_hw_start(struct psp_context *psp)
 			ret = psp_bootloader_load_ras_drv(psp);
 			if (ret) {
 				dev_err(adev->dev, "PSP load ras_drv failed!\n");
+				return ret;
+			}
+		}
+
+		if ((is_psp_fw_valid(psp->ipkeymgr_drv)) &&
+		    (psp->funcs->bootloader_load_ipkeymgr_drv != NULL)) {
+			ret = psp_bootloader_load_ipkeymgr_drv(psp);
+			if (ret) {
+				dev_err(adev->dev, "PSP load ipkeymgr_drv failed!\n");
 				return ret;
 			}
 		}
@@ -2599,7 +2631,8 @@ static int psp_load_p2s_table(struct psp_context *psp)
 	struct amdgpu_firmware_info *ucode =
 		&adev->firmware.ucode[AMDGPU_UCODE_ID_P2S_TABLE];
 
-	if (adev->in_runpm && (adev->pm.rpm_mode == AMDGPU_RUNPM_BACO))
+	if (adev->in_runpm && ((adev->pm.rpm_mode == AMDGPU_RUNPM_BACO) ||
+				(adev->pm.rpm_mode == AMDGPU_RUNPM_BAMACO)))
 		return 0;
 
 	if (amdgpu_ip_version(adev, MP0_HWIP, 0) == IP_VERSION(13, 0, 6)) {
@@ -2629,7 +2662,8 @@ static int psp_load_smu_fw(struct psp_context *psp)
 	 * Skip SMU FW reloading in case of using BACO for runpm only,
 	 * as SMU is always alive.
 	 */
-	if (adev->in_runpm && (adev->pm.rpm_mode == AMDGPU_RUNPM_BACO))
+	if (adev->in_runpm && ((adev->pm.rpm_mode == AMDGPU_RUNPM_BACO) ||
+				(adev->pm.rpm_mode == AMDGPU_RUNPM_BAMACO)))
 		return 0;
 
 	if (!ucode->fw || amdgpu_sriov_vf(psp->adev))
@@ -3254,6 +3288,12 @@ static int parse_sos_bin_descriptor(struct psp_context *psp,
 		psp->ras_drv.feature_version    = le32_to_cpu(desc->fw_version);
 		psp->ras_drv.size_bytes         = le32_to_cpu(desc->size_bytes);
 		psp->ras_drv.start_addr         = ucode_start_addr;
+		break;
+	case PSP_FW_TYPE_PSP_IPKEYMGR_DRV:
+		psp->ipkeymgr_drv.fw_version         = le32_to_cpu(desc->fw_version);
+		psp->ipkeymgr_drv.feature_version    = le32_to_cpu(desc->fw_version);
+		psp->ipkeymgr_drv.size_bytes         = le32_to_cpu(desc->size_bytes);
+		psp->ipkeymgr_drv.start_addr         = ucode_start_addr;
 		break;
 	default:
 		dev_warn(psp->adev->dev, "Unsupported PSP FW type: %d\n", desc->fw_type);

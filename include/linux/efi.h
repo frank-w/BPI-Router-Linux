@@ -694,6 +694,11 @@ extern struct efi {
 
 extern struct mm_struct efi_mm;
 
+static inline bool mm_is_efi(struct mm_struct *mm)
+{
+	return IS_ENABLED(CONFIG_EFI) && mm == &efi_mm;
+}
+
 static inline int
 efi_guidcmp (efi_guid_t left, efi_guid_t right)
 {
@@ -1067,12 +1072,11 @@ static inline u64 efivar_reserved_space(void) { return 0; }
 #endif
 
 /*
- * The maximum size of VariableName + Data = 1024
- * Therefore, it's reasonable to save that much
- * space in each part of the structure,
- * and we use a page for reading/writing.
+ * There is no actual upper limit specified for the variable name size.
+ *
+ * This limit exists only for practical purposes, since name conversions
+ * are bounds-checked and name data is occasionally stored in-line.
  */
-
 #define EFI_VAR_NAME_LEN	1024
 
 int efivars_register(struct efivars *efivars,

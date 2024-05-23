@@ -286,7 +286,7 @@ config ACPI_CPPC_LIB
 
 config ACPI_PROCESSOR
 	tristate "Processor"
-	depends on X86 || ARM64 || LOONGARCH
+	depends on X86 || ARM64 || LOONGARCH || RISCV
 	select ACPI_PROCESSOR_IDLE
 	select ACPI_CPU_FREQ_PSS if X86 || LOONGARCH
 	select THERMAL
@@ -460,7 +460,6 @@ config ACPI_BGRT
 
 config ACPI_REDUCED_HARDWARE_ONLY
 	bool "Hardware-reduced ACPI support only" if EXPERT
-	def_bool n
 	help
 	  This config item changes the way the ACPI code is built.  When this
 	  option is selected, the kernel will use a specialized version of
@@ -469,6 +468,9 @@ config ACPI_REDUCED_HARDWARE_ONLY
 	  running in ACPI reduced hardware mode ONLY.
 
 	  If you are unsure what to do, do not enable this option.
+
+config ACPI_NHLT
+	bool
 
 source "drivers/acpi/nfit/Kconfig"
 source "drivers/acpi/numa/Kconfig"

@@ -14,6 +14,7 @@
 #include <uapi/linux/io_uring.h>
 
 #include "io_uring.h"
+#include "alloc_cache.h"
 #include "refs.h"
 #include "napi.h"
 #include "opdef.h"
@@ -322,8 +323,7 @@ static int io_poll_check_events(struct io_kiocb *req, struct io_tw_state *ts)
 			__poll_t mask = mangle_poll(req->cqe.res &
 						    req->apoll_events);
 
-			if (!io_fill_cqe_req_aux(req, ts->locked, mask,
-						 IORING_CQE_F_MORE)) {
+			if (!io_req_post_cqe(req, mask, IORING_CQE_F_MORE)) {
 				io_req_set_res(req, mask, 0);
 				return IOU_POLL_REMOVE_POLL_USE_RES;
 			}
@@ -687,17 +687,15 @@ static struct async_poll *io_req_alloc_apoll(struct io_kiocb *req,
 					     unsigned issue_flags)
 {
 	struct io_ring_ctx *ctx = req->ctx;
-	struct io_cache_entry *entry;
 	struct async_poll *apoll;
 
 	if (req->flags & REQ_F_POLLED) {
 		apoll = req->apoll;
 		kfree(apoll->double_poll);
 	} else if (!(issue_flags & IO_URING_F_UNLOCKED)) {
-		entry = io_alloc_cache_get(&ctx->apoll_cache);
-		if (entry == NULL)
+		apoll = io_alloc_cache_get(&ctx->apoll_cache);
+		if (!apoll)
 			goto alloc_apoll;
-		apoll = container_of(entry, struct async_poll, cache);
 		apoll->poll.retries = APOLL_MAX_RETRY;
 	} else {
 alloc_apoll:
@@ -996,7 +994,6 @@ int io_poll_remove(struct io_kiocb *req, unsigned int issue_flags)
 	struct io_hash_bucket *bucket;
 	struct io_kiocb *preq;
 	int ret2, ret = 0;
-	struct io_tw_state ts = { .locked = true };
 
 	io_ring_submit_lock(ctx, issue_flags);
 	preq = io_poll_find(ctx, true, &cd, &ctx->cancel_table, &bucket);
@@ -1045,7 +1042,8 @@ found:
 
 	req_set_fail(preq);
 	io_req_set_res(preq, -ECANCELED, 0);
-	io_req_task_complete(preq, &ts);
+	preq->io_task_work.func = io_req_task_complete;
+	io_req_task_work_add(preq);
 out:
 	io_ring_submit_unlock(ctx, issue_flags);
 	if (ret < 0) {
@@ -1055,9 +1053,4 @@ out:
 	/* complete update request, we're done with it */
 	io_req_set_res(req, ret, 0);
 	return IOU_OK;
-}
-
-void io_apoll_cache_free(struct io_cache_entry *entry)
-{
-	kfree(container_of(entry, struct async_poll, cache));
 }

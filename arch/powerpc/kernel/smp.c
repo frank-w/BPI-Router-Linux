@@ -588,7 +588,7 @@ void smp_send_debugger_break(void)
 }
 #endif
 
-#ifdef CONFIG_KEXEC_CORE
+#ifdef CONFIG_CRASH_DUMP
 void crash_send_ipi(void (*crash_ipi_callback)(struct pt_regs *))
 {
 	int cpu;
@@ -631,7 +631,7 @@ void crash_smp_send_stop(void)
 
 	stopped = true;
 
-#ifdef CONFIG_KEXEC_CORE
+#ifdef CONFIG_CRASH_DUMP
 	if (kexec_crash_image) {
 		crash_kexec_prepare();
 		return;
@@ -1567,7 +1567,7 @@ static void add_cpu_to_masks(int cpu)
 
 	/*
 	 * This CPU will not be in the online mask yet so we need to manually
-	 * add it to it's own thread sibling mask.
+	 * add it to its own thread sibling mask.
 	 */
 	map_cpu_to_node(cpu, cpu_to_node(cpu));
 	cpumask_set_cpu(cpu, cpu_sibling_mask(cpu));

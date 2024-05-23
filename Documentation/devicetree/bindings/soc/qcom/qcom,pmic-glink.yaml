@@ -23,6 +23,7 @@ properties:
     oneOf:
       - items:
           - enum:
+              - qcom,qcm6490-pmic-glink
               - qcom,sc8180x-pmic-glink
               - qcom,sc8280xp-pmic-glink
               - qcom,sm8350-pmic-glink
@@ -56,20 +57,6 @@ patternProperties:
 
 required:
   - compatible
-
-allOf:
-  - if:
-      not:
-        properties:
-          compatible:
-            contains:
-              enum:
-                - qcom,sm8450-pmic-glink
-                - qcom,sm8550-pmic-glink
-                - qcom,x1e80100-pmic-glink
-    then:
-      properties:
-        orientation-gpios: false
 
 additionalProperties: false
 
