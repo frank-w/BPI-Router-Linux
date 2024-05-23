@@ -207,9 +207,8 @@ static bool try_release_thread_stack_to_cache(struct vm_struct *vm)
 	for (i = 0; i < NR_CACHED_STACKS; i++) {
 		struct vm_struct *tmp = NULL;
 
-		if (!this_cpu_try_cmpxchg(cached_stacks[i], &tmp, vm))
-			continue;
-		return true;
+		if (this_cpu_try_cmpxchg(cached_stacks[i], &tmp, vm))
+			return true;
 	}
 	return false;
 }
