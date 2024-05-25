@@ -289,11 +289,10 @@ void pci_cfg_access_lock(struct pci_dev *dev)
 {
 	might_sleep();
 
-	lock_map_acquire(&dev->cfg_access_lock);
-
 	raw_spin_lock_irq(&pci_lock);
 	if (dev->block_cfg_access)
 		pci_wait_cfg(dev);
+	lock_map_acquire(&dev->cfg_access_lock);
 	dev->block_cfg_access = 1;
 	raw_spin_unlock_irq(&pci_lock);
 }
@@ -315,8 +314,10 @@ bool pci_cfg_access_trylock(struct pci_dev *dev)
 	raw_spin_lock_irqsave(&pci_lock, flags);
 	if (dev->block_cfg_access)
 		locked = false;
-	else
+	else {
+		lock_map_acquire(&dev->cfg_access_lock);
 		dev->block_cfg_access = 1;
+	}
 	raw_spin_unlock_irqrestore(&pci_lock, flags);
 
 	return locked;
@@ -342,11 +343,10 @@ void pci_cfg_access_unlock(struct pci_dev *dev)
 	WARN_ON(!dev->block_cfg_access);
 
 	dev->block_cfg_access = 0;
+	lock_map_release(&dev->cfg_access_lock);
 	raw_spin_unlock_irqrestore(&pci_lock, flags);
 
 	wake_up_all(&pci_cfg_wait);
-
-	lock_map_release(&dev->cfg_access_lock);
 }
 EXPORT_SYMBOL_GPL(pci_cfg_access_unlock);
 
