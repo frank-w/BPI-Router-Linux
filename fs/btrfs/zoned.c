@@ -87,9 +87,8 @@ static int sb_write_pointer(struct block_device *bdev, struct blk_zone *zones,
 	bool empty[BTRFS_NR_SB_LOG_ZONES];
 	bool full[BTRFS_NR_SB_LOG_ZONES];
 	sector_t sector;
-	int i;
 
-	for (i = 0; i < BTRFS_NR_SB_LOG_ZONES; i++) {
+	for (int i = 0; i < BTRFS_NR_SB_LOG_ZONES; i++) {
 		ASSERT(zones[i].type != BLK_ZONE_TYPE_CONVENTIONAL);
 		empty[i] = (zones[i].cond == BLK_ZONE_COND_EMPTY);
 		full[i] = sb_zone_is_full(&zones[i]);
@@ -121,9 +120,8 @@ static int sb_write_pointer(struct block_device *bdev, struct blk_zone *zones,
 		struct address_space *mapping = bdev->bd_mapping;
 		struct page *page[BTRFS_NR_SB_LOG_ZONES];
 		struct btrfs_super_block *super[BTRFS_NR_SB_LOG_ZONES];
-		int i;
 
-		for (i = 0; i < BTRFS_NR_SB_LOG_ZONES; i++) {
+		for (int i = 0; i < BTRFS_NR_SB_LOG_ZONES; i++) {
 			u64 zone_end = (zones[i].start + zones[i].capacity) << SECTOR_SHIFT;
 			u64 bytenr = ALIGN_DOWN(zone_end, BTRFS_SUPER_INFO_SIZE) -
 						BTRFS_SUPER_INFO_SIZE;
@@ -144,7 +142,7 @@ static int sb_write_pointer(struct block_device *bdev, struct blk_zone *zones,
 		else
 			sector = zones[0].start;
 
-		for (i = 0; i < BTRFS_NR_SB_LOG_ZONES; i++)
+		for (int i = 0; i < BTRFS_NR_SB_LOG_ZONES; i++)
 			btrfs_release_disk_super(super[i]);
 	} else if (!full[0] && (empty[1] || full[1])) {
 		sector = zones[0].wp;
@@ -652,8 +650,7 @@ out:
 	return NULL;
 }
 
-int btrfs_get_dev_zone(struct btrfs_device *device, u64 pos,
-		       struct blk_zone *zone)
+static int btrfs_get_dev_zone(struct btrfs_device *device, u64 pos, struct blk_zone *zone)
 {
 	unsigned int nr_zones = 1;
 	int ret;
@@ -1662,6 +1659,15 @@ out:
 		return -EINVAL;
 	}
 
+	/* Reject non SINGLE data profiles without RST. */
+	if ((map->type & BTRFS_BLOCK_GROUP_DATA) &&
+	    (map->type & BTRFS_BLOCK_GROUP_PROFILE_MASK) &&
+	    !fs_info->stripe_root) {
+		btrfs_err(fs_info, "zoned: data %s needs raid-stripe-tree",
+			  btrfs_bg_type_to_raid_name(map->type));
+		return -EINVAL;
+	}
+
 	if (cache->alloc_offset > cache->zone_capacity) {
 		btrfs_err(fs_info,
 "zoned: invalid write pointer %llu (larger than zone capacity %llu) in block group %llu",
@@ -1776,7 +1782,9 @@ static void btrfs_rewrite_logical_zoned(struct btrfs_ordered_extent *ordered,
 	write_lock(&em_tree->lock);
 	em = search_extent_mapping(em_tree, ordered->file_offset,
 				   ordered->num_bytes);
-	em->block_start = logical;
+	/* The em should be a new COW extent, thus it should not have an offset. */
+	ASSERT(em->offset == 0);
+	em->disk_bytenr = logical;
 	free_extent_map(em);
 	write_unlock(&em_tree->lock);
 }
@@ -2215,8 +2223,7 @@ static int do_zone_finish(struct btrfs_block_group *block_group, bool fully_writ
 		/* Ensure all writes in this block group finish */
 		btrfs_wait_block_group_reservations(block_group);
 		/* No need to wait for NOCOW writers. Zoned mode does not allow that */
-		btrfs_wait_ordered_roots(fs_info, U64_MAX, block_group->start,
-					 block_group->length);
+		btrfs_wait_ordered_roots(fs_info, U64_MAX, block_group);
 		/* Wait for extent buffers to be written. */
 		if (is_metadata)
 			wait_eb_writebacks(block_group);

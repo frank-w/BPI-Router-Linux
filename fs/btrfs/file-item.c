@@ -45,13 +45,12 @@
  */
 void btrfs_inode_safe_disk_i_size_write(struct btrfs_inode *inode, u64 new_i_size)
 {
-	struct btrfs_fs_info *fs_info = inode->root->fs_info;
 	u64 start, end, i_size;
 	int ret;
 
 	spin_lock(&inode->lock);
 	i_size = new_i_size ?: i_size_read(&inode->vfs_inode);
-	if (btrfs_fs_incompat(fs_info, NO_HOLES)) {
+	if (!inode->file_extent_tree) {
 		inode->disk_i_size = i_size;
 		goto out_unlock;
 	}
@@ -84,13 +83,14 @@ out_unlock:
 int btrfs_inode_set_file_extent_range(struct btrfs_inode *inode, u64 start,
 				      u64 len)
 {
+	if (!inode->file_extent_tree)
+		return 0;
+
 	if (len == 0)
 		return 0;
 
 	ASSERT(IS_ALIGNED(start + len, inode->root->fs_info->sectorsize));
 
-	if (btrfs_fs_incompat(inode->root->fs_info, NO_HOLES))
-		return 0;
 	return set_extent_bit(inode->file_extent_tree, start, start + len - 1,
 			      EXTENT_DIRTY, NULL);
 }
@@ -112,14 +112,15 @@ int btrfs_inode_set_file_extent_range(struct btrfs_inode *inode, u64 start,
 int btrfs_inode_clear_file_extent_range(struct btrfs_inode *inode, u64 start,
 					u64 len)
 {
+	if (!inode->file_extent_tree)
+		return 0;
+
 	if (len == 0)
 		return 0;
 
 	ASSERT(IS_ALIGNED(start + len, inode->root->fs_info->sectorsize) ||
 	       len == (u64)-1);
 
-	if (btrfs_fs_incompat(inode->root->fs_info, NO_HOLES))
-		return 0;
 	return clear_extent_bit(inode->file_extent_tree, start,
 				start + len - 1, EXTENT_DIRTY, NULL);
 }
@@ -1292,22 +1293,20 @@ void btrfs_extent_item_to_extent_map(struct btrfs_inode *inode,
 	    type == BTRFS_FILE_EXTENT_PREALLOC) {
 		em->start = extent_start;
 		em->len = btrfs_file_extent_end(path) - extent_start;
-		em->orig_start = extent_start -
-			btrfs_file_extent_offset(leaf, fi);
-		em->orig_block_len = btrfs_file_extent_disk_num_bytes(leaf, fi);
 		bytenr = btrfs_file_extent_disk_bytenr(leaf, fi);
 		if (bytenr == 0) {
-			em->block_start = EXTENT_MAP_HOLE;
+			em->disk_bytenr = EXTENT_MAP_HOLE;
+			em->disk_num_bytes = 0;
+			em->offset = 0;
 			return;
 		}
+		em->disk_bytenr = btrfs_file_extent_disk_bytenr(leaf, fi);
+		em->disk_num_bytes = btrfs_file_extent_disk_num_bytes(leaf, fi);
+		em->offset = btrfs_file_extent_offset(leaf, fi);
 		if (compress_type != BTRFS_COMPRESS_NONE) {
 			extent_map_set_compression(em, compress_type);
-			em->block_start = bytenr;
-			em->block_len = em->orig_block_len;
 		} else {
 			bytenr += btrfs_file_extent_offset(leaf, fi);
-			em->block_start = bytenr;
-			em->block_len = em->len;
 			if (type == BTRFS_FILE_EXTENT_PREALLOC)
 				em->flags |= EXTENT_FLAG_PREALLOC;
 		}
@@ -1315,15 +1314,10 @@ void btrfs_extent_item_to_extent_map(struct btrfs_inode *inode,
 		/* Tree-checker has ensured this. */
 		ASSERT(extent_start == 0);
 
-		em->block_start = EXTENT_MAP_INLINE;
+		em->disk_bytenr = EXTENT_MAP_INLINE;
 		em->start = 0;
 		em->len = fs_info->sectorsize;
-		/*
-		 * Initialize orig_start and block_len with the same values
-		 * as in inode.c:btrfs_get_extent().
-		 */
-		em->orig_start = EXTENT_MAP_HOLE;
-		em->block_len = (u64)-1;
+		em->offset = 0;
 		extent_map_set_compression(em, compress_type);
 	} else {
 		btrfs_err(fs_info,

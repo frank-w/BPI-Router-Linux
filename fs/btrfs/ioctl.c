@@ -1070,7 +1070,7 @@ static noinline int btrfs_mksnapshot(const struct path *parent,
 	atomic_inc(&root->snapshot_force_cow);
 	snapshot_force_cow = true;
 
-	btrfs_wait_ordered_extents(root, U64_MAX, 0, (u64)-1);
+	btrfs_wait_ordered_extents(root, U64_MAX, NULL);
 
 	ret = btrfs_mksubvol(parent, idmap, name, namelen,
 			     root, readonly, inherit);
@@ -1918,7 +1918,7 @@ static int btrfs_search_path_in_tree_user(struct mnt_idmap *idmap,
 {
 	struct btrfs_fs_info *fs_info = BTRFS_I(inode)->root->fs_info;
 	struct super_block *sb = inode->i_sb;
-	struct btrfs_key upper_limit = BTRFS_I(inode)->location;
+	u64 upper_limit = btrfs_ino(BTRFS_I(inode));
 	u64 treeid = btrfs_root_id(BTRFS_I(inode)->root);
 	u64 dirid = args->dirid;
 	unsigned long item_off;
@@ -1944,7 +1944,7 @@ static int btrfs_search_path_in_tree_user(struct mnt_idmap *idmap,
 	 * If the bottom subvolume does not exist directly under upper_limit,
 	 * construct the path in from the bottom up.
 	 */
-	if (dirid != upper_limit.objectid) {
+	if (dirid != upper_limit) {
 		ptr = &args->path[BTRFS_INO_LOOKUP_USER_PATH_MAX - 1];
 
 		root = btrfs_get_fs_root(fs_info, treeid, true);
@@ -2019,7 +2019,7 @@ static int btrfs_search_path_in_tree_user(struct mnt_idmap *idmap,
 				goto out_put;
 			}
 
-			if (key.offset == upper_limit.objectid)
+			if (key.offset == upper_limit)
 				break;
 			if (key.objectid == BTRFS_FIRST_FREE_OBJECTID) {
 				ret = -EACCES;
@@ -2140,7 +2140,7 @@ static int btrfs_ioctl_ino_lookup_user(struct file *file, void __user *argp)
 	inode = file_inode(file);
 
 	if (args->dirid == BTRFS_FIRST_FREE_OBJECTID &&
-	    BTRFS_I(inode)->location.objectid != BTRFS_FIRST_FREE_OBJECTID) {
+	    btrfs_ino(BTRFS_I(inode)) != BTRFS_FIRST_FREE_OBJECTID) {
 		/*
 		 * The subvolume does not exist under fd with which this is
 		 * called
@@ -3807,6 +3807,22 @@ drop_write:
 	return ret;
 }
 
+/*
+ * Quick check for ioctl handlers if quotas are enabled. Proper locking must be
+ * done before any operations.
+ */
+static bool qgroup_enabled(struct btrfs_fs_info *fs_info)
+{
+	bool ret = true;
+
+	mutex_lock(&fs_info->qgroup_ioctl_lock);
+	if (!fs_info->quota_root)
+		ret = false;
+	mutex_unlock(&fs_info->qgroup_ioctl_lock);
+
+	return ret;
+}
+
 static long btrfs_ioctl_qgroup_assign(struct file *file, void __user *arg)
 {
 	struct inode *inode = file_inode(file);
@@ -3819,6 +3835,9 @@ static long btrfs_ioctl_qgroup_assign(struct file *file, void __user *arg)
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (!qgroup_enabled(root->fs_info))
+		return -ENOTCONN;
 
 	ret = mnt_want_write_file(file);
 	if (ret)
@@ -3871,6 +3890,9 @@ static long btrfs_ioctl_qgroup_create(struct file *file, void __user *arg)
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (!qgroup_enabled(root->fs_info))
+		return -ENOTCONN;
 
 	ret = mnt_want_write_file(file);
 	if (ret)
@@ -3928,6 +3950,9 @@ static long btrfs_ioctl_qgroup_limit(struct file *file, void __user *arg)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
+	if (!qgroup_enabled(root->fs_info))
+		return -ENOTCONN;
+
 	ret = mnt_want_write_file(file);
 	if (ret)
 		return ret;
@@ -3972,6 +3997,9 @@ static long btrfs_ioctl_quota_rescan(struct file *file, void __user *arg)
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (!qgroup_enabled(fs_info))
+		return -ENOTCONN;
 
 	ret = mnt_want_write_file(file);
 	if (ret)
