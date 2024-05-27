@@ -275,16 +275,18 @@ static void __init arch_reserve_crashkernel(void)
 static void __init fdt_setup(void)
 {
 #ifdef CONFIG_OF_EARLY_FLATTREE
-	void *fdt_pointer;
+	void *fdt_pointer = NULL;
 
 	/* ACPI-based systems do not require parsing fdt */
 	if (acpi_os_get_root_pointer())
 		return;
 
+#ifdef CONFIG_BUILTIN_DTB
 	/* Prefer to use built-in dtb, checking its legality first. */
 	if (!fdt_check_header(__dtb_start))
 		fdt_pointer = __dtb_start;
-	else
+#endif
+	if (!fdt_pointer)
 		fdt_pointer = efi_fdt_pointer(); /* Fallback to firmware dtb */
 
 	if (!fdt_pointer || fdt_check_header(fdt_pointer))
