@@ -587,8 +587,6 @@ static inline u64 calc_reclaim_items_nr(const struct btrfs_fs_info *fs_info,
 	return nr;
 }
 
-#define EXTENT_SIZE_PER_ITEM	SZ_256K
-
 /*
  * shrink metadata reservation for delalloc
  */
@@ -688,7 +686,7 @@ static void shrink_delalloc(struct btrfs_fs_info *fs_info,
 skip_async:
 		loops++;
 		if (wait_ordered && !trans) {
-			btrfs_wait_ordered_roots(fs_info, items, 0, (u64)-1);
+			btrfs_wait_ordered_roots(fs_info, items, NULL);
 		} else {
 			time_left = schedule_timeout_killable(1);
 			if (time_left)
@@ -807,14 +805,7 @@ static void flush_space(struct btrfs_fs_info *fs_info,
 		 * because that does not wait for a transaction to fully commit
 		 * (only for it to be unblocked, state TRANS_STATE_UNBLOCKED).
 		 */
-		trans = btrfs_attach_transaction_barrier(root);
-		if (IS_ERR(trans)) {
-			ret = PTR_ERR(trans);
-			if (ret == -ENOENT)
-				ret = 0;
-			break;
-		}
-		ret = btrfs_commit_transaction(trans);
+		ret = btrfs_commit_current_transaction(root);
 		break;
 	default:
 		ret = -ENOSPC;

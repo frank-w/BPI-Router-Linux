@@ -2437,19 +2437,15 @@ static int finish_extent_writes_for_zoned(struct btrfs_root *root,
 					  struct btrfs_block_group *cache)
 {
 	struct btrfs_fs_info *fs_info = cache->fs_info;
-	struct btrfs_trans_handle *trans;
 
 	if (!btrfs_is_zoned(fs_info))
 		return 0;
 
 	btrfs_wait_block_group_reservations(cache);
 	btrfs_wait_nocow_writers(cache);
-	btrfs_wait_ordered_roots(fs_info, U64_MAX, cache->start, cache->length);
+	btrfs_wait_ordered_roots(fs_info, U64_MAX, cache);
 
-	trans = btrfs_join_transaction(root);
-	if (IS_ERR(trans))
-		return PTR_ERR(trans);
-	return btrfs_commit_transaction(trans);
+	return btrfs_commit_current_transaction(root);
 }
 
 static noinline_for_stack
@@ -2680,8 +2676,7 @@ int scrub_enumerate_chunks(struct scrub_ctx *sctx,
 		 */
 		if (sctx->is_dev_replace) {
 			btrfs_wait_nocow_writers(cache);
-			btrfs_wait_ordered_roots(fs_info, U64_MAX, cache->start,
-					cache->length);
+			btrfs_wait_ordered_roots(fs_info, U64_MAX, cache);
 		}
 
 		scrub_pause_off(fs_info);

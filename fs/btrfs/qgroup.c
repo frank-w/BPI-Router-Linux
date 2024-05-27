@@ -1334,19 +1334,14 @@ out:
  */
 static int flush_reservations(struct btrfs_fs_info *fs_info)
 {
-	struct btrfs_trans_handle *trans;
 	int ret;
 
 	ret = btrfs_start_delalloc_roots(fs_info, LONG_MAX, false);
 	if (ret)
 		return ret;
-	btrfs_wait_ordered_roots(fs_info, U64_MAX, 0, (u64)-1);
-	trans = btrfs_join_transaction(fs_info->tree_root);
-	if (IS_ERR(trans))
-		return PTR_ERR(trans);
-	ret = btrfs_commit_transaction(trans);
+	btrfs_wait_ordered_roots(fs_info, U64_MAX, NULL);
 
-	return ret;
+	return btrfs_commit_current_transaction(fs_info->tree_root);
 }
 
 int btrfs_quota_disable(struct btrfs_fs_info *fs_info)
@@ -1748,13 +1743,55 @@ out:
 	return ret;
 }
 
-static bool qgroup_has_usage(struct btrfs_qgroup *qgroup)
+/*
+ * Return 0 if we can not delete the qgroup (not empty or has children etc).
+ * Return >0 if we can delete the qgroup.
+ * Return <0 for other errors during tree search.
+ */
+static int can_delete_qgroup(struct btrfs_fs_info *fs_info, struct btrfs_qgroup *qgroup)
 {
-	return (qgroup->rfer > 0 || qgroup->rfer_cmpr > 0 ||
-		qgroup->excl > 0 || qgroup->excl_cmpr > 0 ||
-		qgroup->rsv.values[BTRFS_QGROUP_RSV_DATA] > 0 ||
-		qgroup->rsv.values[BTRFS_QGROUP_RSV_META_PREALLOC] > 0 ||
-		qgroup->rsv.values[BTRFS_QGROUP_RSV_META_PERTRANS] > 0);
+	struct btrfs_key key;
+	struct btrfs_path *path;
+	int ret;
+
+	/*
+	 * Squota would never be inconsistent, but there can still be case
+	 * where a dropped subvolume still has qgroup numbers, and squota
+	 * relies on such qgroup for future accounting.
+	 *
+	 * So for squota, do not allow dropping any non-zero qgroup.
+	 */
+	if (btrfs_qgroup_mode(fs_info) == BTRFS_QGROUP_MODE_SIMPLE &&
+	    (qgroup->rfer || qgroup->excl || qgroup->excl_cmpr || qgroup->rfer_cmpr))
+		return 0;
+
+	/* For higher level qgroup, we can only delete it if it has no child. */
+	if (btrfs_qgroup_level(qgroup->qgroupid)) {
+		if (!list_empty(&qgroup->members))
+			return 0;
+		return 1;
+	}
+
+	/*
+	 * For level-0 qgroups, we can only delete it if it has no subvolume
+	 * for it.
+	 * This means even a subvolume is unlinked but not yet fully dropped,
+	 * we can not delete the qgroup.
+	 */
+	key.objectid = qgroup->qgroupid;
+	key.type = BTRFS_ROOT_ITEM_KEY;
+	key.offset = -1ULL;
+	path = btrfs_alloc_path();
+	if (!path)
+		return -ENOMEM;
+
+	ret = btrfs_find_root(fs_info->tree_root, &key, path, NULL, NULL);
+	btrfs_free_path(path);
+	/*
+	 * The @ret from btrfs_find_root() exactly matches our definition for
+	 * the return value, thus can be returned directly.
+	 */
+	return ret;
 }
 
 int btrfs_remove_qgroup(struct btrfs_trans_handle *trans, u64 qgroupid)
@@ -1776,7 +1813,10 @@ int btrfs_remove_qgroup(struct btrfs_trans_handle *trans, u64 qgroupid)
 		goto out;
 	}
 
-	if (is_fstree(qgroupid) && qgroup_has_usage(qgroup)) {
+	ret = can_delete_qgroup(fs_info, qgroup);
+	if (ret < 0)
+		goto out;
+	if (ret == 0) {
 		ret = -EBUSY;
 		goto out;
 	}
@@ -1801,6 +1841,34 @@ int btrfs_remove_qgroup(struct btrfs_trans_handle *trans, u64 qgroupid)
 	}
 
 	spin_lock(&fs_info->qgroup_lock);
+	/*
+	 * Warn on reserved space. The subvolume should has no child nor
+	 * corresponding subvolume.
+	 * Thus its reserved space should all be zero, no matter if qgroup
+	 * is consistent or the mode.
+	 */
+	WARN_ON(qgroup->rsv.values[BTRFS_QGROUP_RSV_DATA] ||
+		qgroup->rsv.values[BTRFS_QGROUP_RSV_META_PREALLOC] ||
+		qgroup->rsv.values[BTRFS_QGROUP_RSV_META_PERTRANS]);
+	/*
+	 * The same for rfer/excl numbers, but that's only if our qgroup is
+	 * consistent and if it's in regular qgroup mode.
+	 * For simple mode it's not as accurate thus we can hit non-zero values
+	 * very frequently.
+	 */
+	if (btrfs_qgroup_mode(fs_info) == BTRFS_QGROUP_MODE_FULL &&
+	    !(fs_info->qgroup_flags & BTRFS_QGROUP_STATUS_FLAG_INCONSISTENT)) {
+		if (WARN_ON(qgroup->rfer || qgroup->excl ||
+			    qgroup->rfer_cmpr || qgroup->excl_cmpr)) {
+			btrfs_warn_rl(fs_info,
+"to be deleted qgroup %u/%llu has non-zero numbers, rfer %llu rfer_cmpr %llu excl %llu excl_cmpr %llu",
+				      btrfs_qgroup_level(qgroup->qgroupid),
+				      btrfs_qgroup_subvolid(qgroup->qgroupid),
+				      qgroup->rfer, qgroup->rfer_cmpr,
+				      qgroup->excl, qgroup->excl_cmpr);
+			qgroup_mark_inconsistent(fs_info);
+		}
+	}
 	del_qgroup_rb(fs_info, qgroupid);
 	spin_unlock(&fs_info->qgroup_lock);
 
@@ -1813,6 +1881,41 @@ int btrfs_remove_qgroup(struct btrfs_trans_handle *trans, u64 qgroupid)
 	kfree(qgroup);
 out:
 	mutex_unlock(&fs_info->qgroup_ioctl_lock);
+	return ret;
+}
+
+int btrfs_qgroup_cleanup_dropped_subvolume(struct btrfs_fs_info *fs_info, u64 subvolid)
+{
+	struct btrfs_trans_handle *trans;
+	int ret;
+
+	if (!is_fstree(subvolid) || !btrfs_qgroup_enabled(fs_info) || !fs_info->quota_root)
+		return 0;
+
+	/*
+	 * Commit current transaction to make sure all the rfer/excl numbers
+	 * get updated.
+	 */
+	trans = btrfs_start_transaction(fs_info->quota_root, 0);
+	if (IS_ERR(trans))
+		return PTR_ERR(trans);
+
+	ret = btrfs_commit_transaction(trans);
+	if (ret < 0)
+		return ret;
+
+	/* Start new trans to delete the qgroup info and limit items. */
+	trans = btrfs_start_transaction(fs_info->quota_root, 2);
+	if (IS_ERR(trans))
+		return PTR_ERR(trans);
+	ret = btrfs_remove_qgroup(trans, subvolid);
+	btrfs_end_transaction(trans);
+	/*
+	 * It's squota and the subvolume still has numbers needed for future
+	 * accounting, in this case we can not delete it.  Just skip it.
+	 */
+	if (ret == -EBUSY)
+		ret = 0;
 	return ret;
 }
 
@@ -3216,7 +3319,6 @@ int btrfs_qgroup_inherit(struct btrfs_trans_handle *trans, u64 srcid,
 			 struct btrfs_qgroup_inherit *inherit)
 {
 	int ret = 0;
-	int i;
 	u64 *i_qgroups;
 	bool committing = false;
 	struct btrfs_fs_info *fs_info = trans->fs_info;
@@ -3273,7 +3375,7 @@ int btrfs_qgroup_inherit(struct btrfs_trans_handle *trans, u64 srcid,
 		i_qgroups = (u64 *)(inherit + 1);
 		nums = inherit->num_qgroups + 2 * inherit->num_ref_copies +
 		       2 * inherit->num_excl_copies;
-		for (i = 0; i < nums; ++i) {
+		for (int i = 0; i < nums; i++) {
 			srcgroup = find_qgroup_rb(fs_info, *i_qgroups);
 
 			/*
@@ -3300,7 +3402,7 @@ int btrfs_qgroup_inherit(struct btrfs_trans_handle *trans, u64 srcid,
 	 */
 	if (inherit) {
 		i_qgroups = (u64 *)(inherit + 1);
-		for (i = 0; i < inherit->num_qgroups; ++i, ++i_qgroups) {
+		for (int i = 0; i < inherit->num_qgroups; i++, i_qgroups++) {
 			if (*i_qgroups == 0)
 				continue;
 			ret = add_qgroup_relation_item(trans, objectid,
@@ -3386,7 +3488,7 @@ int btrfs_qgroup_inherit(struct btrfs_trans_handle *trans, u64 srcid,
 		goto unlock;
 
 	i_qgroups = (u64 *)(inherit + 1);
-	for (i = 0; i < inherit->num_qgroups; ++i) {
+	for (int i = 0; i < inherit->num_qgroups; i++) {
 		if (*i_qgroups) {
 			ret = add_relation_rb(fs_info, qlist_prealloc[i], objectid,
 					      *i_qgroups);
@@ -3406,7 +3508,7 @@ int btrfs_qgroup_inherit(struct btrfs_trans_handle *trans, u64 srcid,
 		++i_qgroups;
 	}
 
-	for (i = 0; i <  inherit->num_ref_copies; ++i, i_qgroups += 2) {
+	for (int i = 0; i < inherit->num_ref_copies; i++, i_qgroups += 2) {
 		struct btrfs_qgroup *src;
 		struct btrfs_qgroup *dst;
 
@@ -3427,7 +3529,7 @@ int btrfs_qgroup_inherit(struct btrfs_trans_handle *trans, u64 srcid,
 		/* Manually tweaking numbers certainly needs a rescan */
 		need_rescan = true;
 	}
-	for (i = 0; i <  inherit->num_excl_copies; ++i, i_qgroups += 2) {
+	for (int i = 0; i < inherit->num_excl_copies; i++, i_qgroups += 2) {
 		struct btrfs_qgroup *src;
 		struct btrfs_qgroup *dst;
 
@@ -3912,7 +4014,6 @@ int
 btrfs_qgroup_rescan(struct btrfs_fs_info *fs_info)
 {
 	int ret = 0;
-	struct btrfs_trans_handle *trans;
 
 	ret = qgroup_rescan_init(fs_info, 0, 1);
 	if (ret)
@@ -3929,16 +4030,10 @@ btrfs_qgroup_rescan(struct btrfs_fs_info *fs_info)
 	 * going to clear all tracking information for a clean start.
 	 */
 
-	trans = btrfs_attach_transaction_barrier(fs_info->fs_root);
-	if (IS_ERR(trans) && trans != ERR_PTR(-ENOENT)) {
+	ret = btrfs_commit_current_transaction(fs_info->fs_root);
+	if (ret) {
 		fs_info->qgroup_flags &= ~BTRFS_QGROUP_STATUS_FLAG_RESCAN;
-		return PTR_ERR(trans);
-	} else if (trans != ERR_PTR(-ENOENT)) {
-		ret = btrfs_commit_transaction(trans);
-		if (ret) {
-			fs_info->qgroup_flags &= ~BTRFS_QGROUP_STATUS_FLAG_RESCAN;
-			return ret;
-		}
+		return ret;
 	}
 
 	qgroup_rescan_zero_tracking(fs_info);
@@ -4074,7 +4169,6 @@ static int qgroup_unreserve_range(struct btrfs_inode *inode,
  */
 static int try_flush_qgroup(struct btrfs_root *root)
 {
-	struct btrfs_trans_handle *trans;
 	int ret;
 
 	/* Can't hold an open transaction or we run the risk of deadlocking. */
@@ -4095,17 +4189,9 @@ static int try_flush_qgroup(struct btrfs_root *root)
 	ret = btrfs_start_delalloc_snapshot(root, true);
 	if (ret < 0)
 		goto out;
-	btrfs_wait_ordered_extents(root, U64_MAX, 0, (u64)-1);
+	btrfs_wait_ordered_extents(root, U64_MAX, NULL);
 
-	trans = btrfs_attach_transaction_barrier(root);
-	if (IS_ERR(trans)) {
-		ret = PTR_ERR(trans);
-		if (ret == -ENOENT)
-			ret = 0;
-		goto out;
-	}
-
-	ret = btrfs_commit_transaction(trans);
+	ret = btrfs_commit_current_transaction(root);
 out:
 	clear_bit(BTRFS_ROOT_QGROUP_FLUSHING, &root->state);
 	wake_up(&root->qgroup_flush_wait);

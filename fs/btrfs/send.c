@@ -7998,34 +7998,18 @@ out:
  */
 static int ensure_commit_roots_uptodate(struct send_ctx *sctx)
 {
-	int i;
-	struct btrfs_trans_handle *trans = NULL;
+	struct btrfs_root *root = sctx->parent_root;
 
-again:
-	if (sctx->parent_root &&
-	    sctx->parent_root->node != sctx->parent_root->commit_root)
-		goto commit_trans;
+	if (root && root->node != root->commit_root)
+		return btrfs_commit_current_transaction(root);
 
-	for (i = 0; i < sctx->clone_roots_cnt; i++)
-		if (sctx->clone_roots[i].root->node !=
-		    sctx->clone_roots[i].root->commit_root)
-			goto commit_trans;
-
-	if (trans)
-		return btrfs_end_transaction(trans);
-
-	return 0;
-
-commit_trans:
-	/* Use any root, all fs roots will get their commit roots updated. */
-	if (!trans) {
-		trans = btrfs_join_transaction(sctx->send_root);
-		if (IS_ERR(trans))
-			return PTR_ERR(trans);
-		goto again;
+	for (int i = 0; i < sctx->clone_roots_cnt; i++) {
+		root = sctx->clone_roots[i].root;
+		if (root->node != root->commit_root)
+			return btrfs_commit_current_transaction(root);
 	}
 
-	return btrfs_commit_transaction(trans);
+	return 0;
 }
 
 /*
@@ -8046,7 +8030,7 @@ static int flush_delalloc_roots(struct send_ctx *sctx)
 		ret = btrfs_start_delalloc_snapshot(root, false);
 		if (ret)
 			return ret;
-		btrfs_wait_ordered_extents(root, U64_MAX, 0, U64_MAX);
+		btrfs_wait_ordered_extents(root, U64_MAX, NULL);
 	}
 
 	for (i = 0; i < sctx->clone_roots_cnt; i++) {
@@ -8054,7 +8038,7 @@ static int flush_delalloc_roots(struct send_ctx *sctx)
 		ret = btrfs_start_delalloc_snapshot(root, false);
 		if (ret)
 			return ret;
-		btrfs_wait_ordered_extents(root, U64_MAX, 0, U64_MAX);
+		btrfs_wait_ordered_extents(root, U64_MAX, NULL);
 	}
 
 	return 0;
