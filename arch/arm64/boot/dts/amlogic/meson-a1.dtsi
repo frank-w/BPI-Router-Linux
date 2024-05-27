@@ -28,6 +28,7 @@
 			reg = <0x0 0x0>;
 			enable-method = "psci";
 			next-level-cache = <&l2>;
+			#cooling-cells = <2>;
 		};
 
 		cpu1: cpu@1 {
@@ -36,6 +37,7 @@
 			reg = <0x0 0x1>;
 			enable-method = "psci";
 			next-level-cache = <&l2>;
+			#cooling-cells = <2>;
 		};
 
 		l2: l2-cache0 {
@@ -396,6 +398,17 @@
 				reset-names = "phy";
 				#phy-cells = <0>;
 				power-domains = <&pwrc PWRC_USB_ID>;
+			};
+
+			cpu_temp: temperature-sensor@4c00 {
+				compatible = "amlogic,a1-cpu-thermal";
+				reg = <0x0 0x4c00 0x0 0x50>;
+				interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clkc_periphs CLKID_TS>;
+				assigned-clocks = <&clkc_periphs CLKID_TS>;
+				assigned-clock-rates = <500000>;
+				#thermal-sensor-cells = <0>;
+				amlogic,ao-secure = <&sec_AO>;
 			};
 
 			hwrng: rng@5118 {
