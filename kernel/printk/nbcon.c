@@ -936,6 +936,29 @@ update_con:
 	return nbcon_context_exit_unsafe(ctxt);
 }
 
+/* Track the nbcon emergency nesting per CPU. */
+static DEFINE_PER_CPU(unsigned int, nbcon_pcpu_emergency_nesting);
+static unsigned int early_nbcon_pcpu_emergency_nesting __initdata;
+
+/**
+ * nbcon_get_cpu_emergency_nesting - Get the per CPU emergency nesting pointer
+ *
+ * Return:	Either a pointer to the per CPU emergency nesting counter of
+ *		the current CPU or to the init data during early boot.
+ */
+static __ref unsigned int *nbcon_get_cpu_emergency_nesting(void)
+{
+	/*
+	 * The value of __printk_percpu_data_ready gets set in normal
+	 * context and before SMP initialization. As a result it could
+	 * never change while inside an nbcon emergency section.
+	 */
+	if (!printk_percpu_data_ready())
+		return &early_nbcon_pcpu_emergency_nesting;
+
+	return this_cpu_ptr(&nbcon_pcpu_emergency_nesting);
+}
+
 /**
  * nbcon_get_default_prio - The appropriate nbcon priority to use for nbcon
  *				printing on the current CPU
@@ -946,8 +969,14 @@ update_con:
  */
 enum nbcon_prio nbcon_get_default_prio(void)
 {
+	unsigned int *cpu_emergency_nesting;
+
 	if (this_cpu_in_panic())
 		return NBCON_PRIO_PANIC;
+
+	cpu_emergency_nesting = nbcon_get_cpu_emergency_nesting();
+	if (*cpu_emergency_nesting)
+		return NBCON_PRIO_EMERGENCY;
 
 	return NBCON_PRIO_NORMAL;
 }
@@ -1204,6 +1233,103 @@ void nbcon_atomic_flush_pending(void)
 void nbcon_atomic_flush_unsafe(void)
 {
 	__nbcon_atomic_flush_pending(prb_next_reserve_seq(prb), true);
+}
+
+/**
+ * nbcon_cpu_emergency_enter - Enter an emergency section where printk()
+ *				messages for that CPU are only stored
+ *
+ * Upon exiting the emergency section, all stored messages are flushed.
+ *
+ * Context:	Any context. Disables preemption.
+ *
+ * When within an emergency section, no printing occurs on that CPU. This
+ * is to allow all emergency messages to be dumped into the ringbuffer before
+ * flushing the ringbuffer. The actual printing occurs when exiting the
+ * outermost emergency section.
+ */
+void nbcon_cpu_emergency_enter(void)
+{
+	unsigned int *cpu_emergency_nesting;
+
+	preempt_disable();
+
+	cpu_emergency_nesting = nbcon_get_cpu_emergency_nesting();
+	(*cpu_emergency_nesting)++;
+}
+
+/**
+ * nbcon_cpu_emergency_exit - Exit an emergency section and flush the
+ *				stored messages
+ *
+ * Flushing only occurs when exiting all nesting for the CPU.
+ *
+ * Context:	Any context. Enables preemption.
+ */
+void nbcon_cpu_emergency_exit(void)
+{
+	unsigned int *cpu_emergency_nesting;
+	bool do_trigger_flush = false;
+
+	cpu_emergency_nesting = nbcon_get_cpu_emergency_nesting();
+
+	/*
+	 * Flush the messages before enabling preemtion to see them ASAP.
+	 *
+	 * Reduce the risk of potential softlockup by using the
+	 * flush_pending() variant which ignores messages added later. It is
+	 * called before decrementing the counter so that the printing context
+	 * for the emergency messages is NBCON_PRIO_EMERGENCY.
+	 */
+	if (*cpu_emergency_nesting == 1) {
+		nbcon_atomic_flush_pending();
+
+		/*
+		 * Safely attempt to flush the legacy consoles in this
+		 * context. Otherwise an irq_work context is triggered
+		 * to handle it.
+		 */
+		do_trigger_flush = true;
+		if (printing_via_unlock && !is_printk_deferred()) {
+			if (console_trylock()) {
+				do_trigger_flush = false;
+				console_unlock();
+			}
+		}
+	}
+
+	if (!WARN_ON_ONCE(*cpu_emergency_nesting == 0))
+		(*cpu_emergency_nesting)--;
+
+	preempt_enable();
+
+	if (do_trigger_flush)
+		printk_trigger_flush();
+}
+
+/**
+ * nbcon_cpu_emergency_flush - Explicitly flush consoles while
+ *				within emergency context
+ *
+ * Both nbcon and legacy consoles are flushed.
+ *
+ * It should be used only when there are too many messages printed
+ * in emergency context, for example, printing backtraces of all
+ * CPUs or processes. It is typically needed when the watchdogs
+ * need to be touched as well.
+ */
+void nbcon_cpu_emergency_flush(void)
+{
+	/* The explicit flush is needed only in the emergency context. */
+	if (*(nbcon_get_cpu_emergency_nesting()) == 0)
+		return;
+
+	nbcon_atomic_flush_pending();
+
+	if (printing_via_unlock && !is_printk_deferred()) {
+		if (console_trylock())
+			console_unlock();
+	}
 }
 
 /**
