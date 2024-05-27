@@ -6,6 +6,7 @@
 
 #define PAGE_SIZE _PAGE_SIZE
 #define RO_EXCEPTION_TABLE_ALIGN	4
+#define PHYSADDR_MASK			0xffffffffffff /* 48-bit */
 
 /*
  * Put .bss..swapper_pg_dir as the first thing in .bss. This will
@@ -142,6 +143,7 @@ SECTIONS
 
 #ifdef CONFIG_EFI_STUB
 	/* header symbols */
+	_kernel_entry = kernel_entry & PHYSADDR_MASK;
 	_kernel_asize = _end - _text;
 	_kernel_fsize = _edata - _text;
 	_kernel_vsize = _end - __initdata_begin;
