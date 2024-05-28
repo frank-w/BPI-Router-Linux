@@ -803,6 +803,14 @@ config SM_CAMCC_6350
 	  Support for the camera clock controller on SM6350 devices.
 	  Say Y if you want to support camera devices and camera functionality.
 
+config SM_CAMCC_7150
+	tristate "SM7150 Camera Clock Controller"
+	depends on ARM64 || COMPILE_TEST
+	select SM_GCC_7150
+	help
+	  Support for the camera clock controller on SM7150 devices.
+	  Say Y if you want to support camera devices and camera functionality.
+
 config SM_CAMCC_8250
 	tristate "SM8250 Camera Clock Controller"
 	depends on ARM64 || COMPILE_TEST
@@ -846,6 +854,16 @@ config SM_DISPCC_6125
 	  SM6125 devices.
 	  Say Y if you want to support display devices and functionality such as
 	  splash screen
+
+config SM_DISPCC_7150
+	tristate "SM7150 Display Clock Controller"
+	depends on ARM64 || COMPILE_TEST
+	depends on SM_GCC_7150
+	help
+	  Support for the display clock controller on Qualcomm Technologies, Inc
+	  SM7150 devices.
+	  Say Y if you want to support display devices and functionality such as
+	  splash screen.
 
 config SM_DISPCC_8250
 	tristate "SM8150/SM8250/SM8350 Display Clock Controller"
@@ -953,6 +971,7 @@ config SM_GCC_6375
 
 config SM_GCC_7150
 	tristate "SM7150 Global Clock Controller"
+	depends on ARM64 || COMPILE_TEST
 	select QCOM_GDSC
 	help
 	  Support for the global clock controller on SM7150 devices.
@@ -1117,6 +1136,16 @@ config SM_TCSRCC_8650
 	help
 	  Support for the TCSR clock controller on SM8650 devices.
 	  Say Y if you want to use peripheral devices such as SD/UFS.
+
+config SM_VIDEOCC_7150
+	tristate "SM7150 Video Clock Controller"
+	depends on ARM64 || COMPILE_TEST
+	select SM_GCC_7150
+	select QCOM_GDSC
+	help
+	  Support for the video clock controller on SM7150 devices.
+	  Say Y if you want to support video devices and functionality such as
+	  video encode and decode.
 
 config SM_VIDEOCC_8150
 	tristate "SM8150 Video Clock Controller"

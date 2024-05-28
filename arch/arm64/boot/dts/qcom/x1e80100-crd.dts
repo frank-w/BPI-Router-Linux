@@ -49,6 +49,15 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	reserved-memory {
+		linux,cma {
+			compatible = "shared-dma-pool";
+			size = <0x0 0x8000000>;
+			reusable;
+			linux,cma-default;
+		};
+	};
+
 	sound {
 		compatible = "qcom,x1e80100-sndcard";
 		model = "X1E80100-CRD";
@@ -849,7 +858,6 @@
 
 &usb_1_ss0_dwc3 {
 	dr_mode = "host";
-	usb-role-switch;
 };
 
 &usb_1_ss1_hsphy {
@@ -871,7 +879,6 @@
 
 &usb_1_ss1_dwc3 {
 	dr_mode = "host";
-	usb-role-switch;
 };
 
 &usb_1_ss2_hsphy {
@@ -893,5 +900,4 @@
 
 &usb_1_ss2_dwc3 {
 	dr_mode = "host";
-	usb-role-switch;
 };
