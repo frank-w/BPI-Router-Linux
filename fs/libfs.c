@@ -295,6 +295,18 @@ int simple_offset_add(struct offset_ctx *octx, struct dentry *dentry)
 	return 0;
 }
 
+static int simple_offset_replace(struct offset_ctx *octx, struct dentry *dentry,
+				 long offset)
+{
+	int ret;
+
+	ret = mtree_store(&octx->mt, offset, dentry, GFP_KERNEL);
+	if (ret)
+		return ret;
+	offset_set(dentry, offset);
+	return 0;
+}
+
 /**
  * simple_offset_remove - Remove an entry to a directory's offset map
  * @octx: directory offset ctx to be updated
@@ -346,11 +358,44 @@ int simple_offset_empty(struct dentry *dentry)
 }
 
 /**
+ * simple_offset_rename - handle directory offsets for rename
+ * @old_dir: parent directory of source entry
+ * @old_dentry: dentry of source entry
+ * @new_dir: parent_directory of destination entry
+ * @new_dentry: dentry of destination
+ *
+ * Caller provides appropriate serialization.
+ *
+ * User space expects the directory offset value of the replaced
+ * (new) directory entry to be unchanged after a rename.
+ *
+ * Returns zero on success, a negative errno value on failure.
+ */
+int simple_offset_rename(struct inode *old_dir, struct dentry *old_dentry,
+			 struct inode *new_dir, struct dentry *new_dentry)
+{
+	struct offset_ctx *old_ctx = old_dir->i_op->get_offset_ctx(old_dir);
+	struct offset_ctx *new_ctx = new_dir->i_op->get_offset_ctx(new_dir);
+	long new_offset = dentry2offset(new_dentry);
+
+	simple_offset_remove(old_ctx, old_dentry);
+
+	if (new_offset) {
+		offset_set(new_dentry, 0);
+		return simple_offset_replace(new_ctx, old_dentry, new_offset);
+	}
+	return simple_offset_add(new_ctx, old_dentry);
+}
+
+/**
  * simple_offset_rename_exchange - exchange rename with directory offsets
  * @old_dir: parent of dentry being moved
  * @old_dentry: dentry being moved
  * @new_dir: destination parent
  * @new_dentry: destination dentry
+ *
+ * This API preserves the directory offset values. Caller provides
+ * appropriate serialization.
  *
  * Returns zero on success. Otherwise a negative errno is returned and the
  * rename is rolled back.
@@ -369,11 +414,11 @@ int simple_offset_rename_exchange(struct inode *old_dir,
 	simple_offset_remove(old_ctx, old_dentry);
 	simple_offset_remove(new_ctx, new_dentry);
 
-	ret = simple_offset_add(new_ctx, old_dentry);
+	ret = simple_offset_replace(new_ctx, old_dentry, new_index);
 	if (ret)
 		goto out_restore;
 
-	ret = simple_offset_add(old_ctx, new_dentry);
+	ret = simple_offset_replace(old_ctx, new_dentry, old_index);
 	if (ret) {
 		simple_offset_remove(new_ctx, old_dentry);
 		goto out_restore;
@@ -388,10 +433,8 @@ int simple_offset_rename_exchange(struct inode *old_dir,
 	return 0;
 
 out_restore:
-	offset_set(old_dentry, old_index);
-	mtree_store(&old_ctx->mt, old_index, old_dentry, GFP_KERNEL);
-	offset_set(new_dentry, new_index);
-	mtree_store(&new_ctx->mt, new_index, new_dentry, GFP_KERNEL);
+	(void)simple_offset_replace(old_ctx, old_dentry, old_index);
+	(void)simple_offset_replace(new_ctx, new_dentry, new_index);
 	return ret;
 }
 
@@ -2001,33 +2044,39 @@ static inline struct dentry *get_stashed_dentry(struct dentry *stashed)
 }
 
 static struct dentry *prepare_anon_dentry(struct dentry **stashed,
-					  unsigned long ino,
 					  struct super_block *sb,
 					  void *data)
 {
 	struct dentry *dentry;
 	struct inode *inode;
 	const struct stashed_operations *sops = sb->s_fs_info;
-
-	dentry = d_alloc_anon(sb);
-	if (!dentry)
-		return ERR_PTR(-ENOMEM);
+	int ret;
 
 	inode = new_inode_pseudo(sb);
 	if (!inode) {
-		dput(dentry);
+		sops->put_data(data);
 		return ERR_PTR(-ENOMEM);
 	}
 
-	inode->i_ino = ino;
 	inode->i_flags |= S_IMMUTABLE;
 	inode->i_mode = S_IFREG;
 	simple_inode_init_ts(inode);
-	sops->init_inode(inode, data);
+
+	ret = sops->init_inode(inode, data);
+	if (ret < 0) {
+		iput(inode);
+		return ERR_PTR(ret);
+	}
 
 	/* Notice when this is changed. */
 	WARN_ON_ONCE(!S_ISREG(inode->i_mode));
 	WARN_ON_ONCE(!IS_IMMUTABLE(inode));
+
+	dentry = d_alloc_anon(sb);
+	if (!dentry) {
+		iput(inode);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	/* Store address of location where dentry's supposed to be stashed. */
 	dentry->d_fsdata = stashed;
@@ -2062,7 +2111,6 @@ static struct dentry *stash_dentry(struct dentry **stashed,
 /**
  * path_from_stashed - create path from stashed or new dentry
  * @stashed:    where to retrieve or stash dentry
- * @ino:        inode number to use
  * @mnt:        mnt of the filesystems to use
  * @data:       data to store in inode->i_private
  * @path:       path to create
@@ -2077,8 +2125,8 @@ static struct dentry *stash_dentry(struct dentry **stashed,
  *
  * Return: On success zero and on failure a negative error is returned.
  */
-int path_from_stashed(struct dentry **stashed, unsigned long ino,
-		      struct vfsmount *mnt, void *data, struct path *path)
+int path_from_stashed(struct dentry **stashed, struct vfsmount *mnt, void *data,
+		      struct path *path)
 {
 	struct dentry *dentry;
 	const struct stashed_operations *sops = mnt->mnt_sb->s_fs_info;
@@ -2091,11 +2139,9 @@ int path_from_stashed(struct dentry **stashed, unsigned long ino,
 	}
 
 	/* Allocate a new dentry. */
-	dentry = prepare_anon_dentry(stashed, ino, mnt->mnt_sb, data);
-	if (IS_ERR(dentry)) {
-		sops->put_data(data);
+	dentry = prepare_anon_dentry(stashed, mnt->mnt_sb, data);
+	if (IS_ERR(dentry))
 		return PTR_ERR(dentry);
-	}
 
 	/* Added a new dentry. @data is now owned by the filesystem. */
 	path->dentry = stash_dentry(stashed, dentry);

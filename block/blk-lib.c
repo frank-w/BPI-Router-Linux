@@ -35,75 +35,39 @@ static sector_t bio_discard_limit(struct block_device *bdev, sector_t sector)
 	return round_down(UINT_MAX, discard_granularity) >> SECTOR_SHIFT;
 }
 
-static void await_bio_endio(struct bio *bio)
+struct bio *blk_alloc_discard_bio(struct block_device *bdev,
+		sector_t *sector, sector_t *nr_sects, gfp_t gfp_mask)
 {
-	complete(bio->bi_private);
-	bio_put(bio);
-}
+	sector_t bio_sects = min(*nr_sects, bio_discard_limit(bdev, *sector));
+	struct bio *bio;
 
-/*
- * await_bio_chain - ends @bio and waits for every chained bio to complete
- */
-static void await_bio_chain(struct bio *bio)
-{
-	DECLARE_COMPLETION_ONSTACK_MAP(done,
-			bio->bi_bdev->bd_disk->lockdep_map);
+	if (!bio_sects)
+		return NULL;
 
-	bio->bi_private = &done;
-	bio->bi_end_io = await_bio_endio;
-	bio_endio(bio);
-	blk_wait_io(&done);
+	bio = bio_alloc(bdev, 0, REQ_OP_DISCARD, gfp_mask);
+	if (!bio)
+		return NULL;
+	bio->bi_iter.bi_sector = *sector;
+	bio->bi_iter.bi_size = bio_sects << SECTOR_SHIFT;
+	*sector += bio_sects;
+	*nr_sects -= bio_sects;
+	/*
+	 * We can loop for a long time in here if someone does full device
+	 * discards (like mkfs).  Be nice and allow us to schedule out to avoid
+	 * softlocking if preempt is disabled.
+	 */
+	cond_resched();
+	return bio;
 }
 
 int __blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		sector_t nr_sects, gfp_t gfp_mask, struct bio **biop)
 {
-	struct bio *bio = *biop;
-	sector_t bs_mask;
+	struct bio *bio;
 
-	if (bdev_read_only(bdev))
-		return -EPERM;
-	if (!bdev_max_discard_sectors(bdev))
-		return -EOPNOTSUPP;
-
-	/* In case the discard granularity isn't set by buggy device driver */
-	if (WARN_ON_ONCE(!bdev_discard_granularity(bdev))) {
-		pr_err_ratelimited("%pg: Error: discard_granularity is 0.\n",
-				   bdev);
-		return -EOPNOTSUPP;
-	}
-
-	bs_mask = (bdev_logical_block_size(bdev) >> 9) - 1;
-	if ((sector | nr_sects) & bs_mask)
-		return -EINVAL;
-
-	if (!nr_sects)
-		return -EINVAL;
-
-	while (nr_sects) {
-		sector_t req_sects =
-			min(nr_sects, bio_discard_limit(bdev, sector));
-
-		bio = blk_next_bio(bio, bdev, 0, REQ_OP_DISCARD, gfp_mask);
-		bio->bi_iter.bi_sector = sector;
-		bio->bi_iter.bi_size = req_sects << 9;
-		sector += req_sects;
-		nr_sects -= req_sects;
-
-		/*
-		 * We can loop for a long time in here, if someone does
-		 * full device discards (like mkfs). Be nice and allow
-		 * us to schedule out to avoid softlocking if preempt
-		 * is disabled.
-		 */
-		cond_resched();
-		if (fatal_signal_pending(current)) {
-			await_bio_chain(bio);
-			return -EINTR;
-		}
-	}
-
-	*biop = bio;
+	while ((bio = blk_alloc_discard_bio(bdev, &sector, &nr_sects,
+			gfp_mask)))
+		*biop = bio_chain_and_submit(*biop, bio);
 	return 0;
 }
 EXPORT_SYMBOL(__blkdev_issue_discard);
@@ -167,10 +131,6 @@ static int __blkdev_issue_write_zeroes(struct block_device *bdev,
 		nr_sects -= len;
 		sector += len;
 		cond_resched();
-		if (fatal_signal_pending(current)) {
-			await_bio_chain(bio);
-			return -EINTR;
-		}
 	}
 
 	*biop = bio;
@@ -215,10 +175,6 @@ static int __blkdev_issue_zero_pages(struct block_device *bdev,
 				break;
 		}
 		cond_resched();
-		if (fatal_signal_pending(current)) {
-			await_bio_chain(bio);
-			return -EINTR;
-		}
 	}
 
 	*biop = bio;
@@ -309,7 +265,7 @@ retry:
 		bio_put(bio);
 	}
 	blk_finish_plug(&plug);
-	if (ret && ret != -EINTR && try_write_zeroes) {
+	if (ret && try_write_zeroes) {
 		if (!(flags & BLKDEV_ZERO_NOFALLBACK)) {
 			try_write_zeroes = false;
 			goto retry;
@@ -361,12 +317,6 @@ int blkdev_issue_secure_erase(struct block_device *bdev, sector_t sector,
 		sector += len;
 		nr_sects -= len;
 		cond_resched();
-		if (fatal_signal_pending(current)) {
-			await_bio_chain(bio);
-			ret = -EINTR;
-			bio = NULL;
-			break;
-		}
 	}
 	if (bio) {
 		ret = submit_bio_wait(bio);

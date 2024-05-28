@@ -780,12 +780,14 @@ static int lsm_superblock_alloc(struct super_block *sb)
  * @id: LSM id
  * @flags: LSM defined flags
  *
- * Fill all of the fields in a userspace lsm_ctx structure.
+ * Fill all of the fields in a userspace lsm_ctx structure.  If @uctx is NULL
+ * simply calculate the required size to output via @utc_len and return
+ * success.
  *
  * Returns 0 on success, -E2BIG if userspace buffer is not large enough,
  * -EFAULT on a copyout error, -ENOMEM if memory can't be allocated.
  */
-int lsm_fill_user_ctx(struct lsm_ctx __user *uctx, size_t *uctx_len,
+int lsm_fill_user_ctx(struct lsm_ctx __user *uctx, u32 *uctx_len,
 		      void *val, size_t val_len,
 		      u64 id, u64 flags)
 {
@@ -798,6 +800,10 @@ int lsm_fill_user_ctx(struct lsm_ctx __user *uctx, size_t *uctx_len,
 		rc = -E2BIG;
 		goto out;
 	}
+
+	/* no buffer - return success/0 and set @uctx_len to the req size */
+	if (!uctx)
+		goto out;
 
 	nctx = kzalloc(nctx_len, GFP_KERNEL);
 	if (nctx == NULL) {
@@ -1787,11 +1793,11 @@ int security_path_mknod(const struct path *dir, struct dentry *dentry,
 EXPORT_SYMBOL(security_path_mknod);
 
 /**
- * security_path_post_mknod() - Update inode security field after file creation
+ * security_path_post_mknod() - Update inode security after reg file creation
  * @idmap: idmap of the mount
  * @dentry: new file
  *
- * Update inode security field after a file has been created.
+ * Update inode security field after a regular file has been created.
  */
 void security_path_post_mknod(struct mnt_idmap *idmap, struct dentry *dentry)
 {
@@ -2622,6 +2628,7 @@ EXPORT_SYMBOL(security_inode_copy_up);
 
 /**
  * security_inode_copy_up_xattr() - Filter xattrs in an overlayfs copy-up op
+ * @src: union dentry of copy-up file
  * @name: xattr name
  *
  * Filter the xattrs being copied up when a unioned file is copied up from a
@@ -2632,7 +2639,7 @@ EXPORT_SYMBOL(security_inode_copy_up);
  *         if the security module does not know about attribute, or a negative
  *         error code to abort the copy up.
  */
-int security_inode_copy_up_xattr(const char *name)
+int security_inode_copy_up_xattr(struct dentry *src, const char *name)
 {
 	int rc;
 
@@ -2641,7 +2648,7 @@ int security_inode_copy_up_xattr(const char *name)
 	 * xattr), -EOPNOTSUPP if it does not know anything about the xattr or
 	 * any other error code in case of an error.
 	 */
-	rc = call_int_hook(inode_copy_up_xattr, name);
+	rc = call_int_hook(inode_copy_up_xattr, src, name);
 	if (rc != LSM_RET_DEFAULT(inode_copy_up_xattr))
 		return rc;
 
@@ -3931,14 +3938,14 @@ EXPORT_SYMBOL(security_d_instantiate);
  * If @size is insufficient to contain the data -E2BIG is returned.
  */
 int security_getselfattr(unsigned int attr, struct lsm_ctx __user *uctx,
-			 size_t __user *size, u32 flags)
+			 u32 __user *size, u32 flags)
 {
 	struct security_hook_list *hp;
 	struct lsm_ctx lctx = { .id = LSM_ID_UNDEF, };
 	u8 __user *base = (u8 __user *)uctx;
-	size_t total = 0;
-	size_t entrysize;
-	size_t left;
+	u32 entrysize;
+	u32 total = 0;
+	u32 left;
 	bool toobig = false;
 	bool single = false;
 	int count = 0;
@@ -4024,7 +4031,7 @@ int security_getselfattr(unsigned int attr, struct lsm_ctx __user *uctx,
  * LSM specific failure.
  */
 int security_setselfattr(unsigned int attr, struct lsm_ctx __user *uctx,
-			 size_t size, u32 flags)
+			 u32 size, u32 flags)
 {
 	struct security_hook_list *hp;
 	struct lsm_ctx *lctx;

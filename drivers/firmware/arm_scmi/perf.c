@@ -153,6 +153,7 @@ struct perf_dom_info {
 	bool perf_fastchannels;
 	bool level_indexing_mode;
 	u32 opp_count;
+	u32 rate_limit_us;
 	u32 sustained_freq_khz;
 	u32 sustained_perf_level;
 	unsigned long mult_factor;
@@ -282,6 +283,8 @@ scmi_perf_domain_attributes_get(const struct scmi_protocol_handle *ph,
 		if (PROTOCOL_REV_MAJOR(version) >= 0x4)
 			dom_info->level_indexing_mode =
 				SUPPORTS_LEVEL_INDEXING(flags);
+		dom_info->rate_limit_us = le32_to_cpu(attr->rate_limit_us) &
+						GENMASK(19, 0);
 		dom_info->sustained_freq_khz =
 					le32_to_cpu(attr->sustained_freq_khz);
 		dom_info->sustained_perf_level =
@@ -384,8 +387,8 @@ process_response_opp(struct device *dev, struct perf_dom_info *dom,
 
 	ret = xa_insert(&dom->opps_by_lvl, opp->perf, opp, GFP_KERNEL);
 	if (ret)
-		dev_warn(dev, "Failed to add opps_by_lvl at %d - ret:%d\n",
-			 opp->perf, ret);
+		dev_warn(dev, "Failed to add opps_by_lvl at %d for %s - ret:%d\n",
+			 opp->perf, dom->info.name, ret);
 }
 
 static inline void
@@ -402,8 +405,8 @@ process_response_opp_v4(struct device *dev, struct perf_dom_info *dom,
 
 	ret = xa_insert(&dom->opps_by_lvl, opp->perf, opp, GFP_KERNEL);
 	if (ret)
-		dev_warn(dev, "Failed to add opps_by_lvl at %d - ret:%d\n",
-			 opp->perf, ret);
+		dev_warn(dev, "Failed to add opps_by_lvl at %d for %s - ret:%d\n",
+			 opp->perf, dom->info.name, ret);
 
 	/* Note that PERF v4 reports always five 32-bit words */
 	opp->indicative_freq = le32_to_cpu(r->opp[loop_idx].indicative_freq);
@@ -414,8 +417,8 @@ process_response_opp_v4(struct device *dev, struct perf_dom_info *dom,
 				GFP_KERNEL);
 		if (ret)
 			dev_warn(dev,
-				 "Failed to add opps_by_idx at %d - ret:%d\n",
-				 opp->level_index, ret);
+				 "Failed to add opps_by_idx at %d for %s - ret:%d\n",
+				 opp->level_index, dom->info.name, ret);
 
 		hash_add(dom->opps_by_freq, &opp->hash, opp->indicative_freq);
 	}
@@ -825,23 +828,27 @@ static void scmi_perf_domain_init_fc(const struct scmi_protocol_handle *ph,
 
 	ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
 				   PERF_LEVEL_GET, 4, dom->id,
-				   &fc[PERF_FC_LEVEL].get_addr, NULL);
+				   &fc[PERF_FC_LEVEL].get_addr, NULL,
+				   &fc[PERF_FC_LEVEL].rate_limit);
 
 	ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
 				   PERF_LIMITS_GET, 8, dom->id,
-				   &fc[PERF_FC_LIMIT].get_addr, NULL);
+				   &fc[PERF_FC_LIMIT].get_addr, NULL,
+				   &fc[PERF_FC_LIMIT].rate_limit);
 
 	if (dom->info.set_perf)
 		ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
 					   PERF_LEVEL_SET, 4, dom->id,
 					   &fc[PERF_FC_LEVEL].set_addr,
-					   &fc[PERF_FC_LEVEL].set_db);
+					   &fc[PERF_FC_LEVEL].set_db,
+					   &fc[PERF_FC_LEVEL].rate_limit);
 
 	if (dom->set_limits)
 		ph->hops->fastchannel_init(ph, PERF_DESCRIBE_FASTCHANNEL,
 					   PERF_LIMITS_SET, 8, dom->id,
 					   &fc[PERF_FC_LIMIT].set_addr,
-					   &fc[PERF_FC_LIMIT].set_db);
+					   &fc[PERF_FC_LIMIT].set_db,
+					   &fc[PERF_FC_LIMIT].rate_limit);
 
 	dom->fc_info = fc;
 }
@@ -864,12 +871,16 @@ static int scmi_dvfs_device_opps_add(const struct scmi_protocol_handle *ph,
 		else
 			freq = dom->opp[idx].indicative_freq * dom->mult_factor;
 
+		/* All OPPs above the sustained frequency are treated as turbo */
+		data.turbo = freq > dom->sustained_freq_khz * 1000;
+
 		data.level = dom->opp[idx].perf;
 		data.freq = freq;
 
 		ret = dev_pm_opp_add_dynamic(dev, &data);
 		if (ret) {
-			dev_warn(dev, "failed to add opp %luHz\n", freq);
+			dev_warn(dev, "[%d][%s]: Failed to add OPP[%d] %lu\n",
+				 domain, dom->info.name, idx, freq);
 			dev_pm_opp_remove_all_dynamic(dev);
 			return ret;
 		}
@@ -892,6 +903,23 @@ scmi_dvfs_transition_latency_get(const struct scmi_protocol_handle *ph,
 
 	/* uS to nS */
 	return dom->opp[dom->opp_count - 1].trans_latency_us * 1000;
+}
+
+static int
+scmi_dvfs_rate_limit_get(const struct scmi_protocol_handle *ph,
+			 u32 domain, u32 *rate_limit)
+{
+	struct perf_dom_info *dom;
+
+	if (!rate_limit)
+		return -EINVAL;
+
+	dom = scmi_perf_domain_lookup(ph, domain);
+	if (IS_ERR(dom))
+		return PTR_ERR(dom);
+
+	*rate_limit = dom->rate_limit_us;
+	return 0;
 }
 
 static int scmi_dvfs_freq_set(const struct scmi_protocol_handle *ph, u32 domain,
@@ -993,6 +1021,25 @@ static bool scmi_fast_switch_possible(const struct scmi_protocol_handle *ph,
 	return dom->fc_info && dom->fc_info[PERF_FC_LEVEL].set_addr;
 }
 
+static int scmi_fast_switch_rate_limit(const struct scmi_protocol_handle *ph,
+				       u32 domain, u32 *rate_limit)
+{
+	struct perf_dom_info *dom;
+
+	if (!rate_limit)
+		return -EINVAL;
+
+	dom = scmi_perf_domain_lookup(ph, domain);
+	if (IS_ERR(dom))
+		return PTR_ERR(dom);
+
+	if (!dom->fc_info)
+		return -EINVAL;
+
+	*rate_limit = dom->fc_info[PERF_FC_LEVEL].rate_limit;
+	return 0;
+}
+
 static enum scmi_power_scale
 scmi_power_scale_get(const struct scmi_protocol_handle *ph)
 {
@@ -1009,11 +1056,13 @@ static const struct scmi_perf_proto_ops perf_proto_ops = {
 	.level_set = scmi_perf_level_set,
 	.level_get = scmi_perf_level_get,
 	.transition_latency_get = scmi_dvfs_transition_latency_get,
+	.rate_limit_get = scmi_dvfs_rate_limit_get,
 	.device_opps_add = scmi_dvfs_device_opps_add,
 	.freq_set = scmi_dvfs_freq_set,
 	.freq_get = scmi_dvfs_freq_get,
 	.est_power_get = scmi_dvfs_est_power_get,
 	.fast_switch_possible = scmi_fast_switch_possible,
+	.fast_switch_rate_limit = scmi_fast_switch_rate_limit,
 	.power_scale_get = scmi_power_scale_get,
 };
 

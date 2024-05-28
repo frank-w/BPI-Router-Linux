@@ -2960,6 +2960,11 @@ S: 2364 Old Trail Drive
 S: Reston, Virginia 20191
 S: USA
 
+N: Sekhar Nori
+E: nori.sekhar@gmail.com
+D: Maintainer of Texas Instruments DaVinci machine support, contributor
+D: to device drivers relevant to that SoC family.
+
 N: Fredrik Noring
 E: noring@nocrew.org
 W: http://www.lysator.liu.se/~noring/
@@ -3140,6 +3145,10 @@ D: Book: "Linux verstehen und anwenden" (Hanser-Verlag)
 S: Triftstra=DFe 55
 S: 13353 Berlin
 S: Germany
+
+N: Gustavo Pimental
+E: gustavo.pimentel@synopsys.com
+D: PCI driver for Synopsys DesignWare
 
 N: Emanuel Pirker
 E: epirker@edu.uni-klu.ac.at

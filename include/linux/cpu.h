@@ -130,7 +130,7 @@ static inline void cpu_maps_update_done(void)
 static inline int add_cpu(unsigned int cpu) { return 0;}
 
 #endif /* CONFIG_SMP */
-extern struct bus_type cpu_subsys;
+extern const struct bus_type cpu_subsys;
 
 extern int lockdep_is_cpus_held(void);
 
@@ -221,7 +221,18 @@ void cpuhp_report_idle_dead(void);
 static inline void cpuhp_report_idle_dead(void) { }
 #endif /* #ifdef CONFIG_HOTPLUG_CPU */
 
+#ifdef CONFIG_CPU_MITIGATIONS
 extern bool cpu_mitigations_off(void);
 extern bool cpu_mitigations_auto_nosmt(void);
+#else
+static inline bool cpu_mitigations_off(void)
+{
+	return true;
+}
+static inline bool cpu_mitigations_auto_nosmt(void)
+{
+	return false;
+}
+#endif
 
 #endif /* _LINUX_CPU_H_ */

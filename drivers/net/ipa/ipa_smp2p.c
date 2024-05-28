@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0
 
 /* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019-2022 Linaro Ltd.
+ * Copyright (C) 2019-2024 Linaro Ltd.
  */
 
-#include <linux/types.h>
-#include <linux/platform_device.h>
 #include <linux/interrupt.h>
 #include <linux/notifier.h>
 #include <linux/panic_notifier.h>
+#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
-#include <linux/soc/qcom/smem.h>
+#include <linux/types.h>
+
 #include <linux/soc/qcom/smem_state.h>
 
-#include "ipa_smp2p.h"
 #include "ipa.h"
+#include "ipa_smp2p.h"
 #include "ipa_uc.h"
 
 /**
@@ -90,7 +90,7 @@ static void ipa_smp2p_notify(struct ipa_smp2p *smp2p)
 	if (smp2p->notified)
 		return;
 
-	smp2p->power_on = pm_runtime_get_if_active(smp2p->ipa->dev, true) > 0;
+	smp2p->power_on = pm_runtime_get_if_active(smp2p->ipa->dev) > 0;
 
 	/* Signal whether the IPA power is enabled */
 	mask = BIT(smp2p->enabled_bit);

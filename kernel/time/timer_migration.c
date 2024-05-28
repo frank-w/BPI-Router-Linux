@@ -765,10 +765,17 @@ bool tmigr_update_events(struct tmigr_group *group, struct tmigr_group *child,
 		 *    is never set.
 		 *  - tmigr_inactive_up() takes care of the propagation by
 		 *    itself and ignores the return value. But an immediate
-		 *    return is required because nothing has to be done in this
-		 *    level as the event could be ignored.
+		 *    return is possible if there is a parent, sparing group
+		 *    locking at this level, because the upper walking call to
+		 *    the parent will take care about removing this event from
+		 *    within the group and update next_expiry accordingly.
+		 *
+		 * However if there is no parent, ie: the hierarchy has only a
+		 * single level so @group is the top level group, make sure the
+		 * first event information of the group is updated properly and
+		 * also handled properly, so skip this fast return path.
 		 */
-		if (evt->ignore && !remote)
+		if (evt->ignore && !remote && group->parent)
 			return true;
 
 		raw_spin_lock(&group->lock);
@@ -782,8 +789,11 @@ bool tmigr_update_events(struct tmigr_group *group, struct tmigr_group *child,
 	 * queue when the expiry time changed only or when it could be ignored.
 	 */
 	if (timerqueue_node_queued(&evt->nextevt)) {
-		if ((evt->nextevt.expires == nextexp) && !evt->ignore)
+		if ((evt->nextevt.expires == nextexp) && !evt->ignore) {
+			/* Make sure not to miss a new CPU event with the same expiry */
+			evt->cpu = first_childevt->cpu;
 			goto check_toplvl;
+		}
 
 		if (!timerqueue_del(&group->events, &evt->nextevt))
 			WRITE_ONCE(group->next_expiry, KTIME_MAX);
@@ -1058,8 +1068,15 @@ void tmigr_handle_remote(void)
 	 * in tmigr_handle_remote_up() anyway. Keep this check to speed up the
 	 * return when nothing has to be done.
 	 */
-	if (!tmigr_check_migrator(tmc->tmgroup, tmc->childmask))
-		return;
+	if (!tmigr_check_migrator(tmc->tmgroup, tmc->childmask)) {
+		/*
+		 * If this CPU was an idle migrator, make sure to clear its wakeup
+		 * value so it won't chase timers that have already expired elsewhere.
+		 * This avoids endless requeue from tmigr_new_timer().
+		 */
+		if (READ_ONCE(tmc->wakeup) == KTIME_MAX)
+			return;
+	}
 
 	data.now = get_jiffies_update(&data.basej);
 
@@ -1579,7 +1596,7 @@ static int tmigr_setup_groups(unsigned int cpu, unsigned int node)
 
 	} while (i < tmigr_hierarchy_levels);
 
-	do {
+	while (i > 0) {
 		group = stack[--i];
 
 		if (err < 0) {
@@ -1628,7 +1645,7 @@ static int tmigr_setup_groups(unsigned int cpu, unsigned int node)
 				tmigr_connect_child_parent(child, group);
 			}
 		}
-	} while (i > 0);
+	}
 
 	kfree(stack);
 
