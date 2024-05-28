@@ -1322,7 +1322,13 @@ static struct device_node *parse_interrupt_map(struct device_node *np,
 	addrcells = of_bus_n_addr_cells(np);
 
 	imap = of_get_property(np, "interrupt-map", &imaplen);
-	if (!imap || imaplen <= (addrcells + intcells))
+	imaplen /= sizeof(*imap);
+
+	/*
+	 * Check that we have enough runway for the child unit interrupt
+	 * specifier and a phandle. That's the bare minimum we can expect.
+	 */
+	if (!imap || imaplen <= (addrcells + intcells + 1))
 		return NULL;
 	imap_end = imap + imaplen;
 
@@ -1346,8 +1352,14 @@ static struct device_node *parse_interrupt_map(struct device_node *np,
 		if (!index)
 			return sup_args.np;
 
-		of_node_put(sup_args.np);
+		/*
+		 * Account for the full parent unit interrupt specifier
+		 * (address cells, interrupt cells, and phandle).
+		 */
+		imap += of_bus_n_addr_cells(sup_args.np);
 		imap += sup_args.args_count + 1;
+
+		of_node_put(sup_args.np);
 		index--;
 	}
 
