@@ -590,7 +590,7 @@ EXPORT_SYMBOL_GPL(vfs_removexattr);
  * Extended attribute SET operations
  */
 
-int setxattr_copy(const char __user *name, struct xattr_ctx *ctx)
+int setxattr_copy(const char __user *name, struct kernel_xattr_ctx *ctx)
 {
 	int error;
 
@@ -620,7 +620,7 @@ int setxattr_copy(const char __user *name, struct xattr_ctx *ctx)
 }
 
 int do_setxattr(struct mnt_idmap *idmap, struct dentry *dentry,
-		struct xattr_ctx *ctx)
+		struct kernel_xattr_ctx *ctx)
 {
 	if (is_posix_acl_xattr(ctx->kname->name))
 		return do_set_acl(idmap, dentry, ctx->kname->name,
@@ -636,7 +636,7 @@ setxattr(struct mnt_idmap *idmap, struct dentry *d,
 	int flags)
 {
 	struct xattr_name kname;
-	struct xattr_ctx ctx = {
+	struct kernel_xattr_ctx ctx = {
 		.cvalue   = value,
 		.kvalue   = NULL,
 		.size     = size,
@@ -655,21 +655,28 @@ setxattr(struct mnt_idmap *idmap, struct dentry *d,
 	return error;
 }
 
-static int path_setxattr(const char __user *pathname,
+static int do_setxattrat(int dfd, const char __user *pathname, unsigned int at_flags,
 			 const char __user *name, const void __user *value,
-			 size_t size, int flags, unsigned int lookup_flags)
+			 size_t size, int xattr_flags)
 {
 	struct path path;
 	int error;
+	int lookup_flags;
 
+	if ((at_flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH)) != 0)
+		return -EINVAL;
+
+	lookup_flags = (at_flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+	if (at_flags & AT_EMPTY_PATH)
+		lookup_flags |= LOOKUP_EMPTY | LOOKUP_NO_FMODE_PATH;
 retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
+	error = user_path_at(dfd, pathname, lookup_flags, &path);
 	if (error)
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
 		error = setxattr(mnt_idmap(path.mnt), path.dentry, name,
-				 value, size, flags);
+				 value, size, xattr_flags);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -680,18 +687,42 @@ retry:
 	return error;
 }
 
+SYSCALL_DEFINE6(setxattrat, int, dfd, const char __user *, pathname, unsigned int, at_flags,
+		const char __user *, name, const struct xattr_args __user *, uargs,
+		size_t, usize)
+{
+	struct xattr_args args = {};
+	int error;
+
+	BUILD_BUG_ON(sizeof(struct xattr_args) < XATTR_ARGS_SIZE_VER0);
+	BUILD_BUG_ON(sizeof(struct xattr_args) != XATTR_ARGS_SIZE_LATEST);
+
+	if (unlikely(usize < XATTR_ARGS_SIZE_VER0))
+		return -EINVAL;
+	if (usize > PAGE_SIZE)
+		return -E2BIG;
+
+	error = copy_struct_from_user(&args, sizeof(args), uargs, usize);
+	if (error)
+		return error;
+
+	return do_setxattrat(dfd, pathname, at_flags, name,
+			     (const void __user *)(unsigned long)args.value,
+			     args.size, args.flags);
+}
+
 SYSCALL_DEFINE5(setxattr, const char __user *, pathname,
 		const char __user *, name, const void __user *, value,
 		size_t, size, int, flags)
 {
-	return path_setxattr(pathname, name, value, size, flags, LOOKUP_FOLLOW);
+	return do_setxattrat(AT_FDCWD, pathname, 0, name, value, size, flags);
 }
 
 SYSCALL_DEFINE5(lsetxattr, const char __user *, pathname,
 		const char __user *, name, const void __user *, value,
 		size_t, size, int, flags)
 {
-	return path_setxattr(pathname, name, value, size, flags, 0);
+	return do_setxattrat(AT_FDCWD, pathname, AT_SYMLINK_NOFOLLOW, name, value, size, flags);
 }
 
 SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
@@ -719,7 +750,7 @@ SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
  */
 ssize_t
 do_getxattr(struct mnt_idmap *idmap, struct dentry *d,
-	struct xattr_ctx *ctx)
+	struct kernel_xattr_ctx *ctx)
 {
 	ssize_t error;
 	char *kname = ctx->kname->name;
@@ -754,7 +785,7 @@ getxattr(struct mnt_idmap *idmap, struct dentry *d,
 {
 	ssize_t error;
 	struct xattr_name kname;
-	struct xattr_ctx ctx = {
+	struct kernel_xattr_ctx ctx = {
 		.value    = value,
 		.kvalue   = NULL,
 		.size     = size,
@@ -774,14 +805,22 @@ getxattr(struct mnt_idmap *idmap, struct dentry *d,
 	return error;
 }
 
-static ssize_t path_getxattr(const char __user *pathname,
+static ssize_t do_getxattrat(int dfd, const char __user *pathname, unsigned int at_flags,
 			     const char __user *name, void __user *value,
-			     size_t size, unsigned int lookup_flags)
+			     size_t size)
 {
 	struct path path;
 	ssize_t error;
+	int lookup_flags;
+
+	if ((at_flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH)) != 0)
+		return -EINVAL;
+
+	lookup_flags = (at_flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+	if (at_flags & AT_EMPTY_PATH)
+		lookup_flags |= LOOKUP_EMPTY | LOOKUP_NO_FMODE_PATH;
 retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
+	error = user_path_at(dfd, pathname, lookup_flags, &path);
 	if (error)
 		return error;
 	error = getxattr(mnt_idmap(path.mnt), path.dentry, name, value, size);
@@ -793,16 +832,42 @@ retry:
 	return error;
 }
 
+SYSCALL_DEFINE6(getxattrat, int, dfd, const char __user *, pathname, unsigned int, at_flags,
+		const char __user *, name, struct xattr_args __user *, uargs, size_t, usize)
+{
+	struct xattr_args args = {};
+	int error;
+
+	BUILD_BUG_ON(sizeof(struct xattr_args) < XATTR_ARGS_SIZE_VER0);
+	BUILD_BUG_ON(sizeof(struct xattr_args) != XATTR_ARGS_SIZE_LATEST);
+
+	if (unlikely(usize < XATTR_ARGS_SIZE_VER0))
+		return -EINVAL;
+	if (usize > PAGE_SIZE)
+		return -E2BIG;
+
+	error = copy_struct_from_user(&args, sizeof(args), uargs, usize);
+	if (error)
+		return error;
+
+	if (args.flags != 0)
+		return -EINVAL;
+
+	return do_getxattrat(dfd, pathname, at_flags, name,
+			     (void __user *)(unsigned long)args.value,
+			     args.size);
+}
+
 SYSCALL_DEFINE4(getxattr, const char __user *, pathname,
 		const char __user *, name, void __user *, value, size_t, size)
 {
-	return path_getxattr(pathname, name, value, size, LOOKUP_FOLLOW);
+	return do_getxattrat(AT_FDCWD, pathname, 0, name, value, size);
 }
 
 SYSCALL_DEFINE4(lgetxattr, const char __user *, pathname,
 		const char __user *, name, void __user *, value, size_t, size)
 {
-	return path_getxattr(pathname, name, value, size, 0);
+	return do_getxattrat(AT_FDCWD, pathname, AT_SYMLINK_NOFOLLOW, name, value, size);
 }
 
 SYSCALL_DEFINE4(fgetxattr, int, fd, const char __user *, name,
@@ -852,13 +917,22 @@ listxattr(struct dentry *d, char __user *list, size_t size)
 	return error;
 }
 
-static ssize_t path_listxattr(const char __user *pathname, char __user *list,
-			      size_t size, unsigned int lookup_flags)
+static ssize_t do_listxattrat(int dfd, const char __user *pathname,
+			      unsigned int at_flags,
+			      char __user *list, size_t size)
 {
 	struct path path;
 	ssize_t error;
+	int lookup_flags;
+
+	if ((at_flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH)) != 0)
+		return -EINVAL;
+
+	lookup_flags = (at_flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+	if (at_flags & AT_EMPTY_PATH)
+		lookup_flags |= LOOKUP_EMPTY | LOOKUP_NO_FMODE_PATH;
 retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
+	error = user_path_at(dfd, pathname, lookup_flags, &path);
 	if (error)
 		return error;
 	error = listxattr(path.dentry, list, size);
@@ -870,16 +944,23 @@ retry:
 	return error;
 }
 
+SYSCALL_DEFINE5(listxattrat, int, dfd, const char __user *, pathname,
+		unsigned int, at_flags,
+		char __user *, list, size_t, size)
+{
+	return do_listxattrat(dfd, pathname, at_flags, list, size);
+}
+
 SYSCALL_DEFINE3(listxattr, const char __user *, pathname, char __user *, list,
 		size_t, size)
 {
-	return path_listxattr(pathname, list, size, LOOKUP_FOLLOW);
+	return do_listxattrat(AT_FDCWD, pathname, 0, list, size);
 }
 
 SYSCALL_DEFINE3(llistxattr, const char __user *, pathname, char __user *, list,
 		size_t, size)
 {
-	return path_listxattr(pathname, list, size, 0);
+	return do_listxattrat(AT_FDCWD, pathname, AT_SYMLINK_NOFOLLOW, list, size);
 }
 
 SYSCALL_DEFINE3(flistxattr, int, fd, char __user *, list, size_t, size)
@@ -898,7 +979,7 @@ SYSCALL_DEFINE3(flistxattr, int, fd, char __user *, list, size_t, size)
 /*
  * Extended attribute REMOVE operations
  */
-static long
+static int
 removexattr(struct mnt_idmap *idmap, struct dentry *d,
 	    const char __user *name)
 {
@@ -917,13 +998,21 @@ removexattr(struct mnt_idmap *idmap, struct dentry *d,
 	return vfs_removexattr(idmap, d, kname);
 }
 
-static int path_removexattr(const char __user *pathname,
-			    const char __user *name, unsigned int lookup_flags)
+static int do_removexattrat(int dfd, const char __user *pathname,
+			    unsigned int at_flags, const char __user *name)
 {
 	struct path path;
 	int error;
+	int lookup_flags;
+
+	if ((at_flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH)) != 0)
+		return -EINVAL;
+
+	lookup_flags = (at_flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+	if (at_flags & AT_EMPTY_PATH)
+		lookup_flags |= LOOKUP_EMPTY | LOOKUP_NO_FMODE_PATH;
 retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
+	error = user_path_at(dfd, pathname, lookup_flags, &path);
 	if (error)
 		return error;
 	error = mnt_want_write(path.mnt);
@@ -939,16 +1028,22 @@ retry:
 	return error;
 }
 
+SYSCALL_DEFINE4(removexattrat, int, dfd, const char __user *, pathname,
+		unsigned int, at_flags, const char __user *, name)
+{
+	return do_removexattrat(dfd, pathname, at_flags, name);
+}
+
 SYSCALL_DEFINE2(removexattr, const char __user *, pathname,
 		const char __user *, name)
 {
-	return path_removexattr(pathname, name, LOOKUP_FOLLOW);
+	return do_removexattrat(AT_FDCWD, pathname, 0, name);
 }
 
 SYSCALL_DEFINE2(lremovexattr, const char __user *, pathname,
 		const char __user *, name)
 {
-	return path_removexattr(pathname, name, 0);
+	return do_removexattrat(AT_FDCWD, pathname, AT_SYMLINK_NOFOLLOW, name);
 }
 
 SYSCALL_DEFINE2(fremovexattr, int, fd, const char __user *, name)
