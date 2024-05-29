@@ -50,26 +50,15 @@ static void iwl_mvm_print_esr_state(struct iwl_mvm *mvm, u32 mask)
 static u32 iwl_mvm_get_free_fw_link_id(struct iwl_mvm *mvm,
 				       struct iwl_mvm_vif *mvm_vif)
 {
-	u32 link_id;
+	u32 i;
 
 	lockdep_assert_held(&mvm->mutex);
 
-	link_id = ffz(mvm->fw_link_ids_map);
+	for (i = 0; i < ARRAY_SIZE(mvm->link_id_to_link_conf); i++)
+		if (!rcu_access_pointer(mvm->link_id_to_link_conf[i]))
+			return i;
 
-	/* this case can happen if there're deactivated but not removed links */
-	if (link_id > IWL_MVM_FW_MAX_LINK_ID)
-		return IWL_MVM_FW_LINK_ID_INVALID;
-
-	mvm->fw_link_ids_map |= BIT(link_id);
-	return link_id;
-}
-
-static void iwl_mvm_release_fw_link_id(struct iwl_mvm *mvm, u32 link_id)
-{
-	lockdep_assert_held(&mvm->mutex);
-
-	if (!WARN_ON(link_id > IWL_MVM_FW_MAX_LINK_ID))
-		mvm->fw_link_ids_map &= ~BIT(link_id);
+	return IWL_MVM_FW_LINK_ID_INVALID;
 }
 
 static int iwl_mvm_link_cmd_send(struct iwl_mvm *mvm,
@@ -380,7 +369,6 @@ int iwl_mvm_unset_link_mapping(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 
 	RCU_INIT_POINTER(mvm->link_id_to_link_conf[link_info->fw_link_id],
 			 NULL);
-	iwl_mvm_release_fw_link_id(mvm, link_info->fw_link_id);
 	return 0;
 }
 
@@ -978,6 +966,9 @@ void iwl_mvm_exit_esr(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 
 	lockdep_assert_held(&mvm->mutex);
 
+	if (!IWL_MVM_AUTO_EML_ENABLE)
+		return;
+
 	/* Nothing to do */
 	if (!mvmvif->esr_active)
 		return;
@@ -1024,6 +1015,9 @@ void iwl_mvm_block_esr(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
 
 	lockdep_assert_held(&mvm->mutex);
+
+	if (!IWL_MVM_AUTO_EML_ENABLE)
+		return;
 
 	/* This should be called only with disable reasons */
 	if (WARN_ON(!(reason & IWL_MVM_BLOCK_ESR_REASONS)))
@@ -1082,6 +1076,13 @@ static void iwl_mvm_esr_unblocked(struct iwl_mvm *mvm,
 
 	IWL_DEBUG_INFO(mvm, "EMLSR is unblocked\n");
 
+	/* We exited due to an EXIT reason, so MLO scan was scheduled already */
+	if (mvmvif->last_esr_exit.reason &&
+	    !(mvmvif->last_esr_exit.reason & IWL_MVM_BLOCK_ESR_REASONS)) {
+		IWL_DEBUG_INFO(mvm, "Wait for MLO scan\n");
+		return;
+	}
+
 	/*
 	 * If EMLSR was blocked for more than 30 seconds, or the last link
 	 * selection decided to not enter EMLSR, trigger a new scan.
@@ -1110,6 +1111,9 @@ void iwl_mvm_unblock_esr(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
 
 	lockdep_assert_held(&mvm->mutex);
+
+	if (!IWL_MVM_AUTO_EML_ENABLE)
+		return;
 
 	/* This should be called only with disable reasons */
 	if (WARN_ON(!(reason & IWL_MVM_BLOCK_ESR_REASONS)))

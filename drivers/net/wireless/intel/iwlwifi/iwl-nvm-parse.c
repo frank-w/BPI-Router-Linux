@@ -38,16 +38,13 @@ enum nvm_offsets {
 	N_HW_ADDRS = 3,
 	NVM_CHANNELS = 0x1E0 - NVM_SW_SECTION,
 
-	/* NVM calibration section offset (in words) definitions */
-	NVM_CALIB_SECTION = 0x2B8,
-	XTAL_CALIB = 0x316 - NVM_CALIB_SECTION,
-
 	/* NVM REGULATORY -Section offset (in words) definitions */
 	NVM_CHANNELS_SDP = 0,
 };
 
 enum ext_nvm_offsets {
 	/* NVM HW-Section offset (in words) definitions */
+
 	MAC_ADDRESS_OVERRIDE_EXT_NVM = 1,
 
 	/* NVM SW-Section offset (in words) definitions */
@@ -1574,9 +1571,6 @@ iwl_parse_nvm_data(struct iwl_trans *trans, const struct iwl_cfg *cfg,
 			     &regulatory[NVM_CHANNELS_SDP] :
 			     &nvm_sw[NVM_CHANNELS];
 
-		/* in family 8000 Xtal calibration values moved to OTP */
-		data->xtal_calib[0] = *(nvm_calib + XTAL_CALIB);
-		data->xtal_calib[1] = *(nvm_calib + XTAL_CALIB + 1);
 		lar_enabled = true;
 	} else {
 		u16 lar_offset = data->nvm_version < 0xE39 ?
@@ -1625,11 +1619,15 @@ static u32 iwl_nvm_get_regdom_bw_flags(const u16 *nvm_chan,
 			flags &= ~NL80211_RRF_NO_HT40PLUS;
 		if (nvm_chan[ch_idx] >= FIRST_2GHZ_HT_MINUS)
 			flags &= ~NL80211_RRF_NO_HT40MINUS;
-	} else if (nvm_flags & NVM_CHANNEL_40MHZ) {
+	} else if (ch_idx < NUM_2GHZ_CHANNELS + NUM_5GHZ_CHANNELS &&
+		   nvm_flags & NVM_CHANNEL_40MHZ) {
 		if ((ch_idx - NUM_2GHZ_CHANNELS) % 2 == 0)
 			flags &= ~NL80211_RRF_NO_HT40PLUS;
 		else
 			flags &= ~NL80211_RRF_NO_HT40MINUS;
+	} else if (nvm_flags & NVM_CHANNEL_40MHZ) {
+		flags &= ~NL80211_RRF_NO_HT40PLUS;
+		flags &= ~NL80211_RRF_NO_HT40MINUS;
 	}
 
 	if (!(nvm_flags & NVM_CHANNEL_80MHZ))

@@ -9,6 +9,7 @@
 
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <linux/cleanup.h>
 #include <linux/leds.h>
 #include <linux/in6.h>
 
@@ -23,7 +24,7 @@
 #include "iwl-op-mode.h"
 #include "iwl-trans.h"
 #include "fw/notif-wait.h"
-#include "iwl-eeprom-parse.h"
+#include "iwl-nvm-utils.h"
 #include "fw/file.h"
 #include "iwl-config.h"
 #include "sta.h"
@@ -426,6 +427,7 @@ struct iwl_mvm_esr_exit {
  * @csa_bcn_pending: indicates that we are waiting for a beacon on a new channel
  * @csa_blocks_tx: CSA is blocking TX
  * @features: hw features active for this vif
+ * @max_tx_op: max TXOP in usecs for all ACs, zero for no limit.
  * @ap_beacon_time: AP beacon time for synchronisation (on older FW)
  * @bf_enabled: indicates if beacon filtering is enabled
  * @ba_enabled: indicated if beacon abort is enabled
@@ -537,6 +539,8 @@ struct iwl_mvm_vif {
 	struct {
 		struct ieee80211_key_conf __rcu *keys[2];
 	} bcn_prot;
+
+	u16 max_tx_op;
 
 	u16 link_selection_res;
 	u8 link_selection_primary;
@@ -1040,7 +1044,6 @@ struct iwl_mvm {
 	struct iwl_rx_phy_info last_phy_info;
 	struct ieee80211_sta __rcu *fw_id_to_mac_id[IWL_MVM_STATION_COUNT_MAX];
 	struct ieee80211_link_sta __rcu *fw_id_to_link_sta[IWL_MVM_STATION_COUNT_MAX];
-	unsigned long fw_link_ids_map;
 	u8 rx_ba_sessions;
 
 	/* configured by mac80211 */
@@ -1329,6 +1332,8 @@ struct iwl_mvm {
 
 #define IWL_MAC80211_GET_MVM(_hw)			\
 	IWL_OP_MODE_GET_MVM((struct iwl_op_mode *)((_hw)->priv))
+
+DEFINE_GUARD(mvm, struct iwl_mvm *, mutex_lock(&_T->mutex), mutex_unlock(&_T->mutex))
 
 /**
  * enum iwl_mvm_status - MVM status bits
