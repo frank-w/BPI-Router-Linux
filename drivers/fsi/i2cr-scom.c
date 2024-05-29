@@ -73,9 +73,18 @@ static ssize_t i2cr_scom_write(struct file *filep, const char __user *buf, size_
 	return len;
 }
 
+static int i2cr_scom_open(struct inode *inode, struct file *file)
+{
+	struct i2cr_scom *scom = container_of(inode->i_cdev, struct i2cr_scom, cdev);
+
+	file->private_data = scom;
+
+	return 0;
+}
+
 static const struct file_operations i2cr_scom_fops = {
 	.owner		= THIS_MODULE,
-	.open		= simple_open,
+	.open		= i2cr_scom_open,
 	.llseek		= i2cr_scom_llseek,
 	.read		= i2cr_scom_read,
 	.write		= i2cr_scom_write,
