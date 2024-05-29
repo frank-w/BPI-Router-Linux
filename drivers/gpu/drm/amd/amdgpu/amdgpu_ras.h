@@ -46,7 +46,7 @@ struct amdgpu_iv_entry;
 #define AMDGPU_RAS_GPU_ERR_HBM_BIST_TEST(x)		AMDGPU_GET_REG_FIELD(x, 7, 7)
 #define AMDGPU_RAS_GPU_ERR_SOCKET_ID(x)			AMDGPU_GET_REG_FIELD(x, 10, 8)
 #define AMDGPU_RAS_GPU_ERR_AID_ID(x)			AMDGPU_GET_REG_FIELD(x, 12, 11)
-#define AMDGPU_RAS_GPU_ERR_HBM_ID(x)			AMDGPU_GET_REG_FIELD(x, 13, 13)
+#define AMDGPU_RAS_GPU_ERR_HBM_ID(x)			AMDGPU_GET_REG_FIELD(x, 14, 13)
 #define AMDGPU_RAS_GPU_ERR_BOOT_STATUS(x)		AMDGPU_GET_REG_FIELD(x, 31, 31)
 
 #define AMDGPU_RAS_BOOT_STATUS_POLLING_LIMIT	1000
@@ -67,13 +67,8 @@ struct amdgpu_iv_entry;
 /* The high three bits indicates socketid */
 #define AMDGPU_RAS_GET_FEATURES(val)  ((val) & ~AMDGPU_RAS_FEATURES_SOCKETID_MASK)
 
-#define RAS_EVENT_LOG(_adev, _id, _fmt, ...)				\
-do {									\
-	if (amdgpu_ras_event_id_is_valid((_adev), (_id)))			\
-	    dev_info((_adev)->dev, "{%llu}" _fmt, (_id), ##__VA_ARGS__);	\
-	else								\
-	    dev_info((_adev)->dev, _fmt, ##__VA_ARGS__);			\
-} while (0)
+#define RAS_EVENT_LOG(adev, id, fmt, ...)	\
+	amdgpu_ras_event_log_print((adev), (id), (fmt), ##__VA_ARGS__);
 
 enum amdgpu_ras_block {
 	AMDGPU_RAS_BLOCK__UMC = 0,
@@ -955,5 +950,9 @@ int amdgpu_ras_reserve_page(struct amdgpu_device *adev, uint64_t pfn);
 int amdgpu_ras_put_poison_req(struct amdgpu_device *adev,
 		enum amdgpu_ras_block block, uint16_t pasid,
 		pasid_notify pasid_fn, void *data, uint32_t reset);
+
+__printf(3, 4)
+void amdgpu_ras_event_log_print(struct amdgpu_device *adev, u64 event_id,
+				const char *fmt, ...);
 
 #endif

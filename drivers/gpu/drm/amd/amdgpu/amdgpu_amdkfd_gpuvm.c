@@ -415,6 +415,10 @@ static int amdgpu_amdkfd_bo_validate(struct amdgpu_bo *bo, uint32_t domain,
 		 "Called with userptr BO"))
 		return -EINVAL;
 
+	/* bo has been pinned, not need validate it */
+	if (bo->tbo.pin_count)
+		return 0;
+
 	amdgpu_bo_placement_from_domain(bo, domain);
 
 	ret = ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
@@ -1088,7 +1092,10 @@ static int init_user_pages(struct kgd_mem *mem, uint64_t user_addr,
 
 	ret = amdgpu_ttm_tt_get_user_pages(bo, bo->tbo.ttm->pages, &range);
 	if (ret) {
-		pr_err("%s: Failed to get user pages: %d\n", __func__, ret);
+		if (ret == -EAGAIN)
+			pr_debug("Failed to get user pages, try again\n");
+		else
+			pr_err("%s: Failed to get user pages: %d\n", __func__, ret);
 		goto unregister_out;
 	}
 
@@ -1472,13 +1479,30 @@ static int amdgpu_amdkfd_gpuvm_pin_bo(struct amdgpu_bo *bo, u32 domain)
 	if (unlikely(ret))
 		return ret;
 
+	if (bo->flags & AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS) {
+		/*
+		 * If bo is not contiguous on VRAM, move to system memory first to ensure
+		 * we can get contiguous VRAM space after evicting other BOs.
+		 */
+		if (!(bo->tbo.resource->placement & TTM_PL_FLAG_CONTIGUOUS)) {
+			struct ttm_operation_ctx ctx = { true, false };
+
+			amdgpu_bo_placement_from_domain(bo, AMDGPU_GEM_DOMAIN_GTT);
+			ret = ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
+			if (unlikely(ret)) {
+				pr_debug("validate bo 0x%p to GTT failed %d\n", &bo->tbo, ret);
+				goto out;
+			}
+		}
+	}
+
 	ret = amdgpu_bo_pin_restricted(bo, domain, 0, 0);
 	if (ret)
 		pr_err("Error in Pinning BO to domain: %d\n", domain);
 
 	amdgpu_bo_sync_wait(bo, AMDGPU_FENCE_OWNER_KFD, false);
+out:
 	amdgpu_bo_unreserve(bo);
-
 	return ret;
 }
 
@@ -1714,6 +1738,10 @@ int amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu(
 			alloc_flags = AMDGPU_GEM_CREATE_VRAM_WIPE_ON_RELEASE;
 			alloc_flags |= (flags & KFD_IOC_ALLOC_MEM_FLAGS_PUBLIC) ?
 			AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED : 0;
+
+			/* For contiguous VRAM allocation */
+			if (flags & KFD_IOC_ALLOC_MEM_FLAGS_CONTIGUOUS)
+				alloc_flags |= AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS;
 		}
 		xcp_id = fpriv->xcp_id == AMDGPU_XCP_NO_PARTITION ?
 					0 : fpriv->xcp_id;
@@ -2712,7 +2740,7 @@ static int confirm_valid_user_pages_locked(struct amdkfd_process_info *process_i
 
 		/* keep mem without hmm range at userptr_inval_list */
 		if (!mem->range)
-			 continue;
+			continue;
 
 		/* Only check mem with hmm range associated */
 		valid = amdgpu_ttm_tt_get_user_pages_done(
@@ -2955,9 +2983,6 @@ int amdgpu_amdkfd_gpuvm_restore_process_bos(void *info, struct dma_fence __rcu *
 
 		list_for_each_entry(attachment, &mem->attachments, list) {
 			if (!attachment->is_mapped)
-				continue;
-
-			if (attachment->bo_va->base.bo->tbo.pin_count)
 				continue;
 
 			kfd_mem_dmaunmap_attachment(mem, attachment);
