@@ -1356,10 +1356,10 @@ static void bch2_insert_fixup_btree_ptr(struct btree_update *as,
 	struct bch_fs *c = as->c;
 	struct bkey_packed *k;
 	struct printbuf buf = PRINTBUF;
-	unsigned long old, new, v;
+	unsigned long old, new;
 
 	BUG_ON(insert->k.type == KEY_TYPE_btree_ptr_v2 &&
-	       !btree_ptr_sectors_written(insert));
+	       !btree_ptr_sectors_written(bkey_i_to_s_c(insert)));
 
 	if (unlikely(!test_bit(JOURNAL_replay_done, &c->journal.flags)))
 		bch2_journal_key_overwritten(c, b->c.btree_id, b->c.level, insert->k.p);
@@ -1395,14 +1395,14 @@ static void bch2_insert_fixup_btree_ptr(struct btree_update *as,
 	bch2_btree_bset_insert_key(trans, path, b, node_iter, insert);
 	set_btree_node_dirty_acct(c, b);
 
-	v = READ_ONCE(b->flags);
+	old = READ_ONCE(b->flags);
 	do {
-		old = new = v;
+		new = old;
 
 		new &= ~BTREE_WRITE_TYPE_MASK;
 		new |= BTREE_WRITE_interior;
 		new |= 1 << BTREE_NODE_need_write;
-	} while ((v = cmpxchg(&b->flags, old, new)) != old);
+	} while (!try_cmpxchg(&b->flags, &old, new));
 
 	printbuf_exit(&buf);
 }

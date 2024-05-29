@@ -213,6 +213,18 @@ static long bch2_ioctl_fsck_offline(struct bch_ioctl_fsck_offline __user *user_a
 
 	if (arg.opts) {
 		char *optstr = strndup_user((char __user *)(unsigned long) arg.opts, 1 << 16);
+		char *ro, *rest;
+
+		/*
+		 * If passed a "read_only" mount option, remove it because it is
+		 * no longer a valid mount option, and the filesystem will be
+		 * set "read_only" regardless.
+		 */
+		ro = strstr(optstr, "read_only");
+		if (ro) {
+			rest = ro + strlen("read_only");
+			memmove(ro, rest, strlen(rest) + 1);
+		}
 
 		ret =   PTR_ERR_OR_ZERO(optstr) ?:
 			bch2_parse_mount_opts(NULL, &thr->opts, optstr);
@@ -223,6 +235,7 @@ static long bch2_ioctl_fsck_offline(struct bch_ioctl_fsck_offline __user *user_a
 	}
 
 	opt_set(thr->opts, stdio, (u64)(unsigned long)&thr->thr.stdio);
+	opt_set(thr->opts, read_only, 1);
 
 	/* We need request_key() to be called before we punt to kthread: */
 	opt_set(thr->opts, nostart, true);
@@ -604,7 +617,7 @@ static long bch2_ioctl_dev_usage(struct bch_fs *c,
 	arg.bucket_size		= ca->mi.bucket_size;
 	arg.nr_buckets		= ca->mi.nbuckets - ca->mi.first_bucket;
 
-	for (i = 0; i < BCH_DATA_NR; i++) {
+	for (i = 0; i < ARRAY_SIZE(arg.d); i++) {
 		arg.d[i].buckets	= src.d[i].buckets;
 		arg.d[i].sectors	= src.d[i].sectors;
 		arg.d[i].fragmented	= src.d[i].fragmented;

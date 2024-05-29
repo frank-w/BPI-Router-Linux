@@ -221,8 +221,8 @@
 	x(deleted_inode_is_dir,					213)	\
 	x(deleted_inode_not_unlinked,				214)	\
 	x(extent_overlapping,					215)	\
-	x(extent_in_missing_inode,				216)	\
-	x(extent_in_non_reg_inode,				217)	\
+	x(key_in_missing_inode,					216)	\
+	x(key_in_wrong_inode_type,				217)	\
 	x(extent_past_end_of_inode,				218)	\
 	x(dirent_empty_name,					219)	\
 	x(dirent_val_too_big,					220)	\
@@ -275,7 +275,8 @@
 	x(sb_clean_entry_overrun,				267)	\
 	x(btree_ptr_v2_written_0,				268)	\
 	x(subvol_snapshot_bad,					269)	\
-	x(subvol_inode_bad,					270)
+	x(subvol_inode_bad,					270)	\
+	x(alloc_key_stripe_sectors_wrong,			271)
 
 enum bch_sb_error_id {
 #define x(t, n) BCH_FSCK_ERR_##t = n,
