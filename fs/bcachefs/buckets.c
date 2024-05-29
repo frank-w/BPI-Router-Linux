@@ -309,11 +309,19 @@ void bch2_dev_usage_update(struct bch_fs *c, struct bch_dev *ca,
 	u->d[old->data_type].sectors -= bch2_bucket_sectors_dirty(*old);
 	u->d[new->data_type].sectors += bch2_bucket_sectors_dirty(*new);
 
-	u->d[BCH_DATA_cached].sectors += new->cached_sectors;
-	u->d[BCH_DATA_cached].sectors -= old->cached_sectors;
-
 	u->d[old->data_type].fragmented -= bch2_bucket_sectors_fragmented(ca, *old);
 	u->d[new->data_type].fragmented += bch2_bucket_sectors_fragmented(ca, *new);
+
+	u->d[BCH_DATA_cached].sectors -= old->cached_sectors;
+	u->d[BCH_DATA_cached].sectors += new->cached_sectors;
+
+	unsigned old_unstriped = bch2_bucket_sectors_unstriped(*old);
+	u->d[BCH_DATA_unstriped].buckets -= old_unstriped != 0;
+	u->d[BCH_DATA_unstriped].sectors -= old_unstriped;
+
+	unsigned new_unstriped = bch2_bucket_sectors_unstriped(*new);
+	u->d[BCH_DATA_unstriped].buckets += new_unstriped != 0;
+	u->d[BCH_DATA_unstriped].sectors += new_unstriped;
 
 	preempt_enable();
 }
@@ -527,6 +535,7 @@ int bch2_check_fix_ptrs(struct btree_trans *trans,
 				g->gen_valid		= true;
 				g->gen			= p.ptr.gen;
 				g->data_type		= 0;
+				g->stripe_sectors	= 0;
 				g->dirty_sectors	= 0;
 				g->cached_sectors	= 0;
 			} else {
@@ -572,6 +581,7 @@ int bch2_check_fix_ptrs(struct btree_trans *trans,
 				g->gen_valid		= true;
 				g->gen			= p.ptr.gen;
 				g->data_type		= data_type;
+				g->stripe_sectors	= 0;
 				g->dirty_sectors	= 0;
 				g->cached_sectors	= 0;
 			} else {
@@ -888,13 +898,13 @@ void bch2_trans_account_disk_usage_change(struct btree_trans *trans)
 	 */
 	s64 should_not_have_added = added - (s64) disk_res_sectors;
 	if (unlikely(should_not_have_added > 0)) {
-		u64 old, new, v = atomic64_read(&c->sectors_available);
+		u64 old, new;
 
+		old = atomic64_read(&c->sectors_available);
 		do {
-			old = v;
 			new = max_t(s64, 0, old - should_not_have_added);
-		} while ((v = atomic64_cmpxchg(&c->sectors_available,
-					       old, new)) != old);
+		} while (!atomic64_try_cmpxchg(&c->sectors_available,
+					       &old, new));
 
 		added -= should_not_have_added;
 		warn = true;
@@ -962,14 +972,14 @@ need_mark:
 
 static int __mark_pointer(struct btree_trans *trans, struct bch_dev *ca,
 			  struct bkey_s_c k,
-			  const struct bch_extent_ptr *ptr,
+			  const struct extent_ptr_decoded *p,
 			  s64 sectors, enum bch_data_type ptr_data_type,
 			  struct bch_alloc_v4 *a)
 {
-	u32 *dst_sectors = !ptr->cached
-		? &a->dirty_sectors
-		: &a->cached_sectors;
-	int ret = bch2_bucket_ref_update(trans, ca, k, ptr, sectors, ptr_data_type,
+	u32 *dst_sectors = p->has_ec	? &a->stripe_sectors :
+		!p->ptr.cached		? &a->dirty_sectors :
+					  &a->cached_sectors;
+	int ret = bch2_bucket_ref_update(trans, ca, k, &p->ptr, sectors, ptr_data_type,
 					 a->gen, a->data_type, dst_sectors);
 
 	if (ret)
@@ -1005,7 +1015,7 @@ static int bch2_trigger_pointer(struct btree_trans *trans,
 	if (flags & BTREE_TRIGGER_transactional) {
 		struct bkey_i_alloc_v4 *a = bch2_trans_start_alloc_update(trans, bucket);
 		ret = PTR_ERR_OR_ZERO(a) ?:
-			__mark_pointer(trans, ca, k, &p.ptr, *sectors, bp.data_type, &a->v);
+			__mark_pointer(trans, ca, k, &p, *sectors, bp.data_type, &a->v);
 		if (ret)
 			goto err;
 
@@ -1021,7 +1031,7 @@ static int bch2_trigger_pointer(struct btree_trans *trans,
 		struct bucket *g = gc_bucket(ca, bucket.offset);
 		bucket_lock(g);
 		struct bch_alloc_v4 old = bucket_m_to_alloc(*g), new = old;
-		ret = __mark_pointer(trans, ca, k, &p.ptr, *sectors, bp.data_type, &new);
+		ret = __mark_pointer(trans, ca, k, &p, *sectors, bp.data_type, &new);
 		if (!ret) {
 			alloc_to_bucket(g, new);
 			bch2_dev_usage_update(c, ca, &old, &new, 0, true);
@@ -1486,7 +1496,7 @@ int __bch2_disk_reservation_add(struct bch_fs *c, struct disk_reservation *res,
 			      u64 sectors, int flags)
 {
 	struct bch_fs_pcpu *pcpu;
-	u64 old, v, get;
+	u64 old, get;
 	s64 sectors_available;
 	int ret;
 
@@ -1497,17 +1507,16 @@ int __bch2_disk_reservation_add(struct bch_fs *c, struct disk_reservation *res,
 	if (sectors <= pcpu->sectors_available)
 		goto out;
 
-	v = atomic64_read(&c->sectors_available);
+	old = atomic64_read(&c->sectors_available);
 	do {
-		old = v;
 		get = min((u64) sectors + SECTORS_CACHE, old);
 
 		if (get < sectors) {
 			preempt_enable();
 			goto recalculate;
 		}
-	} while ((v = atomic64_cmpxchg(&c->sectors_available,
-				       old, old - get)) != old);
+	} while (!atomic64_try_cmpxchg(&c->sectors_available,
+				       &old, old - get));
 
 	pcpu->sectors_available		+= get;
 

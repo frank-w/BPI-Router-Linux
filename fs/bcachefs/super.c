@@ -564,7 +564,7 @@ static void __bch2_fs_free(struct bch_fs *c)
 	BUG_ON(atomic_read(&c->journal_keys.ref));
 	bch2_fs_btree_write_buffer_exit(c);
 	percpu_free_rwsem(&c->mark_lock);
-	EBUG_ON(percpu_u64_get(c->online_reserved));
+	EBUG_ON(c->online_reserved && percpu_u64_get(c->online_reserved));
 	free_percpu(c->online_reserved);
 
 	darray_exit(&c->btree_roots_extra);
@@ -927,12 +927,13 @@ static struct bch_fs *bch2_fs_alloc(struct bch_sb *sb, struct bch_opts opts)
 	if (ret)
 		goto err;
 
-	for (i = 0; i < c->sb.nr_devices; i++)
-		if (bch2_member_exists(c->disk_sb.sb, i) &&
-		    bch2_dev_alloc(c, i)) {
-			ret = -EEXIST;
+	for (i = 0; i < c->sb.nr_devices; i++) {
+		if (!bch2_member_exists(c->disk_sb.sb, i))
+			continue;
+		ret = bch2_dev_alloc(c, i);
+		if (ret)
 			goto err;
-		}
+	}
 
 	bch2_journal_entry_res_resize(&c->journal,
 			&c->btree_root_journal_res,
@@ -2029,6 +2030,9 @@ err:
 /* return with ref on ca->ref: */
 struct bch_dev *bch2_dev_lookup(struct bch_fs *c, const char *name)
 {
+	if (!strncmp(name, "/dev/", strlen("/dev/")))
+		name += strlen("/dev/");
+
 	for_each_member_device(c, ca)
 		if (!strcmp(name, ca->name))
 			return ca;
