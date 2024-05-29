@@ -2126,7 +2126,7 @@ deferred_init_memmap_chunk(unsigned long start_pfn, unsigned long end_pfn,
 __weak int __init
 deferred_page_init_max_threads(const struct cpumask *node_cpumask)
 {
-	return 1;
+	return max_t(int, cpumask_weight(node_cpumask), 1);
 }
 
 /* Initialise remaining memory on a node */

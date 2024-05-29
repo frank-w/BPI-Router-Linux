@@ -200,6 +200,9 @@ static inline void __folio_rmap_sanity_checks(struct folio *folio,
 	/* hugetlb folios are handled separately. */
 	VM_WARN_ON_FOLIO(folio_test_hugetlb(folio), folio);
 
+	/* When (un)mapping zeropages, we should never touch ref+mapcount. */
+	VM_WARN_ON_FOLIO(is_zero_folio(folio), folio);
+
 	/*
 	 * TODO: we get driver-allocated folios that have nothing to do with
 	 * the rmap using vm_insert_page(); therefore, we cannot assume that
@@ -680,16 +683,6 @@ struct page_vma_mapped_walk {
 	spinlock_t *ptl;
 	unsigned int flags;
 };
-
-#define DEFINE_PAGE_VMA_WALK(name, _page, _vma, _address, _flags)	\
-	struct page_vma_mapped_walk name = {				\
-		.pfn = page_to_pfn(_page),				\
-		.nr_pages = compound_nr(_page),				\
-		.pgoff = page_to_pgoff(_page),				\
-		.vma = _vma,						\
-		.address = _address,					\
-		.flags = _flags,					\
-	}
 
 #define DEFINE_FOLIO_VMA_WALK(name, _folio, _vma, _address, _flags)	\
 	struct page_vma_mapped_walk name = {				\

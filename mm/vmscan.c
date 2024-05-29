@@ -92,6 +92,11 @@ struct scan_control {
 	unsigned long	anon_cost;
 	unsigned long	file_cost;
 
+#ifdef CONFIG_MEMCG
+	/* Swappiness value for proactive reclaim. Always use sc_swappiness()! */
+	int *proactive_swappiness;
+#endif
+
 	/* Can active folios be deactivated as part of reclaim? */
 #define DEACTIVATE_ANON 1
 #define DEACTIVATE_FILE 2
@@ -127,6 +132,9 @@ struct scan_control {
 	 */
 	unsigned int memcg_low_reclaim:1;
 	unsigned int memcg_low_skipped:1;
+
+	/* Shared cgroup tree walk failed, rescan the whole tree */
+	unsigned int memcg_full_walk:1;
 
 	unsigned int hibernation_mode:1;
 
@@ -189,7 +197,7 @@ struct scan_control {
 #endif
 
 /*
- * From 0 .. 200.  Higher means more swappy.
+ * From 0 .. MAX_SWAPPINESS.  Higher means more swappy.
  */
 int vm_swappiness = 60;
 
@@ -233,6 +241,13 @@ static bool writeback_throttling_sane(struct scan_control *sc)
 #endif
 	return false;
 }
+
+static int sc_swappiness(struct scan_control *sc, struct mem_cgroup *memcg)
+{
+	if (sc->proactive && sc->proactive_swappiness)
+		return *sc->proactive_swappiness;
+	return mem_cgroup_swappiness(memcg);
+}
 #else
 static bool cgroup_reclaim(struct scan_control *sc)
 {
@@ -247,6 +262,11 @@ static bool root_reclaim(struct scan_control *sc)
 static bool writeback_throttling_sane(struct scan_control *sc)
 {
 	return true;
+}
+
+static int sc_swappiness(struct scan_control *sc, struct mem_cgroup *memcg)
+{
+	return READ_ONCE(vm_swappiness);
 }
 #endif
 
@@ -1437,9 +1457,7 @@ free_it:
 		 */
 		nr_reclaimed += nr_pages;
 
-		if (folio_test_large(folio) &&
-		    folio_test_large_rmappable(folio))
-			folio_undo_large_rmappable(folio);
+		folio_undo_large_rmappable(folio);
 		if (folio_batch_add(&free_folios, folio) == 0) {
 			mem_cgroup_uncharge_folios(&free_folios);
 			try_to_unmap_flush();
@@ -1846,9 +1864,7 @@ static unsigned int move_folios_to_lru(struct lruvec *lruvec,
 		if (unlikely(folio_put_testzero(folio))) {
 			__folio_clear_lru_flags(folio);
 
-			if (folio_test_large(folio) &&
-			    folio_test_large_rmappable(folio))
-				folio_undo_large_rmappable(folio);
+			folio_undo_large_rmappable(folio);
 			if (folio_batch_add(&free_folios, folio) == 0) {
 				spin_unlock_irq(&lruvec->lru_lock);
 				mem_cgroup_uncharge_folios(&free_folios);
@@ -2353,7 +2369,7 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
 	struct mem_cgroup *memcg = lruvec_memcg(lruvec);
 	unsigned long anon_cost, file_cost, total_cost;
-	int swappiness = mem_cgroup_swappiness(memcg);
+	int swappiness = sc_swappiness(sc, memcg);
 	u64 fraction[ANON_AND_FILE];
 	u64 denominator = 0;	/* gcc */
 	enum scan_balance scan_balance;
@@ -2429,7 +2445,7 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	ap = swappiness * (total_cost + 1);
 	ap /= anon_cost + 1;
 
-	fp = (200 - swappiness) * (total_cost + 1);
+	fp = (MAX_SWAPPINESS - swappiness) * (total_cost + 1);
 	fp /= file_cost + 1;
 
 	fraction[0] = ap;
@@ -2634,7 +2650,7 @@ static int get_swappiness(struct lruvec *lruvec, struct scan_control *sc)
 	    mem_cgroup_get_nr_swap_pages(memcg) < MIN_LRU_BATCH)
 		return 0;
 
-	return mem_cgroup_swappiness(memcg);
+	return sc_swappiness(sc, memcg);
 }
 
 static int get_nr_gens(struct lruvec *lruvec, int type)
@@ -4449,7 +4465,7 @@ static int get_type_to_scan(struct lruvec *lruvec, int swappiness, int *tier_idx
 {
 	int type, tier;
 	struct ctrl_pos sp, pv;
-	int gain[ANON_AND_FILE] = { swappiness, 200 - swappiness };
+	int gain[ANON_AND_FILE] = { swappiness, MAX_SWAPPINESS - swappiness };
 
 	/*
 	 * Compare the first tier of anon with that of file to determine which
@@ -4496,7 +4512,7 @@ static int isolate_folios(struct lruvec *lruvec, struct scan_control *sc, int sw
 		type = LRU_GEN_ANON;
 	else if (swappiness == 1)
 		type = LRU_GEN_FILE;
-	else if (swappiness == 200)
+	else if (swappiness == MAX_SWAPPINESS)
 		type = LRU_GEN_ANON;
 	else if (!(sc->gfp_mask & __GFP_IO))
 		type = LRU_GEN_FILE;
@@ -5430,9 +5446,9 @@ static int run_cmd(char cmd, int memcg_id, int nid, unsigned long seq,
 
 	lruvec = get_lruvec(memcg, nid);
 
-	if (swappiness < 0)
+	if (swappiness < MIN_SWAPPINESS)
 		swappiness = get_swappiness(lruvec, sc);
-	else if (swappiness > 200)
+	else if (swappiness > MAX_SWAPPINESS)
 		goto done;
 
 	switch (cmd) {
@@ -5845,9 +5861,25 @@ static inline bool should_continue_reclaim(struct pglist_data *pgdat,
 static void shrink_node_memcgs(pg_data_t *pgdat, struct scan_control *sc)
 {
 	struct mem_cgroup *target_memcg = sc->target_mem_cgroup;
+	struct mem_cgroup_reclaim_cookie reclaim = {
+		.pgdat = pgdat,
+	};
+	struct mem_cgroup_reclaim_cookie *partial = &reclaim;
 	struct mem_cgroup *memcg;
 
-	memcg = mem_cgroup_iter(target_memcg, NULL, NULL);
+	/*
+	 * In most cases, direct reclaimers can do partial walks
+	 * through the cgroup tree, using an iterator state that
+	 * persists across invocations. This strikes a balance between
+	 * fairness and allocation latency.
+	 *
+	 * For kswapd, reliable forward progress is more important
+	 * than a quick return to idle. Always do full walks.
+	 */
+	if (current_is_kswapd() || sc->memcg_full_walk)
+		partial = NULL;
+
+	memcg = mem_cgroup_iter(target_memcg, NULL, partial);
 	do {
 		struct lruvec *lruvec = mem_cgroup_lruvec(memcg, pgdat);
 		unsigned long reclaimed;
@@ -5897,7 +5929,12 @@ static void shrink_node_memcgs(pg_data_t *pgdat, struct scan_control *sc)
 				   sc->nr_scanned - scanned,
 				   sc->nr_reclaimed - reclaimed);
 
-	} while ((memcg = mem_cgroup_iter(target_memcg, memcg, NULL)));
+		/* If partial walks are allowed, bail once goal is reached */
+		if (partial && sc->nr_reclaimed >= sc->nr_to_reclaim) {
+			mem_cgroup_iter_break(target_memcg, memcg);
+			break;
+		}
+	} while ((memcg = mem_cgroup_iter(target_memcg, memcg, partial)));
 }
 
 static void shrink_node(pg_data_t *pgdat, struct scan_control *sc)
@@ -6271,6 +6308,20 @@ retry:
 		return 1;
 
 	/*
+	 * In most cases, direct reclaimers can do partial walks
+	 * through the cgroup tree to meet the reclaim goal while
+	 * keeping latency low. Since the iterator state is shared
+	 * among all direct reclaim invocations (to retain fairness
+	 * among cgroups), though, high concurrency can result in
+	 * individual threads not seeing enough cgroups to make
+	 * meaningful forward progress. Avoid false OOMs in this case.
+	 */
+	if (!sc->memcg_full_walk) {
+		sc->memcg_full_walk = 1;
+		goto retry;
+	}
+
+	/*
 	 * We make inactive:active ratio decisions based on the node's
 	 * composition of memory, but a restrictive reclaim_idx or a
 	 * memory.low cgroup setting can exempt large amounts of
@@ -6515,12 +6566,14 @@ unsigned long mem_cgroup_shrink_node(struct mem_cgroup *memcg,
 unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 					   unsigned long nr_pages,
 					   gfp_t gfp_mask,
-					   unsigned int reclaim_options)
+					   unsigned int reclaim_options,
+					   int *swappiness)
 {
 	unsigned long nr_reclaimed;
 	unsigned int noreclaim_flag;
 	struct scan_control sc = {
 		.nr_to_reclaim = max(nr_pages, SWAP_CLUSTER_MAX),
+		.proactive_swappiness = swappiness,
 		.gfp_mask = (current_gfp_context(gfp_mask) & GFP_RECLAIM_MASK) |
 				(GFP_HIGHUSER_MOVABLE & ~GFP_RECLAIM_MASK),
 		.reclaim_idx = MAX_NR_ZONES - 1,
