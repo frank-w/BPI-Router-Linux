@@ -32,7 +32,8 @@ enum bcm4377_chip {
 #define BCM4378_DEVICE_ID 0x5f69
 #define BCM4387_DEVICE_ID 0x5f71
 
-#define BCM4377_TIMEOUT 1000
+#define BCM4377_TIMEOUT msecs_to_jiffies(1000)
+#define BCM4377_BOOT_TIMEOUT msecs_to_jiffies(5000)
 
 /*
  * These devices only support DMA transactions inside a 32bit window
@@ -495,6 +496,10 @@ struct bcm4377_data;
  *                  extended scanning
  * broken_mws_transport_config: Set to true if the chip erroneously claims to
  *                              support MWS Transport Configuration
+ * broken_le_ext_adv_report_phy: Set to true if this chip stuffs flags inside
+ *                               reserved bits of Primary/Secondary_PHY inside
+ *                               LE Extended Advertising Report events which
+ *                               have to be ignored
  * send_calibration: Optional callback to send calibration data
  * send_ptb: Callback to send "PTB" regulatory/calibration data
  */
@@ -513,6 +518,7 @@ struct bcm4377_hw {
 	unsigned long broken_ext_scan : 1;
 	unsigned long broken_mws_transport_config : 1;
 	unsigned long broken_le_coded : 1;
+	unsigned long broken_le_ext_adv_report_phy : 1;
 
 	int (*send_calibration)(struct bcm4377_data *bcm4377);
 	int (*send_ptb)(struct bcm4377_data *bcm4377,
@@ -716,7 +722,7 @@ static void bcm4377_handle_ack(struct bcm4377_data *bcm4377,
 		ring->events[msgid] = NULL;
 	}
 
-	bitmap_release_region(ring->msgids, msgid, ring->n_entries);
+	bitmap_release_region(ring->msgids, msgid, 0);
 
 unlock:
 	spin_unlock_irqrestore(&ring->lock, flags);
@@ -1857,7 +1863,7 @@ static int bcm4377_boot(struct bcm4377_data *bcm4377)
 	dev_dbg(&bcm4377->pdev->dev, "waiting for firmware to boot\n");
 
 	ret = wait_for_completion_interruptible_timeout(&bcm4377->event,
-							BCM4377_TIMEOUT);
+							BCM4377_BOOT_TIMEOUT);
 	if (ret == 0) {
 		ret = -ETIMEDOUT;
 		goto out_dma_free;
@@ -2373,6 +2379,8 @@ static int bcm4377_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		set_bit(HCI_QUIRK_BROKEN_EXT_SCAN, &hdev->quirks);
 	if (bcm4377->hw->broken_le_coded)
 		set_bit(HCI_QUIRK_BROKEN_LE_CODED, &hdev->quirks);
+	if (bcm4377->hw->broken_le_ext_adv_report_phy)
+		set_bit(HCI_QUIRK_FIXUP_LE_EXT_ADV_REPORT_PHY, &hdev->quirks);
 
 	pci_set_drvdata(pdev, bcm4377);
 	hci_set_drvdata(hdev, bcm4377);
@@ -2477,6 +2485,7 @@ static const struct bcm4377_hw bcm4377_hw_variants[] = {
 		.clear_pciecfg_subsystem_ctrl_bit19 = true,
 		.broken_mws_transport_config = true,
 		.broken_le_coded = true,
+		.broken_le_ext_adv_report_phy = true,
 		.send_calibration = bcm4387_send_calibration,
 		.send_ptb = bcm4378_send_ptb,
 	},

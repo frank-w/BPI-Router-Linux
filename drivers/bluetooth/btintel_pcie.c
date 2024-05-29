@@ -382,7 +382,7 @@ static int btintel_pcie_recv_frame(struct btintel_pcie_data *data,
 
 	/* The first 4 bytes indicates the Intel PCIe specific packet type */
 	pdata = skb_pull_data(skb, BTINTEL_PCIE_HCI_TYPE_LEN);
-	if (!data) {
+	if (!pdata) {
 		bt_dev_err(hdev, "Corrupted packet received");
 		ret = -EILSEQ;
 		goto exit_error;
@@ -1197,9 +1197,11 @@ static int btintel_pcie_setup(struct hci_dev *hdev)
 		bt_dev_err(hdev, "Unsupported Intel hw variant (%u)",
 			   INTEL_HW_VARIANT(ver_tlv.cnvi_bt));
 		err = -EINVAL;
+		goto exit_error;
 		break;
 	}
 
+	btintel_print_fseq_info(hdev);
 exit_error:
 	kfree_skb(skb);
 
@@ -1327,6 +1329,12 @@ static void btintel_pcie_remove(struct pci_dev *pdev)
 	data = pci_get_drvdata(pdev);
 
 	btintel_pcie_reset_bt(data);
+	for (int i = 0; i < data->alloc_vecs; i++) {
+		struct msix_entry *msix_entry;
+
+		msix_entry = &data->msix_entries[i];
+		free_irq(msix_entry->vector, msix_entry);
+	}
 
 	pci_free_irq_vectors(pdev);
 
