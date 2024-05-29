@@ -5,14 +5,14 @@
 
 #include "xe_uc.h"
 
+#include "xe_assert.h"
 #include "xe_device.h"
 #include "xe_gsc.h"
 #include "xe_gsc_proxy.h"
 #include "xe_gt.h"
+#include "xe_gt_printk.h"
 #include "xe_guc.h"
-#include "xe_guc_db_mgr.h"
 #include "xe_guc_pc.h"
-#include "xe_guc_submit.h"
 #include "xe_huc.h"
 #include "xe_uc_fw.h"
 #include "xe_wopcm.h"
@@ -51,19 +51,16 @@ int xe_uc_init(struct xe_uc *uc)
 		goto err;
 
 	if (!xe_device_uc_enabled(uc_to_xe(uc)))
-		goto err;
+		return 0;
 
 	ret = xe_wopcm_init(&uc->wopcm);
 	if (ret)
 		goto err;
 
-	ret = xe_guc_submit_init(&uc->guc);
-	if (ret)
-		goto err;
-
-	ret = xe_guc_db_mgr_init(&uc->guc.dbm, ~0);
+	return 0;
 
 err:
+	xe_gt_err(uc_to_gt(uc), "Failed to initialize uC (%pe)\n", ERR_PTR(ret));
 	return ret;
 }
 
@@ -215,13 +212,13 @@ void xe_uc_stop_prepare(struct xe_uc *uc)
 	xe_guc_stop_prepare(&uc->guc);
 }
 
-int xe_uc_stop(struct xe_uc *uc)
+void xe_uc_stop(struct xe_uc *uc)
 {
 	/* GuC submission not enabled, nothing to do */
 	if (!xe_device_uc_enabled(uc_to_xe(uc)))
-		return 0;
+		return;
 
-	return xe_guc_stop(&uc->guc);
+	xe_guc_stop(&uc->guc);
 }
 
 int xe_uc_start(struct xe_uc *uc)
@@ -247,17 +244,13 @@ again:
 
 int xe_uc_suspend(struct xe_uc *uc)
 {
-	int ret;
-
 	/* GuC submission not enabled, nothing to do */
 	if (!xe_device_uc_enabled(uc_to_xe(uc)))
 		return 0;
 
 	uc_reset_wait(uc);
 
-	ret = xe_uc_stop(uc);
-	if (ret)
-		return ret;
+	xe_uc_stop(uc);
 
 	return xe_guc_suspend(&uc->guc);
 }

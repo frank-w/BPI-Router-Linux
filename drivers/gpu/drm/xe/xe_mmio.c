@@ -3,9 +3,11 @@
  * Copyright © 2021-2023 Intel Corporation
  */
 
-#include <linux/minmax.h>
-
 #include "xe_mmio.h"
+
+#include <linux/delay.h>
+#include <linux/io-64-nonatomic-lo-hi.h>
+#include <linux/minmax.h>
 
 #include <drm/drm_managed.h>
 #include <drm/xe_drm.h>
@@ -15,9 +17,12 @@
 #include "regs/xe_regs.h"
 #include "xe_bo.h"
 #include "xe_device.h"
+#include "xe_force_wake.h"
 #include "xe_ggtt.h"
 #include "xe_gt.h"
 #include "xe_gt_mcr.h"
+#include "xe_gt_printk.h"
+#include "xe_gt_sriov_vf.h"
 #include "xe_macros.h"
 #include "xe_module.h"
 #include "xe_sriov.h"
@@ -254,6 +259,21 @@ static int xe_mmio_tile_vram_size(struct xe_tile *tile, u64 *vram_size,
 	return xe_force_wake_put(gt_to_fw(gt), XE_FW_GT);
 }
 
+static void vram_fini(void *arg)
+{
+	struct xe_device *xe = arg;
+	struct xe_tile *tile;
+	int id;
+
+	if (xe->mem.vram.mapping)
+		iounmap(xe->mem.vram.mapping);
+
+	xe->mem.vram.mapping = NULL;
+
+	for_each_tile(tile, xe, id)
+		tile->mem.vram.mapping = NULL;
+}
+
 int xe_mmio_probe_vram(struct xe_device *xe)
 {
 	struct xe_tile *tile;
@@ -330,10 +350,20 @@ int xe_mmio_probe_vram(struct xe_device *xe)
 	drm_info(&xe->drm, "Available VRAM: %pa, %pa\n", &xe->mem.vram.io_start,
 		 &available_size);
 
-	return 0;
+	return devm_add_action_or_reset(xe->drm.dev, vram_fini, xe);
 }
 
-void xe_mmio_probe_tiles(struct xe_device *xe)
+static void tiles_fini(void *arg)
+{
+	struct xe_device *xe = arg;
+	struct xe_tile *tile;
+	int id;
+
+	for_each_tile(tile, xe, id)
+		tile->mmio.regs = NULL;
+}
+
+int xe_mmio_probe_tiles(struct xe_device *xe)
 {
 	size_t tile_mmio_size = SZ_16M, tile_mmio_ext_size = xe->info.tile_mmio_ext_size;
 	u8 id, tile_count = xe->info.tile_count;
@@ -384,15 +414,16 @@ add_mmio_ext:
 			regs += tile_mmio_ext_size;
 		}
 	}
+
+	return devm_add_action_or_reset(xe->drm.dev, tiles_fini, xe);
 }
 
-static void mmio_fini(struct drm_device *drm, void *arg)
+static void mmio_fini(void *arg)
 {
 	struct xe_device *xe = arg;
 
 	pci_iounmap(to_pci_dev(xe->drm.dev), xe->mmio.regs);
-	if (xe->mem.vram.mapping)
-		iounmap(xe->mem.vram.mapping);
+	xe->mmio.regs = NULL;
 }
 
 int xe_mmio_init(struct xe_device *xe)
@@ -417,47 +448,42 @@ int xe_mmio_init(struct xe_device *xe)
 	root_tile->mmio.size = SZ_16M;
 	root_tile->mmio.regs = xe->mmio.regs;
 
-	return drmm_add_action_or_reset(&xe->drm, mmio_fini, xe);
+	return devm_add_action_or_reset(xe->drm.dev, mmio_fini, xe);
 }
 
 u8 xe_mmio_read8(struct xe_gt *gt, struct xe_reg reg)
 {
 	struct xe_tile *tile = gt_to_tile(gt);
+	u32 addr = xe_mmio_adjusted_addr(gt, reg.addr);
 
-	if (reg.addr < gt->mmio.adj_limit)
-		reg.addr += gt->mmio.adj_offset;
-
-	return readb((reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + reg.addr);
+	return readb((reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + addr);
 }
 
 u16 xe_mmio_read16(struct xe_gt *gt, struct xe_reg reg)
 {
 	struct xe_tile *tile = gt_to_tile(gt);
+	u32 addr = xe_mmio_adjusted_addr(gt, reg.addr);
 
-	if (reg.addr < gt->mmio.adj_limit)
-		reg.addr += gt->mmio.adj_offset;
-
-	return readw((reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + reg.addr);
+	return readw((reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + addr);
 }
 
 void xe_mmio_write32(struct xe_gt *gt, struct xe_reg reg, u32 val)
 {
 	struct xe_tile *tile = gt_to_tile(gt);
+	u32 addr = xe_mmio_adjusted_addr(gt, reg.addr);
 
-	if (reg.addr < gt->mmio.adj_limit)
-		reg.addr += gt->mmio.adj_offset;
-
-	writel(val, (reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + reg.addr);
+	writel(val, (reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + addr);
 }
 
 u32 xe_mmio_read32(struct xe_gt *gt, struct xe_reg reg)
 {
 	struct xe_tile *tile = gt_to_tile(gt);
+	u32 addr = xe_mmio_adjusted_addr(gt, reg.addr);
 
-	if (reg.addr < gt->mmio.adj_limit)
-		reg.addr += gt->mmio.adj_offset;
+	if (!reg.vf && IS_SRIOV_VF(gt_to_xe(gt)))
+		return xe_gt_sriov_vf_read32(gt, reg);
 
-	return readl((reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + reg.addr);
+	return readl((reg.ext ? tile->mmio_ext.regs : tile->mmio.regs) + addr);
 }
 
 u32 xe_mmio_rmw32(struct xe_gt *gt, struct xe_reg reg, u32 clr, u32 set)
@@ -486,10 +512,9 @@ bool xe_mmio_in_range(const struct xe_gt *gt,
 		      const struct xe_mmio_range *range,
 		      struct xe_reg reg)
 {
-	if (reg.addr < gt->mmio.adj_limit)
-		reg.addr += gt->mmio.adj_offset;
+	u32 addr = xe_mmio_adjusted_addr(gt, reg.addr);
 
-	return range && reg.addr >= range->start && reg.addr <= range->end;
+	return range && addr >= range->start && addr <= range->end;
 }
 
 /**
@@ -519,10 +544,11 @@ u64 xe_mmio_read64_2x32(struct xe_gt *gt, struct xe_reg reg)
 	struct xe_reg reg_udw = { .addr = reg.addr + 0x4 };
 	u32 ldw, udw, oldudw, retries;
 
-	if (reg.addr < gt->mmio.adj_limit) {
-		reg.addr += gt->mmio.adj_offset;
-		reg_udw.addr += gt->mmio.adj_offset;
-	}
+	reg.addr = xe_mmio_adjusted_addr(gt, reg.addr);
+	reg_udw.addr = xe_mmio_adjusted_addr(gt, reg_udw.addr);
+
+	/* we shouldn't adjust just one register address */
+	xe_gt_assert(gt, reg_udw.addr == reg.addr + 0x4);
 
 	oldudw = xe_mmio_read32(gt, reg_udw);
 	for (retries = 5; retries; --retries) {
@@ -593,6 +619,67 @@ int xe_mmio_wait32(struct xe_gt *gt, struct xe_reg reg, u32 mask, u32 val, u32 t
 	if (ret != 0) {
 		read = xe_mmio_read32(gt, reg);
 		if ((read & mask) == val)
+			ret = 0;
+	}
+
+	if (out_val)
+		*out_val = read;
+
+	return ret;
+}
+
+/**
+ * xe_mmio_wait32_not() - Wait for a register to return anything other than the given masked value
+ * @gt: MMIO target GT
+ * @reg: register to read value from
+ * @mask: mask to be applied to the value read from the register
+ * @val: value to match after applying the mask
+ * @timeout_us: time out after this period of time. Wait logic tries to be
+ * smart, applying an exponential backoff until @timeout_us is reached.
+ * @out_val: if not NULL, points where to store the last unmasked value
+ * @atomic: needs to be true if calling from an atomic context
+ *
+ * This function polls for a masked value to change from a given value and
+ * returns zero on success or -ETIMEDOUT if timed out.
+ *
+ * Note that @timeout_us represents the minimum amount of time to wait before
+ * giving up. The actual time taken by this function can be a little more than
+ * @timeout_us for different reasons, specially in non-atomic contexts. Thus,
+ * it is possible that this function succeeds even after @timeout_us has passed.
+ */
+int xe_mmio_wait32_not(struct xe_gt *gt, struct xe_reg reg, u32 mask, u32 val, u32 timeout_us,
+		       u32 *out_val, bool atomic)
+{
+	ktime_t cur = ktime_get_raw();
+	const ktime_t end = ktime_add_us(cur, timeout_us);
+	int ret = -ETIMEDOUT;
+	s64 wait = 10;
+	u32 read;
+
+	for (;;) {
+		read = xe_mmio_read32(gt, reg);
+		if ((read & mask) != val) {
+			ret = 0;
+			break;
+		}
+
+		cur = ktime_get_raw();
+		if (!ktime_before(cur, end))
+			break;
+
+		if (ktime_after(ktime_add_us(cur, wait), end))
+			wait = ktime_us_delta(end, cur);
+
+		if (atomic)
+			udelay(wait);
+		else
+			usleep_range(wait, wait << 1);
+		wait <<= 1;
+	}
+
+	if (ret != 0) {
+		read = xe_mmio_read32(gt, reg);
+		if ((read & mask) != val)
 			ret = 0;
 	}
 
