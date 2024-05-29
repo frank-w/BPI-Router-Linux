@@ -77,6 +77,8 @@ extern void __add_wrong_size(void)
  */
 #define arch_xchg(ptr, v)	__xchg_op((ptr), (v), xchg, "")
 
+#include <linux/cmpxchg-emu.h>
+
 /*
  * Atomic compare and exchange.  Compare OLD with MEM, if identical,
  * store NEW in MEM.  Return the initial value in MEM.  Success is
@@ -91,10 +93,7 @@ extern void __add_wrong_size(void)
 	case __X86_CASE_B:						\
 	{								\
 		volatile u8 *__ptr = (volatile u8 *)(ptr);		\
-		asm volatile(lock "cmpxchgb %2,%1"			\
-			     : "=a" (__ret), "+m" (*__ptr)		\
-			     : "q" (__new), "0" (__old)			\
-			     : "memory");				\
+		__ret = (__typeof__(*(ptr)))cmpxchg_emu_u8(__ptr, (uintptr_t)__old, (uintptr_t)__new);	\
 		break;							\
 	}								\
 	case __X86_CASE_W:						\

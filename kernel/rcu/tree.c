@@ -96,6 +96,7 @@ static struct rcu_state rcu_state = {
 	.ofl_lock = __ARCH_SPIN_LOCK_UNLOCKED,
 	.srs_cleanup_work = __WORK_INITIALIZER(rcu_state.srs_cleanup_work,
 		rcu_sr_normal_gp_cleanup_work),
+	.srs_cleanups_pending = ATOMIC_INIT(0),
 };
 
 /* Dump rcu_node combining tree at boot to verify correct setup. */
@@ -175,6 +176,9 @@ static int gp_init_delay;
 module_param(gp_init_delay, int, 0444);
 static int gp_cleanup_delay;
 module_param(gp_cleanup_delay, int, 0444);
+static int nocb_patience_delay;
+module_param(nocb_patience_delay, int, 0444);
+static int nocb_patience_delay_jiffies;
 
 // Add delay to rcu_read_unlock() for strict grace periods.
 static int rcu_unlock_delay;
@@ -296,16 +300,6 @@ static void rcu_dynticks_eqs_online(void)
 }
 
 /*
- * Snapshot the ->dynticks counter with full ordering so as to allow
- * stable comparison of this counter with past and future snapshots.
- */
-static int rcu_dynticks_snap(int cpu)
-{
-	smp_mb();  // Fundamental RCU ordering guarantee.
-	return ct_dynticks_cpu_acquire(cpu);
-}
-
-/*
  * Return true if the snapshot returned from rcu_dynticks_snap()
  * indicates that RCU is in an extended quiescent state.
  */
@@ -321,7 +315,7 @@ static bool rcu_dynticks_in_eqs(int snap)
  */
 static bool rcu_dynticks_in_eqs_since(struct rcu_data *rdp, int snap)
 {
-	return snap != rcu_dynticks_snap(rdp->cpu);
+	return snap != ct_dynticks_cpu_acquire(rdp->cpu);
 }
 
 /*
@@ -769,7 +763,12 @@ static void rcu_gpnum_ovf(struct rcu_node *rnp, struct rcu_data *rdp)
  */
 static int dyntick_save_progress_counter(struct rcu_data *rdp)
 {
-	rdp->dynticks_snap = rcu_dynticks_snap(rdp->cpu);
+	/*
+	 * Full ordering against accesses prior current GP and also against
+	 * current GP sequence number is enforced by current rnp locking
+	 * with chained smp_mb__after_unlock_lock().
+	 */
+	rdp->dynticks_snap = ct_dynticks_cpu_acquire(rdp->cpu);
 	if (rcu_dynticks_in_eqs(rdp->dynticks_snap)) {
 		trace_rcu_fqs(rcu_state.name, rdp->gp_seq, rdp->cpu, TPS("dti"));
 		rcu_gpnum_ovf(rdp->mynode, rdp);
@@ -1463,14 +1462,11 @@ static void rcu_poll_gp_seq_end_unlocked(unsigned long *snap)
  * for this new grace period. Given that there are a fixed
  * number of wait nodes, if all wait nodes are in use
  * (which can happen when kworker callback processing
- * is delayed) and additional grace period is requested.
- * This means, a system is slow in processing callbacks.
- *
- * TODO: If a slow processing is detected, a first node
- * in the llist should be used as a wait-tail for this
- * grace period, therefore users which should wait due
- * to a slow process are handled by _this_ grace period
- * and not next.
+ * is delayed), first node in the llist is used as wait
+ * tail for this grace period. This means, the first node
+ * has to go through additional grace periods before it is
+ * part of the wait callbacks. This should be ok, as
+ * the system is slow in processing callbacks anyway.
  *
  * Below is an illustration of how the done and wait
  * tail pointers move from one set of rcu_synchronize nodes
@@ -1636,10 +1632,12 @@ static void rcu_sr_normal_gp_cleanup_work(struct work_struct *work)
 	 * the done tail list manipulations are protected here.
 	 */
 	done = smp_load_acquire(&rcu_state.srs_done_tail);
-	if (!done)
+	if (!done) {
+		/* See comments below. */
+		atomic_dec_return_release(&rcu_state.srs_cleanups_pending);
 		return;
+	}
 
-	WARN_ON_ONCE(!rcu_sr_is_wait_head(done));
 	head = done->next;
 	done->next = NULL;
 
@@ -1660,6 +1658,9 @@ static void rcu_sr_normal_gp_cleanup_work(struct work_struct *work)
 
 		rcu_sr_put_wait_head(rcu);
 	}
+
+	/* Order list manipulations with atomic access. */
+	atomic_dec_return_release(&rcu_state.srs_cleanups_pending);
 }
 
 /*
@@ -1667,7 +1668,7 @@ static void rcu_sr_normal_gp_cleanup_work(struct work_struct *work)
  */
 static void rcu_sr_normal_gp_cleanup(void)
 {
-	struct llist_node *wait_tail, *next, *rcu;
+	struct llist_node *wait_tail, *next = NULL, *rcu = NULL;
 	int done = 0;
 
 	wait_tail = rcu_state.srs_wait_tail;
@@ -1676,13 +1677,21 @@ static void rcu_sr_normal_gp_cleanup(void)
 
 	rcu_state.srs_wait_tail = NULL;
 	ASSERT_EXCLUSIVE_WRITER(rcu_state.srs_wait_tail);
-	WARN_ON_ONCE(!rcu_sr_is_wait_head(wait_tail));
 
 	/*
 	 * Process (a) and (d) cases. See an illustration.
 	 */
 	llist_for_each_safe(rcu, next, wait_tail->next) {
-		if (rcu_sr_is_wait_head(rcu))
+		/*
+		 * The done tail may reference a rcu_synchronize node.
+		 * Stop at done tail, as using rcu_sr_normal_complete()
+		 * from this path can result in use-after-free. This
+		 * may occur if, following the wake-up of the synchronize_rcu()
+		 * wait contexts and freeing up of node memory,
+		 * rcu_sr_normal_gp_cleanup_work() accesses the done tail and
+		 * its subsequent nodes.
+		 */
+		if (wait_tail->next == rcu_state.srs_done_tail)
 			break;
 
 		rcu_sr_normal_complete(rcu);
@@ -1693,16 +1702,34 @@ static void rcu_sr_normal_gp_cleanup(void)
 			break;
 	}
 
-	// concurrent sr_normal_gp_cleanup work might observe this update.
-	smp_store_release(&rcu_state.srs_done_tail, wait_tail);
+	/*
+	 * Fast path, no more users to process except putting the second last
+	 * wait head if no inflight-workers. If there are in-flight workers,
+	 * they will remove the last wait head.
+	 *
+	 * Note that the ACQUIRE orders atomic access with list manipulation.
+	 */
+	if (wait_tail->next && wait_tail->next->next == NULL &&
+	    rcu_sr_is_wait_head(wait_tail->next) &&
+	    !atomic_read_acquire(&rcu_state.srs_cleanups_pending)) {
+		rcu_sr_put_wait_head(wait_tail->next);
+		wait_tail->next = NULL;
+	}
+
+	/* Concurrent sr_normal_gp_cleanup work might observe this update. */
 	ASSERT_EXCLUSIVE_WRITER(rcu_state.srs_done_tail);
+	smp_store_release(&rcu_state.srs_done_tail, wait_tail);
 
 	/*
 	 * We schedule a work in order to perform a final processing
 	 * of outstanding users(if still left) and releasing wait-heads
 	 * added by rcu_sr_normal_gp_init() call.
 	 */
-	queue_work(sync_wq, &rcu_state.srs_cleanup_work);
+	if (wait_tail->next) {
+		atomic_inc(&rcu_state.srs_cleanups_pending);
+		if (!queue_work(sync_wq, &rcu_state.srs_cleanup_work))
+			atomic_dec(&rcu_state.srs_cleanups_pending);
+	}
 }
 
 /*
@@ -1719,14 +1746,16 @@ static bool rcu_sr_normal_gp_init(void)
 		return start_new_poll;
 
 	wait_head = rcu_sr_get_wait_head();
-	if (!wait_head) {
-		// Kick another GP to retry.
+	if (wait_head) {
+		/* Inject a wait-dummy-node. */
+		llist_add(wait_head, &rcu_state.srs_next);
+	} else {
+		// Kick another GP for first node.
 		start_new_poll = true;
-		return start_new_poll;
+		if (first == rcu_state.srs_done_tail)
+			return start_new_poll;
+		wait_head = first;
 	}
-
-	/* Inject a wait-dummy-node. */
-	llist_add(wait_head, &rcu_state.srs_next);
 
 	/*
 	 * A waiting list of rcu_synchronize nodes should be empty on
@@ -1810,7 +1839,7 @@ static noinline_for_stack bool rcu_gp_init(void)
 	WRITE_ONCE(rcu_state.gp_state, RCU_GP_ONOFF);
 	/* Exclude CPU hotplug operations. */
 	rcu_for_each_leaf_node(rnp) {
-		local_irq_save(flags);
+		local_irq_disable();
 		arch_spin_lock(&rcu_state.ofl_lock);
 		raw_spin_lock_rcu_node(rnp);
 		if (rnp->qsmaskinit == rnp->qsmaskinitnext &&
@@ -1818,7 +1847,7 @@ static noinline_for_stack bool rcu_gp_init(void)
 			/* Nothing to do on this leaf rcu_node structure. */
 			raw_spin_unlock_rcu_node(rnp);
 			arch_spin_unlock(&rcu_state.ofl_lock);
-			local_irq_restore(flags);
+			local_irq_enable();
 			continue;
 		}
 
@@ -1855,7 +1884,7 @@ static noinline_for_stack bool rcu_gp_init(void)
 
 		raw_spin_unlock_rcu_node(rnp);
 		arch_spin_unlock(&rcu_state.ofl_lock);
-		local_irq_restore(flags);
+		local_irq_enable();
 	}
 	rcu_gp_slow(gp_preinit_delay); /* Races with CPU hotplug. */
 
@@ -3757,6 +3786,7 @@ void kvfree_call_rcu(struct rcu_head *head, void *ptr)
 	unsigned long flags;
 	struct kfree_rcu_cpu *krcp;
 	bool success;
+	bool wakeup = false;
 
 	/*
 	 * Please note there is a limitation for the head-less
@@ -3807,10 +3837,12 @@ void kvfree_call_rcu(struct rcu_head *head, void *ptr)
 
 	// Set timer to drain after KFREE_DRAIN_JIFFIES.
 	if (rcu_scheduler_active == RCU_SCHEDULER_RUNNING)
-		schedule_delayed_monitor_work(krcp);
+		wakeup = true;
 
 unlock_return:
 	krc_this_cpu_unlock(krcp, flags);
+	if (wakeup)
+		schedule_delayed_monitor_work(krcp);
 
 	/*
 	 * Inline kvfree() after synchronize_rcu(). We can do
@@ -4313,11 +4345,14 @@ static int rcu_pending(int user)
 		return 1;
 
 	/* Is this a nohz_full CPU in userspace or idle?  (Ignore RCU if so.) */
-	if ((user || rcu_is_cpu_rrupt_from_idle()) && rcu_nohz_full_cpu())
+	gp_in_progress = rcu_gp_in_progress();
+	if ((user || rcu_is_cpu_rrupt_from_idle() ||
+	     (gp_in_progress &&
+	      time_before(jiffies, READ_ONCE(rcu_state.gp_start) + nocb_patience_delay_jiffies))) &&
+	    rcu_nohz_full_cpu())
 		return 0;
 
 	/* Is the RCU core waiting for a quiescent state from this CPU? */
-	gp_in_progress = rcu_gp_in_progress();
 	if (rdp->core_needs_qs && !rdp->cpu_no_qs.b.norm && gp_in_progress)
 		return 1;
 
@@ -4767,7 +4802,7 @@ rcu_boot_init_percpu_data(int cpu)
 	rdp->grpmask = leaf_node_cpu_bit(rdp->mynode, cpu);
 	INIT_WORK(&rdp->strict_work, strict_work_handler);
 	WARN_ON_ONCE(ct->dynticks_nesting != 1);
-	WARN_ON_ONCE(rcu_dynticks_in_eqs(rcu_dynticks_snap(cpu)));
+	WARN_ON_ONCE(rcu_dynticks_in_eqs(ct_dynticks_cpu(cpu)));
 	rdp->barrier_seq_snap = rcu_state.barrier_sequence;
 	rdp->rcu_ofl_gp_seq = rcu_state.gp_seq;
 	rdp->rcu_ofl_gp_state = RCU_GP_CLEANED;
@@ -5110,11 +5145,15 @@ void rcutree_migrate_callbacks(int cpu)
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 	bool needwake;
 
-	if (rcu_rdp_is_offloaded(rdp) ||
-	    rcu_segcblist_empty(&rdp->cblist))
-		return;  /* No callbacks to migrate. */
+	if (rcu_rdp_is_offloaded(rdp))
+		return;
 
 	raw_spin_lock_irqsave(&rcu_state.barrier_lock, flags);
+	if (rcu_segcblist_empty(&rdp->cblist)) {
+		raw_spin_unlock_irqrestore(&rcu_state.barrier_lock, flags);
+		return;  /* No callbacks to migrate. */
+	}
+
 	WARN_ON_ONCE(rcu_rdp_cpu_online(rdp));
 	rcu_barrier_entrain(rdp);
 	my_rdp = this_cpu_ptr(&rcu_data);
