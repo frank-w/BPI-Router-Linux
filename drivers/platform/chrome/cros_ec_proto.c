@@ -239,13 +239,12 @@ int cros_ec_check_result(struct cros_ec_device *ec_dev,
 }
 EXPORT_SYMBOL(cros_ec_check_result);
 
-/*
+/**
  * cros_ec_get_host_event_wake_mask
  *
  * Get the mask of host events that cause wake from suspend.
  *
  * @ec_dev: EC device to call
- * @msg: message structure to use
  * @mask: result when function returns 0.
  *
  * LOCKING:
@@ -427,13 +426,12 @@ exit:
 	return ret;
 }
 
-/*
+/**
  * cros_ec_get_host_command_version_mask
  *
  * Get the version mask of a given command.
  *
  * @ec_dev: EC device to call
- * @msg: message structure to use
  * @cmd: command to get the version of.
  * @mask: result when function returns 0.
  *
