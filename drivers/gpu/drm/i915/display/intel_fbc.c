@@ -48,6 +48,7 @@
 #include "i915_utils.h"
 #include "i915_vgpu.h"
 #include "i915_vma.h"
+#include "i9xx_plane_regs.h"
 #include "intel_cdclk.h"
 #include "intel_de.h"
 #include "intel_display_device.h"
@@ -326,8 +327,8 @@ static void i8xx_fbc_nuke(struct intel_fbc *fbc)
 	enum i9xx_plane_id i9xx_plane = fbc_state->plane->i9xx_plane;
 	struct drm_i915_private *dev_priv = fbc->i915;
 
-	intel_de_write_fw(dev_priv, DSPADDR(i9xx_plane),
-			  intel_de_read_fw(dev_priv, DSPADDR(i9xx_plane)));
+	intel_de_write_fw(dev_priv, DSPADDR(dev_priv, i9xx_plane),
+			  intel_de_read_fw(dev_priv, DSPADDR(dev_priv, i9xx_plane)));
 }
 
 static void i8xx_fbc_program_cfb(struct intel_fbc *fbc)
@@ -363,8 +364,8 @@ static void i965_fbc_nuke(struct intel_fbc *fbc)
 	enum i9xx_plane_id i9xx_plane = fbc_state->plane->i9xx_plane;
 	struct drm_i915_private *dev_priv = fbc->i915;
 
-	intel_de_write_fw(dev_priv, DSPSURF(i9xx_plane),
-			  intel_de_read_fw(dev_priv, DSPSURF(i9xx_plane)));
+	intel_de_write_fw(dev_priv, DSPSURF(dev_priv, i9xx_plane),
+			  intel_de_read_fw(dev_priv, DSPSURF(dev_priv, i9xx_plane)));
 }
 
 static const struct intel_fbc_funcs i965_fbc_funcs = {
@@ -1251,7 +1252,8 @@ static int intel_fbc_check_plane(struct intel_atomic_state *state,
 	 * Recommendation is to keep this combination disabled
 	 * Bspec: 50422 HSD: 14010260002
 	 */
-	if (IS_DISPLAY_VER(i915, 12, 14) && crtc_state->has_psr2) {
+	if (IS_DISPLAY_VER(i915, 12, 14) && crtc_state->has_sel_update &&
+	    !crtc_state->has_panel_replay) {
 		plane_state->no_fbc_reason = "PSR2 enabled";
 		return 0;
 	}
@@ -1259,7 +1261,7 @@ static int intel_fbc_check_plane(struct intel_atomic_state *state,
 	/* Wa_14016291713 */
 	if ((IS_DISPLAY_VER(i915, 12, 13) ||
 	     IS_DISPLAY_IP_STEP(i915, IP_VER(14, 0), STEP_A0, STEP_C0)) &&
-	    crtc_state->has_psr) {
+	    crtc_state->has_psr && !crtc_state->has_panel_replay) {
 		plane_state->no_fbc_reason = "PSR1 enabled (Wa_14016291713)";
 		return 0;
 	}

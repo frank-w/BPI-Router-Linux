@@ -356,7 +356,7 @@ static void hsw_pipe_crc_irq_handler(struct drm_i915_private *dev_priv,
 				     enum pipe pipe)
 {
 	display_pipe_crc_irq_handler(dev_priv, pipe,
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_1_IVB(pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_1_IVB(dev_priv, pipe)),
 				     0, 0, 0, 0);
 }
 
@@ -364,11 +364,11 @@ static void ivb_pipe_crc_irq_handler(struct drm_i915_private *dev_priv,
 				     enum pipe pipe)
 {
 	display_pipe_crc_irq_handler(dev_priv, pipe,
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_1_IVB(pipe)),
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_2_IVB(pipe)),
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_3_IVB(pipe)),
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_4_IVB(pipe)),
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_5_IVB(pipe)));
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_1_IVB(dev_priv, pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_2_IVB(dev_priv, pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_3_IVB(dev_priv, pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_4_IVB(dev_priv, pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_5_IVB(dev_priv, pipe)));
 }
 
 static void i9xx_pipe_crc_irq_handler(struct drm_i915_private *dev_priv,
@@ -377,19 +377,21 @@ static void i9xx_pipe_crc_irq_handler(struct drm_i915_private *dev_priv,
 	u32 res1, res2;
 
 	if (DISPLAY_VER(dev_priv) >= 3)
-		res1 = intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_RES1_I915(pipe));
+		res1 = intel_uncore_read(&dev_priv->uncore,
+					 PIPE_CRC_RES_RES1_I915(dev_priv, pipe));
 	else
 		res1 = 0;
 
 	if (DISPLAY_VER(dev_priv) >= 5 || IS_G4X(dev_priv))
-		res2 = intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_RES2_G4X(pipe));
+		res2 = intel_uncore_read(&dev_priv->uncore,
+					 PIPE_CRC_RES_RES2_G4X(dev_priv, pipe));
 	else
 		res2 = 0;
 
 	display_pipe_crc_irq_handler(dev_priv, pipe,
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_RED(pipe)),
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_GREEN(pipe)),
-				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_BLUE(pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_RED(dev_priv, pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_GREEN(dev_priv, pipe)),
+				     intel_uncore_read(&dev_priv->uncore, PIPE_CRC_RES_BLUE(dev_priv, pipe)),
 				     res1, res2);
 }
 
@@ -876,7 +878,8 @@ gen8_de_misc_irq_handler(struct drm_i915_private *dev_priv, u32 iir)
 			struct intel_dp *intel_dp = enc_to_intel_dp(encoder);
 
 			if (DISPLAY_VER(dev_priv) >= 12)
-				iir_reg = TRANS_PSR_IIR(intel_dp->psr.transcoder);
+				iir_reg = TRANS_PSR_IIR(dev_priv,
+						        intel_dp->psr.transcoder);
 			else
 				iir_reg = EDP_PSR_IIR;
 
@@ -1455,8 +1458,12 @@ void gen11_display_irq_reset(struct drm_i915_private *dev_priv)
 			if (!intel_display_power_is_enabled(dev_priv, domain))
 				continue;
 
-			intel_uncore_write(uncore, TRANS_PSR_IMR(trans), 0xffffffff);
-			intel_uncore_write(uncore, TRANS_PSR_IIR(trans), 0xffffffff);
+			intel_uncore_write(uncore,
+				           TRANS_PSR_IMR(dev_priv, trans),
+				           0xffffffff);
+			intel_uncore_write(uncore,
+				           TRANS_PSR_IIR(dev_priv, trans),
+				           0xffffffff);
 		}
 	} else {
 		intel_uncore_write(uncore, EDP_PSR_IMR, 0xffffffff);
@@ -1688,7 +1695,8 @@ void gen8_de_irq_postinstall(struct drm_i915_private *dev_priv)
 			if (!intel_display_power_is_enabled(dev_priv, domain))
 				continue;
 
-			gen3_assert_iir_is_zero(uncore, TRANS_PSR_IIR(trans));
+			gen3_assert_iir_is_zero(uncore,
+						TRANS_PSR_IIR(dev_priv, trans));
 		}
 	} else {
 		gen3_assert_iir_is_zero(uncore, EDP_PSR_IIR);

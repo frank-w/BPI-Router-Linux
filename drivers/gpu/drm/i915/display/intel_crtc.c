@@ -78,8 +78,7 @@ void intel_wait_for_vblank_if_active(struct drm_i915_private *i915,
 
 u32 intel_crtc_get_vblank_counter(struct intel_crtc *crtc)
 {
-	struct drm_device *dev = crtc->base.dev;
-	struct drm_vblank_crtc *vblank = &dev->vblank[drm_crtc_index(&crtc->base)];
+	struct drm_vblank_crtc *vblank = drm_crtc_vblank_crtc(&crtc->base);
 
 	if (!crtc->active)
 		return 0;
@@ -311,8 +310,7 @@ int intel_crtc_init(struct drm_i915_private *dev_priv, enum pipe pipe)
 	crtc->num_scalers = DISPLAY_RUNTIME_INFO(dev_priv)->num_scalers[pipe];
 
 	if (DISPLAY_VER(dev_priv) >= 9)
-		primary = skl_universal_plane_create(dev_priv, pipe,
-						     PLANE_PRIMARY);
+		primary = skl_universal_plane_create(dev_priv, pipe, PLANE_1);
 	else
 		primary = intel_primary_plane_create(dev_priv, pipe);
 	if (IS_ERR(primary)) {
@@ -327,8 +325,7 @@ int intel_crtc_init(struct drm_i915_private *dev_priv, enum pipe pipe)
 		struct intel_plane *plane;
 
 		if (DISPLAY_VER(dev_priv) >= 9)
-			plane = skl_universal_plane_create(dev_priv, pipe,
-							   PLANE_SPRITE0 + sprite);
+			plane = skl_universal_plane_create(dev_priv, pipe, PLANE_2 + sprite);
 		else
 			plane = intel_sprite_plane_create(dev_priv, pipe, sprite);
 		if (IS_ERR(plane)) {

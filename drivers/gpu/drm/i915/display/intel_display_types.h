@@ -305,7 +305,7 @@ enum drrs_type {
 };
 
 struct intel_vbt_panel_data {
-	struct drm_display_mode *lfp_lvds_vbt_mode; /* if any */
+	struct drm_display_mode *lfp_vbt_mode; /* if any */
 	struct drm_display_mode *sdvo_lvds_vbt_mode; /* if any */
 
 	/* Feature bits */
@@ -401,7 +401,12 @@ struct intel_panel {
 			} vesa;
 			struct {
 				bool sdr_uses_aux;
-			} intel;
+				bool supports_2084_decode;
+				bool supports_2020_gamut;
+				bool supports_segmented_backlight;
+				bool supports_sdp_colorimetry;
+				bool supports_tone_mapping;
+			} intel_cap;
 		} edp;
 
 		struct backlight_device *device;
@@ -1189,7 +1194,7 @@ struct intel_crtc_state {
 
 	/* PSR is supported but might not be enabled due the lack of enabled planes */
 	bool has_psr;
-	bool has_psr2;
+	bool has_sel_update;
 	bool enable_psr2_sel_fetch;
 	bool enable_psr2_su_region_et;
 	bool req_psr2_sdp_prior_scanline;
@@ -1521,7 +1526,7 @@ struct intel_plane {
 	enum i9xx_plane_id i9xx_plane;
 	enum plane_id id;
 	enum pipe pipe;
-	bool need_async_flip_disable_wa;
+	bool need_async_flip_toggle_wa;
 	u32 frontbuffer_bit;
 
 	struct {
@@ -1695,7 +1700,7 @@ struct intel_psr {
 	unsigned int busy_frontbuffer_bits;
 	bool sink_psr2_support;
 	bool link_standby;
-	bool psr2_enabled;
+	bool sel_update_enabled;
 	bool psr2_sel_fetch_enabled;
 	bool psr2_sel_fetch_cff_enabled;
 	bool req_psr2_sdp_prior_scanline;
@@ -1719,6 +1724,7 @@ struct intel_psr {
 	u16 su_y_granularity;
 	bool source_panel_replay_support;
 	bool sink_panel_replay_support;
+	bool sink_panel_replay_su_support;
 	bool panel_replay_enabled;
 	u32 dc3co_exitline;
 	u32 dc3co_exit_delay;
