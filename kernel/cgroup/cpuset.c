@@ -434,7 +434,7 @@ static struct cpuset top_cpuset = {
  * by other task, we use alloc_lock in the task_struct fields to protect
  * them.
  *
- * The cpuset_common_file_read() handlers only hold callback_lock across
+ * The cpuset_common_seq_show() handlers only hold callback_lock across
  * small pieces of code, such as when reading out possibly multi-word
  * cpumasks and nodemasks.
  *
@@ -4009,8 +4009,6 @@ cpuset_css_alloc(struct cgroup_subsys_state *parent_css)
 	}
 
 	__set_bit(CS_SCHED_LOAD_BALANCE, &cs->flags);
-	nodes_clear(cs->mems_allowed);
-	nodes_clear(cs->effective_mems);
 	fmeter_init(&cs->fmeter);
 	cs->relax_domain_level = -1;
 	INIT_LIST_HEAD(&cs->remote_sibling);
