@@ -7,6 +7,7 @@
  * Author: Paul E. McKenney <paulmck@linux.ibm.com>
  */
 
+#include <linux/console.h>
 #include <linux/kvm_para.h>
 #include <linux/rcu_notifier.h>
 
@@ -260,6 +261,7 @@ static void rcu_print_detail_task_stall_rnp(struct rcu_node *rnp)
 		 */
 		touch_nmi_watchdog();
 		sched_show_task(t);
+		nbcon_cpu_emergency_flush();
 	}
 	raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
 }
@@ -523,6 +525,7 @@ static void print_cpu_stall_info(int cpu)
 	       falsepositive ? " (false positive?)" : "");
 
 	print_cpu_stat_info(cpu);
+	nbcon_cpu_emergency_flush();
 }
 
 /* Complain about starvation of grace-period kthread.  */
@@ -605,6 +608,8 @@ static void print_other_cpu_stall(unsigned long gp_seq, unsigned long gps)
 	if (rcu_stall_is_suppressed())
 		return;
 
+	nbcon_cpu_emergency_enter();
+
 	/*
 	 * OK, time to rat on our buddy...
 	 * See Documentation/RCU/stallwarn.rst for info on how to debug
@@ -657,6 +662,8 @@ static void print_other_cpu_stall(unsigned long gp_seq, unsigned long gps)
 	rcu_check_gp_kthread_expired_fqs_timer();
 	rcu_check_gp_kthread_starvation();
 
+	nbcon_cpu_emergency_exit();
+
 	panic_on_rcu_stall();
 
 	rcu_force_quiescent_state();  /* Kick them all. */
@@ -676,6 +683,8 @@ static void print_cpu_stall(unsigned long gps)
 	rcu_stall_kick_kthreads();
 	if (rcu_stall_is_suppressed())
 		return;
+
+	nbcon_cpu_emergency_enter();
 
 	/*
 	 * OK, time to rat on ourselves...
@@ -705,6 +714,8 @@ static void print_cpu_stall(unsigned long gps)
 		WRITE_ONCE(rcu_state.jiffies_stall,
 			   jiffies + 3 * rcu_jiffies_till_stall_check() + 3);
 	raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+
+	nbcon_cpu_emergency_exit();
 
 	panic_on_rcu_stall();
 
