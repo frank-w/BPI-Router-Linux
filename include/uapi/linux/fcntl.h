@@ -118,6 +118,14 @@
 #define AT_HANDLE_FID		AT_REMOVEDIR	/* file handle is needed to
 					compare object identity and may not
 					be usable to open_by_handle_at(2) */
+/*
+ * All new purely-syscall-specific AT_* flags should consider using bits from
+ * 0xFF, but the bits used by RENAME_* (0x7) should be avoided in case users
+ * decide to pass AT_* flags to renameat2() by accident. These flag bits are
+ * free for re-use by other syscall's syscall-specific flags without worry.
+ */
+#define AT_HANDLE_MNT_ID_UNIQUE 0x80    /* return the u64 unique mount id */
+
 #if defined(__KERNEL__)
 #define AT_GETATTR_NOSEC	0x80000000
 #endif
