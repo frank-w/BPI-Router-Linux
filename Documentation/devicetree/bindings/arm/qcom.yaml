@@ -96,6 +96,7 @@ properties:
       - items:
           - enum:
               - qcom,apq8016-sbc
+              - schneider,apq8016-hmibsc
           - const: qcom,apq8016
 
       - items:
@@ -104,6 +105,7 @@ properties:
               - huawei,sturgeon
               - lg,lenok
               - samsung,matisse-wifi
+              - samsung,milletwifi
           - const: qcom,apq8026
 
       - items:
@@ -175,6 +177,7 @@ properties:
       - items:
           - enum:
               - lge,hammerhead
+              - samsung,hlte
               - sony,xperia-amami
               - sony,xperia-honami
           - const: qcom,msm8974
@@ -205,6 +208,9 @@ properties:
               - huawei,g7
               - longcheer,l8910
               - longcheer,l8150
+              - motorola,harpia
+              - motorola,osprey
+              - motorola,surnia
               - qcom,msm8916-mtp
               - samsung,a3u-eur
               - samsung,a5u-eur
@@ -316,6 +322,7 @@ properties:
       - items:
           - enum:
               - qcom,ipq5018-rdp432-c2
+              - tplink,archer-ax55-v1
           - const: qcom,ipq5018
 
       - items:
@@ -802,6 +809,7 @@ properties:
 
       - items:
           - enum:
+              - lenovo,tbx605f
               - motorola,ali
           - const: qcom,sdm450
 
@@ -1009,6 +1017,7 @@ properties:
 
       - items:
           - enum:
+              - qcom,sm8650-hdk
               - qcom,sm8650-mtp
               - qcom,sm8650-qrd
           - const: qcom,sm8650
