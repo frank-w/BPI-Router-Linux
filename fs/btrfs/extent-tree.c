@@ -5160,8 +5160,16 @@ struct extent_buffer *btrfs_alloc_tree_block(struct btrfs_trans_handle *trans,
 			parent = ins.objectid;
 		flags |= BTRFS_BLOCK_FLAG_FULL_BACKREF;
 		owning_root = reloc_src_root;
-	} else
-		BUG_ON(parent > 0);
+	} else {
+		if (unlikely(parent > 0)) {
+			/*
+			 * Other roots than reloc tree don't expect start
+			 * offset of a parent block.
+			 */
+			ret = -EUCLEAN;
+			goto out_free_reserved;
+		}
+	}
 
 	if (root_objectid != BTRFS_TREE_LOG_OBJECTID) {
 		struct btrfs_ref generic_ref = {
@@ -5220,10 +5228,99 @@ struct walk_control {
 	int reada_slot;
 	int reada_count;
 	int restarted;
+	int lookup_info;
 };
 
+/*
+ * This is our normal stage.  We are traversing blocks the current snapshot owns
+ * and we are dropping any of our references to any children we are able to, and
+ * then freeing the block once we've processed all of the children.
+ */
 #define DROP_REFERENCE	1
+
+/*
+ * We enter this stage when we have to walk into a child block (meaning we can't
+ * simply drop our reference to it from our current parent node) and there are
+ * more than one reference on it.  If we are the owner of any of the children
+ * blocks from the current parent node then we have to do the FULL_BACKREF dance
+ * on them in order to drop our normal ref and add the shared ref.
+ */
 #define UPDATE_BACKREF	2
+
+/*
+ * Decide if we need to walk down into this node to adjust the references.
+ *
+ * @root	- the root we are currently deleting.
+ * @wc		- the walk control for this deletion.
+ * @eb		- the parent eb that we're currently visiting.
+ * @refs	- the number of refs for wc->level - 1.
+ * @flags	- the flags for wc->level - 1.
+ * @slot	- the slot in the eb that we're currently checking.
+ *
+ * This is meant to be called when we're evaluating if a node we point to at
+ * wc->level should be read and walked into, or if we can simply delete our
+ * reference to it.  We return true if we should walk into the node, false if we
+ * can skip it.
+ *
+ * We have assertions in here to make sure this is called correctly.  We assume
+ * that sanity checking on the blocks read to this point has been done, so any
+ * corrupted file systems must have been caught before calling this function.
+ */
+static bool visit_node_for_delete(struct btrfs_root *root,
+				  struct walk_control *wc,
+				  struct extent_buffer *eb,
+				  u64 refs, u64 flags, int slot)
+{
+	struct btrfs_key key;
+	u64 generation;
+	int level = wc->level;
+
+	ASSERT(level > 0);
+	ASSERT(wc->refs[level - 1] > 0);
+
+	/*
+	 * The update backref stage we only want to skip if we already have
+	 * FULL_BACKREF set, otherwise we need to read.
+	 */
+	if (wc->stage == UPDATE_BACKREF) {
+		if (level == 1 && flags & BTRFS_BLOCK_FLAG_FULL_BACKREF)
+			return false;
+		return true;
+	}
+
+	/*
+	 * We're the last ref on this block, we must walk into it and process
+	 * any refs it's pointing at.
+	 */
+	if (wc->refs[level - 1] == 1)
+		return true;
+
+	/*
+	 * If we're already FULL_BACKREF then we know we can just drop our
+	 * current reference.
+	 */
+	if (level == 1 && flags & BTRFS_BLOCK_FLAG_FULL_BACKREF)
+		return false;
+
+	/*
+	 * This block is older than our creation generation, we can drop our
+	 * reference to it.
+	 */
+	generation = btrfs_node_ptr_generation(eb, slot);
+	if (!wc->update_ref || generation <= root->root_key.offset)
+		return false;
+
+	/*
+	 * This block was processed from a previous snapshot deletion run, we
+	 * can skip it.
+	 */
+	btrfs_node_key_to_cpu(eb, &key, slot);
+	if (btrfs_comp_cpu_keys(&key, &wc->update_progress) < 0)
+		return false;
+
+	/* All other cases we need to wander into the node. */
+	return true;
+}
 
 static noinline void reada_walk_down(struct btrfs_trans_handle *trans,
 				     struct btrfs_root *root,
@@ -5236,7 +5333,6 @@ static noinline void reada_walk_down(struct btrfs_trans_handle *trans,
 	u64 refs;
 	u64 flags;
 	u32 nritems;
-	struct btrfs_key key;
 	struct extent_buffer *eb;
 	int ret;
 	int slot;
@@ -5276,28 +5372,19 @@ static noinline void reada_walk_down(struct btrfs_trans_handle *trans,
 		/* We don't care about errors in readahead. */
 		if (ret < 0)
 			continue;
-		BUG_ON(refs == 0);
 
-		if (wc->stage == DROP_REFERENCE) {
-			if (refs == 1)
-				goto reada;
+		/*
+		 * This could be racey, it's conceivable that we raced and end
+		 * up with a bogus refs count, if that's the case just skip, if
+		 * we are actually corrupt we will notice when we look up
+		 * everything again with our locks.
+		 */
+		if (refs == 0)
+			continue;
 
-			if (wc->level == 1 &&
-			    (flags & BTRFS_BLOCK_FLAG_FULL_BACKREF))
-				continue;
-			if (!wc->update_ref ||
-			    generation <= root->root_key.offset)
-				continue;
-			btrfs_node_key_to_cpu(eb, &key, slot);
-			ret = btrfs_comp_cpu_keys(&key,
-						  &wc->update_progress);
-			if (ret < 0)
-				continue;
-		} else {
-			if (wc->level == 1 &&
-			    (flags & BTRFS_BLOCK_FLAG_FULL_BACKREF))
-				continue;
-		}
+		/* If we don't need to visit this node don't reada. */
+		if (!visit_node_for_delete(root, wc, eb, refs, flags, slot))
+			continue;
 reada:
 		btrfs_readahead_node_child(eb, slot);
 		nread++;
@@ -5316,7 +5403,7 @@ reada:
 static noinline int walk_down_proc(struct btrfs_trans_handle *trans,
 				   struct btrfs_root *root,
 				   struct btrfs_path *path,
-				   struct walk_control *wc, int lookup_info)
+				   struct walk_control *wc)
 {
 	struct btrfs_fs_info *fs_info = root->fs_info;
 	int level = wc->level;
@@ -5331,19 +5418,23 @@ static noinline int walk_down_proc(struct btrfs_trans_handle *trans,
 	 * when reference count of tree block is 1, it won't increase
 	 * again. once full backref flag is set, we never clear it.
 	 */
-	if (lookup_info &&
+	if (wc->lookup_info &&
 	    ((wc->stage == DROP_REFERENCE && wc->refs[level] != 1) ||
 	     (wc->stage == UPDATE_BACKREF && !(wc->flags[level] & flag)))) {
-		BUG_ON(!path->locks[level]);
+		ASSERT(path->locks[level]);
 		ret = btrfs_lookup_extent_info(trans, fs_info,
 					       eb->start, level, 1,
 					       &wc->refs[level],
 					       &wc->flags[level],
 					       NULL);
-		BUG_ON(ret == -ENOMEM);
 		if (ret)
 			return ret;
-		BUG_ON(wc->refs[level] == 0);
+		if (unlikely(wc->refs[level] == 0)) {
+			btrfs_err(fs_info,
+				  "bytenr %llu has 0 references, expect > 0",
+				  eb->start);
+			return -EUCLEAN;
+		}
 	}
 
 	if (wc->stage == DROP_REFERENCE) {
@@ -5359,13 +5450,22 @@ static noinline int walk_down_proc(struct btrfs_trans_handle *trans,
 
 	/* wc->stage == UPDATE_BACKREF */
 	if (!(wc->flags[level] & flag)) {
-		BUG_ON(!path->locks[level]);
+		ASSERT(path->locks[level]);
 		ret = btrfs_inc_ref(trans, root, eb, 1);
-		BUG_ON(ret); /* -ENOMEM */
+		if (ret) {
+			btrfs_abort_transaction(trans, ret);
+			return ret;
+		}
 		ret = btrfs_dec_ref(trans, root, eb, 0);
-		BUG_ON(ret); /* -ENOMEM */
+		if (ret) {
+			btrfs_abort_transaction(trans, ret);
+			return ret;
+		}
 		ret = btrfs_set_disk_extent_flags(trans, eb, flag);
-		BUG_ON(ret); /* -ENOMEM */
+		if (ret) {
+			btrfs_abort_transaction(trans, ret);
+			return ret;
+		}
 		wc->flags[level] |= flag;
 	}
 
@@ -5408,6 +5508,140 @@ static int check_ref_exists(struct btrfs_trans_handle *trans,
 }
 
 /*
+ * We may not have an uptodate block, so if we are going to walk down into this
+ * block we need to drop the lock, read it off of the disk, re-lock it and
+ * return to continue dropping the snapshot.
+ */
+static int check_next_block_uptodate(struct btrfs_trans_handle *trans,
+				     struct btrfs_root *root,
+				     struct btrfs_path *path,
+				     struct walk_control *wc,
+				     struct extent_buffer *next)
+{
+	struct btrfs_tree_parent_check check = { 0 };
+	u64 generation;
+	int level = wc->level;
+	int ret;
+
+	btrfs_assert_tree_write_locked(next);
+
+	generation = btrfs_node_ptr_generation(path->nodes[level],
+					       path->slots[level]);
+
+	if (btrfs_buffer_uptodate(next, generation, 0))
+		return 0;
+
+	check.level = level - 1;
+	check.transid = generation;
+	check.owner_root = btrfs_root_id(root);
+	check.has_first_key = true;
+	btrfs_node_key_to_cpu(path->nodes[level], &check.first_key,
+			      path->slots[level]);
+
+	btrfs_tree_unlock(next);
+	if (level == 1)
+		reada_walk_down(trans, root, wc, path);
+	ret = btrfs_read_extent_buffer(next, &check);
+	if (ret) {
+		free_extent_buffer(next);
+		return ret;
+	}
+	btrfs_tree_lock(next);
+	wc->lookup_info = 1;
+	return 0;
+}
+
+/*
+ * If we determine that we don't have to visit wc->level - 1 then we need to
+ * determine if we can drop our reference.
+ *
+ * If we are UPDATE_BACKREF then we will not, we need to update our backrefs.
+ *
+ * If we are DROP_REFERENCE this will figure out if we need to drop our current
+ * reference, skipping it if we dropped it from a previous incompleted drop, or
+ * dropping it if we still have a reference to it.
+ */
+static int maybe_drop_reference(struct btrfs_trans_handle *trans,
+				struct btrfs_root *root,
+				struct btrfs_path *path,
+				struct walk_control *wc,
+				struct extent_buffer *next,
+				u64 owner_root)
+{
+	struct btrfs_ref ref = {
+		.action = BTRFS_DROP_DELAYED_REF,
+		.bytenr = next->start,
+		.num_bytes = root->fs_info->nodesize,
+		.owning_root = owner_root,
+		.ref_root = btrfs_root_id(root),
+	};
+	int level = wc->level;
+	int ret;
+
+	/* We are UPDATE_BACKREF, we're not dropping anything. */
+	if (wc->stage == UPDATE_BACKREF)
+		return 0;
+
+	if (wc->flags[level] & BTRFS_BLOCK_FLAG_FULL_BACKREF) {
+		ref.parent = path->nodes[level]->start;
+	} else {
+		ASSERT(btrfs_root_id(root) ==
+		       btrfs_header_owner(path->nodes[level]));
+		if (btrfs_root_id(root) !=
+		    btrfs_header_owner(path->nodes[level])) {
+			btrfs_err(root->fs_info,
+				  "mismatched block owner");
+			return -EIO;
+		}
+	}
+
+	/*
+	 * If we had a drop_progress we need to verify the refs are set as
+	 * expected.  If we find our ref then we know that from here on out
+	 * everything should be correct, and we can clear the
+	 * ->restarted flag.
+	 */
+	if (wc->restarted) {
+		ret = check_ref_exists(trans, root, next->start, ref.parent,
+				       level - 1);
+		if (ret <= 0)
+			return ret;
+		ret = 0;
+		wc->restarted = 0;
+	}
+
+	/*
+	 * Reloc tree doesn't contribute to qgroup numbers, and we have already
+	 * accounted them at merge time (replace_path), thus we could skip
+	 * expensive subtree trace here.
+	 */
+	if (btrfs_root_id(root) != BTRFS_TREE_RELOC_OBJECTID &&
+	    wc->refs[level - 1] > 1) {
+		u64 generation = btrfs_node_ptr_generation(path->nodes[level],
+							   path->slots[level]);
+
+		ret = btrfs_qgroup_trace_subtree(trans, next, generation, level - 1);
+		if (ret) {
+			btrfs_err_rl(root->fs_info,
+				     "Error %d accounting shared subtree. Quota is out of sync, rescan required.",
+				     ret);
+		}
+	}
+
+	/*
+	 * We need to update the next key in our walk control so we can
+	 * update the drop_progress key accordingly.  We don't care if
+	 * find_next_key doesn't find a key because that means we're at
+	 * the end and are going to clean up now.
+	 */
+	wc->drop_level = level;
+	find_next_key(path, level, &wc->drop_progress);
+
+	btrfs_init_tree_ref(&ref, level - 1, 0, false);
+	return btrfs_free_extent(trans, &ref);
+}
+
+/*
  * helper to process tree block pointer.
  *
  * when wc->stage == DROP_REFERENCE, this function checks
@@ -5423,19 +5657,15 @@ static int check_ref_exists(struct btrfs_trans_handle *trans,
 static noinline int do_walk_down(struct btrfs_trans_handle *trans,
 				 struct btrfs_root *root,
 				 struct btrfs_path *path,
-				 struct walk_control *wc, int *lookup_info)
+				 struct walk_control *wc)
 {
 	struct btrfs_fs_info *fs_info = root->fs_info;
 	u64 bytenr;
 	u64 generation;
 	u64 owner_root = 0;
-	struct btrfs_tree_parent_check check = { 0 };
-	struct btrfs_key key;
 	struct extent_buffer *next;
 	int level = wc->level;
-	int reada = 0;
 	int ret = 0;
-	bool need_account = false;
 
 	generation = btrfs_node_ptr_generation(path->nodes[level],
 					       path->slots[level]);
@@ -5446,27 +5676,17 @@ static noinline int do_walk_down(struct btrfs_trans_handle *trans,
 	 */
 	if (wc->stage == UPDATE_BACKREF &&
 	    generation <= root->root_key.offset) {
-		*lookup_info = 1;
+		wc->lookup_info = 1;
 		return 1;
 	}
 
 	bytenr = btrfs_node_blockptr(path->nodes[level], path->slots[level]);
 
-	check.level = level - 1;
-	check.transid = generation;
-	check.owner_root = btrfs_root_id(root);
-	check.has_first_key = true;
-	btrfs_node_key_to_cpu(path->nodes[level], &check.first_key,
-			      path->slots[level]);
+	next = btrfs_find_create_tree_block(fs_info, bytenr,
+					    btrfs_root_id(root), level - 1);
+	if (IS_ERR(next))
+		return PTR_ERR(next);
 
-	next = find_extent_buffer(fs_info, bytenr);
-	if (!next) {
-		next = btrfs_find_create_tree_block(fs_info, bytenr,
-				btrfs_root_id(root), level - 1);
-		if (IS_ERR(next))
-			return PTR_ERR(next);
-		reada = 1;
-	}
 	btrfs_tree_lock(next);
 
 	ret = btrfs_lookup_extent_info(trans, fs_info, bytenr, level - 1, 1,
@@ -5477,57 +5697,32 @@ static noinline int do_walk_down(struct btrfs_trans_handle *trans,
 		goto out_unlock;
 
 	if (unlikely(wc->refs[level - 1] == 0)) {
-		btrfs_err(fs_info, "Missing references.");
-		ret = -EIO;
+		btrfs_err(fs_info, "bytenr %llu has 0 references, expect > 0",
+			  bytenr);
+		ret = -EUCLEAN;
 		goto out_unlock;
 	}
-	*lookup_info = 0;
+	wc->lookup_info = 0;
 
-	if (wc->stage == DROP_REFERENCE) {
-		if (wc->refs[level - 1] > 1) {
-			need_account = true;
-			if (level == 1 &&
-			    (wc->flags[0] & BTRFS_BLOCK_FLAG_FULL_BACKREF))
-				goto skip;
+	/* If we don't have to walk into this node skip it. */
+	if (!visit_node_for_delete(root, wc, path->nodes[level],
+				   wc->refs[level - 1], wc->flags[level - 1],
+				   path->slots[level]))
+		goto skip;
 
-			if (!wc->update_ref ||
-			    generation <= root->root_key.offset)
-				goto skip;
-
-			btrfs_node_key_to_cpu(path->nodes[level], &key,
-					      path->slots[level]);
-			ret = btrfs_comp_cpu_keys(&key, &wc->update_progress);
-			if (ret < 0)
-				goto skip;
-
-			wc->stage = UPDATE_BACKREF;
-			wc->shared_level = level - 1;
-		}
-	} else {
-		if (level == 1 &&
-		    (wc->flags[0] & BTRFS_BLOCK_FLAG_FULL_BACKREF))
-			goto skip;
+	/*
+	 * We have to walk down into this node, and if we're currently at the
+	 * DROP_REFERNCE stage and this block is shared then we need to switch
+	 * to the UPDATE_BACKREF stage in order to convert to FULL_BACKREF.
+	 */
+	if (wc->stage == DROP_REFERENCE && wc->refs[level - 1] > 1) {
+		wc->stage = UPDATE_BACKREF;
+		wc->shared_level = level - 1;
 	}
 
-	if (!btrfs_buffer_uptodate(next, generation, 0)) {
-		btrfs_tree_unlock(next);
-		free_extent_buffer(next);
-		next = NULL;
-		*lookup_info = 1;
-	}
-
-	if (!next) {
-		if (reada && level == 1)
-			reada_walk_down(trans, root, wc, path);
-		next = read_tree_block(fs_info, bytenr, &check);
-		if (IS_ERR(next)) {
-			return PTR_ERR(next);
-		} else if (!extent_buffer_uptodate(next)) {
-			free_extent_buffer(next);
-			return -EIO;
-		}
-		btrfs_tree_lock(next);
-	}
+	ret = check_next_block_uptodate(trans, root, path, wc, next);
+	if (ret)
+		return ret;
 
 	level--;
 	ASSERT(level == btrfs_header_level(next));
@@ -5544,78 +5739,12 @@ static noinline int do_walk_down(struct btrfs_trans_handle *trans,
 		wc->reada_slot = 0;
 	return 0;
 skip:
+	ret = maybe_drop_reference(trans, root, path, wc, next, owner_root);
+	if (ret)
+		goto out_unlock;
 	wc->refs[level - 1] = 0;
 	wc->flags[level - 1] = 0;
-	if (wc->stage == DROP_REFERENCE) {
-		struct btrfs_ref ref = {
-			.action = BTRFS_DROP_DELAYED_REF,
-			.bytenr = bytenr,
-			.num_bytes = fs_info->nodesize,
-			.owning_root = owner_root,
-			.ref_root = btrfs_root_id(root),
-		};
-		if (wc->flags[level] & BTRFS_BLOCK_FLAG_FULL_BACKREF) {
-			ref.parent = path->nodes[level]->start;
-		} else {
-			ASSERT(btrfs_root_id(root) ==
-			       btrfs_header_owner(path->nodes[level]));
-			if (btrfs_root_id(root) !=
-			    btrfs_header_owner(path->nodes[level])) {
-				btrfs_err(root->fs_info,
-						"mismatched block owner");
-				ret = -EIO;
-				goto out_unlock;
-			}
-		}
-
-		/*
-		 * If we had a drop_progress we need to verify the refs are set
-		 * as expected.  If we find our ref then we know that from here
-		 * on out everything should be correct, and we can clear the
-		 * ->restarted flag.
-		 */
-		if (wc->restarted) {
-			ret = check_ref_exists(trans, root, bytenr, ref.parent,
-					       level - 1);
-			if (ret < 0)
-				goto out_unlock;
-			if (ret == 0)
-				goto no_delete;
-			ret = 0;
-			wc->restarted = 0;
-		}
-
-		/*
-		 * Reloc tree doesn't contribute to qgroup numbers, and we have
-		 * already accounted them at merge time (replace_path),
-		 * thus we could skip expensive subtree trace here.
-		 */
-		if (btrfs_root_id(root) != BTRFS_TREE_RELOC_OBJECTID && need_account) {
-			ret = btrfs_qgroup_trace_subtree(trans, next,
-							 generation, level - 1);
-			if (ret) {
-				btrfs_err_rl(fs_info,
-					     "Error %d accounting shared subtree. Quota is out of sync, rescan required.",
-					     ret);
-			}
-		}
-
-		/*
-		 * We need to update the next key in our walk control so we can
-		 * update the drop_progress key accordingly.  We don't care if
-		 * find_next_key doesn't find a key because that means we're at
-		 * the end and are going to clean up now.
-		 */
-		wc->drop_level = level;
-		find_next_key(path, level, &wc->drop_progress);
-
-		btrfs_init_tree_ref(&ref, level - 1, 0, false);
-		ret = btrfs_free_extent(trans, &ref);
-		if (ret)
-			goto out_unlock;
-	}
-no_delete:
-	*lookup_info = 1;
+	wc->lookup_info = 1;
 	ret = 1;
 
 out_unlock:
@@ -5649,7 +5778,7 @@ static noinline int walk_up_proc(struct btrfs_trans_handle *trans,
 	u64 parent = 0;
 
 	if (wc->stage == UPDATE_BACKREF) {
-		BUG_ON(wc->shared_level < level);
+		ASSERT(wc->shared_level >= level);
 		if (level < wc->shared_level)
 			goto out;
 
@@ -5667,7 +5796,7 @@ static noinline int walk_up_proc(struct btrfs_trans_handle *trans,
 		 * count is one.
 		 */
 		if (!path->locks[level]) {
-			BUG_ON(level == 0);
+			ASSERT(level > 0);
 			btrfs_tree_lock(eb);
 			path->locks[level] = BTRFS_WRITE_LOCK;
 
@@ -5681,7 +5810,13 @@ static noinline int walk_up_proc(struct btrfs_trans_handle *trans,
 				path->locks[level] = 0;
 				return ret;
 			}
-			BUG_ON(wc->refs[level] == 0);
+			if (unlikely(wc->refs[level] == 0)) {
+				btrfs_tree_unlock_rw(eb, path->locks[level]);
+				btrfs_err(fs_info,
+					  "bytenr %llu has 0 references, expect > 0",
+					  eb->start);
+				return -EUCLEAN;
+			}
 			if (wc->refs[level] == 1) {
 				btrfs_tree_unlock_rw(eb, path->locks[level]);
 				path->locks[level] = 0;
@@ -5691,7 +5826,7 @@ static noinline int walk_up_proc(struct btrfs_trans_handle *trans,
 	}
 
 	/* wc->stage == DROP_REFERENCE */
-	BUG_ON(wc->refs[level] > 1 && !path->locks[level]);
+	ASSERT(path->locks[level] || wc->refs[level] == 1);
 
 	if (wc->refs[level] == 1) {
 		if (level == 0) {
@@ -5699,7 +5834,10 @@ static noinline int walk_up_proc(struct btrfs_trans_handle *trans,
 				ret = btrfs_dec_ref(trans, root, eb, 1);
 			else
 				ret = btrfs_dec_ref(trans, root, eb, 0);
-			BUG_ON(ret); /* -ENOMEM */
+			if (ret) {
+				btrfs_abort_transaction(trans, ret);
+				return ret;
+			}
 			if (is_fstree(btrfs_root_id(root))) {
 				ret = btrfs_qgroup_trace_leaf_items(trans, eb);
 				if (ret) {
@@ -5743,17 +5881,38 @@ owner_mismatch:
 	return -EUCLEAN;
 }
 
+/*
+ * walk_down_tree consists of two steps.
+ *
+ * walk_down_proc().  Look up the reference count and reference of our current
+ * wc->level.  At this point path->nodes[wc->level] should be populated and
+ * uptodate, and in most cases should already be locked.  If we are in
+ * DROP_REFERENCE and our refcount is > 1 then we've entered a shared node and
+ * we can walk back up the tree.  If we are UPDATE_BACKREF we have to set
+ * FULL_BACKREF on this node if it's not already set, and then do the
+ * FULL_BACKREF conversion dance, which is to drop the root reference and add
+ * the shared reference to all of this nodes children.
+ *
+ * do_walk_down().  This is where we actually start iterating on the children of
+ * our current path->nodes[wc->level].  For DROP_REFERENCE that means dropping
+ * our reference to the children that return false from visit_node_for_delete(),
+ * which has various conditions where we know we can just drop our reference
+ * without visiting the node.  For UPDATE_BACKREF we will skip any children that
+ * visit_node_for_delete() returns false for, only walking down when necessary.
+ * The bulk of the work for UPDATE_BACKREF occurs in the walk_up_tree() part of
+ * snapshot deletion.
+ */
 static noinline int walk_down_tree(struct btrfs_trans_handle *trans,
 				   struct btrfs_root *root,
 				   struct btrfs_path *path,
 				   struct walk_control *wc)
 {
 	int level = wc->level;
-	int lookup_info = 1;
 	int ret = 0;
 
+	wc->lookup_info = 1;
 	while (level >= 0) {
-		ret = walk_down_proc(trans, root, path, wc, lookup_info);
+		ret = walk_down_proc(trans, root, path, wc);
 		if (ret)
 			break;
 
@@ -5764,7 +5923,7 @@ static noinline int walk_down_tree(struct btrfs_trans_handle *trans,
 		    btrfs_header_nritems(path->nodes[level]))
 			break;
 
-		ret = do_walk_down(trans, root, path, wc, &lookup_info);
+		ret = do_walk_down(trans, root, path, wc);
 		if (ret > 0) {
 			path->slots[level]++;
 			continue;
@@ -5775,6 +5934,24 @@ static noinline int walk_down_tree(struct btrfs_trans_handle *trans,
 	return (ret == 1) ? 0 : ret;
 }
 
+/*
+ * walk_up_tree is responsible for making sure we visit every slot on our
+ * current node, and if we're at the end of that node then we call
+ * walk_up_proc() on our current node which will do one of a few things based on
+ * our stage.
+ *
+ * UPDATE_BACKREF.  If we wc->level is currently less than our wc->shared_level
+ * then we need to walk back up the tree, and then going back down into the
+ * other slots via walk_down_tree to update any other children from our original
+ * wc->shared_level.  Once we're at or above our wc->shared_level we can switch
+ * back to DROP_REFERENCE, lookup the current nodes refs and flags, and carry
+ * on.
+ *
+ * DROP_REFERENCE. If our refs == 1 then we're going to free this tree block.
+ * If we're level 0 then we need to btrfs_dec_ref() on all of the data extents
+ * in our current leaf.  After that we call btrfs_free_tree_block() on the
+ * current node and walk up to the next node to walk down the next slot.
+ */
 static noinline int walk_up_tree(struct btrfs_trans_handle *trans,
 				 struct btrfs_root *root,
 				 struct btrfs_path *path,
@@ -5833,8 +6010,8 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 	struct btrfs_root_item *root_item = &root->root_item;
 	struct walk_control *wc;
 	struct btrfs_key key;
-	int err = 0;
-	int ret;
+	const u64 rootid = btrfs_root_id(root);
+	int ret = 0;
 	int level;
 	bool root_dropped = false;
 	bool unfinished_drop = false;
@@ -5843,14 +6020,14 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 
 	path = btrfs_alloc_path();
 	if (!path) {
-		err = -ENOMEM;
+		ret = -ENOMEM;
 		goto out;
 	}
 
 	wc = kzalloc(sizeof(*wc), GFP_NOFS);
 	if (!wc) {
 		btrfs_free_path(path);
-		err = -ENOMEM;
+		ret = -ENOMEM;
 		goto out;
 	}
 
@@ -5863,12 +6040,12 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 	else
 		trans = btrfs_start_transaction(tree_root, 0);
 	if (IS_ERR(trans)) {
-		err = PTR_ERR(trans);
+		ret = PTR_ERR(trans);
 		goto out_free;
 	}
 
-	err = btrfs_run_delayed_items(trans);
-	if (err)
+	ret = btrfs_run_delayed_items(trans);
+	if (ret)
 		goto out_end_trans;
 
 	/*
@@ -5899,11 +6076,11 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 		path->lowest_level = level;
 		ret = btrfs_search_slot(NULL, root, &key, path, 0, 0);
 		path->lowest_level = 0;
-		if (ret < 0) {
-			err = ret;
+		if (ret < 0)
 			goto out_end_trans;
-		}
+
 		WARN_ON(ret > 0);
+		ret = 0;
 
 		/*
 		 * unlock our path, this is safe because only this
@@ -5916,14 +6093,17 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 			btrfs_tree_lock(path->nodes[level]);
 			path->locks[level] = BTRFS_WRITE_LOCK;
 
+			/*
+			 * btrfs_lookup_extent_info() returns 0 for success,
+			 * or < 0 for error.
+			 */
 			ret = btrfs_lookup_extent_info(trans, fs_info,
 						path->nodes[level]->start,
 						level, 1, &wc->refs[level],
 						&wc->flags[level], NULL);
-			if (ret < 0) {
-				err = ret;
+			if (ret < 0)
 				goto out_end_trans;
-			}
+
 			BUG_ON(wc->refs[level] == 0);
 
 			if (level == btrfs_root_drop_level(root_item))
@@ -5949,19 +6129,18 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 		ret = walk_down_tree(trans, root, path, wc);
 		if (ret < 0) {
 			btrfs_abort_transaction(trans, ret);
-			err = ret;
 			break;
 		}
 
 		ret = walk_up_tree(trans, root, path, wc, BTRFS_MAX_LEVEL);
 		if (ret < 0) {
 			btrfs_abort_transaction(trans, ret);
-			err = ret;
 			break;
 		}
 
 		if (ret > 0) {
 			BUG_ON(wc->stage != DROP_REFERENCE);
+			ret = 0;
 			break;
 		}
 
@@ -5983,7 +6162,6 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 						root_item);
 			if (ret) {
 				btrfs_abort_transaction(trans, ret);
-				err = ret;
 				goto out_end_trans;
 			}
 
@@ -5994,7 +6172,7 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 			if (!for_reloc && btrfs_need_cleaner_sleep(fs_info)) {
 				btrfs_debug(fs_info,
 					    "drop snapshot early exit");
-				err = -EAGAIN;
+				ret = -EAGAIN;
 				goto out_free;
 			}
 
@@ -6008,19 +6186,18 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 			else
 				trans = btrfs_start_transaction(tree_root, 0);
 			if (IS_ERR(trans)) {
-				err = PTR_ERR(trans);
+				ret = PTR_ERR(trans);
 				goto out_free;
 			}
 		}
 	}
 	btrfs_release_path(path);
-	if (err)
+	if (ret)
 		goto out_end_trans;
 
 	ret = btrfs_del_root(trans, &root->root_key);
 	if (ret) {
 		btrfs_abort_transaction(trans, ret);
-		err = ret;
 		goto out_end_trans;
 	}
 
@@ -6029,10 +6206,11 @@ int btrfs_drop_snapshot(struct btrfs_root *root, int update_ref, int for_reloc)
 				      NULL, NULL);
 		if (ret < 0) {
 			btrfs_abort_transaction(trans, ret);
-			err = ret;
 			goto out_end_trans;
 		} else if (ret > 0) {
-			/* if we fail to delete the orphan item this time
+			ret = 0;
+			/*
+			 * If we fail to delete the orphan item this time
 			 * around, it'll get picked up the next time.
 			 *
 			 * The most common failure here is just -ENOENT.
@@ -6063,11 +6241,19 @@ out_free:
 	kfree(wc);
 	btrfs_free_path(path);
 out:
+	if (!ret && root_dropped) {
+		ret = btrfs_qgroup_cleanup_dropped_subvolume(fs_info, rootid);
+		if (ret < 0)
+			btrfs_warn_rl(fs_info,
+				      "failed to cleanup qgroup 0/%llu: %d",
+				      rootid, ret);
+		ret = 0;
+	}
 	/*
 	 * We were an unfinished drop root, check to see if there are any
 	 * pending, and if not clear and wake up any waiters.
 	 */
-	if (!err && unfinished_drop)
+	if (!ret && unfinished_drop)
 		btrfs_maybe_wake_unfinished_drop(fs_info);
 
 	/*
@@ -6079,7 +6265,7 @@ out:
 	 */
 	if (!for_reloc && !root_dropped)
 		btrfs_add_dead_root(root);
-	return err;
+	return ret;
 }
 
 /*

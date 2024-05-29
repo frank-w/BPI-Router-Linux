@@ -1625,7 +1625,8 @@ static noinline int fixup_inode_link_count(struct btrfs_trans_handle *trans,
 		if (ret)
 			goto out;
 	}
-	BTRFS_I(inode)->index_cnt = (u64)-1;
+	if (S_ISDIR(inode->i_mode))
+		BTRFS_I(inode)->index_cnt = (u64)-1;
 
 	if (inode->i_nlink == 0) {
 		if (S_ISDIR(inode->i_mode)) {
@@ -2820,7 +2821,7 @@ static void wait_for_writer(struct btrfs_root *root)
 	finish_wait(&root->log_writer_wait, &wait);
 }
 
-void btrfs_init_log_ctx(struct btrfs_log_ctx *ctx, struct inode *inode)
+void btrfs_init_log_ctx(struct btrfs_log_ctx *ctx, struct btrfs_inode *inode)
 {
 	ctx->log_ret = 0;
 	ctx->log_transid = 0;
@@ -2839,7 +2840,7 @@ void btrfs_init_log_ctx(struct btrfs_log_ctx *ctx, struct inode *inode)
 
 void btrfs_init_log_ctx_scratch_eb(struct btrfs_log_ctx *ctx)
 {
-	struct btrfs_inode *inode = BTRFS_I(ctx->inode);
+	struct btrfs_inode *inode = ctx->inode;
 
 	if (!test_bit(BTRFS_INODE_NEEDS_FULL_SYNC, &inode->runtime_flags) &&
 	    !test_bit(BTRFS_INODE_COPY_EVERYTHING, &inode->runtime_flags))
@@ -2857,7 +2858,7 @@ void btrfs_release_log_ctx_extents(struct btrfs_log_ctx *ctx)
 	struct btrfs_ordered_extent *ordered;
 	struct btrfs_ordered_extent *tmp;
 
-	ASSERT(inode_is_locked(ctx->inode));
+	ASSERT(inode_is_locked(&ctx->inode->vfs_inode));
 
 	list_for_each_entry_safe(ordered, tmp, &ctx->ordered_extents, log_list) {
 		list_del_init(&ordered->log_list);
@@ -4234,8 +4235,10 @@ static int log_inode_item(struct btrfs_trans_handle *trans,
 			  struct btrfs_inode *inode, bool inode_item_dropped)
 {
 	struct btrfs_inode_item *inode_item;
+	struct btrfs_key key;
 	int ret;
 
+	btrfs_get_inode_key(inode, &key);
 	/*
 	 * If we are doing a fast fsync and the inode was logged before in the
 	 * current transaction, then we know the inode was previously logged and
@@ -4247,7 +4250,7 @@ static int log_inode_item(struct btrfs_trans_handle *trans,
 	 * already exists can also result in unnecessarily splitting a leaf.
 	 */
 	if (!inode_item_dropped && inode->logged_trans == trans->transid) {
-		ret = btrfs_search_slot(trans, log, &inode->location, path, 0, 1);
+		ret = btrfs_search_slot(trans, log, &key, path, 0, 1);
 		ASSERT(ret <= 0);
 		if (ret > 0)
 			ret = -ENOENT;
@@ -4261,7 +4264,7 @@ static int log_inode_item(struct btrfs_trans_handle *trans,
 		 * the inode, we set BTRFS_INODE_NEEDS_FULL_SYNC on its runtime
 		 * flags and set ->logged_trans to 0.
 		 */
-		ret = btrfs_insert_empty_item(trans, log, path, &inode->location,
+		ret = btrfs_insert_empty_item(trans, log, path, &key,
 					      sizeof(*inode_item));
 		ASSERT(ret != -EEXIST);
 	}
@@ -4575,6 +4578,7 @@ static int log_extent_csums(struct btrfs_trans_handle *trans,
 {
 	struct btrfs_ordered_extent *ordered;
 	struct btrfs_root *csum_root;
+	u64 block_start;
 	u64 csum_offset;
 	u64 csum_len;
 	u64 mod_start = em->start;
@@ -4584,7 +4588,7 @@ static int log_extent_csums(struct btrfs_trans_handle *trans,
 
 	if (inode->flags & BTRFS_INODE_NODATASUM ||
 	    (em->flags & EXTENT_FLAG_PREALLOC) ||
-	    em->block_start == EXTENT_MAP_HOLE)
+	    em->disk_bytenr == EXTENT_MAP_HOLE)
 		return 0;
 
 	list_for_each_entry(ordered, &ctx->ordered_extents, log_list) {
@@ -4648,17 +4652,18 @@ static int log_extent_csums(struct btrfs_trans_handle *trans,
 	/* If we're compressed we have to save the entire range of csums. */
 	if (extent_map_is_compressed(em)) {
 		csum_offset = 0;
-		csum_len = max(em->block_len, em->orig_block_len);
+		csum_len = em->disk_num_bytes;
 	} else {
 		csum_offset = mod_start - em->start;
 		csum_len = mod_len;
 	}
 
 	/* block start is already adjusted for the file extent offset. */
-	csum_root = btrfs_csum_root(trans->fs_info, em->block_start);
-	ret = btrfs_lookup_csums_list(csum_root, em->block_start + csum_offset,
-				      em->block_start + csum_offset +
-				      csum_len - 1, &ordered_sums, false);
+	block_start = extent_map_block_start(em);
+	csum_root = btrfs_csum_root(trans->fs_info, block_start);
+	ret = btrfs_lookup_csums_list(csum_root, block_start + csum_offset,
+				      block_start + csum_offset + csum_len - 1,
+				      &ordered_sums, false);
 	if (ret < 0)
 		return ret;
 	ret = 0;
@@ -4688,7 +4693,8 @@ static int log_one_extent(struct btrfs_trans_handle *trans,
 	struct extent_buffer *leaf;
 	struct btrfs_key key;
 	enum btrfs_compression_type compress_type;
-	u64 extent_offset = em->start - em->orig_start;
+	u64 extent_offset = em->offset;
+	u64 block_start = extent_map_block_start(em);
 	u64 block_len;
 	int ret;
 
@@ -4698,14 +4704,13 @@ static int log_one_extent(struct btrfs_trans_handle *trans,
 	else
 		btrfs_set_stack_file_extent_type(&fi, BTRFS_FILE_EXTENT_REG);
 
-	block_len = max(em->block_len, em->orig_block_len);
+	block_len = em->disk_num_bytes;
 	compress_type = extent_map_compression(em);
 	if (compress_type != BTRFS_COMPRESS_NONE) {
-		btrfs_set_stack_file_extent_disk_bytenr(&fi, em->block_start);
+		btrfs_set_stack_file_extent_disk_bytenr(&fi, block_start);
 		btrfs_set_stack_file_extent_disk_num_bytes(&fi, block_len);
-	} else if (em->block_start < EXTENT_MAP_LAST_BYTE) {
-		btrfs_set_stack_file_extent_disk_bytenr(&fi, em->block_start -
-							extent_offset);
+	} else if (em->disk_bytenr < EXTENT_MAP_LAST_BYTE) {
+		btrfs_set_stack_file_extent_disk_bytenr(&fi, block_start - extent_offset);
 		btrfs_set_stack_file_extent_disk_num_bytes(&fi, block_len);
 	}
 
@@ -5905,7 +5910,7 @@ again:
 			if (ret < 0) {
 				return ret;
 			} else if (ret > 0 &&
-				   other_ino != btrfs_ino(BTRFS_I(ctx->inode))) {
+				   other_ino != btrfs_ino(ctx->inode)) {
 				if (ins_nr > 0) {
 					ins_nr++;
 				} else {
@@ -7567,7 +7572,7 @@ void btrfs_log_new_name(struct btrfs_trans_handle *trans,
 			goto out;
 	}
 
-	btrfs_init_log_ctx(&ctx, &inode->vfs_inode);
+	btrfs_init_log_ctx(&ctx, inode);
 	ctx.logging_new_name = true;
 	btrfs_init_log_ctx_scratch_eb(&ctx);
 	/*
