@@ -840,12 +840,12 @@ static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_EXP, 5);
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_WEIGHT, 1);
 			break;
-		case SPEED_1000:
+		/*case SPEED_1000:
 			val |= MTK_QTX_SCH_MAX_RATE_EN |
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_MAN, 10) |
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_EXP, 5) |
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_WEIGHT, 10);
-			break;
+			break;*/
 		default:
 			break;
 		}
