@@ -178,7 +178,7 @@ function check_dep()
 	if [[ $# -ge 1 ]];
 	then
 		if [[ $@ =~ "build" ]];then
-			NEEDED_PKGS+=" u-boot-tools bc gcc libc6-dev libncurses5-dev ccache libssl-dev"
+			NEEDED_PKGS+=" u-boot-tools bc gcc libc6-dev libncurses-dev ccache libssl-dev"
 		fi
 		if [[ $@ =~ "deb" ]];then
 			NEEDED_PKGS+=" fakeroot"
