@@ -149,9 +149,9 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		switch@1f {
+		switch@0 {
 			compatible = "mediatek,mt7531";
-			reg = <0x1f>;
+			reg = <0>;
 			interrupt-controller;
 			#interrupt-cells = <1>;
 			interrupts-extended = <&pio 53 IRQ_TYPE_LEVEL_HIGH>;
