@@ -5,6 +5,10 @@
 
 menu "PCS device drivers"
 
+config PCS_STANDALONE
+	tristate
+	select PHYLINK
+
 config PCS_XPCS
 	tristate "Synopsys DesignWare Ethernet XPCS"
 	select PHYLINK
