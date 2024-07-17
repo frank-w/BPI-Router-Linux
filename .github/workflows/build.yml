@@ -1,0 +1,140 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run. 
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches:
+    - '*-main'
+    - '*-ci'
+    - '*-rc'
+    paths-ignore:
+    - README*
+    - .github/workflows/build.yml
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions: {} # none
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    permissions:
+      contents: write  # for softprops/action-gh-release to create GitHub release
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Install depencies
+        run: |
+          sudo apt update
+          sudo apt install ccache libssl-dev u-boot-tools python3-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler libncurses5-dev libelf-dev
+
+      - name: Setup env
+        run: |
+          echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
+          echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+      - name: Generate Changelog
+        run: |
+          echo "# CI-Build for $BRANCH ($KERNELVER)" > ${{ github.workspace }}-CHANGELOG.txt
+          echo "last commits:" >> ${{ github.workspace }}-CHANGELOG.txt
+          git log --pretty=format:"%h %ad %s %d by %an" --date=short >> ${{ github.workspace }}-CHANGELOG.txt
+
+      - name: Print env
+        run: |
+          echo $BRANCH $KERNELVER $DT
+
+      - name: Setup cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache/
+          key: ${{ runner.os }}-ccache-${{ github.ref_name }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ github.ref_name }}
+
+      - name: Build for bananapi-r2
+        run: |
+          export PATH=/usr/lib/ccache:$PATH
+          bash build.sh importconfig
+          bash build.sh build
+          bash build.sh cryptodev
+      - name: Pack for bananapi-r2
+        run: |
+          bash build.sh pack_debs
+          bash build.sh pack
+
+      - name: Build for bananapi-r64
+        run: |
+          sed -ri 's/^#(board=bpi-r64)/\1/' build.conf #change board to r64
+          bash build.sh importconfig
+          bash build.sh build
+          bash build.sh cryptodev
+      - name: Pack for bananapi-r64
+        run: |
+          bash build.sh pack_debs
+          bash build.sh pack
+
+      - name: Build for bananapi-r2pro
+        run: |
+          sed -ri 's/^#(board=bpi-r2pro)/\1/' build.conf #change board to r2pro
+          bash build.sh importconfig
+          bash build.sh build
+      - name: Pack for bananapi-r2pro
+        run: |
+          bash build.sh pack_debs
+          bash build.sh pack
+
+      - name: Build for bananapi-r3 (mini)
+        run: |
+          sed -ri 's/^#(board=bpi-r3)/\1/' build.conf #change board to r3
+          bash build.sh importconfig
+          bash build.sh build
+      - name: Pack for bananapi-r3
+        run: |
+          bash build.sh pack_debs
+          bash build.sh pack
+
+      - name: Build for bananapi-r4
+        run: |
+          sed -ri 's/^#(board=bpi-r4)/\1/' build.conf #change board to r4
+          bash build.sh importconfig
+          bash build.sh build
+      - name: Pack for bananapi-r4
+        run: |
+          bash build.sh pack_debs
+          bash build.sh pack
+
+      - name: Upload binaries to release
+        if: endsWith(github.ref,'-main')
+        #uses: marvinpinto/action-automatic-releases@latest
+        #with:
+        #  repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        #  automatic_release_tag: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
+        #  prerelease: false
+        #  title: "Build for branch ${{ env.BRANCH }} (${{ env.KERNELVER }})"
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          #draft: true
+          #prerelease: true
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          body: ${{ github.sha }}-$BRANCH-$KERNELVER
+          tag_name: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
+          target_commitish: ${{ github.sha }}
+          files: |
+            ../SD/*
+            ../*.deb
+            *.itb
