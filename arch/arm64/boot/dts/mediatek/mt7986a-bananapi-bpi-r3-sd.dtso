@@ -16,4 +16,22 @@
 	max-frequency = <52000000>;
 	cap-sd-highspeed;
 	status = "okay";
+
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		block {
+			compatible = "block-device";
+			partitions {
+				sd_rootdisk: block-partition-production {
+					partname = "production";
+				};
+			};
+		};
+	};
+};
+
+&{/chosen} {
+	rootdisk-sd = <&sd_rootdisk>;
 };

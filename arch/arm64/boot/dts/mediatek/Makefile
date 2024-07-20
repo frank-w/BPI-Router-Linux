@@ -19,6 +19,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-bananapi-bpi-r3-nand.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-bananapi-bpi-r3-nor.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-bananapi-bpi-r3-sata.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-bananapi-bpi-r3-sd.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-bananapi-bpi-r3-respeaker-2mics.dtbo
 mt7986a-bananapi-bpi-r3-emmc-nand-dtbs := \
 	mt7986a-bananapi-bpi-r3.dtb \
 	mt7986a-bananapi-bpi-r3-emmc.dtbo \
