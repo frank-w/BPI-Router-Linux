@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2023 MediaTek Inc.
+ * Author: Maso Huang <Maso.Huang@mediatek.com>
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "bananapi,bpi-r3", "mediatek,mt7986a";
+};
+
+&{/} {
+	sound_wm8960 {
+		compatible = "mediatek,mt7986-wm8960-sound";
+		audio-routing = "Headphone", "HP_L",
+			"Headphone", "HP_R",
+			"LINPUT1", "AMIC",
+			"RINPUT1", "AMIC";
+
+		status = "okay";
+
+		platform {
+			sound-dai = <&afe>;
+		};
+
+		codec {
+			sound-dai = <&wm8960>;
+		};
+	};
+};
+
+&{/soc/i2c@11008000} {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c_pins>;
+	clock-frequency = <400000>;
+	status = "okay";
+
+	wm8960: wm8960@1a {
+		compatible = "wlf,wm8960";
+		reg = <0x1a>;
+	};
+};
+
+
+&{/soc/pinctrl@1001f000} {
+	i2c_pins: i2c-pins-3-4 {
+		mux {
+			function = "i2c";
+			groups = "i2c";
+		};
+	};
+};

@@ -22,4 +22,22 @@
 	no-sd;
 	no-sdio;
 	status = "okay";
+
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		block {
+			compatible = "block-device";
+			partitions {
+				emmc_rootdisk: block-partition-production {
+					partname = "production";
+				};
+			};
+		};
+	};
+};
+
+&{/chosen} {
+	rootdisk-emmc = <&emmc_rootdisk>;
 };
