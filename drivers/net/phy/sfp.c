@@ -397,6 +397,13 @@ static void sfp_fixup_rollball(struct sfp *sfp)
 	sfp->phy_t_retry = msecs_to_jiffies(1000);
 }
 
+// For 2.5GBASE-T short-reach modules
+static void sfp_fixup_oem_2_5gbaset(struct sfp *sfp)
+{
+	sfp_fixup_rollball(sfp);
+	sfp->id.base.extended_cc = SFF8024_ECC_2_5GBASE_T;
+}
+
 static void sfp_fixup_rollball_wait4s(struct sfp *sfp)
 {
 	sfp_fixup_rollball(sfp);
@@ -543,7 +550,8 @@ static const struct sfp_quirk sfp_quirks[] = {
 	SFP_QUIRK_F("OEM", "SFP-GE-T", sfp_fixup_ignore_tx_fault),
 
 	SFP_QUIRK_F("OEM", "SFP-10G-T", sfp_fixup_rollball_cc),
-	SFP_QUIRK_S("OEM", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
+	SFP_QUIRK_F("OEM", "SFP-2.5G-T", sfp_fixup_oem_2_5gbaset),
+	SFP_QUIRK_F("OEM", "SFP-2.5G-T-R-RM", sfp_fixup_oem_2_5gbaset),
 	SFP_QUIRK_S("OEM", "SFP-2.5G-BX10-D", sfp_quirk_2500basex),
 	SFP_QUIRK_S("OEM", "SFP-2.5G-BX10-U", sfp_quirk_2500basex),
 	SFP_QUIRK_F("OEM", "RTSFP-10", sfp_fixup_rollball_cc),
