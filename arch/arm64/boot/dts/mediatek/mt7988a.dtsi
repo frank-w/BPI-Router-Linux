@@ -9,6 +9,16 @@
 #include <dt-bindings/reset/mediatek,mt7988-resets.h>
 #include <dt-bindings/thermal/thermal.h>
 
+/* TOPRGU resets */
+#define MT7988_TOPRGU_SGMII0_GRST		1
+#define MT7988_TOPRGU_SGMII1_GRST		2
+#define MT7988_TOPRGU_XFI0_GRST			12
+#define MT7988_TOPRGU_XFI1_GRST			13
+#define MT7988_TOPRGU_XFI_PEXTP0_GRST		14
+#define MT7988_TOPRGU_XFI_PEXTP1_GRST		15
+#define MT7988_TOPRGU_XFI_PLL_GRST		16
+
+
 / {
 	compatible = "mediatek,mt7988a";
 	interrupt-parent = <&gic>;
@@ -150,6 +160,14 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
+
+		ramoops: ramoops@42ff0000{
+			compatible = "ramoops";
+			reg = <0x0 0x42ff0000 0x0 0x10000>;
+			record-size = <0x2000>;
+			console-size = <0x2000>;
+			pmsg-size = <0x2000>;
+		};
 
 		/* 320 KiB reserved for ARM Trusted Firmware (BL31 and BL32) */
 		secmon_reserved: secmon@43000000 {
@@ -568,7 +586,7 @@
 				     "syscon",
 				     "simple-mfd";
 			reg = <0 0x10060000 0 0x1000>;
-			resets = <&watchdog 1>;
+			resets = <&watchdog MT7988_TOPRGU_SGMII0_GRST>;
 			#clock-cells = <1>;
 
 			sgmiipcs0: pcs {
@@ -588,7 +606,7 @@
 				     "syscon",
 				     "simple-mfd";
 			reg = <0 0x10070000 0 0x1000>;
-			resets = <&watchdog 2>;
+			resets = <&watchdog MT7988_TOPRGU_SGMII1_GRST>;
 			#clock-cells = <1>;
 
 			sgmiipcs1: pcs {
@@ -605,7 +623,7 @@
 		usxgmiisys0: pcs@10080000 {
 			compatible = "mediatek,mt7988-usxgmiisys";
 			reg = <0 0x10080000 0 0x1000>;
-			resets = <&watchdog 12>;
+			resets = <&watchdog MT7988_TOPRGU_XFI0_GRST>;
 			clocks = <&topckgen CLK_TOP_USXGMII_SBUS_0_SEL>;
 			phys = <&xfi_tphy0>;
 			#pcs-cells = <0>;
@@ -614,7 +632,7 @@
 		usxgmiisys1: pcs@10081000 {
 			compatible = "mediatek,mt7988-usxgmiisys";
 			reg = <0 0x10081000 0 0x1000>;
-			resets = <&watchdog 13>;
+			resets = <&watchdog MT7988_TOPRGU_XFI1_GRST>;
 			clocks = <&topckgen CLK_TOP_USXGMII_SBUS_1_SEL>;
 			phys = <&xfi_tphy1>;
 			#pcs-cells = <0>;
@@ -783,12 +801,18 @@
 			      <0 0x11193e00 0 0x0100>;
 			reg-names = "mac", "ippc";
 			interrupts = <GIC_SPI 173 IRQ_TYPE_LEVEL_HIGH>;
+			phys = <&xphyu2port0 PHY_TYPE_USB2>,
+			       <&xphyu3port0 PHY_TYPE_USB3>;
 			clocks = <&infracfg CLK_INFRA_USB_SYS>,
+				 <&infracfg CLK_INFRA_USB_XHCI>,
 				 <&infracfg CLK_INFRA_USB_REF>,
 				 <&infracfg CLK_INFRA_66M_USB_HCK>,
-				 <&infracfg CLK_INFRA_133M_USB_HCK>,
-				 <&infracfg CLK_INFRA_USB_XHCI>;
-			clock-names = "sys_ck", "ref_ck", "mcu_ck", "dma_ck", "xhci_ck";
+				 <&infracfg CLK_INFRA_133M_USB_HCK>;
+			clock-names = "sys_ck", "xhci_ck", "ref_ck", "mcu_ck", "dma_ck";
+			#address-cells = <2>;
+			#size-cells = <2>;
+			mediatek,p0_speed_fixup;
+			status = "disabled";
 		};
 
 		ssusb1: usb@11200000 {
@@ -797,12 +821,17 @@
 			      <0 0x11203e00 0 0x0100>;
 			reg-names = "mac", "ippc";
 			interrupts = <GIC_SPI 172 IRQ_TYPE_LEVEL_HIGH>;
+			phys = <&tphyu2port0 PHY_TYPE_USB2>,
+			       <&tphyu3port0 PHY_TYPE_USB3>;
 			clocks = <&infracfg CLK_INFRA_USB_SYS_CK_P1>,
+				 <&infracfg CLK_INFRA_USB_XHCI_CK_P1>,
 				 <&infracfg CLK_INFRA_USB_CK_P1>,
 				 <&infracfg CLK_INFRA_66M_USB_HCK_CK_P1>,
-				 <&infracfg CLK_INFRA_133M_USB_HCK_CK_P1>,
-				 <&infracfg CLK_INFRA_USB_XHCI_CK_P1>;
-			clock-names = "sys_ck", "ref_ck", "mcu_ck", "dma_ck", "xhci_ck";
+				 <&infracfg CLK_INFRA_133M_USB_HCK_CK_P1>;
+			clock-names = "sys_ck", "xhci_ck", "ref_ck", "mcu_ck", "dma_ck";
+			#address-cells = <2>;
+			#size-cells = <2>;
+			status = "disabled";
 		};
 
 		afe: audio-controller@11210000 {
@@ -1076,7 +1105,7 @@
 		xfi_tphy0: phy@11f20000 {
 			compatible = "mediatek,mt7988-xfi-tphy";
 			reg = <0 0x11f20000 0 0x10000>;
-			resets = <&watchdog 14>;
+			resets = <&watchdog MT7988_TOPRGU_XFI_PEXTP0_GRST>;
 			clocks = <&xfi_pll CLK_XFIPLL_PLL_EN>, <&topckgen CLK_TOP_XFI_PHY_0_XTAL_SEL>;
 			clock-names = "xfipll", "topxtal";
 			mediatek,usxgmii-performance-errata;
@@ -1086,7 +1115,7 @@
 		xfi_tphy1: phy@11f30000 {
 			compatible = "mediatek,mt7988-xfi-tphy";
 			reg = <0 0x11f30000 0 0x10000>;
-			resets = <&watchdog 15>;
+			resets = <&watchdog MT7988_TOPRGU_XFI_PEXTP1_GRST>;
 			clocks = <&xfi_pll CLK_XFIPLL_PLL_EN>, <&topckgen CLK_TOP_XFI_PHY_1_XTAL_SEL>;
 			clock-names = "xfipll", "topxtal";
 			#phy-cells = <0>;
@@ -1095,7 +1124,7 @@
 		xfi_pll: clock-controller@11f40000 {
 			compatible = "mediatek,mt7988-xfi-pll";
 			reg = <0 0x11f40000 0 0x1000>;
-			resets = <&watchdog 16>;
+			resets = <&watchdog MT7988_TOPRGU_XFI_PLL_GRST>;
 			#clock-cells = <1>;
 		};
 
