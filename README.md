@@ -167,6 +167,17 @@ P=partial (vlan on r3 only works on dsa-ports, not on left SFP)
 
 ## Images
 
+Latest images are created by my BPI-Router-Images repo
+https://github.com/frank-w/BPI-Router-Images
+
+and stored on my gdrive
+https://drive.google.com/drive/folders/1A5S7_82Bg4EYxjzdQ5FKyBw9Qi2C3uK-?usp=drive_link
+
+discussion in bpi forum:
+https://forum.banana-pi.org/t/debian-ubuntu-image-creation/15826
+
+older images:
+
 R2:
 Debian Bullseye: https://forum.banana-pi.org/t/bpi-r2-debian-bullseye-image/12592/2
 
@@ -178,6 +189,7 @@ Debian Bullseye/Ubuntu 22.04: https://forum.banana-pi.org/t/bpi-r2-pro-debian-bu
 
 R3:
 Debian Bullseye: https://forum.banana-pi.org/t/bpi-r3-debian-bullseye-image/14541
+Ubuntu 22.04: https://forum.banana-pi.org/t/bpi-r3-ubuntu-22-04-image/14956
 
 ## Links
 
