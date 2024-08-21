@@ -85,6 +85,24 @@ If you want to clean up you can remove all containers (and the associated docker
 ```sh
 docker rmi bpi-cross-compile:1 --force
 ```
+## install kernel (debian/ubuntu images)
+
+either on host-system (build maschine) and inserted sdcard:
+
+```sh
+./build.sh install
+```
+
+or in running system (first make backup of your current itb in /boot) by unpacking
+the tar.gz file created by pack option in build.sh
+
+```sh
+kernelfile=bpi-r3_6.6.47-main.tar.gz
+sudo tar -xzf $kernelfile --strip-components=1 -C /boot/ BPI-BOOT
+echo "unpack kernel-modules to bpi-root loopdev..."
+sudo tar -xzf $kernelfile --strip-components=2 -C /lib/. BPI-ROOT/lib/
+```
+
 ## Branch details
 
 Kernel upstream + BPI-R2 / R64
