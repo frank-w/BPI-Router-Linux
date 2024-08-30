@@ -25,7 +25,14 @@ RUN apt-get update               \
     xz-utils                     \
     libncurses-dev               \
     nano                         \
+    sudo                         \
  && apt-get clean
 
+RUN usermod -a -G sudo builder
+RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
 USER builder
-WORKDIR /srv/
+#WORKDIR /srv/
+WORKDIR /home/builder
+RUN git clone --depth 1 https://www.github.com/frank-w/BPI-ROUTER-Linux --branch 6.6-main --single-branch code
+RUN sed -i.bak -e 's/^\(ramdisksize\)/#\1/' code/build.conf
