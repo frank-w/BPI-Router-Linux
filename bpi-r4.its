@@ -29,6 +29,17 @@
 				algo = "sha1";
 			};
 		};
+		fdt-base-v0 {
+			description = "Flattened Device Tree blob for R4 v0";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-v0.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			load = <0x47000000>;
+			compression = "none";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		fdt-ov-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-sd.dtbo");
@@ -72,10 +83,28 @@
 				algo = "sha1";
 			};
 		};
+		conf-base-v0 {
+			description = "Boot Linux kernel with base FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base-v0";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		conf-sd {
 			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
 			fdt = "fdt-base", "fdt-ov-sd";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
+		conf-sd-v0 {
+			description = "Boot Linux kernel with SD FDT blob";
+			kernel = "kernel-1";
+			fdt = "fdt-base-v0", "fdt-ov-sd";
 			//ramdisk = "ramdisk-1";
 			hash-1 {
 				algo = "sha1";
