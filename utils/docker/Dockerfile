@@ -1,9 +1,4 @@
-#FROM ubuntu:bionic
-#FROM ubuntu:focal
-#FROM ubuntu:jammy
 FROM ubuntu:noble
-
-RUN useradd -ms /bin/bash builder
 
 RUN apt-get update               \
  && apt-get -y -q upgrade        \
@@ -26,13 +21,13 @@ RUN apt-get update               \
     libncurses-dev               \
     nano                         \
     sudo                         \
+    kmod                         \
+    debhelper rsync cpio         \
  && apt-get clean
 
-RUN usermod -a -G sudo builder
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+RUN usermod -aG sudo ubuntu && \
+    echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-USER builder
-#WORKDIR /srv/
-WORKDIR /home/builder
-RUN git clone --depth 1 https://www.github.com/frank-w/BPI-ROUTER-Linux --branch 6.6-main --single-branch code
-RUN sed -i.bak -e 's/^\(ramdisksize\)/#\1/' code/build.conf
+RUN mkdir -p /srv/code && chmod a+rwx -R /srv
+
+WORKDIR /srv/code
