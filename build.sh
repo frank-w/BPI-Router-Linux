@@ -5,6 +5,8 @@ then
   exit 1;
 fi
 
+numproc=$(grep ^processor /proc/cpuinfo  | wc -l)
+
 . build.conf
 
 r64newswver=1.0
@@ -1016,7 +1018,7 @@ if [ -n "$kernver" ]; then
 	action=$1
 	file=$2
 	LANG=C
-	CFLAGS=-j$(grep ^processor /proc/cpuinfo  | wc -l)
+	CFLAGS=-j${numproc}
 
 	#echo $action
 
@@ -1181,7 +1183,8 @@ if [ -n "$kernver" ]; then
 
 		"build")
 			echo "Build Kernel"
-			build
+			echo "building with ${numproc} threads"
+			time build
 			#$0 cryptodev
 			;;
 		"clean")
