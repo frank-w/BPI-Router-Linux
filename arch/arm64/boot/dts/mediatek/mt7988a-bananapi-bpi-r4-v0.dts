@@ -22,6 +22,9 @@
 		led-failsafe = &led_green;
 		led-running = &led_green;
 		led-upgrade = &led_green;
+		ethernet0 = &gmac0;
+		ethernet1 = &gmac1;
+		ethernet2 = &gmac2;
 	};
 
 	chosen {
