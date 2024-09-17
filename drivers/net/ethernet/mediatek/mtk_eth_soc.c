@@ -3266,12 +3266,14 @@ static int mtk_start_dma(struct mtk_eth *eth)
 		       MTK_TX_BT_32DWORDS | MTK_NDP_CO_PRO |
 		       MTK_RX_2B_OFFSET | MTK_TX_WB_DDONE;
 
-		if (mtk_is_netsys_v2_or_greater(eth))
+		if (mtk_is_netsys_v2_or_greater(eth)) {
+			val &= ~MTK_RESV_BUF_MASK;
 			val |= MTK_MUTLI_CNT | MTK_RESV_BUF |
 			       MTK_WCOMP_EN | MTK_DMAD_WR_WDONE |
 			       MTK_CHK_DDONE_EN | MTK_LEAKY_BUCKET_EN;
-		else
+		} else {
 			val |= MTK_RX_BT_32DWORDS;
+		}
 		mtk_w32(eth, val, reg_map->qdma.glo_cfg);
 
 		mtk_w32(eth,
