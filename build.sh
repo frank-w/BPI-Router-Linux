@@ -886,6 +886,7 @@ function build {
 	else
 		echo "No Configfile found, Please Configure Kernel"
 	fi
+	return $ret
 }
 
 function prepare_SD {
