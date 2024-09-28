@@ -197,7 +197,13 @@ static int toprgu_reset(struct reset_controller_dev *rcdev,
 	if (ret)
 		return ret;
 
-	return toprgu_reset_deassert(rcdev, id);
+	udelay(100);
+
+	ret = toprgu_reset_deassert(rcdev, id);
+	if (!ret)
+		udelay(100);
+
+	return ret;
 }
 
 static const struct reset_control_ops toprgu_reset_ops = {
