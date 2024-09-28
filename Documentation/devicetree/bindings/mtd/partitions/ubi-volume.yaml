@@ -29,6 +29,15 @@ properties:
     description:
       This container may reference an NVMEM layout parser.
 
+  volume-is-critical:
+    description: This parameter, if present, indicates that the UBI volume
+      contains early-boot firmware images or data which should not be clobbered.
+      If set, it prevents the user from renaming the volume, writing to it or
+      making any changes affecting it, as well as detaching the UBI device it is
+      located on, so direct access to the underlying MTD device is prevented as
+      well.
+    type: boolean
+
 anyOf:
   - required:
       - volid
