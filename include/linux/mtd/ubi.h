@@ -55,6 +55,7 @@ enum {
  * @name_len: volume name length
  * @name: volume name
  * @cdev: UBI volume character device major and minor numbers
+ * @dev: pointer to struct device
  *
  * The @corrupted flag is only relevant to static volumes and is always zero
  * for dynamic ones. This is because UBI does not care about dynamic volume
