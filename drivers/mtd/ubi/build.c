@@ -315,6 +315,30 @@ struct ubi_device *ubi_get_by_major(int major)
 }
 
 /**
+ * ubi_device_got_critical_volume - check if device contains critical volume
+ * @ubi: UBI device description object
+ *
+ * This function checks if any volume on a given UBI device is critical.
+ *
+ * Context: Expects ubi_devices_lock to be held by caller.
+ * Returns: True if there is a critical volume, false otherwise.
+ */
+static bool ubi_device_got_critical_volume(struct ubi_device *ubi)
+{
+	int i;
+
+	for (i = 0; i < ubi->vtbl_slots; i++) {
+		if (!ubi->volumes[i])
+			continue;
+
+		if (ubi->volumes[i]->critical)
+			return true;
+	}
+
+	return false;
+}
+
+/**
  * ubi_major2num - get UBI device number by character device major number.
  * @major: major number
  *
@@ -1102,6 +1126,11 @@ int ubi_detach_mtd_dev(int ubi_num, int anyway)
 		return -EINVAL;
 
 	spin_lock(&ubi_devices_lock);
+	if (ubi_device_got_critical_volume(ubi)) {
+		spin_unlock(&ubi_devices_lock);
+		return -EPERM;
+	}
+
 	ubi->ref_count -= 1;
 	if (ubi->ref_count) {
 		if (!anyway) {

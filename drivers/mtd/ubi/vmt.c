@@ -372,6 +372,11 @@ int ubi_remove_volume(struct ubi_volume_desc *desc, int no_vtbl)
 		return -EROFS;
 
 	spin_lock(&ubi->volumes_lock);
+	if (vol->critical) {
+		err = -EPERM;
+		goto out_unlock;
+	}
+
 	if (vol->ref_count > 1) {
 		/*
 		 * The volume is busy, probably someone is reading one of its
@@ -474,6 +479,12 @@ int ubi_resize_volume(struct ubi_volume_desc *desc, int reserved_pebs)
 		return PTR_ERR(new_eba_tbl);
 
 	spin_lock(&ubi->volumes_lock);
+	if (vol->critical) {
+		spin_unlock(&ubi->volumes_lock);
+		err = -EPERM;
+		goto out_free;
+	}
+
 	if (vol->ref_count > 1) {
 		spin_unlock(&ubi->volumes_lock);
 		err = -EBUSY;
@@ -580,8 +591,21 @@ out_free:
  */
 int ubi_rename_volumes(struct ubi_device *ubi, struct list_head *rename_list)
 {
-	int err;
+	int err = 0;
 	struct ubi_rename_entry *re;
+
+	spin_lock(&ubi->volumes_lock);
+	list_for_each_entry(re, rename_list, list) {
+		struct ubi_volume *vol = re->desc->vol;
+
+		if (vol->critical) {
+			err = -EPERM;
+			break;
+		}
+	}
+	spin_unlock(&ubi->volumes_lock);
+	if (err)
+		return err;
 
 	err = ubi_vtbl_rename_volumes(ubi, rename_list);
 	if (err)
@@ -643,6 +667,7 @@ int ubi_add_volume(struct ubi_device *ubi, struct ubi_volume *vol)
 	vol->dev.groups = volume_dev_groups;
 	dev_set_name(&vol->dev, "%s_%d", ubi->ubi_name, vol->vol_id);
 	device_set_node(&vol->dev, find_volume_fwnode(vol));
+	vol->critical = device_property_read_bool(&vol->dev, "volume-is-critical");
 	err = device_register(&vol->dev);
 	if (err) {
 		cdev_del(&vol->cdev);

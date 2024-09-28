@@ -364,6 +364,7 @@ struct ubi_volume {
 	unsigned int updating:1;
 	unsigned int changing_leb:1;
 	unsigned int direct_writes:1;
+	unsigned int critical:1;
 
 #ifdef CONFIG_MTD_UBI_FASTMAP
 	unsigned long *checkmap;

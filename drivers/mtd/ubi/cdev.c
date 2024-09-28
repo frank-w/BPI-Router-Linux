@@ -328,6 +328,9 @@ static ssize_t vol_cdev_write(struct file *file, const char __user *buf,
 	struct ubi_volume *vol = desc->vol;
 	struct ubi_device *ubi = vol->ubi;
 
+	if (vol->critical)
+		return -EPERM;
+
 	if (!vol->updating && !vol->changing_leb)
 		return vol_cdev_direct_write(file, buf, count, offp);
 
@@ -390,6 +393,11 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 	{
 		int64_t bytes, rsvd_bytes;
 
+		if (vol->critical) {
+			err = -EPERM;
+			break;
+		}
+
 		if (!capable(CAP_SYS_RESOURCE)) {
 			err = -EPERM;
 			break;
@@ -430,6 +438,11 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 	{
 		struct ubi_leb_change_req req;
 
+		if (vol->critical) {
+			err = -EPERM;
+			break;
+		}
+
 		err = copy_from_user(&req, argp,
 				     sizeof(struct ubi_leb_change_req));
 		if (err) {
@@ -464,6 +477,11 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 	{
 		int32_t lnum;
 
+		if (vol->critical) {
+			err = -EPERM;
+			break;
+		}
+
 		err = get_user(lnum, (__user int32_t *)argp);
 		if (err) {
 			err = -EFAULT;
@@ -495,6 +513,11 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 	{
 		struct ubi_map_req req;
 
+		if (vol->critical) {
+			err = -EPERM;
+			break;
+		}
+
 		err = copy_from_user(&req, argp, sizeof(struct ubi_map_req));
 		if (err) {
 			err = -EFAULT;
@@ -508,6 +531,11 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 	case UBI_IOCEBUNMAP:
 	{
 		int32_t lnum;
+
+		if (vol->critical) {
+			err = -EPERM;
+			break;
+		}
 
 		err = get_user(lnum, (__user int32_t *)argp);
 		if (err) {
@@ -536,6 +564,11 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 	case UBI_IOCSETVOLPROP:
 	{
 		struct ubi_set_vol_prop_req req;
+
+		if (vol->critical) {
+			err = -EPERM;
+			break;
+		}
 
 		err = copy_from_user(&req, argp,
 				     sizeof(struct ubi_set_vol_prop_req));
