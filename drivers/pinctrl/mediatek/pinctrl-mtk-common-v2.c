@@ -605,7 +605,7 @@ static int mtk_pinconf_bias_set_pd(struct mtk_pinctrl *hw,
 				const struct mtk_pin_desc *desc,
 				u32 pullup, u32 arg)
 {
-    int err, pd;
+	int err, pd;
 
 	if (arg == MTK_DISABLE)
 		pd = 0;
@@ -786,7 +786,7 @@ int mtk_pinconf_bias_set_combo(struct mtk_pinctrl *hw,
 		err = mtk_pinconf_bias_set_pd(hw, desc, pullup, arg);
 		if (!err)
 			return err;
-    }
+	}
 
 	if (try_all_type & MTK_PULL_PU_PD_TYPE) {
 		err = mtk_pinconf_bias_set_pu_pd(hw, desc, pullup, arg);
