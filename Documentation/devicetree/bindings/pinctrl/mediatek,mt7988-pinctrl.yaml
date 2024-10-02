@@ -1,35 +1,33 @@
 # SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 %YAML 1.2
 ---
-$id: http://devicetree.org/schemas/pinctrl/mediatek,mt7986-pinctrl.yaml#
+$id: http://devicetree.org/schemas/pinctrl/mediatek,mt7988-pinctrl.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: MediaTek MT7986 Pin Controller
+title: MediaTek MT7988 Pin Controller
 
 maintainers:
   - Sean Wang <sean.wang@kernel.org>
 
 description:
-  The MediaTek's MT7986 Pin controller is used to control SoC pins.
+  The MediaTek's MT7988 Pin controller is used to control SoC pins.
 
 properties:
   compatible:
     enum:
-      - mediatek,mt7986a-pinctrl
-      - mediatek,mt7986b-pinctrl
+      - mediatek,mt7988-pinctrl
 
   reg:
-    minItems: 8
-    maxItems: 8
+    minItems: 7
+    maxItems: 7
 
   reg-names:
     items:
       - const: gpio
-      - const: iocfg_rt
-      - const: iocfg_rb
-      - const: iocfg_lt
-      - const: iocfg_lb
       - const: iocfg_tr
+      - const: iocfg_br
+      - const: iocfg_rb
+      - const: iocfg_lb
       - const: iocfg_tl
       - const: eint
 
@@ -81,67 +79,132 @@ patternProperties:
           The following table shows the effective values of "group", "function"
           properties and chip pinout pins
 
-          groups            function    pins (in pin#)
+          groups               function           pins (in pin#)
           ---------------------------------------------------------------------
-          "watchdog"        "watchdog"  0
-          "wifi_led"        "led"       1, 2
-          "i2c"             "i2c"       3, 4
-          "uart1_0"         "uart"      7, 8, 9, 10
-          "uart1_rx_tx"     "uart"      42, 43
-          "uart1_cts_rts"   "uart"      44, 45
-          "pcie_clk"        "pcie"      9
-          "pcie_wake"       "pcie"      10
-          "spi1_0"          "spi"       11, 12, 13, 14
-          "pwm1_1"          "pwm"       20,
-          "pwm0"            "pwm"       21,
-          "pwm1_0"          "pwm"       22,
-          "snfi"            "flash"     23, 24, 25, 26, 27, 28
-          "spi1_2"          "spi"       29, 30, 31, 32
-          "emmc_45"         "emmc"      22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
-                                        32
-
-          "spi1_1"          "spi"       23, 24, 25, 26
-          "uart1_2_rx_tx"   "uart"      29, 30
-          "uart1_2_cts_rts" "uart"      31, 32
-          "uart1_1"         "uart"      23, 24, 25, 26
-          "uart2_0_rx_tx"   "uart"      29, 30
-          "uart2_0_cts_rts" "uart"      31, 32
-          "spi0"            "spi"       33, 34, 35, 36
-          "spi0_wp_hold"    "spi"       37, 38
-          "uart1_3_rx_tx"   "uart"      35, 36
-          "uart1_3_cts_rts" "uart"      37, 38
-          "uart2_1"         "uart"      33, 34, 35, 36
-          "spi1_3"          "spi"       33, 34, 35, 36
-          "uart0"           "uart"      39, 40
-          "pcie_pereset"    "pcie"      41
-          "uart1"           "uart"      42, 43, 44, 45
-          "uart2"           "uart"      46, 47, 48, 49
-          "emmc_51"         "emmc"      50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
-                                        60, 61
-
-          "pcm"             "audio"     62, 63, 64, 65
-          "i2s"             "audio"     62, 63, 64, 65
-          "switch_int"      "eth"       66
-          "mdc_mdio"        "eth"       67
-          "wf_2g"           "wifi"      74, 75, 76, 77, 78, 79, 80, 81, 82, 83
-          "wf_5g"           "wifi"      91, 92, 93, 94, 95, 96, 97, 98, 99, 100
-          "wf_dbdc"         "wifi"      74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
-                                        84, 85
+          "tops_jtag0_0"       "jtag"             0, 1, 2, 3, 4
+          "wo0_jtag"           "jtag"             50, 51, 52, 53, 54
+          "wo1_jtag"           "jtag"             50, 51, 52, 53, 54
+          "wo2_jtag"           "jtag"             50, 51, 52, 53, 54
+          "jtag"               "jtag"             58, 59, 60, 61, 62
+          "tops_jtag0_1"       "jtag"             58, 59, 60, 61, 62
+          "int_usxgmii"        "int_usxgmii"      2, 3
+          "pwm0"               "pwm"              57
+          "pwm1"               "pwm"              21
+          "pwm2"               "pwm"              80
+          "pwm3"               "pwm"              81
+          "pwm4"               "pwm"              82
+          "pwm5"               "pwm"              83
+          "pwm6"               "pwm"              69
+          "pwm7"               "pwm"              70
+          "dfd"                "dfd"              0, 1, 2, 3, 4
+          "xfi_phy0_i2c0"      "i2c"              0, 1
+          "xfi_phy1_i2c0"      "i2c"              0, 1
+          "xfi_phy_pll_i2c0"   "i2c"              3, 4
+          "xfi_phy_pll_i2c1"   "i2c"              3, 4
+          "i2c0_0"             "i2c"              5, 6
+          "i2c1_sfp"           "i2c"              5, 6
+          "xfi_pextp_phy0_i2c" "i2c"              5, 6
+          "xfi_pextp_phy1_i2c" "i2c"              5, 6
+          "i2c0_1"             "i2c"              15, 16
+          "u30_phy_i2c0"       "i2c"              15, 16
+          "u32_phy_i2c0"       "i2c"              15, 16
+          "xfi_phy0_i2c1"      "i2c"              15, 16
+          "xfi_phy1_i2c1"      "i2c"              15, 16
+          "xfi_phy_pll_i2c2"   "i2c"              15, 16
+          "i2c1_0"             "i2c"              17, 18
+          "u30_phy_i2c1"       "i2c"              17, 18
+          "u32_phy_i2c1"       "i2c"              17, 18
+          "xfi_phy_pll_i2c3"   "i2c"              17, 18
+          "sgmii0_i2c"         "i2c"              17, 18
+          "sgmii1_i2c"         "i2c"              17, 18
+          "i2c1_2"             "i2c"              69, 70
+          "i2c2_0"             "i2c"              69, 70
+          "i2c2_1"             "i2c"              71, 72
+          "mdc_mdio0"          "eth"              5, 6
+          "2p5g_ext_mdio"      "eth"              28, 29
+          "gbe_ext_mdio"       "eth"              30, 31
+          "mdc_mdio1"          "eth"              69, 70
+          "pcie_wake_n0_0"     "pcie"             7
+          "pcie_clk_req_n0_0"  "pcie"             8
+          "pcie_wake_n3_0"     "pcie"             9
+          "pcie_clk_req_n3"    "pcie"             10
+          "pcie_clk_req_n0_1"  "pcie"             10
+          "pcie_p0_phy_i2c"    "pcie"             7, 8
+          "pcie_p1_phy_i2c"    "pcie"             7, 8
+          "pcie_p3_phy_i2c"    "pcie"             9, 10
+          "pcie_p2_phy_i2c"    "pcie"             7, 8
+          "ckm_phy_i2c"        "pcie"             9, 10
+          "pcie_wake_n0_1"     "pcie"             13
+          "pcie_wake_n3_1"     "pcie"             14
+          "pcie_2l_0_pereset"  "pcie"             19
+          "pcie_1l_1_pereset"  "pcie"             20
+          "pcie_clk_req_n2_1"  "pcie"             63
+          "pcie_2l_1_pereset"  "pcie"             73
+          "pcie_1l_0_pereset"  "pcie"             74
+          "pcie_wake_n1_0"     "pcie"             75
+          "pcie_clk_req_n1"    "pcie"             76
+          "pcie_wake_n2_0"     "pcie"             77
+          "pcie_clk_req_n2_0"  "pcie"             78
+          "pcie_wake_n2_1"     "pcie"             79
+          "pmic"               "pmic"             11
+          "watchdog"           "watchdog"         12
+          "spi0_wp_hold"       "spi"              22, 23
+          "spi0"               "spi"              24, 25, 26, 27
+          "spi1"               "spi"              28, 29, 30, 31
+          "spi2"               "spi"              32, 33, 34, 35
+          "spi2_wp_hold"       "spi"              36, 37
+          "snfi"               "flash"            22, 23, 24, 25, 26, 27
+          "emmc_45"            "flash"            21, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37
+          "sdcard"             "flash"            32, 33, 34, 35, 36, 37
+          "emmc_51"            "flash"            38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49
+          "uart2"              "uart"             0, 1, 2, 3
+          "tops_uart0_0"       "uart"             22, 23
+          "uart2_0"            "uart"             28, 29, 30, 31
+          "uart1_0"            "uart"             32, 33, 34, 35
+          "uart2_1"            "uart"             32, 33, 34, 35
+          "net_wo0_uart_txd_0" "uart"             28
+          "net_wo1_uart_txd_0" "uart"             29
+          "net_wo2_uart_txd_0" "uart"             30
+          "tops_uart1_0"       "uart"             28, 29
+          "tops_uart0_1"       "uart"             30, 31
+          "tops_uart1_1"       "uart"             36, 37
+          "uart0"              "uart"             55, 56
+          "tops_uart0_2"       "uart"             55, 56
+          "uart2_2"            "uart"             50, 51, 52, 53
+          "uart1_1"            "uart"             58, 59, 60, 61
+          "uart2_3"            "uart"             58, 59, 60, 61
+          "uart1_2"            "uart"             80, 81, 82, 83
+          "uart1_2_lite"       "uart"             80, 81
+          "tops_uart1_2"       "uart"             80, 81
+          "net_wo0_uart_txd_1" "uart"             80
+          "net_wo1_uart_txd_1" "uart"             81
+          "net_wo2_uart_txd_1" "uart"             82
+          "udi"                "udi"              32, 33, 34, 35, 36
+          "i2s"                "audio"            50, 51, 52, 53, 54
+          "pcm"                "audio"            50, 51, 52, 53
+          "gbe0_led1"          "led"              58
+          "gbe1_led1"          "led"              59
+          "gbe2_led1"          "led"              60
+          "gbe3_led1"          "led"              61
+          "2p5gbe_led1"        "led"              62
+          "gbe0_led0"          "led"              64
+          "gbe1_led0"          "led"              65
+          "gbe2_led0"          "led"              66
+          "gbe3_led0"          "led"              67
+          "2p5gbe_led0"        "led"              68
+          "drv_vbus_p1"        "usb"              63
+          "drv_vbus"           "usb"              79
 
         $ref: /schemas/pinctrl/pinmux-node.yaml
         properties:
           function:
             description:
               A string containing the name of the function to mux to the group.
-              There is no "audio", "pcie" functions on mt7986b, you can only use
-              those functions on mt7986a.
-            enum: [audio, emmc, eth, i2c, led, flash, pcie, pwm, spi, uart,
-                   watchdog, wifi]
+            enum: [audio, jtag, int_usxgmii, pwm, dfd, i2c, eth, pcie, pmic, watchdog, spi, flash,
+                   uart, udi, usb, led]
           groups:
             description:
               An array of strings. Each string contains the name of a group.
-              There is no "pcie_pereset", "uart1", "uart2" "emmc_51", "pcm", and
-              "i2s" groups on mt7986b, you can only use those groups on mt7986a.
         required:
           - function
           - groups
@@ -154,39 +217,31 @@ patternProperties:
             then:
               properties:
                 groups:
-                  enum: [pcm, i2s]
+                  enum: [i2s, pcm]
           - if:
               properties:
                 function:
-                  const: emmc
+                  const: jtag
             then:
               properties:
                 groups:
-                  enum: [emmc_45, emmc_51]
+                  enum: [tops_jtag0_0, wo0_jtag, wo1_jtag, wo2_jtag, jtag, tops_jtag0_1]
           - if:
               properties:
                 function:
-                  const: eth
+                  const: int_usxgmii
             then:
               properties:
                 groups:
-                  enum: [switch_int, mdc_mdio]
+                  enum: [int_usxgmii]
           - if:
               properties:
                 function:
-                  const: i2c
+                  const: dfd
             then:
               properties:
                 groups:
-                  enum: [i2c]
-          - if:
-              properties:
-                function:
-                  const: led
-            then:
-              properties:
-                groups:
-                  enum: [wifi_led]
+                  enum: [dfd]
           - if:
               properties:
                 function:
@@ -194,7 +249,38 @@ patternProperties:
             then:
               properties:
                 groups:
-                  enum: [snfi]
+                  enum: [emmc_45, sdcard, snfi, emmc_51]
+          - if:
+              properties:
+                function:
+                  const: eth
+            then:
+              properties:
+                groups:
+                  enum: [mdc_mdio0, 2p5g_ext_mdio, gbe_ext_mdio, mdc_mdio1]
+          - if:
+              properties:
+                function:
+                  const: i2c
+            then:
+              properties:
+                groups:
+                  enum: [xfi_phy0_i2c0, xfi_phy1_i2c0, xfi_phy_pll_i2c0,
+                         xfi_phy_pll_i2c1, i2c0_0, i2c1_sfp, xfi_pextp_phy0_i2c,
+                         xfi_pextp_phy1_i2c, i2c0_1, u30_phy_i2c0, u32_phy_i2c0,
+                         xfi_phy0_i2c1, xfi_phy1_i2c1, xfi_phy_pll_i2c2, i2c1_0,
+                         u30_phy_i2c1, u32_phy_i2c1, xfi_phy_pll_i2c3, sgmii0_i2c,
+                         sgmii1_i2c, i2c1_2, i2c2_0, i2c2_1]
+          - if:
+              properties:
+                function:
+                  const: led
+            then:
+              properties:
+                groups:
+                  enum: [gbe0_led1, gbe1_led1, gbe2_led1, gbe3_led1, 2p5gbe_led1,
+                         gbe0_led0, gbe1_led0, gbe2_led0, gbe3_led0, 2p5gbe_led0,
+                         wf5g_led0, wf5g_led1]
           - if:
               properties:
                 function:
@@ -203,8 +289,25 @@ patternProperties:
               properties:
                 groups:
                   items:
-                    enum: [pcie_clk, pcie_wake, pcie_pereset]
+                    enum: [pcie_wake_n0_0, pcie_clk_req_n0_0, pcie_wake_n3_0,
+                           pcie_clk_req_n3, pcie_p0_phy_i2c, pcie_p1_phy_i2c,
+                           pcie_p3_phy_i2c, pcie_p2_phy_i2c, ckm_phy_i2c,
+                           pcie_wake_n0_1, pcie_wake_n3_1, pcie_2l_0_pereset,
+                           pcie_1l_1_pereset, pcie_clk_req_n2_1, pcie_2l_1_pereset,
+                           pcie_1l_0_pereset, pcie_wake_n1_0, pcie_clk_req_n1,
+                           pcie_wake_n2_0, pcie_clk_req_n2_0, pcie_wake_n2_1,
+                           pcie_clk_req_n0_1]
                   maxItems: 3
+          - if:
+              properties:
+                function:
+                  const: pmic
+            then:
+              properties:
+                groups:
+                  items:
+                    enum: [pmic]
+                  maxItems: 1
           - if:
               properties:
                 function:
@@ -213,7 +316,7 @@ patternProperties:
               properties:
                 groups:
                   items:
-                    enum: [pwm0, pwm1_0, pwm1_1]
+                    enum: [pwm0, pwm1, pwm2, pwm3, pwm4, pwm5, pwm6, pwm7]
                   maxItems: 2
           - if:
               properties:
@@ -223,7 +326,7 @@ patternProperties:
               properties:
                 groups:
                   items:
-                    enum: [spi0, spi0_wp_hold, spi1_0, spi1_1, spi1_2, spi1_3]
+                    enum: [spi0, spi0_wp_hold, spi1, spi2, spi2_wp_hold]
                   maxItems: 2
           - if:
               properties:
@@ -233,10 +336,13 @@ patternProperties:
               properties:
                 groups:
                   items:
-                    enum: [uart1_0, uart1_rx_tx, uart1_cts_rts, uart1_1,
-                           uart1_2_rx_tx, uart1_2_cts_rts, uart1_3_rx_tx,
-                           uart1_3_cts_rts, uart2_0_rx_tx, uart2_0_cts_rts,
-                           uart2_1, uart0, uart1, uart2]
+                    enum: [uart2, tops_uart0_0, uart2_0, uart1_0, uart2_1,
+                           net_wo0_uart_txd_0, net_wo1_uart_txd_0,
+                           net_wo2_uart_txd_0, tops_uart1_0, ops_uart0_1,
+                           ops_uart1_1, uart0, tops_uart0_2, uart1_1, uart2_3,
+                           uart1_2, uart1_2_lite, tops_uart1_2,
+                           net_wo0_uart_txd_1, net_wo1_uart_txd_1,
+                           net_wo2_uart_txd_1]
                   maxItems: 2
           - if:
               properties:
@@ -249,13 +355,23 @@ patternProperties:
           - if:
               properties:
                 function:
-                  const: wifi
+                  const: udi
             then:
               properties:
                 groups:
                   items:
-                    enum: [wf_2g, wf_5g, wf_dbdc]
-                  maxItems: 3
+                    enum: [udi]
+                  maxItems: 1
+          - if:
+              properties:
+                function:
+                  const: usb
+            then:
+              properties:
+                groups:
+                  items:
+                    enum: [drv_vbus, drv_vbus_p1]
+                  maxItems: 1
       '^.*conf.*$':
         type: object
         additionalProperties: false
@@ -266,30 +382,27 @@ patternProperties:
         properties:
           pins:
             description:
-              An array of strings. Each string contains the name of a pin. There
-              is no PIN 41 to PIN 65 above on mt7686b, you can only use those
-              pins on mt7986a.
+              An array of strings. Each string contains the name of a pin.
             items:
-              enum: [SYS_WATCHDOG, WF2G_LED, WF5G_LED, I2C_SCL, I2C_SDA, GPIO_0,
-                     GPIO_1, GPIO_2, GPIO_3, GPIO_4, GPIO_5, GPIO_6, GPIO_7,
-                     GPIO_8, GPIO_9, GPIO_10, GPIO_11, GPIO_12, GPIO_13,
-                     GPIO_14, GPIO_15, PWM0, PWM1, SPI0_CLK, SPI0_MOSI,
-                     SPI0_MISO, SPI0_CS, SPI0_HOLD, SPI0_WP, SPI1_CLK,
-                     SPI1_MOSI, SPI1_MISO, SPI1_CS, SPI2_CLK, SPI2_MOSI,
-                     SPI2_MISO, SPI2_CS, SPI2_HOLD, SPI2_WP, UART0_RXD,
-                     UART0_TXD, PCIE_PERESET_N, UART1_RXD, UART1_TXD, UART1_CTS,
-                     UART1_RTS, UART2_RXD, UART2_TXD, UART2_CTS, UART2_RTS,
-                     EMMC_DATA_0, EMMC_DATA_1, EMMC_DATA_2, EMMC_DATA_3,
-                     EMMC_DATA_4, EMMC_DATA_5, EMMC_DATA_6, EMMC_DATA_7,
-                     EMMC_CMD, EMMC_CK, EMMC_DSL, EMMC_RSTB, PCM_DTX, PCM_DRX,
-                     PCM_CLK, PCM_FS, MT7531_INT, SMI_MDC, SMI_MDIO,
-                     WF0_DIG_RESETB, WF0_CBA_RESETB, WF0_XO_REQ, WF0_TOP_CLK,
-                     WF0_TOP_DATA, WF0_HB1, WF0_HB2, WF0_HB3, WF0_HB4, WF0_HB0,
-                     WF0_HB0_B, WF0_HB5, WF0_HB6, WF0_HB7, WF0_HB8, WF0_HB9,
-                     WF0_HB10, WF1_DIG_RESETB, WF1_CBA_RESETB, WF1_XO_REQ,
-                     WF1_TOP_CLK, WF1_TOP_DATA, WF1_HB1, WF1_HB2, WF1_HB3,
-                     WF1_HB4, WF1_HB0, WF1_HB0_B, WF1_HB5, WF1_HB6, WF1_HB7,
-                     WF1_HB8]
+              enum: [UART2_RXD, UART2_TXD, UART2_CTS, UART2_RTS, GPIO_A, SMI_0_MDC,
+                     SMI_0_MDIO, PCIE30_2L_0_WAKE_N, PCIE30_2L_0_CLKREQ_N,
+                     PCIE30_1L_1_WAKE_N, PCIE30_1L_1_CLKREQ_N, GPIO_P, WATCHDOG,
+                     GPIO_RESET, GPIO_WPS, PMIC_I2C_SCL, PMIC_I2C_SDA, I2C_1_SCL,
+                     I2C_1_SDA, PCIE30_2L_0_PRESET_N, PCIE30_1L_1_PRESET_N, PWMD1,
+                     SPI0_WP, SPI0_HOLD, SPI0_CSB, SPI0_MISO, SPI0_MOSI, SPI0_CLK,
+                     SPI1_CSB, SPI1_MISO, SPI1_MOSI, SPI1_CLK, SPI2_CLK, SPI2_MOSI,
+                     SPI2_MISO, SPI2_CSB, SPI2_HOLD, SPI2_WP, EMMC_RSTB, EMMC_DSL,
+                     EMMC_CK, EMMC_CMD, EMMC_DATA_7, EMMC_DATA_6, EMMC_DATA_5,
+                     EMMC_DATA_4, EMMC_DATA_3, EMMC_DATA_2, EMMC_DATA_1,
+                     EMMC_DATA_0, PCM_FS_I2S_LRCK, PCM_CLK_I2S_BCLK,
+                     PCM_DRX_I2S_DIN, PCM_DTX_I2S_DOUT, PCM_MCK_I2S_MCLK,
+                     UART0_RXD, UART0_TXD, PWMD0, JTAG_JTDI, JTAG_JTDO, JTAG_JTMS,
+                     JTAG_JTCLK, JTAG_JTRST_N, USB_DRV_VBUS_P1, LED_A, LED_B, LED_C,
+                     LED_D, LED_E, GPIO_B, GPIO_C, I2C_2_SCL, I2C_2_SDA,
+                     PCIE30_2L_1_PRESET_N, PCIE30_1L_0_PRESET_N,
+                     PCIE30_2L_1_WAKE_N, PCIE30_2L_1_CLKREQ_N,
+                     PCIE30_1L_0_WAKE_N, PCIE30_1L_0_CLKREQ_N, USB_DRV_VBUS_P0,
+                     UART1_RXD, UART1_TXD, UART1_CTS, UART1_RTS]
             maxItems: 101
 
           bias-disable: true
@@ -367,96 +480,97 @@ examples:
     soc {
       #address-cells = <2>;
       #size-cells = <2>;
+
       pio: pinctrl@1001f000 {
-        compatible = "mediatek,mt7986a-pinctrl";
+        compatible = "mediatek,mt7988-pinctrl";
         reg = <0 0x1001f000 0 0x1000>,
-              <0 0x11c30000 0 0x1000>,
-              <0 0x11c40000 0 0x1000>,
-              <0 0x11e20000 0 0x1000>,
-              <0 0x11e30000 0 0x1000>,
-              <0 0x11f00000 0 0x1000>,
-              <0 0x11f10000 0 0x1000>,
-              <0 0x1000b000 0 0x1000>;
-        reg-names = "gpio", "iocfg_rt", "iocfg_rb", "iocfg_lt",
-                    "iocfg_lb", "iocfg_tr", "iocfg_tl", "eint";
+        <0 0x11c10000 0 0x1000>,
+        <0 0x11d00000 0 0x1000>,
+        <0 0x11d20000 0 0x1000>,
+        <0 0x11e00000 0 0x1000>,
+        <0 0x11f00000 0 0x1000>,
+        <0 0x1000b000 0 0x1000>;
+        reg-names = "gpio", "iocfg_tr",
+          "iocfg_br", "iocfg_rb",
+          "iocfg_lb", "iocfg_tl", "eint";
         gpio-controller;
         #gpio-cells = <2>;
-        gpio-ranges = <&pio 0 0 100>;
+        gpio-ranges = <&pio 0 0 84>;
         interrupt-controller;
         interrupts = <GIC_SPI 225 IRQ_TYPE_LEVEL_HIGH>;
         interrupt-parent = <&gic>;
         #interrupt-cells = <2>;
 
-        pcie_pins: pcie-pins {
+        i2c0_pins: i2c0-pins-g0 {
           mux {
-            function = "pcie";
-            groups = "pcie_clk", "pcie_wake", "pcie_pereset";
+            function = "i2c";
+            groups = "i2c0_1";
           };
         };
 
-        pwm_pins: pwm-pins {
+        mdio0_pins: mdio0-pins {
           mux {
-            function = "pwm";
-            groups = "pwm0", "pwm1_0";
+            function = "eth";
+            groups = "mdc_mdio0";
+          };
+
+          conf {
+            groups = "mdc_mdio0";
+            drive-strength = <MTK_DRIVE_8mA>;
           };
         };
 
-        spi0_pins: spi0-pins {
+        mmc0_pins_emmc_51: mmc0-pins-emmc-51 {
           mux {
-            function = "spi";
-            groups = "spi0", "spi0_wp_hold";
-          };
-        };
-
-        uart1_pins: uart1-pins {
-          mux {
-            function = "uart";
-            groups = "uart1";
-          };
-        };
-
-        uart1_3_pins: uart1-3-pins {
-          mux {
-            function = "uart";
-            groups = "uart1_3_rx_tx", "uart1_3_cts_rts";
-          };
-        };
-
-        uart2_pins: uart2-pins {
-          mux {
-            function = "uart";
-            groups = "uart2";
-          };
-        };
-
-        mmc0_pins_default: mmc0-pins {
-          mux {
-            function = "emmc";
+            function = "flash";
             groups = "emmc_51";
           };
-          conf-cmd-dat {
-            pins = "EMMC_DATA_0", "EMMC_DATA_1", "EMMC_DATA_2",
-                   "EMMC_DATA_3", "EMMC_DATA_4", "EMMC_DATA_5",
-                   "EMMC_DATA_6", "EMMC_DATA_7", "EMMC_CMD";
-            input-enable;
-            drive-strength = <4>;
-            bias-pull-up = <MTK_PUPD_SET_R1R0_01>; /* pull-up 10K */
-          };
-          conf-clk {
-            pins = "EMMC_CK";
-            drive-strength = <6>;
-            bias-pull-down = <MTK_PUPD_SET_R1R0_10>; /* pull-down 50K */
-          };
-          conf-ds {
-            pins = "EMMC_DSL";
-            bias-pull-down = <MTK_PUPD_SET_R1R0_10>; /* pull-down 50K */
-          };
-          conf-rst {
-            pins = "EMMC_RSTB";
-            drive-strength = <4>;
-            bias-pull-up = <MTK_PUPD_SET_R1R0_01>; /* pull-up 10K */
+        };
+
+        mmc0_pins_sdcard: mmc0-pins-sdcard {
+          mux {
+            function = "flash";
+            groups = "sdcard";
           };
         };
 
+        pcie0_pins: pcie0-pins {
+          mux {
+            function = "pcie";
+            groups = "pcie_2l_0_pereset", "pcie_clk_req_n0_0",
+                     "pcie_wake_n0_0";
+          };
+        };
+
+        pcie1_pins: pcie1-pins {
+          mux {
+            function = "pcie";
+            groups = "pcie_2l_1_pereset", "pcie_clk_req_n1",
+                     "pcie_wake_n1_0";
+          };
+        };
+
+        pcie2_pins: pcie2-pins {
+          mux {
+            function = "pcie";
+            groups = "pcie_1l_0_pereset", "pcie_clk_req_n2_0",
+                     "pcie_wake_n2_0";
+          };
+        };
+
+        pcie3_pins: pcie3-pins {
+          mux {
+            function = "pcie";
+            groups = "pcie_1l_1_pereset", "pcie_clk_req_n3",
+                     "pcie_wake_n3_0";
+          };
+        };
+
+        uart0_pins: uart0-pins {
+          mux {
+            function = "uart";
+            groups =  "uart0";
+          };
+        };
       };
     };
