@@ -1469,8 +1469,8 @@ static const struct mtk_eint_hw mt7988_eint_hw = {
 };
 
 static const char * const mt7988_pinctrl_register_base_names[] = {
-	"gpio_base",	 "iocfg_tr_base", "iocfg_br_base",
-	"iocfg_rb_base", "iocfg_lb_base", "iocfg_tl_base",
+	"gpio",	 "iocfg_tr", "iocfg_br",
+	"iocfg_rb", "iocfg_lb", "iocfg_tl",
 };
 
 static struct mtk_pin_soc mt7988_data = {
