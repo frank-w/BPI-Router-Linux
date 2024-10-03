@@ -349,13 +349,6 @@
 				};
 			};
 
-			i2c2_pins: i2c2-pins {
-				mux {
-					function = "i2c";
-					groups = "i2c2";
-				};
-			};
-
 			i2c2_0_pins: i2c2-g0-pins {
 				mux {
 					function = "i2c";
