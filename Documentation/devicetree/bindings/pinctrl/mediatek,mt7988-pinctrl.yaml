@@ -402,7 +402,7 @@ patternProperties:
                      PCIE30_2L_1_WAKE_N, PCIE30_2L_1_CLKREQ_N,
                      PCIE30_1L_0_WAKE_N, PCIE30_1L_0_CLKREQ_N, USB_DRV_VBUS_P0,
                      UART1_RXD, UART1_TXD, UART1_CTS, UART1_RTS]
-            maxItems: 101
+            maxItems: 84
 
           bias-disable: true
 
