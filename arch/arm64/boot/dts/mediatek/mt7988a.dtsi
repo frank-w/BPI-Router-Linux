@@ -328,21 +328,21 @@
 				};
 			};
 
-			i2c0_pins: i2c0-pins-g0 {
+			i2c0_pins: i2c0-g0-pins {
 				mux {
 					function = "i2c";
 					groups = "i2c0_1";
 				};
 			};
 
-			i2c1_pins: i2c1-pins-g0 {
+			i2c1_pins: i2c1-g0-pins {
 				mux {
 					function = "i2c";
 					groups = "i2c1_0";
 				};
 			};
 
-			i2c1_sfp_pins: i2c1-sfp-pins-g0 {
+			i2c1_sfp_pins: i2c1-sfp-g0-pins {
 				mux {
 					function = "i2c";
 					groups = "i2c1_sfp";
@@ -356,14 +356,14 @@
 				};
 			};
 
-			i2c2_0_pins: i2c2-pins-g0 {
+			i2c2_0_pins: i2c2-g0-pins {
 				mux {
 					function = "i2c";
 					groups = "i2c2_0";
 				};
 			};
 
-			i2c2_1_pins: i2c2-pins-g1 {
+			i2c2_1_pins: i2c2-g1-pins {
 				mux {
 					function = "i2c";
 					groups = "i2c2_1";
@@ -440,21 +440,21 @@
 				};
 			};
 
-			mmc0_pins_emmc_45: mmc0-pins-emmc-45 {
+			mmc0_pins_emmc_45: mmc0-emmc-45-pins {
 				mux {
 					function = "flash";
 					groups = "emmc_45";
 				};
 			};
 
-			mmc0_pins_emmc_51: mmc0-pins-emmc-51 {
+			mmc0_pins_emmc_51: mmc0-emmc-51-pins {
 				mux {
 					function = "flash";
 					groups = "emmc_51";
 				};
 			};
 
-			mmc0_pins_sdcard: mmc0-pins-sdcard {
+			mmc0_pins_sdcard: mmc0-sdcard-pins {
 				mux {
 					function = "flash";
 					groups = "sdcard";
