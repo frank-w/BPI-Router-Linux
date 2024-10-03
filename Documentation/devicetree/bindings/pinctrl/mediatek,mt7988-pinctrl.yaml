@@ -514,7 +514,7 @@ examples:
           };
 
           conf {
-            groups = "mdc_mdio0";
+            pins = "SMI_0_MDC", "SMI_0_MDIO";
             drive-strength = <MTK_DRIVE_8mA>;
           };
         };
