@@ -200,8 +200,8 @@ patternProperties:
           function:
             description:
               A string containing the name of the function to mux to the group.
-            enum: [audio, jtag, int_usxgmii, pwm, dfd, i2c, eth, pcie, pmic, watchdog, spi, flash,
-                   uart, udi, usb, led]
+            enum: [audio, dfd, eth, flash, i2c, int_usxgmii, jtag, led, pcie, pmic, pwm, spi,
+                   uart, udi, usb, watchdog]
           groups:
             description:
               An array of strings. Each string contains the name of a group.
@@ -225,7 +225,7 @@ patternProperties:
             then:
               properties:
                 groups:
-                  enum: [tops_jtag0_0, wo0_jtag, wo1_jtag, wo2_jtag, jtag, tops_jtag0_1]
+                  enum: [jtag, tops_jtag0_0, tops_jtag0_1, wo0_jtag, wo1_jtag, wo2_jtag]
           - if:
               properties:
                 function:
@@ -249,7 +249,7 @@ patternProperties:
             then:
               properties:
                 groups:
-                  enum: [emmc_45, sdcard, snfi, emmc_51]
+                  enum: [emmc_45, emmc_51, sdcard, snfi]
           - if:
               properties:
                 function:
@@ -257,7 +257,7 @@ patternProperties:
             then:
               properties:
                 groups:
-                  enum: [mdc_mdio0, 2p5g_ext_mdio, gbe_ext_mdio, mdc_mdio1]
+                  enum: [2p5g_ext_mdio, gbe_ext_mdio, mdc_mdio0, mdc_mdio1]
           - if:
               properties:
                 function:
@@ -278,9 +278,8 @@ patternProperties:
             then:
               properties:
                 groups:
-                  enum: [gbe0_led1, gbe1_led1, gbe2_led1, gbe3_led1, 2p5gbe_led1,
-                         gbe0_led0, gbe1_led0, gbe2_led0, gbe3_led0, 2p5gbe_led0,
-                         wf5g_led0, wf5g_led1]
+                  enum: [2p5gbe_led0, 2p5gbe_led1, gbe0_led0, gbe0_led1, gbe1_led0, gbe1_led1,
+                         gbe2_led0, gbe2_led1, gbe3_led0, gbe3_led1, wf5g_led0, wf5g_led1]
           - if:
               properties:
                 function:
