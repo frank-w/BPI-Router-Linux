@@ -33,6 +33,8 @@ properties:
           - const: mediatek,mt6765-spi
       - items:
           - enum:
+              - mediatek,ipm-spi-quad
+              - mediatek,ipm-spi-single
               - mediatek,mt7981-spi-ipm
               - mediatek,mt7986-spi-ipm
               - mediatek,mt8188-spi-ipm
