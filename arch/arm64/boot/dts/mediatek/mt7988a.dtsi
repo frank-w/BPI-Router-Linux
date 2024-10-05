@@ -454,30 +454,6 @@
 			status = "disabled";
 		};
 
-		xphy: xphy@11e10000 {
-			compatible = "mediatek,mt7988",
-				     "mediatek,xsphy";
-			#address-cells = <2>;
-			#size-cells = <2>;
-			ranges;
-			status = "disabled";
-
-			xphyu2port0: usb-phy@11e10000 {
-				reg = <0 0x11e10000 0 0x400>;
-				clocks = <&infracfg CLK_INFRA_USB_UTMI>;
-				clock-names = "ref";
-				#phy-cells = <1>;
-			};
-
-			xphyu3port0: usb-phy@11e13000 {
-				reg = <0 0x11e13400 0 0x500>;
-				clocks = <&infracfg CLK_INFRA_USB_PIPE>;
-				clock-names = "ref";
-				#phy-cells = <1>;
-				mediatek,syscon-type = <&topmisc 0x218 0>;
-			};
-		};
-
 		clock-controller@11f40000 {
 			compatible = "mediatek,mt7988-xfi-pll";
 			reg = <0 0x11f40000 0 0x1000>;
