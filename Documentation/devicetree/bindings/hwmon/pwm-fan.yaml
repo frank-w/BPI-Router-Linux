@@ -46,6 +46,8 @@ properties:
 
   "#cooling-cells": true
 
+  "#thermal-sensor-cells": true
+
 required:
   - compatible
   - pwms
