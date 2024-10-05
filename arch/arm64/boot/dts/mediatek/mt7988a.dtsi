@@ -95,7 +95,7 @@
 		operating-points-v2 = <&cci_opp>;
 	};
 
-	cci_opp: opp_table_cci {
+	cci_opp: opp-table-cci {
 		compatible = "operating-points-v2";
 		opp-shared;
 		opp00 {
