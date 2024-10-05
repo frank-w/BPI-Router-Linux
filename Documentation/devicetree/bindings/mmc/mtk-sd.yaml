@@ -277,8 +277,8 @@ allOf:
           items:
             - description: source clock
             - description: HCLK which used for host
-            - description: Advanced eXtensible Interface
-            - description: Advanced High-performance Bus clock
+            - description: Advanced eXtensible Interface clock gate
+            - description: Advanced High-performance Bus clock gate
         clock-names:
           minItems: 3
           items:
