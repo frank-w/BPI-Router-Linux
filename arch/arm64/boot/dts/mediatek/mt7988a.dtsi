@@ -472,7 +472,7 @@
 			#clock-cells = <1>;
 		};
 
-		efuse@11f50000 {
+		efuse: efuse@11f50000 {
 			compatible = "mediatek,mt7988-efuse", "mediatek,efuse";
 			reg = <0 0x11f50000 0 0x1000>;
 			#address-cells = <1>;
