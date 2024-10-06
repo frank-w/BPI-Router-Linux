@@ -35,10 +35,6 @@ properties:
 
   "#gpio-cells":
     const: 2
-    description:
-      Number of cells in GPIO specifier. Since the generic GPIO binding is used,
-      the amount of cells must be specified as 2. See the below mentioned gpio
-      binding representation for description of particular cells.
 
   gpio-ranges:
     minItems: 1
@@ -73,6 +69,7 @@ patternProperties:
       '^.*mux.*$':
         type: object
         additionalProperties: false
+        $ref: /schemas/pinctrl/pinmux-node.yaml
         description: |
           pinmux configuration nodes.
 
@@ -195,7 +192,6 @@ patternProperties:
           "drv_vbus_p1"        "usb"              63
           "drv_vbus"           "usb"              79
 
-        $ref: /schemas/pinctrl/pinmux-node.yaml
         properties:
           function:
             description:
@@ -335,13 +331,11 @@ patternProperties:
               properties:
                 groups:
                   items:
-                    enum: [uart2, tops_uart0_0, uart2_0, uart1_0, uart2_1,
-                           net_wo0_uart_txd_0, net_wo1_uart_txd_0,
-                           net_wo2_uart_txd_0, tops_uart1_0, ops_uart0_1,
-                           ops_uart1_1, uart0, tops_uart0_2, uart1_1, uart2_3,
-                           uart1_2, uart1_2_lite, tops_uart1_2,
-                           net_wo0_uart_txd_1, net_wo1_uart_txd_1,
-                           net_wo2_uart_txd_1]
+                    enum: [net_wo0_uart_txd_0, net_wo0_uart_txd_1, net_wo1_uart_txd_0,
+                           net_wo1_uart_txd_1, net_wo2_uart_txd_0, net_wo2_uart_txd_1,
+                           tops_uart0_0, tops_uart0_1, tops_uart0_2, tops_uart1_0,
+                           tops_uart1_1, tops_uart1_2, uart0, uart1_0, uart1_1, uart1_2,
+                           uart1_2_lite, uart2, uart2_0, uart2_1, uart2_3]
                   maxItems: 2
           - if:
               properties:
