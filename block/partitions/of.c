@@ -48,7 +48,7 @@ static void add_of_partition(struct parsed_partitions *state, int slot,
 	u64 offset = of_read_number(reg, a_cells) / SECTOR_SIZE;
 	u64 size = of_read_number(reg + a_cells, s_cells) / SECTOR_SIZE;
 
-	put_partition(state, slot, offset, size);
+	of_put_partition(state, slot, offset, size, np);
 
 	if (of_property_read_bool(np, "read-only"))
 		state->parts[slot].flags |= ADDPART_FLAG_READONLY;
