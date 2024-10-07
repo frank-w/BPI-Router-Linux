@@ -86,6 +86,7 @@
 #include <linux/crc32.h>
 #include <linux/ctype.h>
 #include <linux/math64.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 #include "check.h"
 #include "efi.h"
@@ -694,6 +695,34 @@ static void utf16_le_to_7bit(const __le16 *in, unsigned int size, u8 *out)
 	}
 }
 
+static struct device_node *find_partition_of_node(struct device_node *partitions_np,
+						  gpt_entry *ptes)
+{
+	char volname[64], partuuid[UUID_STRING_LEN + 1];
+	const char *uuid, *name;
+
+	if (!partitions_np ||
+	    !of_device_is_compatible(partitions_np, "gpt-partitions"))
+		return NULL;
+
+	efi_guid_to_str(&ptes->unique_partition_guid, partuuid);
+	utf16_le_to_7bit(ptes->partition_name, ARRAY_SIZE(volname) - 1, volname);
+
+	for_each_available_child_of_node_scoped(partitions_np, np) {
+		if (!of_property_read_string(np, "uuid", &uuid) &&
+		    strncmp(uuid, partuuid, ARRAY_SIZE(partuuid)))
+			continue;
+
+		if (!of_property_read_string(np, "partname", &name) &&
+		    strncmp(name, volname, ARRAY_SIZE(volname)))
+			continue;
+
+		return np;
+	}
+
+	return NULL;
+}
+
 /**
  * efi_partition - scan for GPT partitions
  * @state: disk parsed partitions
@@ -719,6 +748,8 @@ int efi_partition(struct parsed_partitions *state)
 	gpt_entry *ptes = NULL;
 	u32 i;
 	unsigned ssz = queue_logical_block_size(state->disk->queue) / 512;
+	struct device *ddev = disk_to_dev(state->disk);
+	struct device_node *partitions_np = of_node_get(ddev->of_node);
 
 	if (!find_valid_gpt(state, &gpt, &ptes) || !gpt || !ptes) {
 		kfree(gpt);
@@ -740,7 +771,8 @@ int efi_partition(struct parsed_partitions *state)
 		if (!is_pte_valid(&ptes[i], last_lba(state->disk)))
 			continue;
 
-		put_partition(state, i + 1, start * ssz, size * ssz);
+		of_put_partition(state, i + 1, start * ssz, size * ssz,
+				 find_partition_of_node(partitions_np, &ptes[i]));
 
 		/* If this is a RAID volume, tell md */
 		if (!efi_guidcmp(ptes[i].partition_type_guid,
