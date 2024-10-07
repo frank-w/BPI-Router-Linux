@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #include <linux/pagemap.h>
 #include <linux/blkdev.h>
+#include <linux/of.h>
 #include <linux/seq_buf.h>
 #include "../blk.h"
 
@@ -17,6 +18,9 @@ struct parsed_partitions {
 		int flags;
 		bool has_info;
 		struct partition_meta_info info;
+#ifdef CONFIG_OF
+		struct device_node *np;
+#endif
 	} *parts;
 	int next;
 	int limit;
@@ -35,13 +39,23 @@ static inline void put_dev_sector(Sector p)
 }
 
 static inline void
-put_partition(struct parsed_partitions *p, int n, sector_t from, sector_t size)
+of_put_partition(struct parsed_partitions *p, int n, sector_t from, sector_t size,
+		 struct device_node *np)
 {
 	if (n < p->limit) {
 		p->parts[n].from = from;
 		p->parts[n].size = size;
+#ifdef CONFIG_OF
+		p->parts[n].np = np;
+#endif
 		seq_buf_printf(&p->pp_buf, " %s%d", p->name, n);
 	}
+}
+
+static inline void
+put_partition(struct parsed_partitions *p, int n, sector_t from, sector_t size)
+{
+	of_put_partition(p, n, from, size, NULL);
 }
 
 /* detection routines go here in alphabetical order: */
