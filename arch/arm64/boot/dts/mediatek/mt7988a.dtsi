@@ -599,7 +599,7 @@
 		};
 
 		mmc0: mmc@11230000 {
-			compatible = "mediatek,mt7988-mmc";
+			compatible = "mediatek,mt7988-mmc", "mediatek,mt7986-mmc";
 			reg = <0 0x11230000 0 0x1000>,
 			      <0 0x11D60000 0 0x1000>;
 			interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
