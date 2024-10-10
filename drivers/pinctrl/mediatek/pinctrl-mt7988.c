@@ -8,7 +8,7 @@
 
 #include "pinctrl-moore.h"
 
-enum MT7988_PINCTRL_REG_PAGE {
+enum mt7988_pinctrl_reg_page {
 	GPIO_BASE,
 	IOCFG_TR_BASE,
 	IOCFG_BR_BASE,
@@ -1500,9 +1500,7 @@ static struct mtk_pin_soc mt7988_data = {
 };
 
 static const struct of_device_id mt7988_pinctrl_of_match[] = {
-	{
-		.compatible = "mediatek,mt7988-pinctrl",
-	},
+	{ .compatible = "mediatek,mt7988-pinctrl" },
 	{}
 };
 
