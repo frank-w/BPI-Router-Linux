@@ -21,6 +21,7 @@ properties:
           - mediatek,mt7620-mmc
           - mediatek,mt7622-mmc
           - mediatek,mt7986-mmc
+          - mediatek,mt7988-mmc
           - mediatek,mt8135-mmc
           - mediatek,mt8173-mmc
           - mediatek,mt8183-mmc
@@ -36,10 +37,6 @@ properties:
               - mediatek,mt8195-mmc
               - mediatek,mt8365-mmc
           - const: mediatek,mt8183-mmc
-      - items:
-          - enum:
-              - mediatek,mt7988-mmc
-          - const: mediatek,mt7986-mmc
 
   reg:
     minItems: 1
