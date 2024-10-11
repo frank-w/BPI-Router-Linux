@@ -34,6 +34,7 @@
 #define PHY_ID_AQR115	0x31c31c63
 #define PHY_ID_AQR115C	0x31c31c33
 #define PHY_ID_AQR813	0x31c31cb2
+#define PHY_ID_CUX3410	0x31c31dd3
 
 #define MDIO_PHYXS_VEND_PROV2			0xc441
 #define MDIO_PHYXS_VEND_PROV2_USX_AN		BIT(3)
@@ -49,6 +50,9 @@
 #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_RXAUI	7
 #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_OFF	9
 #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_OCSGMII	10
+
+#define MDIO_PHYXS_TX_RSVD_VEND_PROV2           0xc441
+#define MDIO_PHYXS_TX_RSVD_VEND_PROV2_ANEG      BIT(3)
 
 #define MDIO_AN_VEND_PROV			0xc400
 #define MDIO_AN_VEND_PROV_1000BASET_FULL	BIT(15)
@@ -193,6 +197,16 @@ static int aqr_set_mdix(struct phy_device *phydev, int mdix)
 
 	return phy_modify_mmd_changed(phydev, MDIO_MMD_AN, MDIO_AN_RESVD_VEND_PROV,
 				      MDIO_AN_RESVD_VEND_PROV_MDIX_MASK, val);
+}
+
+static int aqr107_config_usx_aneg_en(struct phy_device *phydev)
+{
+	u16 val;
+
+	val = phy_read_mmd(phydev, MDIO_MMD_PHYXS, MDIO_PHYXS_TX_RSVD_VEND_PROV2);
+	val |= MDIO_PHYXS_TX_RSVD_VEND_PROV2_ANEG;
+
+	return phy_write_mmd(phydev, MDIO_MMD_PHYXS, MDIO_PHYXS_TX_RSVD_VEND_PROV2, val);
 }
 
 static int aqr_config_aneg(struct phy_device *phydev)
@@ -805,6 +819,10 @@ static int aqr_gen1_config_init(struct phy_device *phydev)
 	ret = aqr107_set_downshift(phydev, MDIO_AN_VEND_PROV_DOWNSHIFT_DFLT);
 	if (ret)
 		return ret;
+
+	ret = aqr107_config_usx_aneg_en(phydev);
+	if (ret)
+		phydev_err(phydev, "USX autonegotiation disabled, ret: %d\n", ret);
 
 	ret = aqr107_config_mdi(phydev);
 	if (ret)
@@ -1560,6 +1578,32 @@ static struct phy_driver aqr_driver[] = {
 	.inband_caps	= aqr_gen2_inband_caps,
 	.config_inband	= aqr_gen2_config_inband,
 },
+{
+	PHY_ID_MATCH_MODEL(PHY_ID_CUX3410),
+	.name           = "Aquantia CUX3410",
+	.probe          = aqr107_probe,
+	.get_rate_matching = aqr_gen2_get_rate_matching,
+	.config_init    = aqr_gen4_config_init,
+	.config_aneg    = aqr_config_aneg,
+	.config_intr    = aqr_config_intr,
+	.handle_interrupt       = aqr_handle_interrupt,
+	.read_status    = aqr_gen2_read_status,
+	.get_tunable    = aqr107_get_tunable,
+	.set_tunable    = aqr107_set_tunable,
+	.suspend        = aqr_gen1_suspend,
+	.resume         = aqr_gen1_resume,
+	.get_sset_count = aqr107_get_sset_count,
+	.get_strings    = aqr107_get_strings,
+	.get_stats      = aqr107_get_stats,
+	.link_change_notify = aqr107_link_change_notify,
+	.led_brightness_set = aqr_phy_led_brightness_set,
+	.led_hw_is_supported = aqr_phy_led_hw_is_supported,
+	.led_hw_control_set = aqr_phy_led_hw_control_set,
+	.led_hw_control_get = aqr_phy_led_hw_control_get,
+	.led_polarity_set = aqr_phy_led_polarity_set,
+	.inband_caps    = aqr_gen2_inband_caps,
+	.config_inband  = aqr_gen2_config_inband,
+},
 };
 
 module_phy_driver(aqr_driver);
@@ -1583,6 +1627,7 @@ static const struct mdio_device_id __maybe_unused aqr_tbl[] = {
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR115) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR115C) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR813) },
+	{ PHY_ID_MATCH_MODEL(PHY_ID_CUX3410) },
 	{ }
 };
 
