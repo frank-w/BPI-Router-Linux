@@ -573,7 +573,7 @@ EXPORT_SYMBOL_GPL(mtk_pinconf_bias_get_rev1);
  */
 static int mtk_pinconf_bias_set_pu_pd(struct mtk_pinctrl *hw,
 				const struct mtk_pin_desc *desc,
-				u32 pullup, u32 arg)
+				u32 pullup, u32 arg, bool pd_only)
 {
 	int err, pu, pd;
 
@@ -587,18 +587,16 @@ static int mtk_pinconf_bias_set_pu_pd(struct mtk_pinctrl *hw,
 		pu = 0;
 		pd = 1;
 	} else {
-		err = -EINVAL;
-		goto out;
+		return -EINVAL;
 	}
 
-	err = mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_PU, pu);
-	if (err)
-		goto out;
+	if (!pd_only) {
+		err = mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_PU, pu);
+		if (err)
+			return err;
+	}
 
-	err = mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_PD, pd);
-
-out:
-	return err;
+	return mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_PD, pd);
 }
 
 static int mtk_pinconf_bias_set_pd(struct mtk_pinctrl *hw,
@@ -607,21 +605,19 @@ static int mtk_pinconf_bias_set_pd(struct mtk_pinctrl *hw,
 {
 	int err, pd;
 
-	if (arg == MTK_DISABLE)
+	if (arg != MTK_DISABLE && arg != MTK_ENABLE)
+		return -EINVAL;
+
+	/* Either this */
+	if (arg == MTK_DISABLE || pullup)
 		pd = 0;
-	else if ((arg == MTK_ENABLE) && pullup)
-		pd = 0;
-	else if ((arg == MTK_ENABLE) && !pullup)
+	else if (!pullup)
 		pd = 1;
-	else {
-		err = -EINVAL;
-		goto out;
-	}
 
-	err = mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_PD, pd);
+	/* Or this (but it's probably a bit too cryptic) */
+	//pd = !(arg == MTK_DISABLE || pullup);
 
-out:
-	return err;
+	return mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_PD, pd);
 
 }
 
@@ -761,7 +757,7 @@ static int mtk_pinconf_bias_set_pu_pd_rsel(struct mtk_pinctrl *hw,
 			return err;
 	}
 
-	return mtk_pinconf_bias_set_pu_pd(hw, desc, pullup, enable);
+	return mtk_pinconf_bias_set_pu_pd(hw, desc, pullup, enable,false);
 }
 
 int mtk_pinconf_bias_set_combo(struct mtk_pinctrl *hw,
@@ -783,13 +779,13 @@ int mtk_pinconf_bias_set_combo(struct mtk_pinctrl *hw,
 	}
 
 	if (try_all_type & MTK_PULL_PD_TYPE) {
-		err = mtk_pinconf_bias_set_pd(hw, desc, pullup, arg);
+		err = mtk_pinconf_bias_set_pu_pd(hw, desc, pullup, arg, true);
 		if (!err)
 			return err;
 	}
 
 	if (try_all_type & MTK_PULL_PU_PD_TYPE) {
-		err = mtk_pinconf_bias_set_pu_pd(hw, desc, pullup, arg);
+		err = mtk_pinconf_bias_set_pu_pd(hw, desc, pullup, arg, false);
 		if (!err)
 			return 0;
 	}
