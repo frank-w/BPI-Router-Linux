@@ -4,8 +4,8 @@
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/leds/common.h>
+#include <dt-bindings/input/input.h>
 #include <dt-bindings/regulator/richtek,rt5190a-regulator.h>
-#include <dt-bindings/leds/common.h>
 
 #include "mt7988a.dtsi"
 
@@ -14,6 +14,10 @@
 		ethernet0 = &gmac0;
 		ethernet1 = &gmac1;
 		ethernet2 = &gmac2;
+		led-boot = &led_green;
+		led-failsafe = &led_green;
+		led-running = &led_green;
+		led-upgrade = &led_green;
 	};
 
 	chosen {
@@ -27,6 +31,16 @@
 		#cooling-cells = <2>;
 		pwms = <&pwm 0 50000>;
 		status = "okay";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		button-wps {
+			label = "WPS";
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
+		};
 	};
 
 	gpio-leds {
@@ -282,7 +296,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		i2c@0 {
+		i2c@0 { //eeprom,rtc,ngff
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
@@ -290,12 +304,16 @@
 			pcf8563: rtc@51 {
 				compatible = "nxp,pcf8563";
 				reg = <0x51>;
+				//interrupts = <&pio 6 IRQ_TYPE_LEVEL_LOW>;
 				#clock-cells = <0>;
+				//status = "disabled";
 			};
 
 			eeprom@57 {
 				compatible = "atmel,24c02";
 				reg = <0x57>;
+				address-width = <8>;
+				pagesize = <8>;
 				size = <256>;
 			};
 
@@ -305,6 +323,14 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <1>;
+		};
+
+		i2c_wifi: i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+
+			status = "disabled";
 		};
 	};
 };
