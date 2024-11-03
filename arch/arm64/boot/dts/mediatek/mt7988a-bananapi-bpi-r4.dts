@@ -27,6 +27,7 @@
 	managed = "in-band-status";
 	phy-mode = "usxgmii";
 	sfp = <&sfp2>;
+	status = "okay";
 };
 
 &pca9545 {
