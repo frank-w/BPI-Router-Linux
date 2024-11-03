@@ -3,14 +3,36 @@
 /dts-v1/;
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
 #include <dt-bindings/regulator/richtek,rt5190a-regulator.h>
 #include <dt-bindings/leds/common.h>
 
 #include "mt7988a.dtsi"
 
 / {
+	compatible = "bananapi,bpi-r4", "mediatek,mt7988a";
+	model = "Banana Pi BPI-R4";
+	chassis-type = "embedded";
+
+	aliases {
+		ethernet0 = &gmac0;
+		ethernet1 = &gmac1;
+		ethernet2 = &gmac2;
+		led-boot = &led_green;
+		led-failsafe = &led_green;
+		led-running = &led_green;
+		led-upgrade = &led_green;
+	};
+
 	chosen {
 		stdout-path = "serial0:115200n8";
+		bootargs = "loglevel=8 pci=pcie_bus_perf ubi.block=0,fit root=/dev/fit0";
+		rootdisk-spim-nand = <&ubi_rootfs>;
+	};
+
+	memory {
+		reg = <0x00 0x40000000 0x00 0x10000000>;
 	};
 
 	fan: pwm-fan {
@@ -50,6 +72,34 @@
 		tx-fault-gpios = <&pio 69 GPIO_ACTIVE_HIGH>;
 		rate-select0-gpios = <&pio 21 GPIO_ACTIVE_LOW>;
 		maximum-power-milliwatt = <3000>;
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		wps {
+			label = "WPS";
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	gpio-leds {
+		compatible = "gpio-leds";
+
+		led_green: led-green {
+			function = LED_FUNCTION_STATUS;
+			color = <LED_COLOR_ID_GREEN>;
+			gpios = <&pio 79 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+
+		led_blue: led-blue {
+			function = LED_FUNCTION_WPS;
+			color = <LED_COLOR_ID_BLUE>;
+			gpios = <&pio 63 GPIO_ACTIVE_HIGH>;
+			default-state = "off";
+		};
 	};
 };
 
@@ -254,7 +304,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		i2c@0 {
+		i2c@0 { //eeprom,rtc,ngff
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
@@ -262,12 +312,16 @@
 			pcf8563: rtc@51 {
 				compatible = "nxp,pcf8563";
 				reg = <0x51>;
+				//interrupts = <&pio 6 IRQ_TYPE_LEVEL_LOW>;
 				#clock-cells = <0>;
+				//status = "disabled";
 			};
 
 			eeprom@57 {
 				compatible = "atmel,24c02";
 				reg = <0x57>;
+				address-bits = <8>;
+				page-size = <8>;
 				size = <256>;
 			};
 
@@ -277,6 +331,14 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <1>;
+		};
+
+		i2c_wifi: i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+
+			status = "disabled";
 		};
 	};
 };
@@ -423,6 +485,32 @@
 			label = "bl2";
 			reg = <0x0 0x200000>;
 			read-only;
+		};
+
+		partition@200000 {
+			label = "ubi";
+			reg = <0x200000 0x7e00000>;
+			compatible = "linux,ubi";
+
+			volumes {
+				ubi-volume-ubootenv {
+					volname = "ubootenv";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool-layout";
+					};
+				};
+
+				ubi-volume-ubootenv2 {
+					volname = "ubootenv2";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool-layout";
+					};
+				};
+
+				ubi_rootfs: ubi-volume-fit {
+					volname = "fit";
+				};
+			};
 		};
 	};
 };
