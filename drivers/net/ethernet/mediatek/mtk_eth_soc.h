@@ -1530,6 +1530,7 @@ struct mtk_eth {
 
 	struct {
 		struct delayed_work monitor_work;
+		atomic_t force;
 		u32 wdidx;
 		u8 wdma_hang_count;
 		u8 qdma_hang_count;
