@@ -3603,7 +3603,8 @@ static void mtk_tx_timeout(struct net_device *dev, unsigned int txqueue)
 	eth->netdev[mac->id]->stats.tx_errors++;
 	netif_err(eth, tx_err, dev, "transmit timed out\n");
 
-	schedule_work(&eth->pending_work);
+	if (atomic_read(&eth->reset.force))
+		schedule_work(&eth->pending_work);
 }
 
 static irqreturn_t mtk_handle_irq_rx(int irq, void *priv)
@@ -4387,7 +4388,7 @@ static void mtk_hw_reset_monitor_work(struct work_struct *work)
 		goto out;
 
 	/* DMA stuck checks */
-	if (mtk_hw_check_dma_hang(eth))
+	if (mtk_hw_check_dma_hang(eth) && atomic_read(&eth->reset.force))
 		schedule_work(&eth->pending_work);
 
 out:
@@ -5561,6 +5562,7 @@ static int mtk_probe(struct platform_device *pdev)
 
 	eth->rx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
 	INIT_WORK(&eth->rx_dim.work, mtk_dim_rx);
+	atomic_set(&eth->reset.force, 0);
 	INIT_DELAYED_WORK(&eth->reset.monitor_work, mtk_hw_reset_monitor_work);
 
 	eth->tx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
