@@ -155,7 +155,7 @@ static const char *gpio_names[] = {
 };
 
 static const enum gpiod_flags gpio_flags[] = {
-	GPIOD_IN,
+	GPIOD_IN | GPIOD_FLAGS_BIT_NONEXCLUSIVE,
 	GPIOD_IN,
 	GPIOD_IN,
 	GPIOD_ASIS,
@@ -600,7 +600,7 @@ static unsigned int sfp_gpio_get_state(struct sfp *sfp)
 	unsigned int i, state, v;
 
 	for (i = state = 0; i < GPIO_MAX; i++) {
-		if (gpio_flags[i] != GPIOD_IN || !sfp->gpio[i])
+		if ((gpio_flags[i] & GPIOD_IN) != GPIOD_IN || !sfp->gpio[i])
 			continue;
 
 		v = gpiod_get_value_cansleep(sfp->gpio[i]);
@@ -3154,7 +3154,7 @@ static int sfp_probe(struct platform_device *pdev)
 	}
 
 	for (i = 0; i < GPIO_MAX; i++) {
-		if (gpio_flags[i] != GPIOD_IN || !sfp->gpio[i])
+		if ((gpio_flags[i] & GPIOD_IN) != GPIOD_IN || !sfp->gpio[i])
 			continue;
 
 		sfp->gpio_irq[i] = gpiod_to_irq(sfp->gpio[i]);
