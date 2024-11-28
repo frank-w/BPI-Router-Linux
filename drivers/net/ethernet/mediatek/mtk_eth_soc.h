@@ -758,6 +758,7 @@ struct mtk_tx_dma_v2 {
 
 struct mtk_eth;
 struct mtk_mac;
+struct mtk_mux;
 
 struct mtk_xdp_stats {
 	u64 rx_xdp_redirect;
@@ -1471,6 +1472,7 @@ struct mtk_eth {
 	struct mtk_mac			*mac[MTK_MAX_DEVS];
 	int				irq_fe[MTK_FE_IRQ_NUM];
 	int				irq_pdma[MTK_PDMA_IRQ_NUM];
+	struct mtk_mux			*mux[MTK_MAX_DEVS];
 	u32				msg_enable;
 	unsigned long			sysclk;
 	struct regmap			*ethsys;
@@ -1555,6 +1557,27 @@ struct mtk_mac {
 	int				hwlro_ip_cnt;
 	unsigned int			syscfg0;
 	struct notifier_block		device_notifier;
+};
+
+/* struct mtk_mux_data -	the structure that holds the private data about the
+ *			 Passive MUXs of the SoC
+ */
+struct mtk_mux_data {
+	struct device_node		*of_node;
+	struct phylink			*phylink;
+};
+
+/* struct mtk_mux -	the structure that holds the info about the Passive MUXs of the
+ *			SoC
+ */
+struct mtk_mux {
+	struct delayed_work		poll;
+	struct gpio_desc		*mod_def0_gpio;
+	struct gpio_desc		*chan_sel_gpio;
+	struct mtk_mux_data		*data[2];
+	struct mtk_mac			*mac;
+	unsigned int			channel;
+	unsigned int			sfp_present_channel;
 };
 
 /* the struct describing the SoC. these are declared in the soc_xyz.c files */
