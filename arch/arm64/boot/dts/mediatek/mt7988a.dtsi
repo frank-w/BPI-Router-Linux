@@ -231,10 +231,10 @@
 		};
 
 		sgmiisys0: syscon@10060000 {
-			compatible = "mediatek,mt7988-sgmiisys",
+			compatible = /*"mediatek,mt7988-sgmiisys",*/
 				     "mediatek,mt7988-sgmiisys0",
-				     "syscon",
-				     "simple-mfd";
+				     "simple-mfd",
+				     "syscon";
 			reg = <0 0x10060000 0 0x1000>;
 			resets = <&watchdog 1>;
 			#clock-cells = <1>;
@@ -251,10 +251,10 @@
 		};
 
 		sgmiisys1: syscon@10070000 {
-			compatible = "mediatek,mt7988-sgmiisys",
+			compatible = /*"mediatek,mt7988-sgmiisys",*/
 				     "mediatek,mt7988-sgmiisys1",
-				     "syscon",
-				     "simple-mfd";
+				     "simple-mfd",
+				     "syscon";
 			reg = <0 0x10070000 0 0x1000>;
 			resets = <&watchdog 2>;
 			#clock-cells = <1>;
@@ -765,18 +765,15 @@
 				     <GIC_SPI 197 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 198 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 199 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&ethsys CLK_ETHDMA_XGP1_EN>,
-				 <&ethsys CLK_ETHDMA_XGP2_EN>,
-				 <&ethsys CLK_ETHDMA_XGP3_EN>,
+			clocks = <&ethsys CLK_ETHDMA_CRYPT0_EN>,
 				 <&ethsys CLK_ETHDMA_FE_EN>,
 				 <&ethsys CLK_ETHDMA_GP2_EN>,
 				 <&ethsys CLK_ETHDMA_GP1_EN>,
 				 <&ethsys CLK_ETHDMA_GP3_EN>,
-				 <&ethsys CLK_ETHDMA_ESW_EN>,
-				 <&ethsys CLK_ETHDMA_CRYPT0_EN>,
 				 <&ethwarp CLK_ETHWARP_WOCPU2_EN>,
 				 <&ethwarp CLK_ETHWARP_WOCPU1_EN>,
 				 <&ethwarp CLK_ETHWARP_WOCPU0_EN>,
+				 <&ethsys CLK_ETHDMA_ESW_EN>,
 				 <&topckgen CLK_TOP_ETH_GMII_SEL>,
 				 <&topckgen CLK_TOP_ETH_REFCK_50M_SEL>,
 				 <&topckgen CLK_TOP_ETH_SYS_200M_SEL>,
@@ -788,18 +785,21 @@
 				 <&topckgen CLK_TOP_NETSYS_PAO_2X_SEL>,
 				 <&topckgen CLK_TOP_NETSYS_SYNC_250M_SEL>,
 				 <&topckgen CLK_TOP_NETSYS_PPEFB_250M_SEL>,
-				 <&topckgen CLK_TOP_NETSYS_WARP_SEL>;
-			clock-names = "xgp1", "xgp2", "xgp3", "fe", "gp2", "gp1",
-				      "gp3", "esw", "crypto",
+				 <&topckgen CLK_TOP_NETSYS_WARP_SEL>,
+				 <&ethsys CLK_ETHDMA_XGP1_EN>,
+				 <&ethsys CLK_ETHDMA_XGP2_EN>,
+				 <&ethsys CLK_ETHDMA_XGP3_EN>;
+			clock-names = "crypto", "fe", "gp2", "gp1",
+				      "gp3",
 				      "ethwarp_wocpu2", "ethwarp_wocpu1",
-				      "ethwarp_wocpu0", "top_eth_gmii_sel",
+				      "ethwarp_wocpu0", "esw", "top_eth_gmii_sel",
 				      "top_eth_refck_50m_sel", "top_eth_sys_200m_sel",
 				      "top_eth_sys_sel", "top_eth_xgmii_sel",
 				      "top_eth_mii_sel", "top_netsys_sel",
 				      "top_netsys_500m_sel", "top_netsys_pao_2x_sel",
 				      "top_netsys_sync_250m_sel",
 				      "top_netsys_ppefb_250m_sel",
-				      "top_netsys_warp_sel";
+				      "top_netsys_warp_sel","xgp1", "xgp2", "xgp3";
 			assigned-clocks = <&topckgen CLK_TOP_NETSYS_2X_SEL>,
 					  <&topckgen CLK_TOP_NETSYS_GSW_SEL>,
 					  <&topckgen CLK_TOP_USXGMII_SBUS_0_SEL>,
