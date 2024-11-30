@@ -247,7 +247,7 @@
 			status = "disabled";
 		};
 
-		serial@11000100 {
+		serial1: serial@11000100 {
 			compatible = "mediatek,mt7988-uart", "mediatek,mt6577-uart";
 			reg = <0 0x11000100 0 0x100>;
 			interrupts = <GIC_SPI 124 IRQ_TYPE_LEVEL_HIGH>;
@@ -258,7 +258,7 @@
 			status = "disabled";
 		};
 
-		serial@11000200 {
+		serial2: serial@11000200 {
 			compatible = "mediatek,mt7988-uart", "mediatek,mt6577-uart";
 			reg = <0 0x11000200 0 0x100>;
 			interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>;
