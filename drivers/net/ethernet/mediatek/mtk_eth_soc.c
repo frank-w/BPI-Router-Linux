@@ -4870,32 +4870,31 @@ static u32 mtk_get_rxfh_indir_size(struct net_device *dev)
 	return MTK_RSS_MAX_INDIRECTION_TABLE;
 }
 
-static int mtk_get_rxfh(struct net_device *dev, u32 *indir, u8 *key,
-			u8 *hfunc)
+static int mtk_get_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
 	struct mtk_rss_params *rss_params = &eth->rss_params;
 	int i;
 
-	if (hfunc)
-		*hfunc = ETH_RSS_HASH_TOP;	/* Toeplitz */
+	if (rxfh->hfunc)
+		rxfh->hfunc = ETH_RSS_HASH_TOP;	/* Toeplitz */
 
-	if (key) {
-		memcpy(key, rss_params->hash_key,
+	if (rxfh->key) {
+		memcpy(rxfh->key, rss_params->hash_key,
 		       sizeof(rss_params->hash_key));
 	}
 
-	if (indir) {
+	if (rxfh->indir) {
 		for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE; i++)
-			indir[i] = rss_params->indirection_table[i];
+			rxfh->indir[i] = rss_params->indirection_table[i];
 	}
 
 	return 0;
 }
 
-static int mtk_set_rxfh(struct net_device *dev, const u32 *indir,
-			const u8 *key, const u8 hfunc)
+static int mtk_set_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh,
+			 struct netlink_ext_ack *extack)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
@@ -4903,21 +4902,21 @@ static int mtk_set_rxfh(struct net_device *dev, const u32 *indir,
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
 
-	if (hfunc != ETH_RSS_HASH_NO_CHANGE &&
-	    hfunc != ETH_RSS_HASH_TOP)
+	if (rxfh->hfunc != ETH_RSS_HASH_NO_CHANGE &&
+	    rxfh->hfunc != ETH_RSS_HASH_TOP)
 		return -EOPNOTSUPP;
 
-	if (key) {
-		memcpy(rss_params->hash_key, key,
+	if (rxfh->key) {
+		memcpy(rss_params->hash_key, rxfh->key,
 		       sizeof(rss_params->hash_key));
 		for (i = 0; i < MTK_RSS_HASH_KEYSIZE / sizeof(u32); i++)
 			mtk_w32(eth, rss_params->hash_key[i],
 				MTK_RSS_HASH_KEY_DW(i));
 	}
 
-	if (indir) {
+	if (rxfh->indir) {
 		for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE; i++)
-			rss_params->indirection_table[i] = indir[i];
+			rss_params->indirection_table[i] = rxfh->indir[i];
 		for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE / 16; i++)
 			mtk_w32(eth, mtk_rss_indr_table(rss_params, i),
 				MTK_RSS_INDR_TABLE_DW(i));
