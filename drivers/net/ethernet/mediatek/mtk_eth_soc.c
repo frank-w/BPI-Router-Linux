@@ -2516,12 +2516,12 @@ static int mtk_poll_tx(struct mtk_eth *eth, int budget)
 
 static void mtk_handle_status_irq(struct mtk_eth *eth)
 {
-	u32 status2 = mtk_r32(eth, MTK_INT_STATUS2);
+	u32 status2 = mtk_r32(eth, MTK_FE_INT_STATUS);
 
 	if (unlikely(status2 & (MTK_GDM1_AF | MTK_GDM2_AF))) {
 		mtk_stats_update(eth);
 		mtk_w32(eth, (MTK_GDM1_AF | MTK_GDM2_AF),
-			MTK_INT_STATUS2);
+			MTK_FE_INT_STATUS);
 	}
 }
 
@@ -3449,7 +3449,7 @@ static void mtk_dma_free(struct mtk_eth *eth)
 
 static bool mtk_hw_reset_check(struct mtk_eth *eth)
 {
-	u32 val = mtk_r32(eth, MTK_INT_STATUS2);
+	u32 val = mtk_r32(eth, MTK_FE_INT_STATUS);
 
 	return (val & MTK_FE_INT_FQ_EMPTY) || (val & MTK_FE_INT_RFIFO_UF) ||
 	       (val & MTK_FE_INT_RFIFO_OV) || (val & MTK_FE_INT_TSO_FAIL) ||
