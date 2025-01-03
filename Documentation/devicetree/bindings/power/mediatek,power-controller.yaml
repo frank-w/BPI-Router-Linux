@@ -22,17 +22,27 @@ properties:
     pattern: '^power-controller(@[0-9a-f]+)?$'
 
   compatible:
-    enum:
-      - mediatek,mt6735-power-controller
-      - mediatek,mt6795-power-controller
-      - mediatek,mt8167-power-controller
-      - mediatek,mt8173-power-controller
-      - mediatek,mt8183-power-controller
-      - mediatek,mt8186-power-controller
-      - mediatek,mt8188-power-controller
-      - mediatek,mt8192-power-controller
-      - mediatek,mt8195-power-controller
-      - mediatek,mt8365-power-controller
+    oneOf:
+      - items:
+        - enum:
+          - mediatek,mt6735-power-controller
+          - mediatek,mt6795-power-controller
+          - mediatek,mt8167-power-controller
+          - mediatek,mt8173-power-controller
+          - mediatek,mt8183-power-controller
+          - mediatek,mt8186-power-controller
+          - mediatek,mt8188-power-controller
+          - mediatek,mt8192-power-controller
+          - mediatek,mt8195-power-controller
+          - mediatek,mt8365-power-controller
+      - items:
+        - enum:
+          - mediatek,mt7988-topmisc
+        - const: syscon
+        - const: mediatek,mt7988-power-controller
+
+  reg:
+    maxItems: 1
 
   '#power-domain-cells':
     const: 1
@@ -42,6 +52,9 @@ properties:
 
   '#size-cells':
     const: 0
+
+  '#clock-cells':
+    const: 1
 
 patternProperties:
   "^power-domain@[0-9a-f]+$":
