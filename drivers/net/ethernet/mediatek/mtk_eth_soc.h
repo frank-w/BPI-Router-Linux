@@ -93,7 +93,7 @@
 #define RST_GL_PSE		BIT(0)
 
 /* Frame Engine Interrupt Status Register */
-#define MTK_INT_STATUS2		0x08
+#define MTK_FE_INT_STATUS	0x08
 #define MTK_FE_INT_ENABLE	0x0c
 #define MTK_FE_INT_FQ_EMPTY	BIT(8)
 #define MTK_FE_INT_TSO_FAIL	BIT(12)
@@ -112,6 +112,14 @@
 
 /* Frame Engine Interrupt Grouping Register */
 #define MTK_FE_INT_GRP		0x20
+
+/* Frame Engine Interrupt Status 2 Register */
+#define MTK_FE_INT_STATUS2	0x28
+
+/* Frame Engine LRO Auto-Learn Table Information */
+#define MTK_FE_ALT_CF8		0x300
+#define MTK_FE_ALT_SGL_CFC	0x304
+#define MTK_FE_ALT_SEQ_CFC	0x308
 
 /* CDMP Ingress Control Register */
 #define MTK_CDMQ_IG_CTRL	0x1400
@@ -218,6 +226,13 @@
 #define MTK_RSS_INDR_TABLE_DW(x)	(reg_map->pdma.rss_glo_cfg + 0x50 +	\
 					 ((x) * 0x4))
 
+/* PDMA HW LRO ALT Debug Registers */
+#define MTK_LRO_ALT_DBG		0xc40
+#define MTK_LRO_ALT_INDEX_OFFSET	(8)
+
+/* PDMA HW LRO ALT Data Registers */
+#define MTK_LRO_ALT_DBG_DATA	0xc44
+
 /* PDMA Global Configuration Register */
 #define MTK_PDMA_LRO_SDL	0x3000
 #define MTK_RX_CFG_SDL_OFFSET	16
@@ -261,7 +276,29 @@
 #define MTK_RING_MAX_AGG_CNT_L		((MTK_HW_LRO_MAX_AGG_CNT & 0x3f) << 26)
 #define MTK_RING_MAX_AGG_CNT_H		((MTK_HW_LRO_MAX_AGG_CNT >> 6) & 0x3)
 
+/* PDMA HW LRO Ring Control Mask */
+#define MTK_LRO_RING_AGG_CNT_H_MASK	GENMASK(1, 0)
+#define MTK_LRO_RING_AGG_TIME_MASK	GENMASK(25, 10)
+#define MTK_LRO_RING_AGG_CNT_L_MASK	GENMASK(31, 26)
+#define MTK_LRO_RING_AGE_TIME_H_MASK	GENMASK(5, 0)
+#define MTK_LRO_RING_AGE_TIME_L_MASK	GENMASK(31, 22)
+
+/* PDMA HW LRO Ring Control 1 Offsets */
+#define MTK_LRO_RING_AGE_TIME_L_OFFSET	(22)
+
+/* PDMA HW LRO Ring Control 2 Offsets */
+#define MTK_LRO_RING_AGE_TIME_H_OFFSET	(0)
+#define MTK_LRO_RING_RX_MODE_OFFSET	(6)
+#define MTK_LRO_RING_RX_PORT_VLD_OFFSET	(8)
+#define MTK_LRO_RING_AGG_TIME_OFFSET	(10)
+#define MTK_LRO_RING_AGG_CNT_L_OFFSET	(26)
+
+/* PDMA HW LRO Ring Control 3 Offsets */
+#define MTK_LRO_RING_AGG_CNT_H_OFFSET	(0)
+
 /* QDMA TX Queue Configuration Registers */
+#define MTK_QTX_CFG_HW_RESV	GENMASK(15, 8)
+#define MTK_QTX_CFG_SW_RESV	GENMASK(7, 0)
 #define MTK_QTX_OFFSET		0x10
 #define QDMA_RES_THRES		4
 
@@ -279,8 +316,19 @@
 #define MTK_QTX_SCH_MAX_RATE_MAN	GENMASK(10, 4)
 #define MTK_QTX_SCH_MAX_RATE_EXP	GENMASK(3, 0)
 
+/* QDMA Page Configuration Register */
+#define MTK_QTX_PER_PAGE	(16)
+
+/* QDMA TX Queue MIB Interface Register */
+#define MTK_MIB_ON_QTX_CFG	BIT(31)
+#define MTK_VQTX_MIB_EN		BIT(28)
+
 /* QDMA TX Scheduler Rate Control Register */
+#define MTK_QDMA_TX_SCH			GENMASK(15, 0)
 #define MTK_QDMA_TX_SCH_MAX_WFQ		BIT(15)
+#define MTK_QDMA_TX_SCH_RATE_EN		BIT(11)
+#define MTK_QDMA_TX_SCH_RATE_MAN	GENMASK(10, 4)
+#define MTK_QDMA_TX_SCH_RATE_EXP	GENMASK(3, 0)
 
 /* QDMA Global Configuration Register */
 #define MTK_RX_2B_OFFSET	BIT(31)
@@ -417,6 +465,10 @@
 #define RX_DMA_L4_VALID_PDMA	BIT(30)		/* when PDMA is used */
 #define RX_DMA_SPECIAL_TAG	BIT(22)
 
+/* PDMA descriptor rxd2 */
+#define RX_DMA_GET_AGG_CNT	GENMASK(9, 2)
+#define RX_DMA_GET_REV		GENMASK(15, 10)
+
 /* PDMA descriptor rxd5 */
 #define MTK_RXD5_FOE_ENTRY	GENMASK(14, 0)
 #define MTK_RXD5_PPE_CPU_REASON	GENMASK(22, 18)
@@ -430,6 +482,10 @@
 #define RX_DMA_L4_VALID_V2	BIT(2)
 
 #define MTK_TDMA_GLO_CFG	0x6204
+
+/* PDMA V2 descriptor rxd6 */
+#define RX_DMA_GET_FLUSH_RSN_V2	GENMASK(2, 0)
+#define RX_DMA_GET_AGG_CNT_V2	GENMASK(23, 16)
 
 /* PHY Polling and SMI Master Control registers */
 #define MTK_PPSC		0x10000
@@ -1263,14 +1319,18 @@ struct mtk_reg_map {
 		u32	rx_ptr;		/* rx base pointer */
 		u32	rx_cnt_cfg;	/* rx max count configuration */
 		u32	qcrx_ptr;	/* rx cpu pointer */
+		u32	page;		/* page configuration */
 		u32	glo_cfg;	/* global configuration */
 		u32	rst_idx;	/* reset index */
 		u32	delay_irq;	/* delay interrupt */
 		u32	fc_th;		/* flow control */
 		u32	int_grp;
+		u32	fsm;
 		u32	hred;		/* interrupt mask */
+		u32	qtx_mib_if;	/* tx queue mib interface */
 		u32	ctx_ptr;	/* tx acquire cpu pointer */
 		u32	dtx_ptr;	/* tx acquire dma pointer */
+		u32	fwd_count;	/* tx forward count */
 		u32	crx_ptr;	/* tx release cpu pointer */
 		u32	drx_ptr;	/* tx release dma pointer */
 		u32	fq_head;	/* fq head pointer */
@@ -1610,6 +1670,10 @@ void mtk_stats_update_mac(struct mtk_mac *mac);
 void mtk_w32(struct mtk_eth *eth, u32 val, unsigned reg);
 u32 mtk_r32(struct mtk_eth *eth, unsigned reg);
 u32 mtk_m32(struct mtk_eth *eth, u32 mask, u32 set, unsigned int reg);
+
+int _mtk_mdio_read_c22(struct mtk_eth *eth, u32 phy_addr, u32 phy_reg);
+int _mtk_mdio_write_c22(struct mtk_eth *eth, u32 phy_addr, u32 phy_reg,
+			       u32 write_data);
 
 int mtk_gmac_sgmii_path_setup(struct mtk_eth *eth, int mac_id);
 int mtk_gmac_2p5gphy_path_setup(struct mtk_eth *eth, int mac_id);
