@@ -2,6 +2,7 @@
 # Makefile for Linux PCS drivers
 
 obj-$(CONFIG_FWNODE_PCS)	+= pcs.o
+obj-$(CONFIG_PCS_AIROHA)	+= pcs-airoha.o
 pcs_xpcs-$(CONFIG_PCS_XPCS)	:= pcs-xpcs.o pcs-xpcs-plat.o \
 				   pcs-xpcs-nxp.o pcs-xpcs-wx.o
 
