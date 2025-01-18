@@ -66,6 +66,10 @@
 
 #define MTK_MAX_RX_RING_NUM	(8)
 #define MTK_HW_LRO_DMA_SIZE(eth)	(mtk_is_netsys_v3_or_greater(eth) ? 64 : 8)
+#define IS_HW_LRO_RING(ring_no)		(mtk_is_netsys_v3_or_greater(eth) ?            \
+					(((ring_no) > 3) && ((ring_no) < 8)) :         \
+					(((ring_no) > 0) && ((ring_no) < 4)))
+
 #define	MTK_MAX_LRO_RX_LENGTH		(4096 * 3 + MTK_MAX_RX_LENGTH)
 #define	MTK_MAX_LRO_IP_CNT		2
 #define	MTK_HW_LRO_TIMER_UNIT		1	/* 20 us */
@@ -1580,6 +1584,7 @@ struct mtk_mac {
 
 /* the struct describing the SoC. these are declared in the soc_xyz.c files */
 extern const struct of_device_id of_mtk_match[];
+extern u32 mtk_hwlro_stats_ebl;
 
 static inline bool mtk_is_netsys_v1(struct mtk_eth *eth)
 {
