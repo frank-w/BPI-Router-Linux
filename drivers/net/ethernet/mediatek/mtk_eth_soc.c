@@ -32,6 +32,7 @@
 #include <linux/genalloc.h>
 
 #include "mtk_eth_soc.h"
+#include "mtk_eth_dbg.h"
 #include "mtk_wed.h"
 
 static int mtk_msg_level = -1;
@@ -384,7 +385,7 @@ int _mtk_mdio_write_c22(struct mtk_eth *eth, u32 phy_addr, u32 phy_reg,
 	return 0;
 }
 
-static int _mtk_mdio_write_c45(struct mtk_eth *eth, u32 phy_addr,
+int _mtk_mdio_write_c45(struct mtk_eth *eth, u32 phy_addr,
 			       u32 devad, u32 phy_reg, u32 write_data)
 {
 	int ret;
@@ -442,7 +443,7 @@ int _mtk_mdio_read_c22(struct mtk_eth *eth, u32 phy_addr, u32 phy_reg)
 	return mtk_r32(eth, MTK_PHY_IAC) & PHY_IAC_DATA_MASK;
 }
 
-static int _mtk_mdio_read_c45(struct mtk_eth *eth, u32 phy_addr,
+int _mtk_mdio_read_c45(struct mtk_eth *eth, u32 phy_addr,
 			      u32 devad, u32 phy_reg)
 {
 	int ret;
@@ -5904,6 +5905,9 @@ static int mtk_probe(struct platform_device *pdev)
 				       mtk_napi_rx);
 		}
 	}
+
+	mtketh_debugfs_init(eth);
+	debug_proc_init(eth);
 
 	platform_set_drvdata(pdev, eth);
 	schedule_delayed_work(&eth->reset.monitor_work,
