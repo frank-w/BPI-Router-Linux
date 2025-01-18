@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2023 MediaTek Inc.
+ * Author: Frank Wunderlich <frank-w@public-files.de>
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/mt65xx.h>
+
+/*
+Hardware-connection:
+
+GND = pin 9
+VCC = 3v3 (pin 1)
+SCL = CLK (pin 23)
+SDA = MOSI (pin 19)
+RES (reset) = gpio52 (pin 26)
+DC (data/command selection) = gpio53 (pin 22)
+BLK (backlight) = pwm6 (pin 7)
+
+driver:
+config DRM_PANEL_MIPI_DBI
+        tristate "DRM support for MIPI DBI compatible panels"
+
+depencies:
+CONFIG_DRM=m
+CONFIG_FB=m
+CONFIG_FB_MODE_HELPERS=y
+CONFIG_BACKLIGHT_PWM=m
+
+driver creates /dev/dri/cardX and with help of CONFIG_DRM_FBDEV_EMULATION
+(autoselected by options above) we should get a /dev/fbX with console.
+
+firmware can be created with
+https://github.com/notro/panel-mipi-dbi/
+
+copy to /lib/firmware/zjy-ips130-v20.bin (name should be same as first compatible)
+
+modprobe panel-mipi-dbi
+
+fbi -d /dev/fb0 -T 1 --autodown --noverbose linux-tux.222x256.png
+
+in case fb0 is not there:
+
+
+root@bpi-r4-v11:~
+# ls /sys/class/backlight/
+backlight-lcd0
+
+*/
+
+/ {
+	compatible = "bananapi,bpi-r4", "mediatek,mt7988a";
+};
+
+&{/} {
+	backlight: backlight-lcd0 {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 6 50000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pwm6_backlight_pins>;
+
+		status = "okay";
+	};
+};
+
+&{/soc/pinctrl@1001f000} {
+	pwm6_backlight_pins: pwm6-pins {
+		mux {
+			groups = "pwm6_0";
+			function = "pwm";
+		};
+
+		conf {
+			groups = "pwm6_0";
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+	};
+};
+
+&{/soc/spi@11008000} { //&spi1
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	status = "okay";
+
+	display@0 {
+		compatible = "zjy-ips130-v20", "panel-mipi-dbi-spi";
+		reg = <0>;
+		spi-max-frequency = <52000000>;
+		spi-tx-buswidth = <1>;
+		spi-rx-buswidth = <0>;
+		spi-cpha;
+		spi-cpol;
+
+		dc-gpios = <&pio 53 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pio 52 GPIO_ACTIVE_HIGH>;
+		backlight = <&backlight>;
+		write-only;
+
+		width-mm = <23>;
+		height-mm = <23>;
+
+		panel-timing {
+			hactive = <240>;
+			vactive = <240>;
+			hback-porch = <0>;
+			vback-porch = <0>;
+			clock-frequency = <0>;
+			hfront-porch = <0>;
+			hsync-len = <0>;
+			vfront-porch = <0>;
+			vsync-len = <0>;
+		};
+	};
+};
