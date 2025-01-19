@@ -16,9 +16,6 @@
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
-#include <linux/pm.h>
-#include <linux/pm_runtime.h>
-#include <linux/pm_wakeirq.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -487,10 +484,8 @@ struct msdc_host {
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *pins_default;
 	struct pinctrl_state *pins_uhs;
-	struct pinctrl_state *pins_eint;
 	struct delayed_work req_timeout;
 	int irq;		/* host interrupt */
-	int eint_irq;		/* interrupt from sdio device for waking up system */
 	struct reset_control *reset;
 
 	struct clk *src_clk;	/* msdc source clock */
@@ -1700,44 +1695,10 @@ static void msdc_enable_sdio_irq(struct mmc_host *mmc, int enb)
 {
 	struct msdc_host *host = mmc_priv(mmc);
 	unsigned long flags;
-	int ret;
 
 	spin_lock_irqsave(&host->lock, flags);
 	__msdc_enable_sdio_irq(host, enb);
 	spin_unlock_irqrestore(&host->lock, flags);
-
-	if (mmc_card_enable_async_irq(mmc->card) && host->pins_eint) {
-		if (enb) {
-			/*
-			 * In dev_pm_set_dedicated_wake_irq_reverse(), eint pin will be set to
-			 * GPIO mode. We need to restore it to SDIO DAT1 mode after that.
-			 * Since the current pinstate is pins_uhs, to ensure pinctrl select take
-			 * affect successfully, we change the pinstate to pins_eint firstly.
-			 */
-			pinctrl_select_state(host->pinctrl, host->pins_eint);
-			ret = dev_pm_set_dedicated_wake_irq_reverse(host->dev, host->eint_irq);
-
-			if (ret) {
-				dev_err(host->dev, "Failed to register SDIO wakeup irq!\n");
-				host->pins_eint = NULL;
-				pm_runtime_get_noresume(host->dev);
-			} else {
-				dev_dbg(host->dev, "SDIO eint irq: %d!\n", host->eint_irq);
-			}
-
-			pinctrl_select_state(host->pinctrl, host->pins_uhs);
-		} else {
-			dev_pm_clear_wake_irq(host->dev);
-		}
-	} else {
-		if (enb) {
-			/* Ensure host->pins_eint is NULL */
-			host->pins_eint = NULL;
-			pm_runtime_get_noresume(host->dev);
-		} else {
-			pm_runtime_put_noidle(host->dev);
-		}
-	}
 }
 
 static irqreturn_t msdc_cmdq_irq(struct msdc_host *host, u32 intsts)
@@ -3016,20 +2977,6 @@ static int msdc_drv_probe(struct platform_device *pdev)
 		return PTR_ERR(host->pins_uhs);
 	}
 
-	/* Support for SDIO eint irq ? */
-	if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && (mmc->pm_caps & MMC_PM_KEEP_POWER)) {
-		host->eint_irq = platform_get_irq_byname_optional(pdev, "sdio_wakeup");
-		if (host->eint_irq > 0) {
-			host->pins_eint = pinctrl_lookup_state(host->pinctrl, "state_eint");
-			if (IS_ERR(host->pins_eint)) {
-				dev_err(&pdev->dev, "Cannot find pinctrl eint!\n");
-				host->pins_eint = NULL;
-			} else {
-				device_init_wakeup(&pdev->dev, true);
-			}
-		}
-	}
-
 	msdc_of_property_parse(pdev, host);
 
 	host->dev = &pdev->dev;
@@ -3135,18 +3082,11 @@ static int msdc_drv_probe(struct platform_device *pdev)
 	if (ret)
 		goto release;
 
-	pm_runtime_set_active(host->dev);
-	pm_runtime_set_autosuspend_delay(host->dev, MTK_MMC_AUTOSUSPEND_DELAY);
-	pm_runtime_use_autosuspend(host->dev);
-	pm_runtime_enable(host->dev);
 	ret = mmc_add_host(mmc);
-
 	if (ret)
-		goto end;
+		goto release;
 
 	return 0;
-end:
-	pm_runtime_disable(host->dev);
 release:
 	msdc_deinit_hw(host);
 release_clk:
@@ -3173,15 +3113,11 @@ static void msdc_drv_remove(struct platform_device *pdev)
 	mmc = platform_get_drvdata(pdev);
 	host = mmc_priv(mmc);
 
-	pm_runtime_get_sync(host->dev);
-
 	platform_set_drvdata(pdev, NULL);
 	mmc_remove_host(mmc);
 	msdc_deinit_hw(host);
 	msdc_gate_clock(host);
 
-	pm_runtime_disable(host->dev);
-	pm_runtime_put_noidle(host->dev);
 	dma_free_coherent(&pdev->dev,
 			2 * sizeof(struct mt_gpdma_desc),
 			host->dma.gpd, host->dma.gpd_addr);
@@ -3261,92 +3197,6 @@ static void msdc_restore_reg(struct msdc_host *host)
 		__msdc_enable_sdio_irq(host, 1);
 }
 
-static int __maybe_unused msdc_runtime_suspend(struct device *dev)
-{
-	struct mmc_host *mmc = dev_get_drvdata(dev);
-	struct msdc_host *host = mmc_priv(mmc);
-
-	if (host->hsq_en)
-		mmc_hsq_suspend(mmc);
-
-	msdc_save_reg(host);
-
-	if (sdio_irq_claimed(mmc)) {
-		if (host->pins_eint) {
-			disable_irq(host->irq);
-			pinctrl_select_state(host->pinctrl, host->pins_eint);
-		}
-
-		__msdc_enable_sdio_irq(host, 0);
-	}
-	msdc_gate_clock(host);
-	return 0;
-}
-
-static int __maybe_unused msdc_runtime_resume(struct device *dev)
-{
-	struct mmc_host *mmc = dev_get_drvdata(dev);
-	struct msdc_host *host = mmc_priv(mmc);
-	int ret;
-
-	ret = msdc_ungate_clock(host);
-	if (ret)
-		return ret;
-
-	msdc_restore_reg(host);
-
-	if (sdio_irq_claimed(mmc) && host->pins_eint) {
-		pinctrl_select_state(host->pinctrl, host->pins_uhs);
-		enable_irq(host->irq);
-	}
-
-	if (host->hsq_en)
-		mmc_hsq_resume(mmc);
-
-	return 0;
-}
-
-static int __maybe_unused msdc_suspend(struct device *dev)
-{
-	struct mmc_host *mmc = dev_get_drvdata(dev);
-	struct msdc_host *host = mmc_priv(mmc);
-	int ret;
-	u32 val;
-
-	if (mmc->caps2 & MMC_CAP2_CQE) {
-		ret = cqhci_suspend(mmc);
-		if (ret)
-			return ret;
-		val = readl(host->base + MSDC_INT);
-		writel(val, host->base + MSDC_INT);
-	}
-
-	/*
-	 * Bump up runtime PM usage counter otherwise dev->power.needs_force_resume will
-	 * not be marked as 1, pm_runtime_force_resume() will go out directly.
-	 */
-	if (sdio_irq_claimed(mmc) && host->pins_eint)
-		pm_runtime_get_noresume(dev);
-
-	return pm_runtime_force_suspend(dev);
-}
-
-static int __maybe_unused msdc_resume(struct device *dev)
-{
-	struct mmc_host *mmc = dev_get_drvdata(dev);
-	struct msdc_host *host = mmc_priv(mmc);
-
-	if (sdio_irq_claimed(mmc) && host->pins_eint)
-		pm_runtime_put_noidle(dev);
-
-	return pm_runtime_force_resume(dev);
-}
-
-static const struct dev_pm_ops msdc_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(msdc_suspend, msdc_resume)
-	SET_RUNTIME_PM_OPS(msdc_runtime_suspend, msdc_runtime_resume, NULL)
-};
-
 static struct platform_driver mt_msdc_driver = {
 	.probe = msdc_drv_probe,
 	.remove = msdc_drv_remove,
@@ -3354,7 +3204,6 @@ static struct platform_driver mt_msdc_driver = {
 		.name = "mtk-msdc",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 		.of_match_table = msdc_of_ids,
-		.pm = &msdc_dev_pm_ops,
 	},
 };
 
