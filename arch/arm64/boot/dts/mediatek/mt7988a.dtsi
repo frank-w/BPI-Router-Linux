@@ -508,7 +508,7 @@
 			status = "disabled";
 		};
 
-		mmc0: mmc@11230000 {
+		msdc: mmc@11230000 {
 			compatible = "mediatek,mt7988-mmc";
 			reg = <0 0x11230000 0 0x1000>,
 			      <0 0x11D60000 0 0x1000>;

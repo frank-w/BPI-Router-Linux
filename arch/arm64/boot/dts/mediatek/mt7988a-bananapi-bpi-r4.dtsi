@@ -341,6 +341,89 @@
 	};
 };
 
+&msdc {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "emmc-default", "emmc-state_uhs", "sdcard-default", "sdcard-state_uhs";
+	pinctrl-0 = <&mmc_pins_emmc_51>;
+	pinctrl-1 = <&mmc_pins_emmc_51>;
+	pinctrl-2 = <&mmc_pins_sdcard>;
+	pinctrl-3 = <&mmc_pins_sdcard>;
+	mmc0: slot@0 {
+		compatible = "mediatek,mmc-slot";
+		reg = <0>;
+		bus-width = <8>;
+		max-frequency = <200000000>;
+		
+		pinctrl-default = "emmc-default";
+		pinctrl-state_uhs = "emmc-state_uhs";
+		cap-mmc-highspeed;
+		mmc-hs200-1_8v;
+		mmc-hs400-1_8v;
+		hs400-ds-delay = <0x12814>;
+		vqmmc-supply = <&reg_1p8v>;
+		vmmc-supply = <&reg_3p3v>;
+		non-removable;
+		no-sd;
+		no-sdio;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		card@0 {
+			compatible = "mmc-card";
+			reg = <0>;
+			block {
+				compatible = "block-device";
+				partitions {
+					block-partition-env {
+						partname = "ubootenv";
+						nvmem-layout {
+							compatible = "u-boot,env-layout";
+						};
+					};
+					emmc_rootfs: block-partition-production {
+						partname = "production";
+					};
+				};
+			};
+		};
+	};
+	mmc1: slot@1 {
+		compatible = "mediatek,mmc-slot";
+		reg = <1>;
+		
+		pinctrl-default = "sdcard-default";
+		pinctrl-state_uhs = "sdcard-state_uhs";
+		cd-gpios = <&pio 12 GPIO_ACTIVE_LOW>;
+		bus-width = <4>;
+		max-frequency = <52000000>;
+		cap-sd-highspeed;
+		vqmmc-supply = <&reg_3p3v>;
+		vmmc-supply = <&reg_3p3v>;
+		no-mmc;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		card@0 {
+			compatible = "mmc-card";
+			reg = <0>;
+			block {
+				compatible = "block-device";
+				partitions {
+					block-partition-env {
+						partname = "ubootenv";
+						nvmem-layout {
+							compatible = "u-boot,env-layout";
+						};
+					};
+					sd_rootfs: block-partition-production {
+						partname = "production";
+					};
+				};
+			};
+		};
+	};
+};
+
 /* mPCIe SIM2 */
 &pcie0 {
 	status = "okay";
@@ -418,21 +501,21 @@
 		};
 	};
 
-	mmc0_pins_emmc_45: mmc0-emmc-45-pins {
+	mmc_pins_emmc_45: mmc-emmc-45-pins {
 		mux {
 			function = "flash";
 			groups = "emmc_45";
 		};
 	};
 
-	mmc0_pins_emmc_51: mmc0-emmc-51-pins {
+	mmc_pins_emmc_51: mmc-emmc-51-pins {
 		mux {
 			function = "flash";
 			groups = "emmc_51";
 		};
 	};
 
-	mmc0_pins_sdcard: mmc0-sdcard-pins {
+	mmc_pins_sdcard: mmc-sdcard-pins {
 		mux {
 			function = "flash";
 			groups = "sdcard";

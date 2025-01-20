@@ -12,22 +12,5 @@
 };
 
 &{/soc/mmc@11230000} {
-	pinctrl-names = "default", "state_uhs";
-	pinctrl-0 = <&mmc0_pins_emmc_51>;
-	pinctrl-1 = <&mmc0_pins_emmc_51>;
-	bus-width = <8>;
-	max-frequency = <200000000>;
-	cap-mmc-highspeed;
-	mmc-hs200-1_8v;
-	mmc-hs400-1_8v;
-	hs400-ds-delay = <0x12814>;
-	vqmmc-supply = <&reg_1p8v>;
-	vmmc-supply = <&reg_3p3v>;
-	non-removable;
-	no-sd;
-	no-sdio;
-	#address-cells = <1>;
-	#size-cells = <0>;
-	status = "okay";
 };
 
