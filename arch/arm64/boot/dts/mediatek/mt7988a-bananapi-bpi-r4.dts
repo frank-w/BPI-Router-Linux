@@ -3,3 +3,11 @@
 /dts-v1/;
 
 #include "mt7988a-bananapi-bpi-r4.dtsi"
+
+&pca9545 {
+	i2c_sfp2: i2c@2 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <2>;
+	};
+};
