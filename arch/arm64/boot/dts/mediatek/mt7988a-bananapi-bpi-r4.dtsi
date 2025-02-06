@@ -170,12 +170,6 @@
 			#size-cells = <0>;
 			reg = <1>;
 		};
-
-		i2c_sfp2: i2c@2 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <2>;
-		};
 	};
 };
 
