@@ -145,6 +145,19 @@ config NET_DSA_TAG_QCA
 	  Say Y or M if you want to enable support for tagging frames for
 	  the Qualcomm Atheros QCA8K switches.
 
+config NET_DSA_TAG_MXL862
+	tristate "Tag driver for MxL862xx switches"
+	help
+	  Say Y or M if you want to enable support for tagging frames for the
+	  Maxlinear MxL862xx switches.
+
+config NET_DSA_TAG_MXL862_8021Q
+	tristate "Tag driver for MxL862xx switches, based on VLAN tags"
+	help
+	  Say Y or M if you want to enable support for tagging frames for the
+	  Maxlinear MxL862xx switches. This tagging variant is based on 4-byte wide VLAN
+	  tags
+
 config NET_DSA_TAG_RTL4_A
 	tristate "Tag driver for Realtek 4 byte protocol A tags"
 	help
