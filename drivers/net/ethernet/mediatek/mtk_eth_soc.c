@@ -5748,7 +5748,7 @@ static int mtk_probe(struct platform_device *pdev)
 
 	if (eth->hwlro) {
 		for (i = 0; i < MTK_HW_LRO_RING_NUM; i++) {
-			netif_napi_add(&eth->dummy_dev, &eth->rx_napi[MTK_HW_LRO_RING(i)].napi,
+			netif_napi_add(eth->dummy_dev, &eth->rx_napi[MTK_HW_LRO_RING(i)].napi,
 				       mtk_napi_rx);
 		}
 	}
