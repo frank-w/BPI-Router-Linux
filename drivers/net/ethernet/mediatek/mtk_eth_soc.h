@@ -1552,6 +1552,7 @@ struct mtk_mac {
 
 /* the struct describing the SoC. these are declared in the soc_xyz.c files */
 extern const struct of_device_id of_mtk_match[];
+extern u32 mtk_hwlro_stats_ebl;
 
 static inline bool mtk_is_netsys_v1(struct mtk_eth *eth)
 {
