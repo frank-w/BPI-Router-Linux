@@ -2341,6 +2341,12 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 		if (reason == MTK_PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
 			mtk_ppe_check_skb(eth->ppe[ppe_idx], skb, hash);
 
+		if (eth->hwlro && mtk_hwlro_stats_ebl &&
+		    IS_HW_LRO_RING(ring->ring_no)) {
+			hw_lro_stats_update(ring->ring_no, &trxd);
+			hw_lro_flush_stats_update(ring->ring_no, &trxd);
+		}
+
 		skb_record_rx_queue(skb, 0);
 		napi_gro_receive(napi, skb);
 
