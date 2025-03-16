@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+
+/dts-v1/;
+
+#include "mt7988a-bananapi-bpi-r4.dtsi"
