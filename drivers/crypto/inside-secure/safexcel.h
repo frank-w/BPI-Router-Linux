@@ -189,6 +189,8 @@
 #define EIP197_PE_DEBUG(n)			(0x1ff4 + (0x2000 * (n)))
 #define EIP197_PE_OPTIONS(n)			(0x1ff8 + (0x2000 * (n)))
 #define EIP197_PE_VERSION(n)			(0x1ffc + (0x2000 * (n)))
+#define EIP197_FORCE_CLOCK_ON2			0xffd8
+#define EIP197_FORCE_CLOCK_ON			0xffe8
 #define EIP197_MST_CTRL				0xfff4
 #define EIP197_OPTIONS				0xfff8
 #define EIP197_VERSION				0xfffc
