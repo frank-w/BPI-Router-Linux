@@ -37,7 +37,7 @@
 #define MTK_DMA_SIZE(x)		(SZ_##x)
 #define MTK_FQ_DMA_HEAD		32
 #define MTK_FQ_DMA_LENGTH	2048
-#define MTK_RX_ETH_HLEN		(ETH_HLEN + ETH_FCS_LEN)
+#define MTK_RX_ETH_HLEN		(VLAN_ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN)
 #define MTK_RX_HLEN		(NET_SKB_PAD + MTK_RX_ETH_HLEN + NET_IP_ALIGN)
 #define MTK_DMA_DUMMY_DESC	0xffffffff
 #define MTK_DEFAULT_MSG_ENABLE	(NETIF_MSG_DRV | \
@@ -65,10 +65,13 @@
 
 #define MTK_QRX_OFFSET		0x10
 
-#define MTK_MAX_RX_RING_NUM	4
-#define MTK_HW_LRO_DMA_SIZE	8
+#define MTK_MAX_RX_RING_NUM	(8)
+#define MTK_HW_LRO_DMA_SIZE	(mtk_is_netsys_v3_or_greater(eth) ? 64 : 8)
+#define IS_HW_LRO_RING(ring_no)	(mtk_is_netsys_v3_or_greater(eth) ?		\
+				 (((ring_no) > 3) && ((ring_no) < 8)) :		\
+				 (((ring_no) > 0) && ((ring_no) < 4)))
 
-#define	MTK_MAX_LRO_RX_LENGTH		(4096 * 3)
+#define	MTK_MAX_LRO_RX_LENGTH		(4096 * 3 + MTK_MAX_RX_LENGTH)
 #define	MTK_MAX_LRO_IP_CNT		2
 #define	MTK_HW_LRO_TIMER_UNIT		1	/* 20 us */
 #define	MTK_HW_LRO_REFRESH_TIME		50000	/* 1 sec. */
@@ -175,31 +178,35 @@
 #define MTK_CDMM_THRES		0x165c
 
 /* PDMA HW LRO Control Registers */
-#define MTK_PDMA_LRO_CTRL_DW0	0x980
+#define MTK_HW_LRO_DIP_NUM		(mtk_is_netsys_v3_or_greater(eth) ? 4 : 3)
 #define MTK_HW_LRO_RING_NUM		(mtk_is_netsys_v3_or_greater(eth) ? 4 : 3)
+#define MTK_HW_LRO_RING(x)		((x) + (mtk_is_netsys_v3_or_greater(eth) ? 4 : 1))
+#define MTK_HW_LRO_IRQ(x)		((x) + (mtk_is_netsys_v3_or_greater(eth) ? 0 : 1))
+#define MTK_LRO_CRSN_BNW		BIT((mtk_is_netsys_v3_or_greater(eth) ? 22 : 6))
 #define MTK_LRO_EN			BIT(0)
 #define MTK_NON_LRO_MULTI_EN		BIT(2)
 #define MTK_LRO_DLY_INT_EN		BIT(5)
-#define MTK_L3_CKS_UPD_EN		BIT(7)
-#define MTK_L3_CKS_UPD_EN_V2		BIT(19)
+#define MTK_L3_CKS_UPD_EN		BIT(mtk_is_netsys_v3_or_greater(eth) ? 19 : 7)
 #define MTK_LRO_ALT_PKT_CNT_MODE	BIT(21)
-#define MTK_LRO_RING_RELINQUISH_REQ	(0x7 << 26)
-#define MTK_LRO_RING_RELINQUISH_REQ_V2	(0xf << 24)
-#define MTK_LRO_RING_RELINQUISH_DONE	(0x7 << 29)
-#define MTK_LRO_RING_RELINQUISH_DONE_V2	(0xf << 28)
+#define MTK_LRO_RING_RELINQUISH_REQ	(mtk_is_netsys_v3_or_greater(eth) ? 0xf << 24 : 0x7 << 26)
+#define MTK_LRO_RING_RELINQUISH_DONE	(mtk_is_netsys_v3_or_greater(eth) ? 0xf << 28 : 0x7 << 29)
 
-#define MTK_PDMA_LRO_CTRL_DW1	0x984
-#define MTK_PDMA_LRO_CTRL_DW2	0x988
-#define MTK_PDMA_LRO_CTRL_DW3	0x98c
+#define MTK_PDMA_LRO_CTRL_DW0	(reg_map->pdma.lro_ctrl_dw0)
+#define MTK_PDMA_LRO_CTRL_DW1	(reg_map->pdma.lro_ctrl_dw0 + 0x04)
+#define MTK_PDMA_LRO_CTRL_DW2	(reg_map->pdma.lro_ctrl_dw0 + 0x08)
+#define MTK_PDMA_LRO_CTRL_DW3	(reg_map->pdma.lro_ctrl_dw0 + 0x0c)
 #define MTK_ADMA_MODE		BIT(15)
 #define MTK_LRO_MIN_RXD_SDL	(MTK_HW_LRO_SDL_REMAIN_ROOM << 16)
+
+#define MTK_CTRL_DW0_SDL_OFFSET	(3)
+#define MTK_CTRL_DW0_SDL_MASK	BITS(3, 18)
 
 #define MTK_RX_DMA_LRO_EN	BIT(8)
 #define MTK_MULTI_EN		BIT(10)
 #define MTK_PDMA_SIZE_8DWORDS	(1 << 4)
 
 /* PDMA RSS Control Registers */
-#define MTK_RX_NAPI_NUM			(4)
+#define MTK_RX_NAPI_NUM			(8)
 #define MTK_RX_RSS_NUM			(eth->soc->rss_num)
 #define MTK_RSS_RING(x)			(x)
 #define MTK_RSS_EN			BIT(0)
@@ -235,11 +242,10 @@
 #define MTK_PDMA_DELAY_PTIME_MASK	0xff
 
 /* PDMA HW LRO Alter Flow Delta Register */
-#define MTK_PDMA_LRO_ALT_SCORE_DELTA	0xa4c
+#define MTK_PDMA_LRO_ALT_SCORE_DELTA	(reg_map->pdma.lro_alt_score_delta)
 
 /* PDMA HW LRO IP Setting Registers */
-#define MTK_LRO_RX_RING0_DIP_DW0	0xb04
-#define MTK_LRO_DIP_DW0_CFG(x)		(MTK_LRO_RX_RING0_DIP_DW0 + (x * 0x40))
+#define MTK_LRO_DIP_DW0_CFG(x)		(reg_map->pdma.lro_ring_dip_dw0 + (x * 0x40))
 #define MTK_RING_MYIP_VLD		BIT(9)
 
 /* PDMA HW LRO Ring Control Registers */
@@ -1208,7 +1214,7 @@ enum mkt_eth_capabilities {
 		      MTK_MUX_GMAC123_TO_GEPHY_SGMII | \
 		      MTK_MUX_GMAC123_TO_USXGMII | MTK_MUX_GMAC2_TO_2P5GPHY | \
 		      MTK_QDMA | MTK_SRAM | MTK_PDMA_INT | MTK_RSS | \
-		      MTK_RSTCTRL_PPE1 | MTK_RSTCTRL_PPE2)
+		      MTK_HWLRO | MTK_RSTCTRL_PPE1 | MTK_RSTCTRL_PPE2)
 
 struct mtk_tx_dma_desc_info {
 	dma_addr_t	addr;
@@ -1488,6 +1494,7 @@ struct mtk_mac {
 
 /* the struct describing the SoC. these are declared in the soc_xyz.c files */
 extern const struct of_device_id of_mtk_match[];
+extern u32 mtk_hwlro_stats_ebl;
 
 static inline bool mtk_is_netsys_v1(struct mtk_eth *eth)
 {
