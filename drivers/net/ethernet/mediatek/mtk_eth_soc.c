@@ -2431,9 +2431,10 @@ static int mtk_poll_tx_qdma(struct mtk_eth *eth, int budget,
 	while ((cpu != dma) && budget) {
 		u32 next_cpu = desc->txd2;
 
-		desc = mtk_qdma_phys_to_virt(ring, desc->txd2);
 		if ((desc->txd3 & TX_DMA_OWNER_CPU) == 0)
 			break;
+
+		desc = mtk_qdma_phys_to_virt(ring, desc->txd2);
 
 		tx_buf = mtk_desc_to_tx_buf(ring, desc,
 					    eth->soc->tx.desc_size);
