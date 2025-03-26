@@ -4504,12 +4504,12 @@ static int mtk_hw_init(struct mtk_eth *eth, bool reset)
 	 */
 	val = mtk_r32(eth, MTK_CDMQ_IG_CTRL);
 	mtk_w32(eth, val | MTK_CDMQ_STAG_EN, MTK_CDMQ_IG_CTRL);
-	if (mtk_is_netsys_v1(eth)) {
-		val = mtk_r32(eth, MTK_CDMP_IG_CTRL);
-		mtk_w32(eth, val | MTK_CDMP_STAG_EN, MTK_CDMP_IG_CTRL);
 
+	val = mtk_r32(eth, MTK_CDMP_IG_CTRL);
+	mtk_w32(eth, val | MTK_CDMP_STAG_EN, MTK_CDMP_IG_CTRL);
+
+	if (mtk_is_netsys_v1(eth))
 		mtk_w32(eth, 1, MTK_CDMP_EG_CTRL);
-	}
 
 	/* set interrupt delays based on current Net DIM sample */
 	mtk_dim_rx(&eth->rx_dim.work);
