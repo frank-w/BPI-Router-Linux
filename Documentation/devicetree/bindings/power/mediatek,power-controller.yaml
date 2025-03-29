@@ -38,7 +38,6 @@ properties:
       - items:
         - enum:
           - mediatek,mt7988-topmisc
-        - const: syscon
         - const: mediatek,mt7988-power-controller
 
   reg:
