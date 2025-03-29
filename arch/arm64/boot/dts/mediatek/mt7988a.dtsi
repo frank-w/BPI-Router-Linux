@@ -692,7 +692,7 @@
 		};
 
 		topmisc: power-controller@11d10000 {
-			compatible = "mediatek,mt7988-topmisc", "syscon",
+			compatible = "mediatek,mt7988-topmisc",
 				     "mediatek,mt7988-power-controller";
 			reg = <0 0x11d10000 0 0x10000>;
 			#clock-cells = <1>;
