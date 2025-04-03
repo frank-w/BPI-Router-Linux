@@ -24,18 +24,7 @@
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
 #include <net/dsa.h>
-
-#ifndef LINUX_VERSION_CODE
-#include <linux/version.h>
-#else
-#define KERNEL_VERSION(a, b, c) (((a) << 16) + ((b) << 8) + (c))
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
-#include "dsa_priv.h"
-#else
 #include "tag.h"
-#endif
 
 #define MXL862_NAME	"mxl862xx"
 
@@ -59,14 +48,7 @@
 static struct sk_buff *mxl862_tag_xmit(struct sk_buff *skb,
 				       struct net_device *dev)
 {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
-	int err;
-#endif
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
-	struct dsa_port *dp = dsa_slave_to_port(dev);
-#else
 	struct dsa_port *dp = dsa_user_to_port(dev);
-#endif
 	struct dsa_port *cpu_dp = dp->cpu_dp;
 	unsigned int cpu_port = cpu_dp->index + 1;
 	unsigned int usr_port = dp->index + 1;
@@ -75,12 +57,6 @@ static struct sk_buff *mxl862_tag_xmit(struct sk_buff *skb,
 
 	if (skb == NULL)
 		return skb;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
-	err = skb_cow_head(skb, MXL862_TX_HEADER_LEN);
-	if (err)
-		return NULL;
-#endif
 
 	/* provide additional space 'MXL862_TX_HEADER_LEN' bytes */
 	skb_push(skb, MXL862_TX_HEADER_LEN);
@@ -103,20 +79,11 @@ static struct sk_buff *mxl862_tag_xmit(struct sk_buff *skb,
 	return skb;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
-static struct sk_buff *mxl862_tag_rcv(struct sk_buff *skb,
-				      struct net_device *dev,
-				      struct packet_type *pt)
-#else
 static struct sk_buff *mxl862_tag_rcv(struct sk_buff *skb,
 				      struct net_device *dev)
-#endif
 {
 	int port;
 	u8 *mxl862_tag;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
-	struct dsa_port *dp;
-#endif
 
 	if (unlikely(!pskb_may_pull(skb, MXL862_RX_HEADER_LEN))) {
 		dev_warn_ratelimited(&dev->dev,
@@ -142,11 +109,7 @@ static struct sk_buff *mxl862_tag_rcv(struct sk_buff *skb,
 	/* Get source port information */
 	port = (mxl862_tag[7] & MXL862_IGP_EGP_MASK) >> MXL862_IGP_EGP_SHIFT;
 	port = port - 1;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
-	skb->dev = dsa_master_find_slave(dev, 0, port);
-#else
 	skb->dev = dsa_conduit_find_user(dev, 0, port);
-#endif
 	if (!skb->dev) {
 		dev_warn_ratelimited(
 			&dev->dev,
@@ -164,44 +127,20 @@ static struct sk_buff *mxl862_tag_rcv(struct sk_buff *skb,
 	skb_pull_rcsum(skb, MXL862_RX_HEADER_LEN);
 	memmove(skb->data - ETH_HLEN,
 		skb->data - (ETH_HLEN + MXL862_RX_HEADER_LEN), 2 * ETH_ALEN);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
-	dp = dsa_slave_to_port(skb->dev);
-	if (dp->bridge_dev)
-		skb->offload_fwd_mark = 1;
-#else
 	dsa_default_offload_fwd_mark(skb);
-#endif
 
 	return skb;
 }
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0))
-const struct dsa_device_ops mxl862_netdev_ops = {
-	.xmit = mxl862_tag_xmit,
-	.rcv = mxl862_tag_rcv,
-};
-#else
 
 static const struct dsa_device_ops mxl862_netdev_ops = {
 	.name = "mxl862",
 	.proto = DSA_TAG_PROTO_MXL862,
 	.xmit = mxl862_tag_xmit,
 	.rcv = mxl862_tag_rcv,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0))
-	.overhead = MXL862_RX_HEADER_LEN,
-#else
 	.needed_headroom = MXL862_RX_HEADER_LEN,
-#endif
 };
 
 MODULE_LICENSE("GPL");
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
-MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_MXL862);
-#else
 MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_MXL862, MXL862_NAME);
-#endif
-
 module_dsa_tag_driver(mxl862_netdev_ops);
-#endif
 
-MODULE_LICENSE("GPL");
