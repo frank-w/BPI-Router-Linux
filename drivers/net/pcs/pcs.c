@@ -22,6 +22,13 @@ struct fwnode_pcs_provider {
 
 static LIST_HEAD(fwnode_pcs_providers);
 static DEFINE_MUTEX(fwnode_pcs_mutex);
+static BLOCKING_NOTIFIER_HEAD(fwnode_pcs_notify_list);
+
+int register_fwnode_pcs_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&fwnode_pcs_notify_list, nb);
+}
+EXPORT_SYMBOL_GPL(register_fwnode_pcs_notifier);
 
 struct phylink_pcs *fwnode_pcs_simple_get(struct fwnode_reference_args *pcsspec,
 					  void *data)
@@ -54,6 +61,10 @@ int fwnode_pcs_add_provider(struct fwnode_handle *fwnode,
 	pr_debug("Added pcs provider from %pfwf\n", fwnode);
 
 	fwnode_dev_initialized(fwnode, true);
+
+	blocking_notifier_call_chain(&fwnode_pcs_notify_list,
+				     FWNODE_PCS_PROVIDER_ADD,
+				     fwnode);
 
 	return 0;
 }
@@ -146,6 +157,29 @@ struct phylink_pcs *fwnode_pcs_get(struct fwnode_handle *fwnode, int index)
 	return __fwnode_pcs_get(fwnode, index, NULL);
 }
 EXPORT_SYMBOL_GPL(fwnode_pcs_get);
+
+struct phylink_pcs *
+fwnode_phylink_pcs_get_from_fwnode(struct fwnode_handle *fwnode,
+				   struct fwnode_handle *pcs_fwnode)
+{
+	struct fwnode_reference_args pcsspec;
+	int i = 0;
+	int ret;
+
+	while (true) {
+		ret = fwnode_parse_pcsspec(fwnode, i, NULL, &pcsspec);
+		if (ret)
+			break;
+
+		if (pcsspec.fwnode == pcs_fwnode)
+			break;
+
+		i++;
+	}
+
+	return fwnode_pcs_get(fwnode, i);
+}
+EXPORT_SYMBOL_GPL(fwnode_phylink_pcs_get_from_fwnode);
 
 static int fwnode_phylink_pcs_count(struct fwnode_handle *fwnode,
 				    unsigned int *num_pcs)
