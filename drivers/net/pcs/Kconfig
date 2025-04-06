@@ -12,6 +12,13 @@ config FWNODE_PCS
 	help
 		Firmware node PCS accessors
 
+config PCS_AIROHA
+	select FWNODE_PCS
+	tristate "Airoha PCS driver"
+	help
+	  This module provides helper to phylink for managing the Airoha
+	  PCS for SoC Ethernet Serdes and PCS.
+
 config PCS_XPCS
 	tristate "Synopsys DesignWare Ethernet XPCS"
 	select PHYLINK
