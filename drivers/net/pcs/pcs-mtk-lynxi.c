@@ -52,9 +52,9 @@
 #define SGMII_IF_MODE_SGMII		BIT(0)
 #define SGMII_SPEED_DUPLEX_AN		BIT(1)
 #define SGMII_SPEED_MASK		GENMASK(3, 2)
-#define SGMII_SPEED_10			FIELD_PREP(SGMII_SPEED_MASK, 0)
-#define SGMII_SPEED_100			FIELD_PREP(SGMII_SPEED_MASK, 1)
-#define SGMII_SPEED_1000		FIELD_PREP(SGMII_SPEED_MASK, 2)
+#define SGMII_SPEED_10			FIELD_PREP_CONST(SGMII_SPEED_MASK, 0)
+#define SGMII_SPEED_100			FIELD_PREP_CONST(SGMII_SPEED_MASK, 1)
+#define SGMII_SPEED_1000		FIELD_PREP_CONST(SGMII_SPEED_MASK, 2)
 #define SGMII_DUPLEX_HALF		BIT(4)
 #define SGMII_REMOTE_FAULT_DIS		BIT(8)
 #define SGMII_TRXBUF_THR_MASK		GENMASK(31, 16)
@@ -146,15 +146,39 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
 				    struct phylink_link_state *state)
 {
 	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
-	unsigned int bm, adv;
+	unsigned int bm, bmsr, adv, rgc3, sgm_mode;
 
 	/* Read the BMSR and LPA */
 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm);
 	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
 
-	phylink_mii_c22_pcs_decode_state(state, neg_mode,
-					 FIELD_GET(SGMII_BMSR, bm),
-					 FIELD_GET(SGMII_LPA, adv));
+	if (bm & BMCR_ANENABLE) {
+		regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
+		phylink_mii_c22_pcs_decode_state(state, neg_mode, bmsr, FIELD_GET(SGMII_LPA, adv));
+	} else {
+		state->link = !!(bmsr & BMSR_LSTATUS);
+		state->an_complete = !!(bmsr & BMSR_ANEGCOMPLETE);
+		regmap_read(mpcs->regmap, SGMSYS_SGMII_MODE, &sgm_mode);
+
+		switch (sgm_mode & SGMII_SPEED_MASK) {
+		case SGMII_SPEED_10:
+			state->speed = SPEED_10;
+			break;
+		case SGMII_SPEED_100:
+			state->speed = SPEED_100;
+			break;
+		case SGMII_SPEED_1000:
+			regmap_read(mpcs->regmap, mpcs->ana_rgc3, &rgc3);
+			rgc3 &= SGMII_PHY_SPEED_MASK;
+			state->speed = (rgc3 == SGMII_PHY_SPEED_3_125G) ? SPEED_2500 : SPEED_1000;
+			break;
+		}
+ 
+		if (sgm_mode & SGMII_DUPLEX_HALF)
+			state->duplex = DUPLEX_HALF;
+		else
+			state->duplex = DUPLEX_FULL;
+	}
 
 	/* Continuously repeat re-configuration sequence until link comes up */
 	if (!state->link && time_after(jiffies, mpcs->link_poll_expire)) {
@@ -272,8 +296,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 	/* Update the sgmsys mode register */
 	regmap_update_bits(mpcs->regmap, SGMSYS_SGMII_MODE,
 			   SGMII_TRXBUF_THR_MASK |
-			   SGMII_REMOTE_FAULT_DIS | SGMII_SPEED_DUPLEX_AN |
-			   SGMII_IF_MODE_SGMII,
+			   SGMII_REMOTE_FAULT_DIS | SGMII_DUPLEX_HALF |
+			   SGMII_SPEED_DUPLEX_AN | SGMII_IF_MODE_SGMII,
 			   SGMII_TRXBUF_THR(trxbuf_thr) | sgm_mode);
 
 	/* Update the BMCR */
