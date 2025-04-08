@@ -206,9 +206,10 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 		sgm_mode |= SGMII_REMOTE_FAULT_DIS;
 
 	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED) {
-		if (interface == PHY_INTERFACE_MODE_SGMII)
+		if (interface != PHY_INTERFACE_MODE_2500BASEX) {
 			sgm_mode |= SGMII_SPEED_DUPLEX_AN;
-		bmcr = BMCR_ANENABLE;
+			bmcr = BMCR_ANENABLE;
+		}
 	} else {
 		bmcr = 0;
 	}
