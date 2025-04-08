@@ -69,7 +69,7 @@
 
 /* Register to power up QPHY */
 #define SGMSYS_QPHY_PWR_STATE_CTRL	0xe8
-#define	SGMII_PHYA_PWD			BIT(4)
+#define	SGMII_PHYA_PWD			(BIT(4) | BIT(3) | BIT(0))
 
 /* Register to QPHY wrapper control */
 #define SGMSYS_QPHY_WRAP_CTRL		0xec
