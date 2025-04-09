@@ -106,5 +106,13 @@
 				algo = "sha1";
 			};
 		};
+		ov-sd {
+			description = "SD FDT overlay blob";
+			fdt = "fdt-ov-sd";
+		};
+		ov-emmc {
+			description = "EMMC FDT overlay blob";
+			fdt = "fdt-ov-emmc";
+		};
 	};
 };
