@@ -3159,12 +3159,6 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 			MTK_RX_CFG_SDL_OFFSET), reg_map->pdma.rx_cfg);
 
 		lro_ctrl_dw0 |= MTK_PDMA_LRO_SDL << MTK_CTRL_DW0_SDL_OFFSET;
-
-		/* enable cpu reason black list */
-		lro_ctrl_dw0 |= MTK_LRO_CRSN_BNW(eth);
-
-		/* no use PPE cpu reason */
-		mtk_w32(eth, 0xffffffff, MTK_PDMA_LRO_CTRL_DW1(reg_map));
 	} else {
 		/* set HW LRO mode & the max aggregation count for rx packets */
 		lro_ctrl_dw3 |= MTK_ADMA_MODE | (MTK_HW_LRO_MAX_AGG_CNT & 0xff);
@@ -3179,8 +3173,14 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	/* enable HW LRO */
 	lro_ctrl_dw0 |= MTK_LRO_EN;
 
+	/* enable cpu reason black list */
+	lro_ctrl_dw0 |= MTK_LRO_CRSN_BNW(eth);
+
 	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3(reg_map));
 	mtk_w32(eth, lro_ctrl_dw0, MTK_PDMA_LRO_CTRL_DW0(reg_map));
+
+	/* no use PPE cpu reason */
+	mtk_w32(eth, 0xffffffff, MTK_PDMA_LRO_CTRL_DW1(reg_map));
 
 	if (mtk_is_netsys_v2_or_greater(eth)) {
 		i = (soc->rx.desc_size == sizeof(struct mtk_rx_dma_v2)) ? 1 : 0;
@@ -6696,7 +6696,7 @@ static const struct mtk_soc_data mt7981_data = {
 	},
 	.rx = {
 		.desc_size = sizeof(struct mtk_rx_dma),
-		.dma_l4_valid = RX_DMA_L4_VALID_V2,
+		.dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
 		.dma_size = MTK_DMA_SIZE(2K),
@@ -6726,7 +6726,7 @@ static const struct mtk_soc_data mt7986_data = {
 	},
 	.rx = {
 		.desc_size = sizeof(struct mtk_rx_dma),
-		.dma_l4_valid = RX_DMA_L4_VALID_V2,
+		.dma_l4_valid = RX_DMA_L4_VALID,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN,
 		.dma_len_offset = 16,
 		.dma_size = MTK_DMA_SIZE(2K),
