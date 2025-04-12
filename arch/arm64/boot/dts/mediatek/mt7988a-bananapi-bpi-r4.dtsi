@@ -591,6 +591,6 @@
 	status = "okay";
 };
 
-/*&xphy {
+&xsphy {
 	status = "okay";
-};*/
+};
