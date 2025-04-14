@@ -52,6 +52,18 @@
 		regulator-always-on;
 	};
 
+	/* SFP1 cage (WAN) */
+	sfp1: sfp1 {
+		compatible = "sff,sfp";
+		i2c-bus = <&i2c_sfp1>;
+		los-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+		mod-def0-gpios = <&pio 82 GPIO_ACTIVE_LOW>;
+		tx-disable-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
+		tx-fault-gpios = <&pio 69 GPIO_ACTIVE_HIGH>;
+		rate-select0-gpios = <&pio 21 GPIO_ACTIVE_LOW>;
+		maximum-power-milliwatt = <3000>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
@@ -134,6 +146,13 @@
 };
 
 &gmac0 {
+	status = "okay";
+};
+
+&gmac2 {
+	sfp = <&sfp1>;
+	managed = "in-band-status";
+	phy-mode = "usxgmii";
 	status = "okay";
 };
 
