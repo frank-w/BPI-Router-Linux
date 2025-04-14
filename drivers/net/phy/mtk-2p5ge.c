@@ -98,30 +98,6 @@ static int mt7988_2p5ge_phy_config_init(struct phy_device *phydev)
 	struct pinctrl *pinctrl;
 
 	if (!phy_priv->fw_loaded) {
-		/*pm_dev = dev_pm_domain_attach_by_name(dev, "i2p5gbe-pd");
-		if (IS_ERR(pm_dev)) {
-			ret = PTR_ERR(pm_dev);
-			dev_err(dev, "failed to get i2p5g pm-domain: %d\n", ret);
-			return ret;
-		}
-		if (!pm_dev->pm_domain)
-			dev_info(dev, "pm_dev domain is not ready yet\n");
-
-		/* We need to add 1 to power domain counter first so that
-		 * we can correctly power off internal 2.5Gphy
-		 */
-		/*ret = pm_runtime_get_sync(pm_dev);
-		if (ret < 0) {
-			dev_err(&phydev->mdio.dev, "failed to power on!\n");
-			return ret;
-		}
-		pm_runtime_put_sync(pm_dev);
-		ret = pm_runtime_get_sync(pm_dev);
-		if (ret < 0) {
-			dev_err(&phydev->mdio.dev, "failed to power on!\n");
-			return ret;
-		}*/
-
 		np = of_find_compatible_node(NULL, NULL, "mediatek,2p5gphy-fw");
 		if (!np)
 			return -ENOENT;
