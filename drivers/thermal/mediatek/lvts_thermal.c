@@ -87,6 +87,8 @@
 #define LVTS_COEFF_B_MT8195			250460
 #define LVTS_COEFF_A_MT7988			-204650
 #define LVTS_COEFF_B_MT7988			204650
+#define LVTS_COEFF_A_MT7987			-204650
+#define LVTS_COEFF_B_MT7987			204650
 
 #define LVTS_MSR_IMMEDIATE_MODE		0
 #define LVTS_MSR_FILTERED_MODE		1
@@ -1041,6 +1043,22 @@ static int lvts_ctrl_initialize(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	return 0;
 }
 
+/*static int mt7987_lvts_ctrl_initialize(struct device *dev,
+				       struct lvts_ctrl *lvts_ctrl)
+{
+	// Write device mask: 0xC1030000
+	
+	u32 cmds[] = {
+		0xC1030300, 0xC1030420, 0xC1030500, 0xC10307A6, 0xC10308C7,
+		0xC103098D, 0xC1030C7C, 0xC1030AA8, 0xC10308CE, 0xC10308C7,
+		0xC1030B04, 0xC1030E01, 0xC10306B8
+	};
+
+	lvts_write_config(lvts_ctrl, cmds, ARRAY_SIZE(cmds));
+
+	return 0;
+}*/
+
 static int lvts_ctrl_calibrate(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 {
 	int i;
@@ -1256,7 +1274,52 @@ static int lvts_ctrl_start(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 
 	return 0;
 }
+/*
+static int mt7987_lvts_ctrl_connect(struct device *dev,
+				    struct lvts_ctrl *lvts_ctrl)
+{
+	u32 id, cmds[] = { 0xC103FFFF, 0xC502FC55 };
 
+	lvts_write_config(lvts_ctrl, cmds, ARRAY_SIZE(cmds));
+
+	// LVTS_ID : Get ID and status of the thermal controller
+	// Bits:
+	// 0-5	: thermal controller id
+	//   7	: thermal controller connection is valid
+	id = readl(LVTS_ID(lvts_ctrl->base));
+	if (!(id & BIT(7)))
+		return -EIO;
+
+	return 0;
+}*/
+/*
+static int mt7987_lvts_ctrl_start(struct device *dev,
+				  struct lvts_ctrl *lvts_ctrl)
+{
+	struct lvts_sensor *vir_sensor = &lvts_ctrl->vir_sensor;
+	struct thermal_zone_device *tz;
+	u32 sensor_map = BIT(0) | BIT(1);
+
+	 // Bits:
+	 //      9: Single point access flow
+	 //    0-3: Enable sensing point 0-3
+	writel(sensor_map | BIT(9), LVTS_MONCTL0(lvts_ctrl->base));
+
+	tz = thermal_zone_get_zone_by_name("cpu-thermal");
+	if (IS_ERR(tz)) {
+		tz = devm_thermal_of_zone_register(dev, 0, vir_sensor,
+						   &lvts_vir_tz_ops);
+		if (IS_ERR(tz) && PTR_ERR(tz) != -ENODEV)
+			return PTR_ERR(tz);
+
+		devm_thermal_add_hwmon_sysfs(dev, tz);
+
+		vir_sensor->tz = tz;
+	}
+
+	return 0;
+}
+*/
 static int lvts_domain_init(struct device *dev, struct lvts_domain *lvts_td,
 					const struct lvts_data *lvts_data)
 {
@@ -1400,6 +1463,26 @@ static void lvts_remove(struct platform_device *pdev)
 		lvts_ctrl_set_enable(&lvts_td->lvts_ctrl[i], false);
 }
 
+static const struct lvts_ctrl_data mt7987_lvts_ap_data_ctrl[] = {
+	{
+		//.cal_offset = { 0x04, 0x08 },
+		//.hw_speed   = {0xc, 0x1, 0x1, 0x1},
+		.lvts_sensor = {
+			{ .dt_id = MT7987_CPU, 
+			  .cal_offsets = { 0x04, 0x05, 0x06 } },
+			{ .dt_id = MT7987_ETH2P5G,
+			  .cal_offsets = { 0x08, 0x09, 0x0a } },
+		},
+		//.cal_mask_len = 4,
+		//.num_lvts_sensor = 2,
+		VALID_SENSOR_MAP(1, 1, 0, 0),
+		.offset = 0x0,
+		.mode = LVTS_MSR_FILTERED_MODE,
+		//.hw_filter = LVTS_HW_FILTER_16_OF_18,
+		//.hw_tshut_temp = LVTS_HW_SHUTDOWN_MT7987,
+	},
+};
+
 static const struct lvts_ctrl_data mt7988_lvts_ap_data_ctrl[] = {
 	{
 		.lvts_sensor = {
@@ -1480,6 +1563,12 @@ static const u32 default_init_cmds[] = {
 	0xC10307A6, 0xC10306B8, 0xC1030500, 0xC1030420, 0xC1030300,
 	0xC1030030, 0xC10300F6, 0xC1030050, 0xC1030060, 0xC10300AC,
 	0xC10300FC, 0xC103009D, 0xC10300F1, 0xC10300E1
+};
+
+static const u32 mt7987_init_cmds[] = {
+	0xC1030300, 0xC1030420, 0xC1030500, 0xC10307A6, 0xC10308C7,
+	0xC103098D, 0xC1030C7C, 0xC1030AA8, 0xC10308CE, 0xC10308C7,
+	0xC1030B04, 0xC1030E01, 0xC10306B8
 };
 
 static const u32 mt7988_init_cmds[] = {
@@ -1780,6 +1869,32 @@ static const struct lvts_ctrl_data mt8195_lvts_ap_data_ctrl[] = {
 	}
 };
 
+static const struct lvts_data mt7987_lvts_ap_data = {
+	.lvts_ctrl	= mt7987_lvts_ap_data_ctrl,
+	/*.cal_data = {
+		.default_golden_temp = 60,
+		.default_cal_data = 19380,
+	},
+	.ops = {
+		.lvts_ctrl_connect	= mt7987_lvts_ctrl_connect,
+		.lvts_ctrl_initialize	= mt7987_lvts_ctrl_initialize,
+		.lvts_ctrl_start	= mt7987_lvts_ctrl_start,
+	},
+	.irq_enable	= 0,
+	.hw_protection	= 1,*/
+	.num_lvts_ctrl	= ARRAY_SIZE(mt7987_lvts_ap_data_ctrl),
+	.conn_cmd	= mt7988_conn_cmds,
+	.init_cmd	= mt7987_init_cmds,
+	.num_conn_cmd	= ARRAY_SIZE(mt7988_conn_cmds),
+	.num_init_cmd	= ARRAY_SIZE(mt7987_init_cmds),
+	.temp_factor	= LVTS_COEFF_A_MT7987,
+	.temp_offset	= LVTS_COEFF_B_MT7987,
+	.golden_temp	= LVTS_GOLDEN_TEMP_DEFAULT,
+	.gt_calib_bit_offset = 32,
+	.def_calibration = 19380,
+	.irq_enable	= false,
+};
+
 static const struct lvts_data mt7988_lvts_ap_data = {
 	.lvts_ctrl	= mt7988_lvts_ap_data_ctrl,
 	.conn_cmd	= mt7988_conn_cmds,
@@ -1899,6 +2014,7 @@ static const struct lvts_data mt8195_lvts_ap_data = {
 };
 
 static const struct of_device_id lvts_of_match[] = {
+	{ .compatible = "mediatek,mt7987-lvts-ap", .data = &mt7987_lvts_ap_data },
 	{ .compatible = "mediatek,mt7988-lvts-ap", .data = &mt7988_lvts_ap_data },
 	{ .compatible = "mediatek,mt8186-lvts", .data = &mt8186_lvts_data },
 	{ .compatible = "mediatek,mt8188-lvts-mcu", .data = &mt8188_lvts_mcu_data },
