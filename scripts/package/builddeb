@@ -63,6 +63,7 @@ install_linux_image () {
 	*)
 		source_image_path="./$board.itb"
 		installed_image_path=boot/$board-${KERNELRELEASE}.itb
+		DTBFILE=""
 		case $board in
 		bpi-r2)
 			mkdir -p "${pdir}/boot/bananapi/$board/linux/dtb"
