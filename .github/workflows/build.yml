@@ -98,6 +98,8 @@ jobs:
         run: |
           bash build.sh pack_debs
           bash build.sh pack
+          bash build.sh clean
+          df -h;du -h --max-depth=3 ~
 
       - name: Build for bananapi-r64
         run: |
@@ -109,6 +111,8 @@ jobs:
         run: |
           bash build.sh pack_debs
           bash build.sh pack
+          bash build.sh clean
+          df -h;du -h --max-depth=3 ~
 
       - name: Build for bananapi-r2pro
         run: |
@@ -119,6 +123,8 @@ jobs:
         run: |
           bash build.sh pack_debs
           bash build.sh pack
+          bash build.sh clean
+          df -h;du -h --max-depth=3 ~
 
       - name: Build for bananapi-r3 (mini)
         run: |
@@ -129,6 +135,8 @@ jobs:
         run: |
           bash build.sh pack_debs
           bash build.sh pack
+          bash build.sh clean
+          df -h;du -h --max-depth=3 ~
 
       - name: Build for bananapi-r4
         run: |
@@ -139,6 +147,13 @@ jobs:
         run: |
           bash build.sh pack_debs
           bash build.sh pack
+          bash build.sh clean
+          df -h;
+          du -h --max-depth=3 ~
+
+      - name: list files to be uploaded
+        run: |
+          ls -lh ../SD/* ../*.deb *.itb
 
       - name: Upload binaries to release
         if: endsWith(github.ref,'-main')
