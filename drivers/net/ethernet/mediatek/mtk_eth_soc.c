@@ -5318,17 +5318,6 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	mac->hw = eth;
 	mac->of_node = np;
 
-	err = of_get_ethdev_address(mac->of_node, eth->netdev[id]);
-	if (err == -EPROBE_DEFER)
-		return err;
-
-	if (err) {
-		/* If the mac address is invalid, use random mac address */
-		eth_hw_addr_random(eth->netdev[id]);
-		dev_err(eth->dev, "generated random MAC address %pM\n",
-			eth->netdev[id]->dev_addr);
-	}
-
 	memset(mac->hwlro_ip, 0, sizeof(mac->hwlro_ip));
 	mac->hwlro_ip_cnt = 0;
 
@@ -5470,6 +5459,26 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 free_netdev:
 	free_netdev(eth->netdev[id]);
 	return err;
+}
+
+static int mtk_mac_assign_address(struct mtk_eth *eth, int i, bool test_defer_only)
+{
+	int err = of_get_ethdev_address(eth->mac[i]->of_node, eth->netdev[i]);
+
+	if (err == -EPROBE_DEFER)
+		return err;
+
+	if (test_defer_only)
+		return 0;
+
+	if (err) {
+		/* If the mac address is invalid, use random mac address */
+		eth_hw_addr_random(eth->netdev[i]);
+		dev_err(eth->dev, "generated random MAC address %pM\n",
+			eth->netdev[i]);
+	}
+
+	return 0;
 }
 
 void mtk_eth_set_dma_device(struct mtk_eth *eth, struct device *dma_dev)
@@ -5737,6 +5746,28 @@ static int mtk_probe(struct platform_device *pdev)
 			of_node_put(mac_np);
 			goto err_deinit_hw;
 		}
+	}
+
+	/* check if all MAC address providers are available and return
+	 * -EPROBE_DEFER in case at least one of them is not ready
+	 */
+	for (i = 0; i < MTK_MAX_DEVS; i++) {
+		if (!eth->netdev[i])
+			continue;
+
+		err = mtk_mac_assign_address(eth, i, true);
+		if (err)
+			goto err_deinit_hw;
+	}
+
+	/* now actually assign MAC addresses to netdevs */
+	for (i = 0; i < MTK_MAX_DEVS; i++) {
+		if (!eth->netdev[i])
+			continue;
+
+		err = mtk_mac_assign_address(eth, i, false);
+		if (err)
+			goto err_deinit_hw;
 	}
 
 	err = mtk_napi_init(eth);
