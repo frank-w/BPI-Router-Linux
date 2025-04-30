@@ -28,7 +28,8 @@ properties:
       - ralink,rt5350-eth
 
   reg:
-    maxItems: 1
+    items:
+      - description: Register for accessing the MACs.
 
   clocks:
     minItems: 2
@@ -40,7 +41,19 @@ properties:
 
   interrupts:
     minItems: 1
-    maxItems: 4
+    maxItems: 8
+
+  interrupt-names:
+    minItems: 1
+    items:
+      - const: fe0
+      - const: fe1
+      - const: fe2
+      - const: fe3
+      - const: pdma0
+      - const: pdma1
+      - const: pdma2
+      - const: pdma3
 
   power-domains:
     maxItems: 1
@@ -53,6 +66,10 @@ properties:
       - const: fe
       - const: gmac
       - const: ppe
+
+  sram:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: phandle to mmio SRAM
 
   mediatek,ethsys:
     $ref: /schemas/types.yaml#/definitions/phandle
@@ -135,6 +152,10 @@ allOf:
           minItems: 3
           maxItems: 3
 
+        interrupt-names:
+          minItems: 3
+          maxItems: 3
+
         clocks:
           minItems: 4
           maxItems: 4
@@ -166,6 +187,9 @@ allOf:
         interrupts:
           maxItems: 1
 
+        interrupt-namess:
+          maxItems: 1
+
         clocks:
           minItems: 2
           maxItems: 2
@@ -189,6 +213,10 @@ allOf:
     then:
       properties:
         interrupts:
+          minItems: 3
+          maxItems: 3
+
+        interrupt-names:
           minItems: 3
           maxItems: 3
 
@@ -229,6 +257,10 @@ allOf:
     then:
       properties:
         interrupts:
+          minItems: 3
+          maxItems: 3
+
+        interrupt-names:
           minItems: 3
           maxItems: 3
 
@@ -274,6 +306,9 @@ allOf:
         interrupts:
           minItems: 4
 
+        interrupt-names:
+          minItems: 4
+
         clocks:
           minItems: 15
           maxItems: 15
@@ -310,6 +345,9 @@ allOf:
     then:
       properties:
         interrupts:
+          minItems: 4
+
+        interrupt-names:
           minItems: 4
 
         clocks:
@@ -350,6 +388,9 @@ allOf:
         interrupts:
           minItems: 4
 
+        interrupt-names:
+          minItems: 4
+
         clocks:
           minItems: 24
           maxItems: 24
@@ -382,7 +423,7 @@ allOf:
             - const: xgp3
 
 patternProperties:
-  "^mac@[0-1]$":
+  "^mac@[0-2]$":
     type: object
     unevaluatedProperties: false
     allOf:
