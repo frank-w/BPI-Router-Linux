@@ -58,12 +58,27 @@ properties:
           - const: sgmii_tx
           - const: sgmii_rx
 
+      phys:
+        $ref: /schemas/types.yaml#/definitions/phandle
+        description:
+          Phandle to the (xfi) phy.
+
     required:
       - compatible
       - clocks
       - clock-names
 
     additionalProperties: false
+
+  resets:
+    description:
+      A phandle to reset the sgmiisys controller.
+    items:
+      - items:
+          - description:
+              Phandle to the reset controller
+          - description:
+              value for reset
 
 required:
   - compatible
