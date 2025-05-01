@@ -315,6 +315,24 @@
 			};
 		};
 
+		usxgmiisys0: pcs@10080000 {
+			compatible = "mediatek,mt7988-usxgmiisys";
+			reg = <0 0x10080000 0 0x1000>;
+			resets = <&watchdog 12>;
+			clocks = <&topckgen CLK_TOP_USXGMII_SBUS_0_SEL>;
+			phys = <&xfi_tphy0>;
+			#pcs-cells = <0>;
+		};
+
+		usxgmiisys1: pcs@10081000 {
+			compatible = "mediatek,mt7988-usxgmiisys";
+			reg = <0 0x10081000 0 0x1000>;
+			resets = <&watchdog 13>;
+			clocks = <&topckgen CLK_TOP_USXGMII_SBUS_1_SEL>;
+			phys = <&xfi_tphy1>;
+			#pcs-cells = <0>;
+		};
+
 		mcusys: mcusys@100e0000 {
 			compatible = "mediatek,mt7988-mcusys", "syscon";
 			reg = <0 0x100e0000 0 0x1000>;
@@ -1017,12 +1035,14 @@
 				compatible = "mediatek,eth-mac";
 				reg = <1>;
 				status = "disabled";
+				pcs-handle = <&sgmiipcs1>, <&usxgmiisys1>;
 			};
 
 			gmac2: mac@2 {
 				compatible = "mediatek,eth-mac";
 				reg = <2>;
 				status = "disabled";
+				pcs-handle = <&sgmiipcs0>, <&usxgmiisys0>;
 			};
 
 			mdio_bus: mdio-bus {
