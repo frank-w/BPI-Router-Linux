@@ -62,6 +62,7 @@
 #define LVTS_GROUP_INTERVAL			0
 #define LVTS_FILTER_INTERVAL		0
 #define LVTS_SENSOR_INTERVAL		0
+#define LVTS_HW_FILTER				0x0
 #define LVTS_TSSEL_CONF				0x13121110
 #define LVTS_CALSCALE_CONF			0x300
 
@@ -80,7 +81,8 @@
 #define LVTS_INT_SENSOR3			0x1FC00000
 
 #define LVTS_SENSOR_MAX				4
-#define LVTS_GOLDEN_TEMP_MAX			62
+#define LVTS_GOLDEN_TEMP_MAX		62
+#define LVTS_GOLDEN_TEMP_DEFAULT	50
 #define LVTS_COEFF_A_MT8195			-250460
 #define LVTS_COEFF_B_MT8195			250460
 #define LVTS_COEFF_A_MT7988			-204650
@@ -94,35 +96,19 @@
 
 #define LVTS_MINIMUM_THRESHOLD		20000
 
-static int golden_temp;
+static int golden_temp = LVTS_GOLDEN_TEMP_DEFAULT;
 static int golden_temp_offset;
-static int use_fake_efuse;
 
 struct lvts_sensor_data {
 	int dt_id;
 	u8 cal_offsets[3];
 };
 
-struct lvts_hw_speed {
-	u32 period_unit;
-	u32 group_interval_delay;
-	u32 filter_interval_delay;
-	u32 sensor_interval_delay;
-};
-
-struct sensor_cal_data {
-	u32 default_golden_temp;
-	u32 default_cal_data;
-};
-
 struct lvts_ctrl_data {
 	struct lvts_sensor_data lvts_sensor[LVTS_SENSOR_MAX];
-	struct lvts_hw_speed hw_speed;
 	u8 valid_sensor_mask;
-	int cal_mask_len;
 	int offset;
 	int mode;
-	int hw_filter;
 };
 
 #define VALID_SENSOR_MAP(s0, s1, s2, s3) \
@@ -158,8 +144,6 @@ struct lvts_sensor {
 
 struct lvts_ctrl {
 	struct lvts_sensor sensors[LVTS_SENSOR_MAX];
-	struct lvts_sensor vir_sensor;
-	struct lvts_domain *lvts_domain;
 	const struct lvts_data *lvts_data;
 	u32 calibration[LVTS_SENSOR_MAX];
 	u8 valid_sensor_mask;
@@ -167,25 +151,6 @@ struct lvts_ctrl {
 	void __iomem *base;
 	int low_thresh;
 	int high_thresh;
-};
-
-struct platform_ops {
-	int (*lvts_ctrl_connect)(struct device *dev,
-				 struct lvts_ctrl *lvts_ctrl);
-	int (*lvts_ctrl_initialize)(struct device *dev,
-				    struct lvts_ctrl *lvts_ctrl);
-	int (*lvts_ctrl_start)(struct device *dev, struct lvts_ctrl *lvts_ctrl);
-};
-
-struct lvts_data {
-	const struct lvts_ctrl_data *lvts_ctrl;
-	struct platform_ops ops;
-	struct sensor_cal_data cal_data;
-	int irq_enable;
-	int hw_protection;
-	int num_lvts_ctrl;
-	int temp_factor;
-	int temp_offset;
 };
 
 struct lvts_domain {
@@ -199,15 +164,6 @@ struct lvts_domain {
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *dom_dentry;
 #endif
-};
-
-enum lvts_hw_filter {
-	LVTS_HW_FILTER_1,
-	LVTS_HW_FILTER_2,
-	LVTS_HW_FILTER_2_OF_4,
-	LVTS_HW_FILTER_4_OF_6,
-	LVTS_HW_FILTER_8_OF_10,
-	LVTS_HW_FILTER_16_OF_18
 };
 
 #ifdef CONFIG_MTK_LVTS_THERMAL_DEBUGFS
@@ -371,39 +327,6 @@ static int lvts_get_temp(struct thermal_zone_device *tz, int *temp)
 	return 0;
 }
 
-static int lvts_get_max_temp(struct thermal_zone_device *tz, int *temp)
-{
-	struct lvts_sensor *lvts_sensor = thermal_zone_device_priv(tz);
-	struct lvts_ctrl *lvts_ctrl = container_of(lvts_sensor, struct lvts_ctrl,
-						   vir_sensor);
-	struct lvts_domain *lvts_td = lvts_ctrl->lvts_domain;
-	const struct lvts_data *lvts_data = lvts_ctrl->lvts_data;
-	int current_temp, max_temp = THERMAL_TEMP_INVALID;
-	int i, j, rc;
-	void __iomem *msr;
-	u32 value;
-
-	for (i = 0; i < lvts_td->num_lvts_ctrl; i++) {
-		for (j = 0; j < lvts_td->lvts_ctrl[i].num_lvts_sensor; j++) {
-			msr = lvts_td->lvts_ctrl[i].sensors[j].msr;
-			rc = readl_poll_timeout(msr, value, value & BIT(16),
-						LVTS_MSR_READ_WAIT_US,
-						LVTS_MSR_READ_TIMEOUT_US);
-			if (rc)
-				continue;
-
-			current_temp = lvts_raw_to_temp(value & 0xFFFF,
-							lvts_data->temp_factor);
-
-			max_temp = max(max_temp, current_temp);
-		}
-	}
-
-	*temp = max_temp;
-
-	return 0;
-}
-
 static void lvts_update_irq_mask(struct lvts_ctrl *lvts_ctrl)
 {
 	static const u32 high_offset_inten_masks[] = {
@@ -481,39 +404,36 @@ static int lvts_set_trips(struct thermal_zone_device *tz, int low, int high)
 		lvts_ctrl->high_thresh = high;
 		lvts_ctrl->low_thresh = low;
 	}
+	lvts_update_irq_mask(lvts_ctrl);
 
-	if (lvts_data->irq_enable) {
-		lvts_update_irq_mask(lvts_ctrl);
+	if (!should_update_thresh)
+		return 0;
 
-		if (!should_update_thresh)
-			return 0;
+	/*
+	 * Low offset temperature threshold
+	 *
+	 * LVTS_OFFSETL
+	 *
+	 * Bits:
+	 *
+	 * 14-0 : Raw temperature for threshold
+	 */
+	pr_debug("%s: Setting low limit temperature interrupt: %d\n",
+		 thermal_zone_device_type(tz), low);
+	writel(raw_low, LVTS_OFFSETL(base));
 
-		/*
-		 * Low offset temperature threshold
-		 *
-		 * LVTS_OFFSETL
-		 *
-		 * Bits:
-		 *
-		 * 14-0 : Raw temperature for threshold
-		 */
-		pr_debug("%s: Setting low limit temperature interrupt: %d\n",
-			 thermal_zone_device_type(tz), low);
-		writel(raw_low, LVTS_OFFSETL(base));
-
-		/*
-		 * High offset temperature threshold
-		 *
-		 * LVTS_OFFSETH
-		 *
-		 * Bits:
-		 *
-		 * 14-0 : Raw temperature for threshold
-		 */
-		pr_debug("%s: Setting high limit temperature interrupt: %d\n",
-			 thermal_zone_device_type(tz), high);
-		writel(raw_high, LVTS_OFFSETH(base));
-	}
+	/*
+	 * High offset temperature threshold
+	 *
+	 * LVTS_OFFSETH
+	 *
+	 * Bits:
+	 *
+	 * 14-0 : Raw temperature for threshold
+	 */
+	pr_debug("%s: Setting high limit temperature interrupt: %d\n",
+		 thermal_zone_device_type(tz), high);
+	writel(raw_high, LVTS_OFFSETH(base));
 
 	return 0;
 }
@@ -608,7 +528,6 @@ static irqreturn_t lvts_ctrl_irq_handler(struct lvts_ctrl *lvts_ctrl)
 
 		thermal_zone_device_update(lvts_ctrl->sensors[i].tz,
 					   THERMAL_TRIP_VIOLATED);
-
 		iret = IRQ_HANDLED;
 	}
 
@@ -655,10 +574,6 @@ static irqreturn_t lvts_irq_handler(int irq, void *data)
 static struct thermal_zone_device_ops lvts_ops = {
 	.get_temp = lvts_get_temp,
 	.set_trips = lvts_set_trips,
-};
-
-static struct thermal_zone_device_ops lvts_vir_tz_ops = {
-	.get_temp = lvts_get_max_temp,
 };
 
 static int lvts_sensor_init(struct device *dev, struct lvts_ctrl *lvts_ctrl,
@@ -740,11 +655,8 @@ static int lvts_sensor_init(struct device *dev, struct lvts_ctrl *lvts_ctrl,
  * <-----sensor#2----->        <-----sensor#3----->
  *  0x0C | 0x0D | 0x0E | 0x0F | 0x10 | 0x11 | 0x12 | 0x13
  *
- * <-----sensor#4----->        <-----sensor#5----->
- *  0x14 | 0x15 | 0x16 | 0x17 | 0x18 | 0x19 | 0x1A | 0x1B |
- *
- * <-----sensor#6----->        <-----sensor#7----->
- *  0x1C | 0x1D | 0x1E | 0x1F | 0x20 | 0x21 | 0x22 | 0x23
+ * <-----sensor#4----->        <-----sensor#5----->        <-----sensor#6----->        <-----sensor#7----->
+ *  0x14 | 0x15 | 0x16 | 0x17 | 0x18 | 0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E | 0x1F | 0x20 | 0x21 | 0x22 | 0x23
  *
  * Stream index map for AP Domain mt8192 :
  *
@@ -769,11 +681,8 @@ static int lvts_sensor_init(struct device *dev, struct lvts_ctrl *lvts_ctrl,
  * <-----mcu-tc#1-----> <-----sensor#2-----> <-----sensor#3----->
  *  0x0A | 0x0B | 0x0C | 0x0D | 0x0E | 0x0F | 0x10 | 0x11 | 0x12
  *
- * <-----mcu-tc#2-----> <-----sensor#4-----> <-----sensor#5----->
- *  0x13 | 0x14 | 0x15 | 0x16 | 0x17 | 0x18 | 0x19 | 0x1A | 0x1B |
- *
- * <-----sensor#6-----> <-----sensor#7----->
- *  0x1C | 0x1D | 0x1E | 0x1F | 0x20 | 0x21
+ * <-----mcu-tc#2-----> <-----sensor#4-----> <-----sensor#5-----> <-----sensor#6-----> <-----sensor#7----->
+ *  0x13 | 0x14 | 0x15 | 0x16 | 0x17 | 0x18 | 0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E | 0x1F | 0x20 | 0x21
  *
  * Stream index map for AP Domain mt8195 :
  *
@@ -925,7 +834,6 @@ static int lvts_ctrl_init(struct device *dev, struct lvts_domain *lvts_td,
 
 	for (i = 0; i < lvts_data->num_lvts_ctrl; i++) {
 
-		lvts_ctrl[i].lvts_domain = lvts_td;
 		lvts_ctrl[i].base = lvts_td->base + lvts_data->lvts_ctrl[i].offset;
 		lvts_ctrl[i].lvts_data = lvts_data;
 
@@ -1096,28 +1004,6 @@ static int lvts_ctrl_connect(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	return 0;
 }
 
-static int mt7988_lvts_ctrl_connect(struct device *dev,
-				    struct lvts_ctrl *lvts_ctrl)
-{
-	u32 id, cmds[] = { 0xC103FFFF, 0xC502FC55 };
-
-	lvts_write_config(lvts_ctrl, cmds, ARRAY_SIZE(cmds));
-
-	/*
-	 * LVTS_ID : Get ID and status of the thermal controller
-	 *
-	 * Bits:
-	 *
-	 * 0-5	: thermal controller id
-	 *   7	: thermal controller connection is valid
-	 */
-	id = readl(LVTS_ID(lvts_ctrl->base));
-	if (!(id & BIT(7)))
-		return -EIO;
-
-	return 0;
-}
-
 static int lvts_ctrl_initialize(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 {
 	/*
@@ -1128,23 +1014,6 @@ static int lvts_ctrl_initialize(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 		0xC10307A6, 0xC10306B8, 0xC1030500, 0xC1030420, 0xC1030300,
 		0xC1030030, 0xC10300F6, 0xC1030050, 0xC1030060, 0xC10300AC,
 		0xC10300FC, 0xC103009D, 0xC10300F1, 0xC10300E1
-	};
-
-	lvts_write_config(lvts_ctrl, cmds, ARRAY_SIZE(cmds));
-
-	return 0;
-}
-
-static int mt7988_lvts_ctrl_initialize(struct device *dev,
-				       struct lvts_ctrl *lvts_ctrl)
-{
-	/*
-	 * Write device mask: 0xC1030000
-	 */
-	u32 cmds[] = {
-		0xC1030300, 0xC1030420, 0xC1030500, 0xC10307A6, 0xC1030CFC,
-		0xC1030A8C, 0xC103098D, 0xC10308F1, 0xC1030B04, 0xC1030E01,
-		0xC10306B8
 	};
 
 	lvts_write_config(lvts_ctrl, cmds, ARRAY_SIZE(cmds));
@@ -1177,9 +1046,6 @@ static int lvts_ctrl_calibrate(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 
 static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 {
-	const struct lvts_ctrl_data *lvts_ctrl_data =
-		lvts_ctrl->lvts_data->lvts_ctrl;
-	const struct lvts_hw_speed *hw_speed = &lvts_ctrl_data->hw_speed;
 	u32 value;
 
 	/*
@@ -1198,8 +1064,8 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	/*
 	 * LVTS_CALSCALE : ADC voltage round
 	 */
+	value = 0x300;
 	value = LVTS_CALSCALE_CONF;
-	writel(value, LVTS_CALSCALE(lvts_ctrl->base));
 
 	/*
 	 * LVTS_MSRCTL0 : Sensor filtering strategy
@@ -1220,10 +1086,8 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	 * 6-8  : Sensor2 filter
 	 * 9-11 : Sensor3 filter
 	 */
-	value = lvts_ctrl_data->hw_filter << 9 |
-		lvts_ctrl_data->hw_filter << 6 |
-		lvts_ctrl_data->hw_filter << 3 |
-		lvts_ctrl_data->hw_filter;
+	value = LVTS_HW_FILTER << 9 |  LVTS_HW_FILTER << 6 |
+			LVTS_HW_FILTER << 3 | LVTS_HW_FILTER;
 	writel(value, LVTS_MSRCTL0(lvts_ctrl->base));
 
 	/*
@@ -1266,7 +1130,7 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	 *       9 - 0  : Period unit
 	 *
 	 */
-	value = hw_speed->group_interval_delay << 20 | hw_speed->period_unit;
+	value = LVTS_GROUP_INTERVAL << 20 | LVTS_PERIOD_UNIT;
 	writel(value, LVTS_MONCTL1(lvts_ctrl->base));
 
 	/*
@@ -1279,49 +1143,10 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	 *       9-0  : Interval unit in PERIOD_UNIT between each sensor
 	 *
 	 */
-	value = hw_speed->filter_interval_delay << 16 |
-		hw_speed->sensor_interval_delay;
+	value = LVTS_FILTER_INTERVAL << 16 | LVTS_SENSOR_INTERVAL;
 	writel(value, LVTS_MONCTL2(lvts_ctrl->base));
 
 	return lvts_irq_init(lvts_ctrl);
-}
-
-static int lvts_ctrl_wait_bus_idle(struct device *dev,
-				    struct lvts_ctrl *lvts_ctrl)
-{
-	u32 mask, error_code;
-	int i, ret;
-
-	mask = BIT(10) | BIT(7) | BIT(0);
-
-	for (i = 0; i < 2; i++) {
-		ret = readl_poll_timeout(LVTS_MSRCTL1(lvts_ctrl->base),
-					 error_code,
-					 !(error_code & mask), 2, 200);
-		/*
-		 * Error Code:
-		 *
-		 * 000 : IDLE
-		 * 001 : Write transaction
-		 * 010 : Waiting for read after Write
-		 * 011 : Disable Continue fetching on Device
-		 * 100 : Read transaction
-		 * 101 : Set Device special Register for Voltage threshold
-		 * 111 : Set TSMCU number for Fetch
-		 */
-		error_code = ((error_code & BIT(10)) >> 8) +
-			     ((error_code & BIT(7)) >> 6) +
-			     (error_code & BIT(0));
-
-		if (ret) {
-			dev_err(dev,
-				"Bus status is not idle, error code 0x%x\n",
-				error_code);
-			return -EBUSY;
-		}
-	}
-
-	return 0;
 }
 
 static int lvts_ctrl_start(struct device *dev, struct lvts_ctrl *lvts_ctrl)
@@ -1412,40 +1237,9 @@ static int lvts_ctrl_start(struct device *dev, struct lvts_ctrl *lvts_ctrl)
 	return 0;
 }
 
-
-static int mt7988_lvts_ctrl_start(struct device *dev,
-				  struct lvts_ctrl *lvts_ctrl)
-{
-	struct lvts_sensor *vir_sensor = &lvts_ctrl->vir_sensor;
-	struct thermal_zone_device *tz;
-	u32 sensor_map = BIT(0) | BIT(1) | BIT(2) | BIT(3);
-
-	/*
-	 * Bits:
-	 *      9: Single point access flow
-	 *    0-3: Enable sensing point 0-3
-	 */
-	writel(sensor_map | BIT(9), LVTS_MONCTL0(lvts_ctrl->base));
-
-	tz = thermal_zone_get_zone_by_name("cpu-thermal");
-	if (IS_ERR(tz)) {
-		tz = devm_thermal_of_zone_register(dev, 0, vir_sensor,
-						   &lvts_vir_tz_ops);
-		if (IS_ERR(tz) && PTR_ERR(tz) != -ENODEV)
-			return PTR_ERR(tz);
-
-		devm_thermal_add_hwmon_sysfs(dev, tz);
-
-		vir_sensor->tz = tz;
-	}
-
-	return 0;
-}
-
 static int lvts_domain_init(struct device *dev, struct lvts_domain *lvts_td,
 					const struct lvts_data *lvts_data)
 {
-	const struct platform_ops *ops = &lvts_data->ops;
 	struct lvts_ctrl *lvts_ctrl;
 	int i, ret;
 
@@ -1481,13 +1275,13 @@ static int lvts_domain_init(struct device *dev, struct lvts_domain *lvts_td,
 			return ret;
 		}
 
-		ret = ops->lvts_ctrl_connect(dev, lvts_ctrl);
+		ret = lvts_ctrl_connect(dev, lvts_ctrl);
 		if (ret) {
 			dev_dbg(dev, "Failed to connect to LVTS controller");
 			return ret;
 		}
 
-		ret = ops->lvts_ctrl_initialize(dev, lvts_ctrl);
+		ret = lvts_ctrl_initialize(dev, lvts_ctrl);
 		if (ret) {
 			dev_dbg(dev, "Failed to initialize controller");
 			return ret;
@@ -1499,19 +1293,13 @@ static int lvts_domain_init(struct device *dev, struct lvts_domain *lvts_td,
 			return ret;
 		}
 
-		ret = lvts_ctrl_wait_bus_idle(dev, lvts_ctrl);
-		if (ret) {
-			dev_dbg(dev, "Failed to wait for the bus to idle");
-			return ret;
-		}
-
 		ret = lvts_ctrl_configure(dev, lvts_ctrl);
 		if (ret) {
 			dev_dbg(dev, "Failed to configure controller");
 			return ret;
 		}
 
-		ret = ops->lvts_ctrl_start(dev, lvts_ctrl);
+		ret = lvts_ctrl_start(dev, lvts_ctrl);
 		if (ret) {
 			dev_dbg(dev, "Failed to start controller");
 			return ret;
@@ -1553,11 +1341,9 @@ static int lvts_probe(struct platform_device *pdev)
 	if (IS_ERR(lvts_td->reset))
 		return dev_err_probe(dev, PTR_ERR(lvts_td->reset), "Failed to get reset control\n");
 
-	if (lvts_data->irq_enable) {
-		irq = platform_get_irq(pdev, 0);
-		if (irq < 0)
-			return irq;
-	}
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0)
+		return irq;
 
 	golden_temp_offset = lvts_data->temp_offset;
 
@@ -1569,14 +1355,10 @@ static int lvts_probe(struct platform_device *pdev)
 	 * At this point the LVTS is initialized and enabled. We can
 	 * safely enable the interrupt.
 	 */
-	if (lvts_data->irq_enable) {
-		ret = devm_request_threaded_irq(dev, irq, NULL,
-						lvts_irq_handler,
-						IRQF_ONESHOT, dev_name(dev),
-						lvts_td);
-		if (ret)
-			return dev_err_probe(dev, ret, "Failed to request interrupt\n");
-	}
+	ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
+					IRQF_ONESHOT, dev_name(dev), lvts_td);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to request interrupt\n");
 
 	platform_set_drvdata(pdev, lvts_td);
 
@@ -1959,17 +1741,6 @@ static const struct lvts_ctrl_data mt8195_lvts_ap_data_ctrl[] = {
 
 static const struct lvts_data mt7988_lvts_ap_data = {
 	.lvts_ctrl	= mt7988_lvts_ap_data_ctrl,
-	.cal_data = {
-		.default_golden_temp = 60,
-		.default_cal_data = 19380,
-	},
-	.ops = {
-		.lvts_ctrl_connect	= mt7988_lvts_ctrl_connect,
-		.lvts_ctrl_initialize	= mt7988_lvts_ctrl_initialize,
-		.lvts_ctrl_start	= mt7988_lvts_ctrl_start,
-	},
-	.irq_enable	= 0,
-	.hw_protection	= 1,
 	.num_lvts_ctrl	= ARRAY_SIZE(mt7988_lvts_ap_data_ctrl),
 	.temp_factor	= LVTS_COEFF_A_MT7988,
 	.temp_offset	= LVTS_COEFF_B_MT7988,
@@ -2032,16 +1803,6 @@ static const struct lvts_data mt8195_lvts_mcu_data = {
 
 static const struct lvts_data mt8195_lvts_ap_data = {
 	.lvts_ctrl	= mt8195_lvts_ap_data_ctrl,
-	.cal_data = {
-		.default_golden_temp = 50,
-	},
-	.ops = {
-		.lvts_ctrl_connect	= lvts_ctrl_connect,
-		.lvts_ctrl_initialize	= lvts_ctrl_initialize,
-		.lvts_ctrl_start	= lvts_ctrl_start,
-	},
-	.irq_enable	= 1,
-	.hw_protection  = 1,
 	.num_lvts_ctrl	= ARRAY_SIZE(mt8195_lvts_ap_data_ctrl),
 	.temp_factor	= LVTS_COEFF_A_MT8195,
 	.temp_offset	= LVTS_COEFF_B_MT8195,
