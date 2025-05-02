@@ -770,6 +770,9 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
+			cpufreq_calibration: calib@278 {
+				reg = <0x278 0x1>;
+			};
 			lvts_calibration: calib@918 {
 				reg = <0x918 0x28>;
 			};
