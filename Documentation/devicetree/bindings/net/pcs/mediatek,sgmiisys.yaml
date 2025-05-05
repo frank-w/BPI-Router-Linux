@@ -58,6 +58,9 @@ properties:
           - const: sgmii_tx
           - const: sgmii_rx
 
+      "#pcs-cells":
+        const: 0
+
       phys:
         $ref: /schemas/types.yaml#/definitions/phandle
         description:
