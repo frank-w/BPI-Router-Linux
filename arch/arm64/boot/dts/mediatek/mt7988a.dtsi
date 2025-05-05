@@ -277,6 +277,44 @@
 			status = "disabled";
 		};
 
+		sgmiisys0: syscon@10060000 {
+			compatible = "mediatek,mt7988-sgmiisys0",
+				     "simple-mfd",
+				     "syscon";
+			reg = <0 0x10060000 0 0x1000>;
+			resets = <&watchdog 1>;
+			#clock-cells = <1>;
+
+			sgmiipcs0: pcs {
+				compatible = "mediatek,mt7988-sgmii";
+				clocks = <&topckgen CLK_TOP_SGM_0_SEL>,
+					 <&sgmiisys0 CLK_SGM0_TX_EN>,
+					 <&sgmiisys0 CLK_SGM0_RX_EN>;
+				clock-names = "sgmii_sel", "sgmii_tx", "sgmii_rx";
+				phys = <&xfi_tphy0>;
+				#pcs-cells = <0>;
+			};
+		};
+
+		sgmiisys1: syscon@10070000 {
+			compatible = "mediatek,mt7988-sgmiisys1",
+				     "simple-mfd",
+				     "syscon";
+			reg = <0 0x10070000 0 0x1000>;
+			resets = <&watchdog 2>;
+			#clock-cells = <1>;
+
+			sgmiipcs1: pcs {
+				compatible = "mediatek,mt7988-sgmii";
+				clocks = <&topckgen CLK_TOP_SGM_1_SEL>,
+					 <&sgmiisys1 CLK_SGM1_TX_EN>,
+					 <&sgmiisys1 CLK_SGM1_RX_EN>;
+				clock-names = "sgmii_sel", "sgmii_tx", "sgmii_rx";
+				phys = <&xfi_tphy1>;
+				#pcs-cells = <0>;
+			};
+		};
+
 		mcusys: mcusys@100e0000 {
 			compatible = "mediatek,mt7988-mcusys", "syscon";
 			reg = <0 0x100e0000 0 0x1000>;
