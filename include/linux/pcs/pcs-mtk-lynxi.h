@@ -5,6 +5,8 @@
 #include <linux/phylink.h>
 #include <linux/regmap.h>
 
+#define MTK_SGMII_FLAG_PHYA_TRX_CK BIT(2)
+
 struct phylink_pcs *mtk_pcs_lynxi_create(struct device *dev,
 					 struct fwnode_handle *fwnode,
 					 struct regmap *regmap, u32 ana_rgc3);
