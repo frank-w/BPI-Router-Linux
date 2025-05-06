@@ -30,6 +30,7 @@
 #define SGMSYS_PCS_CONTROL_1		0x0
 #define SGMII_BMCR			GENMASK(15, 0)
 #define SGMII_BMSR			GENMASK(31, 16)
+#define SGMII_REF_CK_SEL		BIT(24)
 
 #define SGMSYS_PCS_DEVICE_ID		0x4
 #define SGMII_LYNXI_DEV_ID		0x4d544950
@@ -57,6 +58,8 @@
 #define SGMII_SPEED_1000		FIELD_PREP(SGMII_SPEED_MASK, 2)
 #define SGMII_DUPLEX_HALF		BIT(4)
 #define SGMII_REMOTE_FAULT_DIS		BIT(8)
+#define SGMII_TRXBUF_THR_MASK		GENMASK(31, 16)
+#define SGMII_TRXBUF_THR(x)		FIELD_PREP(SGMII_TRXBUF_THR_MASK, (x))
 
 /* Register to reset SGMII design */
 #define SGMSYS_RESERVED_0		0x34
@@ -195,7 +198,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 {
 	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
 	bool mode_changed = false, changed;
-	unsigned int rgc3, sgm_mode, bmcr;
+	unsigned int rgc3, sgm_mode, bmcr = 0, trxbuf_thr = 0x3112;
 	int advertise, link_timer;
 	int ret;
 
@@ -227,6 +230,12 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 		bmcr = BMCR_ANENABLE;
 	} else {
 		bmcr = 0;
+	}
+
+	/* Configure SGMII PCS clock source */
+	if (mpcs->flags & MTK_SGMII_FLAG_PHYA_TRX_CK) {
+		bmcr |= SGMII_REF_CK_SEL;
+		trxbuf_thr = 0x2111;
 	}
 
 	if (mpcs->interface != interface) {
@@ -273,12 +282,14 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 
 	/* Update the sgmsys mode register */
 	regmap_update_bits(mpcs->regmap, SGMSYS_SGMII_MODE,
-			   SGMII_REMOTE_FAULT_DIS | SGMII_SPEED_DUPLEX_AN |
-			   SGMII_IF_MODE_SGMII, sgm_mode);
+			   SGMII_TRXBUF_THR_MASK |
+			   SGMII_REMOTE_FAULT_DIS | SGMII_DUPLEX_HALF |
+			   SGMII_SPEED_DUPLEX_AN | SGMII_IF_MODE_SGMII,
+			   SGMII_TRXBUF_THR(trxbuf_thr) | sgm_mode);
 
 	/* Update the BMCR */
 	regmap_update_bits(mpcs->regmap, SGMSYS_PCS_CONTROL_1,
-			   BMCR_ANENABLE, bmcr);
+			   SGMII_REF_CK_SEL | BMCR_ANENABLE, bmcr);
 
 	/* Release PHYA power down state
 	 * Only removing bit SGMII_PHYA_PWD isn't enough.
@@ -534,6 +545,7 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 	struct mtk_pcs_lynxi *mpcs;
 	struct phylink_pcs *pcs;
 	struct regmap *regmap;
+	u32 flags = 0;
 
 	mpcs = devm_kzalloc(dev, sizeof(*mpcs), GFP_KERNEL);
 	if (!mpcs)
@@ -543,6 +555,9 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 	regmap = syscon_node_to_regmap(np->parent);
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
+
+	if (of_property_read_bool(np->parent, "mediatek,phya_trx_ck"))
+		flags |= MTK_SGMII_FLAG_PHYA_TRX_CK;
 
 	if (of_parse_phandle(np->parent, "resets", 0)) {
 		mpcs->rstc = of_reset_control_get_shared(np->parent, NULL);
