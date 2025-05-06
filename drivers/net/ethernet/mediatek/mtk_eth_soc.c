@@ -5596,6 +5596,7 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
 {
 	struct device_node *np;
 	struct regmap *regmap;
+	u32 flags = 0;
 	int i;
 
 	for (i = 0; i < MTK_MAX_DEVS; i++) {
@@ -5606,6 +5607,13 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
 		regmap = syscon_node_to_regmap(np);
 		if (IS_ERR(regmap)) {
 			of_node_put(np);
+
+		if (of_property_read_bool(np->parent, "mediatek,phya_trx_ck"))
+			flags |= MTK_SGMII_FLAG_PHYA_TRX_CK;
+
+		of_node_put(np);
+
+		if (IS_ERR(regmap))
 			return PTR_ERR(regmap);
 		}
 
