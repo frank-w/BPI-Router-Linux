@@ -5807,6 +5807,9 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
 		else if (of_property_read_bool(np, "mediatek,pnswap-rx"))
 			flags |= MTK_SGMII_FLAG_PN_SWAP_RX;
 
+		if (of_property_read_bool(np->parent, "mediatek,phya_trx_ck"))
+			flags |= MTK_SGMII_FLAG_PHYA_TRX_CK;
+
 		of_node_put(np);
 
 		if (IS_ERR(regmap))
