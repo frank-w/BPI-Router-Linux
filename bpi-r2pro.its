@@ -1,0 +1,55 @@
+/*
+ * Copyright (C) 2020 Rockchip Electronics Co., Ltd
+ *
+ * SPDX-License-Identifier: GPL-2.0
+ */
+
+/dts-v1/;
+
+/ {
+	description = "U-Boot fitImage for bpi-r2pro aarch64 kernel";
+	images {
+		kernel {
+			description = "Linux Kernel %version%";
+			data = /incbin/("arch/arm64/boot/Image.gz");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+			entry = <0x02080000>;
+			load = <0x02080000>;
+			hash {
+				algo = "sha256";
+			};
+		};
+		fdt {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("arch/arm64/boot/dts/rockchip/rk3568-bpi-r2-pro.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			hash {
+				algo = "sha256";
+			};
+		};
+/*		ramdisk {
+			data = /incbin/("out/ramdisk");
+			type = "ramdisk";
+			arch = "arm64";
+			os = "linux";
+			compression = "none";
+			load = <0xffffff02>;
+			hash {
+				algo = "sha256";
+			};
+		};*/
+	};
+	configurations {
+		default = "conf";
+		conf {
+			fdt = "fdt";
+			kernel = "kernel";
+			//ramdisk = "ramdisk";
+		};
+	};
+};
