@@ -27,6 +27,7 @@
  */
 #include <linux/msdos_fs.h>
 #include <linux/msdos_partition.h>
+#include <linux/of.h>
 
 #include "check.h"
 #include "efi.h"
@@ -116,6 +117,26 @@ static void set_info(struct parsed_partitions *state, int slot,
 	state->parts[slot].has_info = true;
 }
 
+static struct device_node *find_partno_of_node(struct device_node *partitions_np,
+						  int partno)
+{
+	int np_partno;
+
+	if (!partitions_np ||
+	    !of_device_is_compatible(partitions_np, "msdos-partitions"))
+		return NULL;
+
+	for_each_available_child_of_node_scoped(partitions_np, np) {
+		if (!of_property_read_u32(np, "partno", &np_partno) &&
+		    partno != np_partno)
+			continue;
+
+		return np;
+	}
+
+	return NULL;
+}
+
 /*
  * Create devices for each logical partition in an extended partition.
  * The logical partitions form a linked list, with each entry being
@@ -131,6 +152,8 @@ static void parse_extended(struct parsed_partitions *state,
 			   sector_t first_sector, sector_t first_size,
 			   u32 disksig)
 {
+	struct device *ddev = disk_to_dev(state->disk);
+	struct device_node *partitions_np = of_node_get(ddev->of_node);
 	struct msdos_partition *p;
 	Sector sect;
 	unsigned char *data;
@@ -190,7 +213,8 @@ static void parse_extended(struct parsed_partitions *state,
 					continue;
 			}
 
-			put_partition(state, state->next, next, size);
+			of_put_partition(state, state->next, next, size,
+					 find_partno_of_node(partitions_np, state->next));
 			set_info(state, state->next, disksig);
 			if (p->sys_ind == LINUX_RAID_PARTITION)
 				state->parts[state->next].flags = ADDPART_FLAG_RAID;
@@ -251,6 +275,8 @@ static void parse_solaris_x86(struct parsed_partitions *state,
 			      sector_t offset, sector_t size, int origin)
 {
 #ifdef CONFIG_SOLARIS_X86_PARTITION
+	struct device *ddev = disk_to_dev(state->disk);
+	struct device_node *partitions_np = of_node_get(ddev->of_node);
 	Sector sect;
 	struct solaris_x86_vtoc *v;
 	int i;
@@ -281,9 +307,10 @@ static void parse_solaris_x86(struct parsed_partitions *state,
 		seq_buf_printf(&state->pp_buf, " [s%d]", i);
 		/* solaris partitions are relative to current MS-DOS
 		 * one; must add the offset of the current partition */
-		put_partition(state, state->next++,
+		of_put_partition(state, state->next++,
 				 le32_to_cpu(s->s_start)+offset,
-				 le32_to_cpu(s->s_size));
+				 le32_to_cpu(s->s_size),
+				 find_partno_of_node(partitions_np, state->next));
 	}
 	put_dev_sector(sect);
 	seq_buf_puts(&state->pp_buf, " >\n");
@@ -347,6 +374,8 @@ static void parse_bsd(struct parsed_partitions *state,
 		      sector_t offset, sector_t size, int origin, char *flavour,
 		      int max_partitions)
 {
+	struct device *ddev = disk_to_dev(state->disk);
+	struct device_node *partitions_np = of_node_get(ddev->of_node);
 	Sector sect;
 	struct bsd_disklabel *l;
 	struct bsd_partition *p;
@@ -383,7 +412,8 @@ static void parse_bsd(struct parsed_partitions *state,
 			seq_buf_puts(&state->pp_buf, "bad subpartition - ignored\n");
 			continue;
 		}
-		put_partition(state, state->next++, bsd_start, bsd_size);
+		of_put_partition(state, state->next++, bsd_start, bsd_size,
+				 find_partno_of_node(partitions_np, state->next));
 	}
 	put_dev_sector(sect);
 	if (le16_to_cpu(l->d_npartitions) > max_partitions)
@@ -471,6 +501,8 @@ static void parse_unixware(struct parsed_partitions *state,
 			   sector_t offset, sector_t size, int origin)
 {
 #ifdef CONFIG_UNIXWARE_DISKLABEL
+	struct device *ddev = disk_to_dev(state->disk);
+	struct device_node *partitions_np = of_node_get(ddev->of_node);
 	Sector sect;
 	struct unixware_disklabel *l;
 	struct unixware_slice *p;
@@ -491,9 +523,11 @@ static void parse_unixware(struct parsed_partitions *state,
 			break;
 
 		if (p->s_label != UNIXWARE_FS_UNUSED)
-			put_partition(state, state->next++,
-				      le32_to_cpu(p->start_sect),
-				      le32_to_cpu(p->nr_sects));
+			of_put_partition(state, state->next++,
+					 le32_to_cpu(p->start_sect),
+					 le32_to_cpu(p->nr_sects),
+					 find_partno_of_node(partitions_np,
+							     state->next));
 		p++;
 	}
 	put_dev_sector(sect);
@@ -512,6 +546,8 @@ static void parse_minix(struct parsed_partitions *state,
 			sector_t offset, sector_t size, int origin)
 {
 #ifdef CONFIG_MINIX_SUBPARTITION
+	struct device *ddev = disk_to_dev(state->disk);
+	struct device_node *partitions_np = of_node_get(ddev->of_node);
 	Sector sect;
 	unsigned char *data;
 	struct msdos_partition *p;
@@ -534,8 +570,10 @@ static void parse_minix(struct parsed_partitions *state,
 				break;
 			/* add each partition in use */
 			if (p->sys_ind == MINIX_PARTITION)
-				put_partition(state, state->next++,
-					      start_sect(p), nr_sects(p));
+				of_put_partition(state, state->next++,
+						 start_sect(p), nr_sects(p),
+						 find_partno_of_node(partitions_np,
+								     state->next));
 		}
 		seq_buf_puts(&state->pp_buf, " >\n");
 	}
@@ -559,6 +597,8 @@ static struct {
 
 int msdos_partition(struct parsed_partitions *state)
 {
+	struct device *ddev = disk_to_dev(state->disk);
+	struct device_node *partitions_np = of_node_get(ddev->of_node);
 	sector_t sector_size;
 	Sector sect;
 	unsigned char *data;
@@ -655,14 +695,18 @@ int msdos_partition(struct parsed_partitions *state)
 			sector_t n = 2;
 
 			n = min(size, max(sector_size, n));
-			put_partition(state, slot, start, n);
+			of_put_partition(state, slot, start, n,
+					 find_partno_of_node(partitions_np,
+							     slot));
 
 			seq_buf_puts(&state->pp_buf, " <");
 			parse_extended(state, start, size, disksig);
 			seq_buf_puts(&state->pp_buf, " >");
 			continue;
 		}
-		put_partition(state, slot, start, size);
+		of_put_partition(state, slot, start, size,
+				 find_partno_of_node(partitions_np,
+						     state->next));
 		set_info(state, slot, disksig);
 		if (p->sys_ind == LINUX_RAID_PARTITION)
 			state->parts[slot].flags = ADDPART_FLAG_RAID;
