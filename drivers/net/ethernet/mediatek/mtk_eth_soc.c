@@ -4727,27 +4727,40 @@ static int mtk_hw_init(struct mtk_eth *eth, bool reset)
 		mtk_w32(eth, PSE_DUMMY_WORK_GDM(1) | PSE_DUMMY_WORK_GDM(2) |
 			PSE_DUMMY_WORK_GDM(3) | DUMMY_PAGE_THR, PSE_DUMY_REQ);
 
-		/* PSE free buffer drop threshold */
-		mtk_w32(eth, 0x00600009, PSE_IQ_REV(8));
+		if (eth->soc->caps == MT7988_CAPS) {
+			/* PSE free buffer drop threshold */
+			mtk_w32(eth, 0x00600009, PSE_IQ_REV(8));
 
-		/* PSE should not drop port8, port9 and port13 packets from
-		 * WDMA Tx
-		 */
-		mtk_w32(eth, 0x00002300, PSE_DROP_CFG);
+			/* PSE should not drop port8, port9 and port13 packets
+			 * from WDMA Tx
+			 */
+			mtk_w32(eth, 0x00002300, PSE_DROP_CFG);
 
-		/* PSE should drop packets to port8, port9 and port13 on WDMA Rx
-		 * ring full
-		 */
-		mtk_w32(eth, 0x00002300, PSE_PPE_DROP(0));
-		mtk_w32(eth, 0x00002300, PSE_PPE_DROP(1));
-		mtk_w32(eth, 0x00002300, PSE_PPE_DROP(2));
+			/* PSE should drop packets to port8, port9 and port13
+			 * on WDMA Rx ring full
+			 */
+			mtk_w32(eth, 0x00002300, PSE_PPE_DROP(0));
+			mtk_w32(eth, 0x00002300, PSE_PPE_DROP(1));
+			mtk_w32(eth, 0x00002300, PSE_PPE_DROP(2));
 
-		/* GDM and CDM Threshold */
-		mtk_w32(eth, 0x08000707, MTK_CDMW0_THRES);
-		mtk_w32(eth, 0x00000077, MTK_CDMW1_THRES);
+			/* GDM and CDM Threshold */
+			mtk_w32(eth, 0x08000707, MTK_CDMW0_THRES);
+			mtk_w32(eth, 0x00000077, MTK_CDMW1_THRES);
+		} else if (eth->soc->caps == MT7987_CAPS) {
+			/* PSE should not drop port8 packets from WDMA Tx */
+			mtk_w32(eth, 0x00000100, PSE_DROP_CFG);
 
-		/* Disable GDM1 RX CRC stripping */
-		mtk_m32(eth, MTK_GDMA_STRP_CRC, 0, MTK_GDMA_FWD_CFG(0));
+			/* PSE should drop packets to port8 on WDMA Rx ring
+			 * full
+			 */
+			mtk_w32(eth, 0x00000100, PSE_PPE_DROP(0));
+			mtk_w32(eth, 0x00000100, PSE_PPE_DROP(1));
+		}
+
+		if (MTK_HAS_CAPS(eth->soc->caps, MTK_ESW)) {
+			/* Disable GDM1 RX CRC stripping */
+			mtk_m32(eth, MTK_GDMA_STRP_CRC, 0, MTK_GDMA_FWD_CFG(0));
+		}
 
 		/* PSE GDM3 MIB counter has incorrect hw default values,
 		 * so the driver ought to read clear the values beforehand
