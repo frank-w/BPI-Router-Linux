@@ -544,9 +544,12 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
 
-	mpcs->rstc = of_reset_control_get_shared(np->parent, NULL);
-	if (IS_ERR(mpcs->rstc))
-		return PTR_ERR(mpcs->rstc);
+	if (of_parse_phandle(np->parent, "resets", 0)) {
+		mpcs->rstc = of_reset_control_get_shared(np->parent, NULL);
+		if (IS_ERR(mpcs->rstc))
+			return PTR_ERR(mpcs->rstc);
+	} else
+		mpcs->rstc = NULL;
 
 	reset_control_deassert(mpcs->rstc);
 	mpcs->sgmii_sel = devm_clk_get_enabled(dev, "sgmii_sel");
@@ -584,6 +587,7 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id mtk_pcs_lynxi_of_match[] = {
+	{ .compatible = "mediatek,mt7987-sgmii", .data = (void *)MTK_NETSYS_V3_AMA_RGC3 },
 	{ .compatible = "mediatek,mt7988-sgmii", .data = (void *)MTK_NETSYS_V3_AMA_RGC3 },
 	{ /* sentinel */ },
 };
