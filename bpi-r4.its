@@ -55,6 +55,11 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-spidisplay.dtbo");
 			type = "flat_dt";
 		};
+		fdt-ov-wanlos {
+			description = "Flattened Device Tree blob (wan los fix)";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-wanlos.dtbo");
+			type = "flat_dt";
+		};
 /*		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");
@@ -116,6 +121,10 @@
 		ov-spidisplay {
 			description = "SPI display FDT overlay blob";
 			fdt = "fdt-ov-spi-display";
+		};
+		ov-wanlos {
+			description = "WAN-LOS FDT overlay blob";
+			fdt = "fdt-ov-wanlos";
 		};
 	};
 };
