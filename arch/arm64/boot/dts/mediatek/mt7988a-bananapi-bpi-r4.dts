@@ -5,7 +5,6 @@
 #include "mt7988a-bananapi-bpi-r4.dtsi"
 
 / {
-
 	compatible = "bananapi,bpi-r4", "mediatek,mt7988a";
 	model = "Banana Pi BPI-R4 (2x SFP+)";
 	chassis-type = "embedded";
