@@ -45,7 +45,7 @@
 #define MXL862XX_FDMA_PCTRL_EN BIT(0) /* FDMA Port Enable */
 
 #define MAX_BRIDGES 16
-#define MAX_VLAN_ENTRIES (1024 - 160)
+#define MAX_VLAN_ENTRIES (1024 - 320)
 #define IDX_INVAL (-1)
 
 #define INGRESS_FINAL_RULES 5
@@ -197,15 +197,11 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 	u8 i;
 	bool vlan_sp_tag = (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q);
 
-	/*struct dsa_port *dp = dsa_to_port(priv->ds, port), *other_dp;
-	 * struct mxl862xx_port_info *other_p;
-	 *int other_port;
-	 */
 	int ret;
 
 	/* Update local bridge port map */
 	for (i = 0; i < max_ports; i++) {
-		int bridge_id = priv->port_info[i].bridge_id;
+		int bridge_id = priv->port_info[port].bridge_id;
 
 		if (dsa_is_unused_port(ds, i))
 			continue;
@@ -220,7 +216,7 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 
 		/* Case for standalone bridges assigned only to single user and CPU ports.
 		 * Used only for initial ports isolation */
-		if ((bridge == NULL) && (i != port))
+		if (!bridge && i != port)
 			continue;
 
 		if (action) {
@@ -2592,14 +2588,14 @@ static void mxl862xx_deisolate_port(struct dsa_switch *ds, u8 port)
 
 	ret = mxl862xx_update_bridge_conf_port(ds, port, NULL, 0);
 	if (ret) {
-		dev_err(ds->dev, "failed to remove port %d from bridge\n", port);
+		dev_err(ds->dev, "%s: failed to remove port %d from bridge\n", __func__, port);
 		return;
 	}
 
 	bridge_alloc.bridge_id = priv->port_info[port].bridge_id;
 	ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGE_FREE, bridge_alloc);
 	if (ret) {
-		dev_err(ds->dev, "failed to free bridge %d\n", bridge_alloc.bridge_id);
+		dev_err(ds->dev, "%s: failed to free bridge %d\n", __func__, bridge_alloc.bridge_id);
 		return;
 	}
 
@@ -2650,14 +2646,15 @@ static int mxl862xx_find_bridge_id(struct dsa_switch *ds, struct net_device *bri
 	struct mxl862xx_priv *priv = ds->priv;
 	u8 i;
 
-	if (bridge) {
-		for (i = 0; i < priv->hw_info->max_ports; i++) {
-			if (dsa_is_unused_port(ds, i))
-				continue;
+	if (!bridge)
+		return 0;
 
-			if (priv->port_info[i].bridge == bridge)
-				return priv->port_info[i].bridge_id;
-		}
+	for (i = 0; i < priv->hw_info->max_ports; i++) {
+		if (dsa_is_unused_port(ds, i))
+			continue;
+
+		if (priv->port_info[i].bridge == bridge)
+			return priv->port_info[i].bridge_id;
 	}
 
 	return 0;
@@ -2695,17 +2692,17 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 	/* The calculation of the max number of simultaneously supported VLANS (priv->max_vlans)
 	 * comes from the equation:
 	 *
-	 * MAX_VLAN_ENTRIES = phy_ports * (EGRESS_FINAL_RULES + EGRESS_VID_RULES * priv->max_vlans)
-	 *  + phy_ports * (INGRESS_FINAL_RULES + INGRESS_VID_RULES * priv-> max_vlans)
+	 * MAX_VLAN_ENTRIES = user_ports * (EGRESS_FINAL_RULES + EGRESS_VID_RULES * priv->max_vlans)
+	 *  + user_ports * (INGRESS_FINAL_RULES + INGRESS_VID_RULES * priv-> max_vlans)
 	 *  + cpu_ingress_entries + cpu_egress_entries
 	 */
 	if (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q) {
-		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->user_pnum *
+		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->hw_info->user_ports *
 				   (EGRESS_FINAL_RULES + INGRESS_FINAL_RULES + 2) - 3) /
-				  (priv->user_pnum *
+				   (priv->hw_info->user_ports *
 				   (EGRESS_VID_RULES + INGRESS_VID_RULES) + 2);
 		/* 2 entries per port and 1 entry for fixed rule */
-		cpu_ingress_entries = priv->hw_info->phy_ports * 2 + 1;
+		cpu_ingress_entries = priv->hw_info->user_ports * 2 + 1;
 		/* 2 entries per each vlan and 2 entries for fixed rules */
 		cpu_egress_entries = priv->max_vlans * 2 + 2;
 
@@ -2717,9 +2714,9 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 		user_ingress_entries = INGRESS_FINAL_RULES + INGRESS_VID_RULES * priv->max_vlans;
 		user_egress_entries = EGRESS_FINAL_RULES + EGRESS_VID_RULES * priv->max_vlans;
 	} else {
-		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->user_pnum *
+		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->hw_info->user_ports *
 				(EGRESS_FINAL_RULES + INGRESS_FINAL_RULES) - 1) /
-			(priv->user_pnum * (EGRESS_VID_RULES + INGRESS_VID_RULES) + 2);
+			(priv->hw_info->user_ports * (EGRESS_VID_RULES + INGRESS_VID_RULES) + 2);
 		/* 1 entry for fixed rule */
 		cpu_ingress_entries =  1;
 		/* 2 entries per each vlan  */
@@ -2741,6 +2738,7 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 
 	/* Set limits and indexes required for processing VLAN rules for user ports */
 	for (i = 0; i < priv->hw_info->max_ports; i++) {
+		//if (!dsa_is_user_port(ds, i))
 		if (dsa_is_unused_port(ds, i))
 			continue;
 
@@ -2755,9 +2753,9 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 		vlan->egress_vlan_block_info.final_filters_idx =
 			vlan->egress_vlan_block_info.filters_max - 1;
 	}
-	dev_info(ds->dev, "%s: user_pnum:%d, priv->max_vlans: %d, cpu_egress_entries: %d, "
+	dev_info(ds->dev, "%s: user_ports: %d, priv->max_vlans: %d, cpu_egress_entries: %d, "
 		 "user_ingress_entries: %d, INGRESS_VID_RULES: %d\n",
-		 __func__, priv->user_pnum, priv->max_vlans,
+		 __func__, priv->hw_info->user_ports, priv->max_vlans,
 		 cpu_egress_entries, user_ingress_entries, INGRESS_VID_RULES);
 }
 
@@ -2897,14 +2895,14 @@ static void mxl862xx_port_bridge_leave(struct dsa_switch *ds, int port,
 	bridge_id = mxl862xx_find_bridge_id(ds, bridge.dev);
 	ret = mxl862xx_update_bridge_conf_port(ds, port, bridge.dev, 0);
 	if (ret) {
-		dev_err(ds->dev, "failed to remove port %d from bridge\n", port);
+		dev_err(ds->dev, "%s: failed to remove port %d from bridge\n", __func__, port);
 		return;
 	}
 
 	if (priv->bridge_portmap[bridge_id] == BIT(DSA_MXL_PORT(cpu_port))) {
 		ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGE_FREE, bridge_alloc);
 		if (ret) {
-			dev_err(ds->dev, "failed to free bridge %d\n", bridge_alloc.bridge_id);
+			dev_err(ds->dev, "%s: failed to free bridge %d\n", __func__, bridge_alloc.bridge_id);
 			return;
 		}
 	}
@@ -3095,12 +3093,13 @@ static void mxl862xx_phylink_get_caps(struct dsa_switch *ds, int port,
 	    (port >= 8 && priv->hw_info->ext_ports >= 7)) {
 		__set_bit(PHY_INTERFACE_MODE_INTERNAL, config->supported_interfaces);
 	} else if (port >= 8 && priv->hw_info->ext_ports == 2) {
+	//} else if (port >= priv->hw_info->cpu_port && priv->hw_info->ext_ports == 2) {
 		__set_bit(PHY_INTERFACE_MODE_SGMII, config->supported_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_1000BASEX, config->supported_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_2500BASEX, config->supported_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_10GBASER, config->supported_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_USXGMII, config->supported_interfaces);
-		config->mac_capabilities |= MAC_10000FD;
+		config->mac_capabilities |= MAC_5000FD | MAC_10000FD;
 	} else {
 		__set_bit(PHY_INTERFACE_MODE_NA, config->supported_interfaces);
 	}

@@ -18,6 +18,7 @@
 
 struct mxl862xx_hw_info {
 	u8 max_ports;
+	u8 user_ports;
 	u8 phy_ports;
 	u8 ext_ports;
 };
