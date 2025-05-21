@@ -5801,7 +5801,11 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
 		regmap = syscon_node_to_regmap(np);
 		flags = 0;
 		if (of_property_read_bool(np, "mediatek,pnswap"))
-			flags |= MTK_SGMII_FLAG_PN_SWAP;
+			flags |= MTK_SGMII_FLAG_PN_SWAP_TX | MTK_SGMII_FLAG_PN_SWAP_RX;
+		else if (of_property_read_bool(np, "mediatek,pnswap-tx"))
+			flags |= MTK_SGMII_FLAG_PN_SWAP_TX;
+		else if (of_property_read_bool(np, "mediatek,pnswap-rx"))
+			flags |= MTK_SGMII_FLAG_PN_SWAP_RX;
 
 		of_node_put(np);
 
