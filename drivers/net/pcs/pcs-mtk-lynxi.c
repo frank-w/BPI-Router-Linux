@@ -72,7 +72,8 @@
 /* Register to QPHY wrapper control */
 #define SGMSYS_QPHY_WRAP_CTRL		0xec
 #define SGMII_PN_SWAP_MASK		GENMASK(1, 0)
-#define SGMII_PN_SWAP_TX_RX		(BIT(0) | BIT(1))
+#define SGMII_PN_SWAP_RX		BIT(1)
+#define SGMII_PN_SWAP_TX		BIT(0)
 
 #define MTK_NETSYS_V3_AMA_RGC3		0x128
 
@@ -163,6 +164,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
 	bool mode_changed = false, changed;
 	unsigned int rgc3, sgm_mode, bmcr;
+	unsigned int pnswap_tx, pnswap_rx;
 	int link_timer;
 
 	if (advertising) {
@@ -209,10 +211,14 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 		regmap_set_bits(mpcs->regmap, SGMSYS_RESERVED_0,
 				SGMII_SW_RESET);
 
-		if (mpcs->flags & MTK_SGMII_FLAG_PN_SWAP)
-			regmap_update_bits(mpcs->regmap, SGMSYS_QPHY_WRAP_CTRL,
-					   SGMII_PN_SWAP_MASK,
-					   SGMII_PN_SWAP_TX_RX);
+		/* Configure the interface polarity */
+		pnswap_tx = (mpcs->flags & MTK_SGMII_FLAG_PN_SWAP_TX) ?
+			    SGMII_PN_SWAP_TX : 0;
+		pnswap_rx = (mpcs->flags & MTK_SGMII_FLAG_PN_SWAP_RX) ?
+			    SGMII_PN_SWAP_RX : 0;
+		regmap_update_bits(mpcs->regmap, SGMSYS_QPHY_WRAP_CTRL,
+				   SGMII_PN_SWAP_MASK,
+				   pnswap_tx | pnswap_rx);
 
 		if (interface == PHY_INTERFACE_MODE_2500BASEX)
 			rgc3 = SGMII_PHY_SPEED_3_125G;
@@ -433,7 +439,11 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 		return PTR_ERR(regmap);
 
 	if (of_property_read_bool(np->parent, "mediatek,pnswap"))
-		flags |= MTK_SGMII_FLAG_PN_SWAP;
+		flags |= MTK_SGMII_FLAG_PN_SWAP_TX | MTK_SGMII_FLAG_PN_SWAP_RX;
+	else if (of_property_read_bool(np->parent, "mediatek,pnswap-tx"))
+		flags |= MTK_SGMII_FLAG_PN_SWAP_TX;
+	else if (of_property_read_bool(np->parent, "mediatek,pnswap-rx"))
+		flags |= MTK_SGMII_FLAG_PN_SWAP_RX;
 
 	if (of_parse_phandle(np->parent, "resets", 0)) {
 		mpcs->rstc = of_reset_control_get_shared(np->parent, NULL);
