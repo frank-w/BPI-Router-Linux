@@ -114,7 +114,8 @@ mt7531_create_sgmii(struct mt7530_priv *priv)
 			break;
 		}
 		pcs = mtk_pcs_lynxi_create(priv->dev, regmap,
-					   MT7531_PHYA_CTRL_SIGNAL3, 0);
+					   MT7531_PHYA_CTRL_SIGNAL3,
+					   MTK_SGMII_FLAG_PN_SWAP_TX);
 		if (!pcs) {
 			ret = -ENXIO;
 			break;
