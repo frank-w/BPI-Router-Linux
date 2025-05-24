@@ -3302,7 +3302,7 @@ static void mtk_dma_free(struct mtk_eth *eth)
 			continue;
 
 		for (j = 0; j < txqs; j++)
-			netdev_tx_reset_queue(netdev_get_tx_queue(eth->netdev[i], j));
+			netdev_tx_reset_subqueue(eth->netdev[i], j);
 	}
 
 	if (!MTK_HAS_CAPS(soc->caps, MTK_SRAM) && eth->scratch_ring) {
@@ -3580,9 +3580,6 @@ static int mtk_open(struct net_device *dev)
 			}
 			mtk_gdm_config(eth, target_mac->id, gdm_config);
 		}
-		/* Reset and enable PSE */
-		mtk_w32(eth, RST_GL_PSE, MTK_RST_GL);
-		mtk_w32(eth, 0, MTK_RST_GL);
 
 		napi_enable(&eth->tx_napi);
 		napi_enable(&eth->rx_napi);
