@@ -110,6 +110,9 @@ int tcp_twsk_unique(struct sock *sk, struct sock *sktw, void *twp)
 	const struct tcp_timewait_sock *tcptw = tcp_twsk(sktw);
 	struct tcp_sock *tp = tcp_sk(sk);
 
+	if (tw->tw_substate == TCP_FIN_WAIT2)
+		reuse = 0;
+
 	if (reuse == 2) {
 		/* Still does not detect *everything* that goes through
 		 * lo, since we require a loopback src or dst address
@@ -2497,7 +2500,7 @@ static void get_tcp4_sock(struct sock *sk, struct seq_file *f, int i)
 
 	state = inet_sk_state_load(sk);
 	if (state == TCP_LISTEN)
-		rx_queue = sk->sk_ack_backlog;
+		rx_queue = READ_ONCE(sk->sk_ack_backlog);
 	else
 		/* Because we don't lock the socket,
 		 * we might find a transient negative value.
