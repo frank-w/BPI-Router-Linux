@@ -100,7 +100,6 @@ jobs:
           bash build.sh cryptodev
       - name: Pack for bananapi-r64
         run: |
-          bash build.sh pack_debs
           bash build.sh pack
 
       - name: Upload binaries to release
