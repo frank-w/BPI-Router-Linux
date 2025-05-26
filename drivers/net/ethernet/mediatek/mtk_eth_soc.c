@@ -575,9 +575,14 @@ static int mtk_mac_prepare(struct phylink_config *config, unsigned int mode,
 		mtk_m32(mac->hw, XMAC_MCR_TRX_DISABLE,
 			XMAC_MCR_TRX_DISABLE, MTK_XMAC_MCR(mac->id));
 
-		mtk_m32(mac->hw, MTK_XGMAC_FORCE_MODE(mac->id) |
-				 MTK_XGMAC_FORCE_LINK(mac->id),
-			MTK_XGMAC_FORCE_MODE(mac->id), MTK_XGMAC_STS(mac->id));
+		if (MTK_HAS_CAPS(eth->soc->caps, MTK_XGMAC_V2))
+			mtk_m32(mac->hw, XMAC_FORCE_RX_FC_MODE | XMAC_FORCE_TX_FC_MODE |
+					 XMAC_FORCE_LINK_MODE | XMAC_FORCE_LINK,
+					 XMAC_FORCE_RX_FC_MODE | XMAC_FORCE_TX_FC_MODE |
+					 XMAC_FORCE_LINK_MODE, MTK_XMAC_STS_FRC(mac->id));
+		else
+			mtk_m32(mac->hw, MTK_XGMAC_FORCE_MODE(mac->id) | MTK_XGMAC_FORCE_LINK(mac->id),
+				MTK_XGMAC_FORCE_MODE(mac->id), MTK_XGMAC_STS(mac->id));
 	}
 
 	return 0;
@@ -775,6 +780,7 @@ static void mtk_mac_link_down(struct phylink_config *config, unsigned int mode,
 {
 	struct mtk_mac *mac = container_of(config, struct mtk_mac,
 					   phylink_config);
+	struct mtk_eth *eth = mac->hw;
 
 	if (!mtk_interface_mode_is_xgmii(mac->hw, interface)) {
 		/* GMAC modes */
@@ -784,12 +790,14 @@ static void mtk_mac_link_down(struct phylink_config *config, unsigned int mode,
 		if (mtk_is_netsys_v3_or_greater(mac->hw))
 			mtk_m32(mac->hw, MTK_XGMAC_FORCE_LINK(mac->id), 0,
 				MTK_XGMAC_STS(mac->id));
-	} else if (mac->id != MTK_GMAC1_ID) {
+	} else if (mtk_is_netsys_v3_or_greater(mac->hw) && mac->id != MTK_GMAC1_ID) {
 		/* XGMAC except for built-in switch */
 		mtk_m32(mac->hw, XMAC_MCR_TRX_DISABLE, XMAC_MCR_TRX_DISABLE,
 			MTK_XMAC_MCR(mac->id));
-		mtk_m32(mac->hw, MTK_XGMAC_FORCE_LINK(mac->id), 0,
-			MTK_XGMAC_STS(mac->id));
+		if (MTK_HAS_CAPS(eth->soc->caps, MTK_XGMAC_V2))
+			mtk_m32(mac->hw, XMAC_FORCE_LINK, 0, MTK_XMAC_STS_FRC(mac->id));
+		else
+			mtk_m32(mac->hw, MTK_XGMAC_FORCE_LINK(mac->id), 0, MTK_XGMAC_STS(mac->id));
 	}
 }
 
@@ -803,10 +811,16 @@ static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
 		return;
 
 	val = MTK_QTX_SCH_MIN_RATE_EN |
-	      /* minimum: 10 Mbps */
-	      FIELD_PREP(MTK_QTX_SCH_MIN_RATE_MAN, 1) |
-	      FIELD_PREP(MTK_QTX_SCH_MIN_RATE_EXP, 4) |
 	      MTK_QTX_SCH_LEAKY_BUCKET_SIZE;
+	/* minimum: 10 Mbps */
+	if (mtk_is_netsys_v3_or_greater(eth) &&
+	    (eth->soc->caps != MT7988_CAPS)) {
+		val |= FIELD_PREP(MTK_QTX_SCH_MIN_RATE_MAN_V3, 1) |
+		       FIELD_PREP(MTK_QTX_SCH_MIN_RATE_EXP_V3, 4);
+	} else {
+		val |= FIELD_PREP(MTK_QTX_SCH_MIN_RATE_MAN, 1) |
+		       FIELD_PREP(MTK_QTX_SCH_MIN_RATE_EXP, 4);
+	}
 	if (mtk_is_netsys_v1(eth))
 		val |= MTK_QTX_SCH_LEAKY_BUCKET_EN;
 
@@ -829,6 +843,30 @@ static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_MAN, 105) |
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_EXP, 4) |
 			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_WEIGHT, 10);
+			break;
+		default:
+			break;
+		}
+	} else if (mtk_is_netsys_v3_or_greater(eth) &&
+		   (eth->soc->caps != MT7988_CAPS)) {
+		switch (speed) {
+		case SPEED_10:
+			val |= MTK_QTX_SCH_MAX_RATE_EN_V3 |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_MAN_V3, 1) |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_EXP_V3, 4) |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_WEIGHT_V3, 1);
+			break;
+		case SPEED_100:
+			val |= MTK_QTX_SCH_MAX_RATE_EN_V3 |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_MAN_V3, 1) |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_EXP_V3, 5) |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_WEIGHT_V3, 1);
+			break;
+		case SPEED_1000:
+			val |= MTK_QTX_SCH_MAX_RATE_EN_V3 |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_MAN_V3, 1) |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_EXP_V3, 6) |
+			       FIELD_PREP(MTK_QTX_SCH_MAX_RATE_WEIGHT_V3, 10);
 			break;
 		default:
 			break;
@@ -919,6 +957,7 @@ static void mtk_xgdm_mac_link_up(struct mtk_mac *mac,
 				 int speed, int duplex, bool tx_pause,
 				 bool rx_pause)
 {
+	struct mtk_eth *eth = mac->hw;
 	u32 mcr;
 
 	if (mac->id == MTK_GMAC1_ID)
@@ -930,21 +969,35 @@ static void mtk_xgdm_mac_link_up(struct mtk_mac *mac,
 	mtk_m32(mac->hw, XMAC_GLB_CNTCLR, XMAC_GLB_CNTCLR,
 		MTK_XMAC_CNT_CTRL(mac->id));
 
-	mtk_m32(mac->hw, MTK_XGMAC_FORCE_LINK(mac->id),
-		MTK_XGMAC_FORCE_LINK(mac->id), MTK_XGMAC_STS(mac->id));
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_XGMAC_V2)) {
+		mcr = mtk_r32(mac->hw, MTK_XMAC_STS_FRC(mac->id));
+		mcr |= XMAC_FORCE_LINK;
+		mcr &= ~(XMAC_FORCE_TX_FC | XMAC_FORCE_RX_FC);
+		/* Configure pause modes -
+		 * phylink will avoid these for half duplex
+		 */
+		if (tx_pause)
+			mcr |= XMAC_FORCE_TX_FC;
+		if (rx_pause)
+			mcr |= XMAC_FORCE_RX_FC;
+		mtk_w32(mac->hw, mcr, MTK_XMAC_STS_FRC(mac->id));
+		mtk_m32(mac->hw, XMAC_MCR_TRX_DISABLE, 0, MTK_XMAC_MCR(mac->id));
+	} else {
+		mtk_m32(mac->hw, MTK_XGMAC_FORCE_LINK(mac->id),
+			MTK_XGMAC_FORCE_LINK(mac->id), MTK_XGMAC_STS(mac->id));
 
-	mcr = mtk_r32(mac->hw, MTK_XMAC_MCR(mac->id));
-	mcr &= ~(XMAC_MCR_FORCE_TX_FC | XMAC_MCR_FORCE_RX_FC |
-		 XMAC_MCR_TRX_DISABLE);
-	/* Configure pause modes -
-	 * phylink will avoid these for half duplex
-	 */
-	if (tx_pause)
-		mcr |= XMAC_MCR_FORCE_TX_FC;
-	if (rx_pause)
-		mcr |= XMAC_MCR_FORCE_RX_FC;
+		mcr = mtk_r32(mac->hw, MTK_XMAC_MCR(mac->id));
+		mcr &= ~(XMAC_MCR_FORCE_TX_FC | XMAC_MCR_FORCE_RX_FC | XMAC_MCR_TRX_DISABLE);
+		/* Configure pause modes -
+		 * phylink will avoid these for half duplex
+		 */
+		if (tx_pause)
+			mcr |= XMAC_MCR_FORCE_TX_FC;
+		if (rx_pause)
+			mcr |= XMAC_MCR_FORCE_RX_FC;
 
-	mtk_w32(mac->hw, mcr, MTK_XMAC_MCR(mac->id));
+		mtk_w32(mac->hw, mcr, MTK_XMAC_MCR(mac->id));
+	}
 }
 
 static void mtk_mac_link_up(struct phylink_config *config,
@@ -2796,10 +2849,16 @@ static int mtk_tx_alloc(struct mtk_eth *eth)
 			mtk_w32(eth, val, soc->reg_map->qdma.qtx_cfg + ofs);
 
 			val = MTK_QTX_SCH_MIN_RATE_EN |
-			      /* minimum: 10 Mbps */
-			      FIELD_PREP(MTK_QTX_SCH_MIN_RATE_MAN, 1) |
-			      FIELD_PREP(MTK_QTX_SCH_MIN_RATE_EXP, 4) |
 			      MTK_QTX_SCH_LEAKY_BUCKET_SIZE;
+			/* minimum: 10 Mbps */
+			if (mtk_is_netsys_v3_or_greater(eth) &&
+			    (eth->soc->caps != MT7988_CAPS)) {
+				val |= FIELD_PREP(MTK_QTX_SCH_MIN_RATE_MAN_V3, 1) |
+				       FIELD_PREP(MTK_QTX_SCH_MIN_RATE_EXP_V3, 4);
+			} else {
+				val |= FIELD_PREP(MTK_QTX_SCH_MIN_RATE_MAN, 1) |
+				       FIELD_PREP(MTK_QTX_SCH_MIN_RATE_EXP, 4);
+			}
 			if (mtk_is_netsys_v1(eth))
 				val |= MTK_QTX_SCH_LEAKY_BUCKET_EN;
 			mtk_w32(eth, val, soc->reg_map->qdma.qtx_sch + ofs);
@@ -6249,6 +6308,37 @@ static const struct mtk_soc_data mt7986_data = {
 	},
 };
 
+static const struct mtk_soc_data mt7987_data = {
+	.reg_map = &mt7988_reg_map,
+	.ana_rgc3 = 0x128,
+	.caps = MT7987_CAPS,
+	.hw_features = MTK_HW_FEATURES,
+	.required_clks = MT7987_CLKS_BITMAP,
+	.required_pctl = false,
+	.version = 3,
+	.offload_version = 2,
+	.ppe_num = 2,
+	.hash_offset = 4,
+	.has_accounting = true,
+	.foe_entry_size = MTK_FOE_ENTRY_V3_SIZE,
+	//.rss_num = 4,
+	.tx = {
+		.desc_size = sizeof(struct mtk_tx_dma_v2),
+		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
+		.dma_len_offset = 8,
+		.dma_size = MTK_DMA_SIZE(2K),
+		.fq_dma_size = MTK_DMA_SIZE(4K),
+	},
+	.rx = {
+		.desc_size = sizeof(struct mtk_rx_dma_v2),
+		.irq_done_mask = MTK_RX_DONE_INT_V2,
+		.dma_l4_valid = RX_DMA_L4_VALID_V2,
+		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
+		.dma_len_offset = 8,
+		.dma_size = MTK_DMA_SIZE(2K),
+	},
+};
+
 static const struct mtk_soc_data mt7988_data = {
 	.reg_map = &mt7988_reg_map,
 	.ana_rgc3 = 0x128,
@@ -6310,6 +6400,7 @@ const struct of_device_id of_mtk_match[] = {
 	{ .compatible = "mediatek,mt7629-eth", .data = &mt7629_data },
 	{ .compatible = "mediatek,mt7981-eth", .data = &mt7981_data },
 	{ .compatible = "mediatek,mt7986-eth", .data = &mt7986_data },
+	{ .compatible = "mediatek,mt7987-eth", .data = &mt7987_data },
 	{ .compatible = "mediatek,mt7988-eth", .data = &mt7988_data },
 	{ .compatible = "ralink,rt5350-eth", .data = &rt5350_data },
 	{},
