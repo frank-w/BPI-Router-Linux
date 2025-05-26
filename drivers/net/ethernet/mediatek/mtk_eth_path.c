@@ -106,13 +106,14 @@ static int set_mux_gmac2_gmac0_to_gephy(struct mtk_eth *eth, u64 path)
 	return 0;
 }
 
-static int set_mux_u3_gmac2_to_qphy(struct mtk_eth *eth, u64 path)
+static int set_mux_u3_gmac23_to_qphy(struct mtk_eth *eth, u64 path)
 {
 	unsigned int val = 0, mask = 0, reg = 0;
 	bool updated = true;
 
 	switch (path) {
 	case MTK_ETH_PATH_GMAC2_SGMII:
+	case MTK_ETH_PATH_GMAC3_SGMII:
 		if (MTK_HAS_CAPS(eth->soc->caps, MTK_U3_COPHY_V2)) {
 			reg = USB_PHY_SWITCH_REG;
 			val = SGMII_QPHY_SEL;
@@ -283,9 +284,9 @@ static const struct mtk_eth_muxc mtk_eth_muxc[] = {
 		.cap_bit = MTK_ETH_MUX_GMAC2_GMAC0_TO_GEPHY,
 		.set_path = set_mux_gmac2_gmac0_to_gephy,
 	}, {
-		.name = "mux_u3_gmac2_to_qphy",
-		.cap_bit = MTK_ETH_MUX_U3_GMAC2_TO_QPHY,
-		.set_path = set_mux_u3_gmac2_to_qphy,
+		.name = "mux_u3_gmac23_to_qphy",
+		.cap_bit = MTK_ETH_MUX_U3_GMAC23_TO_QPHY,
+		.set_path = set_mux_u3_gmac23_to_qphy,
 	}, {
 		.name = "mux_gmac2_to_2p5gphy",
 		.cap_bit = MTK_ETH_MUX_GMAC2_TO_2P5GPHY,
