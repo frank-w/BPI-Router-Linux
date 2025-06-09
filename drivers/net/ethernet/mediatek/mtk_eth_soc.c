@@ -5653,17 +5653,12 @@ static int mtk_probe(struct platform_device *pdev)
 		}
 	}
 
-	if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT)) {
-		for (i = 0; i < MTK_PDMA_IRQ_NUM; i++)
-			eth->irq_pdma[i] = platform_get_irq(pdev, i);
-	}
-
 	for (i = 0; i < MTK_FE_IRQ_NUM; i++) {
 		if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_INT) && i > 0)
 			eth->irq_fe[i] = eth->irq_fe[0];
 		else if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT))
 			eth->irq_fe[i] =
-				platform_get_irq(pdev, MTK_PDMA_IRQ_NUM + i);
+				platform_get_irq(pdev, i);
 		else
 			eth->irq_fe[i] = platform_get_irq(pdev, i);
 		if (eth->irq_fe[i] < 0) {
@@ -5672,6 +5667,12 @@ static int mtk_probe(struct platform_device *pdev)
 			goto err_wed_exit;
 		}
 	}
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT)) {
+		for (i = 0; i < MTK_PDMA_IRQ_NUM; i++)
+			eth->irq_pdma[i] = platform_get_irq(pdev, 4 + i);
+	}
+
 	for (i = 0; i < ARRAY_SIZE(eth->clks); i++) {
 		eth->clks[i] = devm_clk_get(eth->dev,
 					    mtk_clks_source_name[i]);
