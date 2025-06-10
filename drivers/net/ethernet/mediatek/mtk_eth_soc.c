@@ -5427,6 +5427,26 @@ free_netdev:
 	return err;
 }
 
+static int mtk_mac_assign_address(struct mtk_eth *eth, int i, bool test_defer_only)
+{
+	int err = of_get_ethdev_address(eth->mac[i]->of_node, eth->netdev[i]);
+
+	if (err == -EPROBE_DEFER)
+		return err;
+
+	if (test_defer_only)
+		return 0;
+
+	if (err) {
+		/* If the mac address is invalid, use random mac address */
+		eth_hw_addr_random(eth->netdev[i]);
+		dev_err(eth->dev, "generated random MAC address %pM\n",
+			eth->netdev[i]);
+	}
+
+	return 0;
+}
+
 void mtk_eth_set_dma_device(struct mtk_eth *eth, struct device *dma_dev)
 {
 	struct net_device *dev, *tmp;
