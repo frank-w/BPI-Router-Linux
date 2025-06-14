@@ -5690,8 +5690,14 @@ static int mtk_probe(struct platform_device *pdev)
 	}
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT)) {
+		char rxring[9];
 		for (i = 0; i < MTK_PDMA_IRQ_NUM; i++)
-			eth->irq_pdma[i] = platform_get_irq(pdev, 4 + i);
+		{
+			snprintf(rxring, sizeof(rxring), "rx-ring%d", i);
+			eth->irq_pdma[i] = platform_get_irq_byname(pdev, rxring);
+			if (eth->irq_pdma[i] < 0)
+				eth->irq_pdma[i] = platform_get_irq(pdev, 4 + i);
+		}
 	}
 
 	for (i = 0; i < ARRAY_SIZE(eth->clks); i++) {
