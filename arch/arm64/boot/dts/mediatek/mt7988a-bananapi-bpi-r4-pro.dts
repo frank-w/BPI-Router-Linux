@@ -45,13 +45,25 @@
 		i2c6 = &imux3_wifi;
 	};
 	chosen {
-		stdout-path = &uart0;
+		stdout-path = &serial0;
 		bootargs = "console=ttyS0,115200n1 loglevel=8  \
 			    earlycon=uart8250,mmio32,0x11000000 \
 			    pci=pcie_bus_perf ubi.block=0,firmware root=/dev/fit0 \
 			    rootwait";
 		rootdisk-spim-nand = <&ubi_rootfs>;
 	};
+
+	fan: pwm-fan {
+		compatible = "pwm-fan";
+		/* cooling level (0, 1, 2, 3) : (0% duty, 30% duty, 50% duty, 100% duty) */
+		cooling-levels = <0 80 128 255>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pwm0_pins>;
+		pwms = <&pwm 0 50000>;
+		#cooling-cells = <2>;
+		#thermal-sensor-cells = <1>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 		reset {
@@ -65,6 +77,7 @@
 			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
 		};
 	};
+
 	gpio-leds {
 		compatible = "gpio-leds";
 		led_red: sys-led-red {
@@ -105,12 +118,16 @@
 	pinctrl-names = "default";
 	status = "okay";
 	mux: mux-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
 		mux1: ethernet-mux@1 {
 			compatible = "mediatek,eth-mux";
 			reg = <1>;
 			chan-sel-gpios = <&pio 3 GPIO_ACTIVE_HIGH>;
 			mod-def0-gpios = <&pio 1 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 			channel_10: channel@0 {
 				reg = <0>;
 				phy-mode = "usxgmii";
@@ -131,6 +148,8 @@
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
 			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 			channel_20: channel@0 {
 				reg = <0>;
 				phy-mode = "10gbase-r";
@@ -232,6 +251,8 @@
 		dsa,member = <0 0>;
 		status = "disabled";
 		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
 			port0: port@0 {
 				reg = <0>;
 				label = "mxl_lan0";
@@ -286,6 +307,8 @@
 			};
 		};
 		mdio {
+			#address-cells = <1>;
+			#size-cells = <0>;
 			switchphy0:switchphy@0 {
 				reg= <0>;
 			};
@@ -301,6 +324,76 @@
 			switchphy4:switchphy@4 {
 				reg= <4>;
 			};
+		};
+	};
+};
+
+&pio {
+	i2c0_pins: i2c0-g0-pins {
+		mux {
+			function = "i2c";
+			groups = "i2c0_1";
+		};
+	};
+
+	i2c1_pins: i2c1-g0-pins {
+		mux {
+			function = "i2c";
+			groups = "i2c1_0";
+		};
+	};
+
+	i2c2_1_pins: i2c2-g1-pins {
+		mux {
+			function = "i2c";
+			groups = "i2c2_1";
+		};
+	};
+
+	gbe0_led0_pins: gbe0-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe0_led0";
+		};
+	};
+
+	gbe1_led0_pins: gbe1-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe1_led0";
+		};
+	};
+
+	gbe2_led0_pins: gbe2-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe2_led0";
+		};
+	};
+
+	gbe3_led0_pins: gbe3-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe3_led0";
+		};
+	};
+
+	mdio0_pins: mdio0-pins {
+		mux {
+			function = "eth";
+			groups = "mdc_mdio0";
+		};
+
+		conf {
+			pins = "SMI_0_MDC", "SMI_0_MDIO";
+			drive-strength = <8>;
+		};
+	};
+
+	spi0_flash_pins: spi0-flash-pins {
+		mux {
+			function = "spi";
+			groups = "spi0", "spi0_wp_hold";
 		};
 	};
 };
@@ -480,6 +573,9 @@
 	pinctrl-0 = <&pcie0_pins>;
 	status = "okay";
 	slot0: pcie@0,0 {
+		#address-cells = <3>;
+		#size-cells = <2>;
+
 		reg = <0x0000 0 0 0 0>;
 		mt7996@0,0 {
 			compatible = "mediatek,mt76";
@@ -597,22 +693,22 @@
 		};
 	};
 };
-&uart0 {
+&serial0 {
 	status = "okay";
 };
-&uart1 {
+&serial1 {
 	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart1_2_lite_pins>;
+	//pinctrl-names = "default";
+	//pinctrl-0 = <&uart1_2_lite_pins>;
 };
-&uart2 {
+&serial2 {
 	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart2_3_pins>;
+	//pinctrl-names = "default";
+	//pinctrl-0 = <&uart2_3_pins>;
 };
 &watchdog {
 	status = "okay";
 };
-&xphy {
+&xsphy {
 	status = "okay";
 };
