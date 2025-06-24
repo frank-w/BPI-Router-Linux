@@ -1146,6 +1146,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21011PB1),
@@ -1160,6 +1161,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21010PB1),
@@ -1174,6 +1176,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21010JB1),
@@ -1188,6 +1191,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21210PB1),
@@ -1202,6 +1206,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21510JB1),
@@ -1216,6 +1221,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21510PB1),
@@ -1230,6 +1236,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21511JB1),
@@ -1244,6 +1251,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21210JB1),
@@ -1258,6 +1266,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21511PB1),
@@ -1272,6 +1281,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.led_hw_control_set = as21xxx_led_hw_control_set,
 		.led_hw_control_get = as21xxx_led_hw_control_get,
 		.led_polarity_set = as21xxx_led_polarity_set,
+		.flags = PHY_DETACH_NO_RESET,
 	},
 };
 module_phy_driver(as21xxx_drivers);
