@@ -1245,7 +1245,8 @@ struct mtk_soc_data {
  * @dev:		The device pointer
  * @dma_dev:		The device pointer used for dma mapping/alloc
  * @base:		The mapped register i/o base
- * @sram_base:		The mapped SRAM base
+ * @sram_base:		The mapped SRAM base (deprecated)
+ * @sram_pool:		Pointer to SRAM pool used for DMA descriptor rings
  * @page_lock:		Make sure that register operations are atomic
  * @tx_irq__lock:	Make sure that IRQ register operations are atomic
  * @rx_irq__lock:	Make sure that IRQ register operations are atomic
@@ -1292,6 +1293,7 @@ struct mtk_eth {
 	struct device			*dma_dev;
 	void __iomem			*base;
 	void				*sram_base;
+	struct gen_pool			*sram_pool;
 	spinlock_t			page_lock;
 	spinlock_t			tx_irq_lock;
 	spinlock_t			rx_irq_lock;
