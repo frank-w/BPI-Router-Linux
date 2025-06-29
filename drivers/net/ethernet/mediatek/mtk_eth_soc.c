@@ -1279,7 +1279,7 @@ static void *mtk_dma_ring_alloc(struct mtk_eth *eth, size_t size,
 	void *dma_ring;
 
 	if (WARN_ON(mtk_use_legacy_sram(eth)))
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	if (eth->sram_pool) {
 		dma_ring = (void *)gen_pool_alloc(eth->sram_pool, size);
