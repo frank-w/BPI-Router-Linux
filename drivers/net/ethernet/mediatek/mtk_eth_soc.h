@@ -683,6 +683,13 @@ struct mtk_tx_dma_v2 {
 	unsigned int txd8;
 } __packed __aligned(4);
 
+struct mtk_dma_cookie {
+	union {
+		unsigned long gen_pool;
+		void *coherent;
+	};
+};
+
 struct mtk_eth;
 struct mtk_mac;
 

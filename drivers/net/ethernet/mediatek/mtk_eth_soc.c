@@ -1277,15 +1277,17 @@ static void *mtk_dma_ring_alloc(struct mtk_eth *eth, size_t size,
 				dma_addr_t *dma_handle)
 {
 	void *dma_ring;
+	struct mtk_dma_cookie dma;
 
 	if (WARN_ON(mtk_use_legacy_sram(eth)))
 		return ERR_PTR(-ENOMEM);
 
 	if (eth->sram_pool) {
-		dma_ring = (void *)gen_pool_alloc(eth->sram_pool, size);
-		if (!dma_ring)
-			return dma_ring;
-		*dma_handle = gen_pool_virt_to_phys(eth->sram_pool, (unsigned long)dma_ring);
+		dma.gen_pool = gen_pool_alloc(eth->sram_pool, size);
+		if (!dma.coherent)
+			return dma.coherent;
+		*dma_handle = gen_pool_virt_to_phys(eth->sram_pool, dma.gen_pool);
+		dma_ring = dma.coherent;
 	} else {
 		dma_ring = dma_alloc_coherent(eth->dma_dev, size, dma_handle,
 					      GFP_KERNEL);
@@ -1297,12 +1299,15 @@ static void *mtk_dma_ring_alloc(struct mtk_eth *eth, size_t size,
 static void mtk_dma_ring_free(struct mtk_eth *eth, size_t size, void *dma_ring,
 			      dma_addr_t dma_handle)
 {
+	struct mtk_dma_cookie dma;
+
 	if (WARN_ON(mtk_use_legacy_sram(eth)))
 		return;
 
-	if (eth->sram_pool)
-		gen_pool_free(eth->sram_pool, (unsigned long)dma_ring, size);
-	else
+	if (eth->sram_pool) {
+		dma.coherent = dma_ring;
+		gen_pool_free(eth->sram_pool, dma.gen_pool, size);
+	} else
 		dma_free_coherent(eth->dma_dev, size, dma_ring, dma_handle);
 }
 
