@@ -450,6 +450,36 @@
 			label = "bl2";
 			reg = <0x0 0x200000>;
 		};
+
+		partition@200000 {
+			label = "ubi";
+			reg = <0x200000 0x7e00000>;
+			compatible = "linux,ubi";
+
+			/*volumes {
+				ubi-volume-fip {
+					volname = "fip";
+				};
+
+				ubi-volume-ubootenv {
+					volname = "ubootenv";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool-layout";
+					};
+				};
+
+				ubi-volume-ubootenv2 {
+					volname = "ubootenv2";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool-layout";
+					};
+				};
+
+				ubi_rootfs: ubi-volume-rootfs {
+					volname = "rootfs";
+				};
+			};*/
+		};
 	};
 };
 
