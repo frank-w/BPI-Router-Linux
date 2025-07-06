@@ -1,0 +1,8 @@
+config MTD_RW
+	tristate "Module to make all MTD partitions writeable"
+	default n
+	help
+		Say M here to build a module which, upon loading, will make
+		all read-only MTD partitions writeable. Do not say Y here.
+
+		If unsure, say N.
