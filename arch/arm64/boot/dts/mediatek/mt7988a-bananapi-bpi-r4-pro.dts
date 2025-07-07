@@ -94,6 +94,25 @@
 	memory {
 		reg = <0x00 0x40000000 0x00 0x10000000>;
 	};
+
+	reg_1p8v: regulator-1p8v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-1.8V";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_3p3v: regulator-3p3v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
 	/* SFP1 cage (LAN) */
 	sfp1: sfp1 {
 		compatible = "sff,sfp";
@@ -113,11 +132,12 @@
 		maximum-power-milliwatt = <3000>;
 	};
 };
+
 &eth {
 	pinctrl-0 = <&mdio0_pins>;
 	pinctrl-names = "default";
 	status = "okay";
-	mux: mux-bus {
+	/*mux: mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		mux1: ethernet-mux@1 {
@@ -164,7 +184,7 @@
 				phy-handle = <&phy24>;
 			};
 		};
-	};
+	};*/
 };
 &gmac0 {
 	status = "okay";
@@ -174,10 +194,10 @@
 &gmac1 {
 	phy-mode = "usxgmii";
 	phy-connection-type = "usxgmii";
-	phy = <&phy28>;
+	//phy = <&phy28>;
 	nvmem-cell-names = "mac-address";
-	nvmem-cells = <&gmac1_mac>;
-	status = "okay";
+	//nvmem-cells = <&gmac1_mac>;
+	//status = "okay";
 };
 &gmac2 {
 	phy-mode = "10gbase-r";
@@ -196,60 +216,11 @@
 };
 &mdio_bus {
 	/* external Airoha AN8831X is connected to Mxl 2.5G switch */
-	phy24: ethernet-phy@24 {
-		reg = <24>;
-		compatible = "ethernet-phy-ieee802.3-c45";
-		reset-gpios = <&pca9555 12 GPIO_ACTIVE_LOW>;
-		reset-assert-us = <200000>;
-		reset-deassert-us = <350000>;
-		firmware-name = "as21x1x_fw.bin";
-		leds {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			phy24_led0: an8831x_phy24_led0@0 {
-				reg = <0>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-			phy24_led1: an8831x_phy24_led1@1 {
-				reg = <1>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-		};
-	};
-	/* external Airoha AN8831X */
-	phy28: ethernet-phy@28 {
-		reg = <28>;
-		compatible = "ethernet-phy-ieee802.3-c45";
-		reset-gpios = <&pca9555 13 GPIO_ACTIVE_LOW>;
-		reset-assert-us = <200000>;
-		reset-deassert-us = <350000>;
-		firmware-name = "as21x1x_fw.bin";
-		leds {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			phy28_led0: an8831x_phy28_led0@0 {
-				reg = <0>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-			phy28_led1: an8831x_phy28_led1@1 {
-				reg = <1>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-		};
-	};
 	switch16: switch@16 {
 		compatible = "mxl,86252";
 		reg = <16>;
 		dsa,member = <0 0>;
-		status = "disabled";
+		status = "okay";
 		ports {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -288,12 +259,12 @@
 				phy-mode = "internal";
 				status = "okay";
 			};
-			port12: port@12 {
+			/*port12: port@12 {
 				reg = <12>;
 				label = "mxl_lan12";
 				phy-mode = "xfi";
 				status = "okay";
-			};
+			};*/
 			port8: port@8 {
 				reg = <8>;
 				label = "cpu";
@@ -326,6 +297,55 @@
 			};
 		};
 	};
+	/*phy24: ethernet-phy@24 {
+		reg = <24>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pca9555 12 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "as21x1x_fw.bin";
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			phy24_led0: an8831x_phy24_led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+			phy24_led1: an8831x_phy24_led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};*/
+	/* external Airoha AN8831X */
+	/*phy28: ethernet-phy@28 {
+		reg = <28>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pca9555 13 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "as21x1x_fw.bin";
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			phy28_led0: an8831x_phy28_led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+			phy28_led1: an8831x_phy28_led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};*/
 };
 
 &pio {
@@ -390,6 +410,27 @@
 		};
 	};
 
+	mmc0_pins_emmc_45: mmc0-emmc-45-pins {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	mmc0_pins_emmc_51: mmc0-emmc-51-pins {
+		mux {
+			function = "flash";
+			groups = "emmc_51";
+		};
+	};
+
+	mmc0_pins_sdcard: mmc0-sdcard-pins {
+		mux {
+			function = "flash";
+			groups = "sdcard";
+		};
+	};
+
 	spi0_flash_pins: spi0-flash-pins {
 		mux {
 			function = "spi";
@@ -436,6 +477,10 @@
 	status = "okay";
 	color = <LED_COLOR_ID_GREEN>;
 };
+&cci {
+	proc-supply = <&rt5190_buck3>;
+	//status = "disabled";
+};
 &cpu0 {
 	proc-supply = <&rt5190_buck3>;
 };
@@ -446,9 +491,6 @@
 	proc-supply = <&rt5190_buck3>;
 };
 &cpu3 {
-	proc-supply = <&rt5190_buck3>;
-};
-&cci {
 	proc-supply = <&rt5190_buck3>;
 };
 &i2c0 {
@@ -625,10 +667,10 @@
 	phys = <&xphyu2port0 PHY_TYPE_USB2>;
 	mediatek,u3p-dis-msk = <1>;
 	/delete-property/ mediatek,p0_speed_fixup;
-	status = "okay";
+	//status = "okay";
 };
 &ssusb1 {
-	status = "okay";
+	//status = "okay";
 };
 &tphy {
 	status = "okay";
