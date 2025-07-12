@@ -3332,6 +3332,11 @@ static int mtk_hwlro_get_fdir_all(struct net_device *dev,
 	return 0;
 }
 
+static bool mtk_rss_available(struct mtk_eth *eth)
+{
+	return (eth->soc->rss_num && eth->irq_pdma[eth->soc->rss_num - 1]>=0);
+}
+
 static u32 mtk_rss_indr_table(struct mtk_rss_params *rss_params, int index)
 {
 	u32 val = 0;
@@ -4612,7 +4617,7 @@ static int mtk_hw_init(struct mtk_eth *eth, bool reset)
 	mtk_w32(eth, MTK_TX_DONE_INT, reg_map->qdma.int_grp);
 	mtk_w32(eth, MTK_RX_DONE_INT(0), reg_map->qdma.int_grp + 4);
 
-	if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT)) {
+	if (mtk_rss_available(eth)) {
 		mtk_w32(eth, 0x210FFFF2, MTK_FE_INT_GRP);
 	} else {
 		mtk_w32(eth, MTK_TX_DONE_INT, reg_map->pdma.int_grp);
@@ -5797,7 +5802,7 @@ static int mtk_probe(struct platform_device *pdev)
 		if (err)
 			goto err_free_dev;
 
-		if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT)) {
+		if (mtk_rss_available(eth)) {
 			irqname = devm_kasprintf(eth->dev, GFP_KERNEL, "%s PDMA RX %d",
 						 dev_name(eth->dev), 0);
 			err = devm_request_irq(eth->dev, eth->irq_pdma[0],
