@@ -525,21 +525,9 @@
 	status = "okay";
 	color = <LED_COLOR_ID_GREEN>;
 };
-
-&gsw_port1 {
-	status = "disabled";
-};
-
-&gsw_port2 {
-	status = "disabled";
-};
-
-&gsw_port3 {
-	status = "disabled";
-};
-
 &cci {
 	proc-supply = <&rt5190_buck3>;
+	//status = "disabled";
 };
 &cpu0 {
 	proc-supply = <&rt5190_buck3>;
