@@ -3575,7 +3575,7 @@ static void sfp_monitor_work_func(struct work_struct *work)
 	struct combo_port_mux *mux = container_of(work, struct combo_port_mux, sfp_monitor_work.work);
 	struct dsa_switch *ds = mux->dp->ds;
 	struct dsa_port *dp = mux->dp;
-	struct net_device *dev = mux->dp->slave;
+	struct net_device *dev = mux->dp->user;
 	unsigned int new_channel;
 	int sfp_present;
 
