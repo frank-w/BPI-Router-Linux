@@ -185,10 +185,10 @@
 	pinctrl-0 = <&mdio0_pins>;
 	pinctrl-names = "default";
 	status = "okay";
-	/*mux: mux-bus {
+	mux: mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
-		mux1: ethernet-mux@1 {
+		/*mux1: ethernet-mux@1 {
 			compatible = "mediatek,eth-mux";
 			reg = <1>;
 			chan-sel-gpios = <&pio 3 GPIO_ACTIVE_HIGH>;
@@ -209,8 +209,8 @@
 				managed = "in-band-status";
 				sfp = <&sfp2>;
 			};
-		};
-		mux2: ethernet-mux@2 {
+		};*/
+		/*mux2: ethernet-mux@2 {
 			compatible = "mediatek,eth-mux";
 			reg = <2>;
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
@@ -231,8 +231,8 @@
 				phy-connection-type = "usxgmii";
 				phy-handle = <&phy24>;
 			};
-		};
-	};*/
+		};*/
+	};
 };
 &gmac0 {
 	status = "okay";
@@ -269,6 +269,32 @@
 		reg = <16>;
 		dsa,member = <0 0>;
 		status = "okay";
+		
+		/*ds_mux: ds-mux-bus {
+			ds_mux0: ds-mux@0 {
+				compatible = "mxl862xx,ds-mux";
+				reg = <12>;
+				chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+				mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+				sfp-present-channel = <0>;
+
+				ds_channel_0: channel@0 {
+					reg = <0>;
+					phy-mode = "10gbase-r";
+					phy-connection-type = "10gbase-r";
+					managed = "in-band-status";
+					sfp = <&sfp1>;
+				};
+
+				ds_channel_1: channel@1 {
+					reg = <1>;
+					phy-mode = "10gbase-r";
+					phy-connection-type = "10gbase-r";
+					phy-handle = <&phy24>;
+				};
+			};
+		};*/
+
 		ports {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -307,11 +333,17 @@
 				phy-mode = "internal";
 				status = "okay";
 			};
-			/*port12: port@12 {
+			/*port6: port@6 {
 				reg = <12>;
-				label = "mxl_lan12";
-				phy-mode = "xfi";
+				label = "mxl_lan5";
+				phy-mode = "usxgmii";
+				phy-handle = <&phy24>;
 				status = "okay";
+
+				fixed-link {
+					speed = <10000>;
+					full-duplex;
+				};
 			};*/
 			port8: port@8 {
 				reg = <8>;
