@@ -1,12 +1,25 @@
-#define VID_RULES 2
-#define MAX_VLANS  100
-#define MAX_PORTS 13
+#define MXL862XX_MAX_PHY_PORT_NUM	8
+#define MXL862XX_MAX_EXT_PORT_NUM	7	/* not able to support 16-port * SKU yet */
+#define MXL862XX_MAX_PORT_NUM		(MXL862XX_MAX_PHY_PORT_NUM + \
+					 MXL862XX_MAX_EXT_PORT_NUM)
+
+/* internal phy port number of each SKU */
+#define MXL86252_PHY_PORT_NUM		5
+#define MXL86282_PHY_PORT_NUM		8
+
+/* external port number of each SKU */
+#define MXL86252_EXT_PORT_NUM		2
+#define MXL86282_EXT_PORT_NUM		2
+
+#define VID_RULES	2
+#define MAX_VLANS	100
+#define MAX_PORTS	MXL862XX_MAX_PORT_NUM
 #define MAX_BRIDGES 16
 
 struct mxl862xx_hw_info {
 	u8 max_ports;
 	u8 phy_ports;
-	u8 cpu_port;
+	u8 ext_ports;
 };
 
 struct mxl862xx_filter_ids {
@@ -68,6 +81,21 @@ struct mxl862xx_port_info {
 	struct mxl862xx_port_vlan_info vlan;
 };
 
+struct dp_mux_data {
+	struct device_node		*of_node;
+	struct phylink			*phylink;
+};
+
+struct combo_port_mux {
+	struct dsa_port 		*dp;
+	struct gpio_desc		*mod_def0_gpio;
+	struct gpio_desc		*chan_sel_gpio;
+	struct dp_mux_data		*data[2];
+	unsigned int			channel;
+	unsigned int			sfp_present_channel;
+	struct delayed_work 		sfp_monitor_work;
+};
+
 struct mxl862xx_priv {
 	struct dsa_switch *ds;
 	struct mii_bus *bus;
@@ -83,4 +111,8 @@ struct mxl862xx_priv {
 	 * might cause dead-locks / hang in previous versions
 	 */
 	struct mutex pce_table_lock;
+	uint8_t cpu_port;
+	uint8_t user_pnum;
+	bool force_isolate;
+	struct combo_port_mux *ds_mux[MAX_PORTS];
 };
