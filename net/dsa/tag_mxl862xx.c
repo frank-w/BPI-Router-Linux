@@ -45,13 +45,31 @@
 #define MXL862_IGP_EGP_SHIFT 0
 #define MXL862_IGP_EGP_MASK GENMASK(3, 0)
 
+static int mxl862_dsa_port_to_tag_port(const int in_dsa_port)
+{
+	if (in_dsa_port < 15)
+		return in_dsa_port + 1;
+
+	dev_err_ratelimited(NULL, "%s Wrong in_dsa_port value: %d\n", __FILE__, in_dsa_port);
+	return 0;
+}
+
+static int mxl862_tag_port_to_dsa_port(const int in_hw_port)
+{
+	if (in_hw_port >= 1 && in_hw_port <= 15)
+		return in_hw_port - 1;
+
+	dev_err_ratelimited(NULL, "%s Wrong in_hw_port value: %d\n", __FILE__, in_hw_port);
+	return 0;
+}
+
 static struct sk_buff *mxl862_tag_xmit(struct sk_buff *skb,
 				       struct net_device *dev)
 {
 	struct dsa_port *dp = dsa_user_to_port(dev);
 	struct dsa_port *cpu_dp = dp->cpu_dp;
-	unsigned int cpu_port = cpu_dp->index + 1;
-	unsigned int usr_port = dp->index + 1;
+	unsigned int cpu_port = mxl862_dsa_port_to_tag_port(cpu_dp->index);
+	unsigned int usr_port = mxl862_dsa_port_to_tag_port(dp->index);
 
 	u8 *mxl862_tag;
 
@@ -83,6 +101,7 @@ static struct sk_buff *mxl862_tag_rcv(struct sk_buff *skb,
 				      struct net_device *dev)
 {
 	int port;
+	int usr_port = 0;
 	u8 *mxl862_tag;
 
 	if (unlikely(!pskb_may_pull(skb, MXL862_RX_HEADER_LEN))) {
@@ -108,12 +127,27 @@ static struct sk_buff *mxl862_tag_rcv(struct sk_buff *skb,
 
 	/* Get source port information */
 	port = (mxl862_tag[7] & MXL862_IGP_EGP_MASK) >> MXL862_IGP_EGP_SHIFT;
-	port = port - 1;
-	skb->dev = dsa_conduit_find_user(dev, 0, port);
+	if (port >= 1) {
+		usr_port = mxl862_tag_port_to_dsa_port(port);
+	} else {
+		dev_err_ratelimited(
+			&dev->dev, "mxl %s, %s, %d, Source Port value ERROR %d\n", 
+			__FILE__, __func__, __LINE__, port);
+		dev_warn_ratelimited(
+			&dev->dev,
+			"mxl %s, %s, %d, Rx Packet Tag: 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x\n",
+			__FILE__, __func__, __LINE__,
+			mxl862_tag[0], mxl862_tag[1], mxl862_tag[2],
+			mxl862_tag[3], mxl862_tag[4], mxl862_tag[5],
+			mxl862_tag[6], mxl862_tag[7]);
+		return NULL;
+	}
+	skb->dev = dsa_conduit_find_user(dev, 0, usr_port);
 	if (!skb->dev) {
 		dev_warn_ratelimited(
 			&dev->dev,
-			"Dropping packet due to invalid source port\n");
+			"Dropping packet due to invalid tag_port source port (hw %d, usr %d)\n",
+			port, usr_port);
 		dev_warn_ratelimited(
 			&dev->dev,
 			"Rx Packet Tag: 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x\n",
