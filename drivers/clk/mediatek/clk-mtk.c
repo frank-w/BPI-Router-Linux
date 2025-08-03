@@ -589,7 +589,7 @@ static int __mtk_clk_simple_probe(struct platform_device *pdev,
 
 	if (mcd->need_runtime_pm)
 		pm_runtime_put(&pdev->dev);
-
+	dev_err(&pdev->dev, "%s done\n",__func__);
 	return r;
 
 unregister_clks:

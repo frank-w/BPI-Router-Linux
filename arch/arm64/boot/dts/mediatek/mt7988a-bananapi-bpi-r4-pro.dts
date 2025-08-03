@@ -605,6 +605,7 @@
 				regulator-min-microvolt = <600000>;
 				regulator-max-microvolt = <1400000>;
 				regulator-boot-on;
+				regulator-always-on;
 			};
 			buck4 {
 				regulator-name = "rt5190a-buck4";
