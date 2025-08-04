@@ -3006,6 +3006,7 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 		return ret;
 	}
 	usleep_range(4000000, 6000000);
+	dev_info(ds->dev, "%s:%d after usleep range...\n",__func__, __LINE__);
 
 	priv->port_info[priv->cpu_port].tag_protocol = mxl862_parse_tag_proto(ds, priv->cpu_port);
 
@@ -3015,11 +3016,13 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 			return ret;
 	}
 
+	dev_info(ds->dev, "%s:%d before mac-learning...\n",__func__, __LINE__);
 	mxl862xx_mac_learning(ds, cpu_port, true);
 
 	for (i = 0; i < MAX_BRIDGES; i++)
 		priv->bridge_portmap[i] = BIT(DSA_MXL_PORT(cpu_port));
 
+	dev_info(ds->dev, "%s:%d before vlan-filter...\n",__func__, __LINE__);
 	mxl862xx_set_vlan_filter_limits(ds);
 	for (i = 0; i < MAX_VLANS; i++)
 		priv->port_info[cpu_port].vlan.egress_vlan_block_info.vlans[i].untagged = true;

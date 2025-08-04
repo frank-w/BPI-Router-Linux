@@ -348,6 +348,7 @@ static int gpy_probe(struct phy_device *phydev)
 	int fw_version;
 	int ret;
 
+	phydev_info(phydev, "mxl-gphy probe\n");
 	if (!phydev->is_c45) {
 		ret = phy_get_c45_ids(phydev);
 		if (ret < 0)
@@ -364,12 +365,15 @@ static int gpy_probe(struct phy_device *phydev)
 		phydev->dev_flags |= PHY_F_NO_IRQ;
 
 	fw_version = phy_read(phydev, PHY_FWV);
+	phydev_info(phydev, "mxl-gphy after phy_read %d\n",fw_version);
 	if (fw_version < 0)
 		return fw_version;
+
 	priv->fw_major = FIELD_GET(PHY_FWV_MAJOR_MASK, fw_version);
 	priv->fw_minor = FIELD_GET(PHY_FWV_MINOR_MASK, fw_version);
 
 	ret = gpy_hwmon_register(phydev);
+	phydev_info(phydev, "mxl-gphy hwmon %d\n",ret);
 	if (ret)
 		return ret;
 
