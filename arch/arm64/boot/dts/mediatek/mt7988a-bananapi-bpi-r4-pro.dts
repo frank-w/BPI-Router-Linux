@@ -804,8 +804,9 @@
 	//status = "okay";
 };
 
+/* front USB */
 &ssusb1 {
-	//status = "okay";
+	status = "okay";
 };
 
 &switch {
