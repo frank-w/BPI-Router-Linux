@@ -653,7 +653,7 @@
 
 };
 
-/* mPCIe SIM2 */
+/* mPCIe SIM2 (11300000) */
 &pcie0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie0_pins>;
@@ -673,21 +673,21 @@
 	};
 };
 
-/* mPCIe SIM3 */
+/* mPCIe SIM3 (11310000  near leds) */
 &pcie1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie1_pins>;
 	status = "okay";
 };
 
-/* M.2 key-B SIM1 */
+/* M.2 key-B SIM1 (11280000) */
 &pcie2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie2_pins>;
 	status = "okay";
 };
 
-/* M.2 key-M SSD */
+/* M.2 key-M SSD (11290000) */
 &pcie3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie3_pins>;
@@ -695,6 +695,18 @@
 };
 
 &pio {
+	/*pcie-0-hog {
+		gpio-hog;
+		gpios = <79 GPIO_ACTIVE_LOW>;
+		output-low;
+	};
+
+	pcie-1-hog {
+		gpio-hog;
+		gpios = <63 GPIO_ACTIVE_LOW>;
+		output-low;
+	};*/
+
 	i2c0_pins: i2c0-g0-pins {
 		mux {
 			function = "i2c";
