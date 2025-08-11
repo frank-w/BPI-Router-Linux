@@ -396,7 +396,7 @@
 	status = "okay";
 };
 
-&i2c2 {
+&i2c2 { //not working yet, but function i2c2_1 are mapped to gpio 71/72 in pinctrl driver
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_1_pins>;
 	status = "okay";
