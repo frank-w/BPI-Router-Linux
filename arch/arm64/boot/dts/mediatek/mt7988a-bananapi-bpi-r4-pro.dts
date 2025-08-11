@@ -114,24 +114,24 @@
 	};
 
 	/* SFP1 cage (LAN) */
-	sfp1: sfp1 {
+	/*sfp1: sfp1 {
 		compatible = "sff,sfp";
 		i2c-bus = <&imux1_gpio>;
 		los-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
 		mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
 		tx-disable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
 		maximum-power-milliwatt = <3000>;
-	};
+	};*/
 
 	/* SFP2 cage (WAN) */
-	sfp2: sfp2 {
+	/*sfp2: sfp2 {
 		compatible = "sff,sfp";
 		i2c-bus = <&imux2_sfp2>;
 		los-gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
 		mod-def0-gpios = <&pio 1 GPIO_ACTIVE_LOW>;
 		tx-disable-gpios = <&pio 0 GPIO_ACTIVE_HIGH>;
 		maximum-power-milliwatt = <3000>;
-	};
+	};*/
 };
 
 &cci {
