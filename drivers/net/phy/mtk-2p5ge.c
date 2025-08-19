@@ -89,7 +89,6 @@ static int mt7988_2p5ge_phy_config_init(struct phy_device *phydev)
 	int ret, i;
 	const struct firmware *fw;
 	struct device *dev = &phydev->mdio.dev;
-	struct device *pm_dev;
 	struct device_node *np;
 	void __iomem *pmb_addr;
 	void __iomem *md32_en_cfg_base;
