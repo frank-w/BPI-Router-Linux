@@ -225,7 +225,7 @@
 	//phy = <&phy28>;
 	//nvmem-cell-names = "mac-address";
 	//nvmem-cells = <&gmac1_mac>;
-	//status = "okay";
+	status = "okay";
 };
 
 &gmac2 {
