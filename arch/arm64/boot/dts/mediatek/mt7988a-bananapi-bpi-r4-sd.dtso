@@ -19,7 +19,6 @@
 	pinctrl-1 = <&mmc0_pins_sdcard>;
 	cd-gpios = <&pio 12 GPIO_ACTIVE_LOW>;
 	bus-width = <4>;
-	max-frequency = <52000000>;
 	cap-sd-highspeed;
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&reg_3p3v>;
