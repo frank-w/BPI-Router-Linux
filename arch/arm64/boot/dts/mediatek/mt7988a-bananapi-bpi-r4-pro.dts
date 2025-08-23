@@ -663,7 +663,7 @@
 	pinctrl-0 = <&pcie0_pins>;
 	status = "okay";
 
-	slot0: pcie@0,0 {
+	/*slot0: pcie@0,0 {
 		#address-cells = <3>;
 		#size-cells = <2>;
 
@@ -674,7 +674,7 @@
 			device_type = "pci";
 			//mediatek,mtd-eeprom = <&factory 0x0>;
 		};
-	};
+	};*/
 };
 
 /* mPCIe (11310000 near leds) SIM3 */
