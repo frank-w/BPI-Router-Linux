@@ -27,6 +27,8 @@ DEFCONFIG=""
 DTS=""
 DTSI=""
 
+baseboard=$board
+
 case $board in
 	"bpi-r2pro")
 		ARCH=arm64
@@ -51,20 +53,31 @@ case $board in
 		fi
 		DTSI=arch/arm64/boot/dts/mediatek/mt7622.dtsi
 		;;
-	"bpi-r3")
+	"bpi-r3" | "bpi-r3mini")
+		baseboard="bpi-r3"
 		ARCH=arm64
 		CONFIGPATH=arch/$ARCH/configs
 		DEFCONFIG=$CONFIGPATH/mt7986a_bpi-r3_defconfig
 		DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dts
 		#DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sd.dts
 		DTSI=arch/arm64/boot/dts/mediatek/mt7986a.dtsi
+		if [[ "$board" == "bpi-r3mini" ]];then
+			DTS=arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-mini.dts
+		fi
 		;;
-	"bpi-r4")
+	"bpi-r4" | "bpi-r4pro" | "bpi-r4lite")
+		baseboard="bpi-r4"
 		ARCH=arm64
 		CONFIGPATH=arch/$ARCH/configs
 		DEFCONFIG=$CONFIGPATH/mt7988a_bpi-r4_defconfig
 		DTS=arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4.dts
 		DTSI=arch/arm64/boot/dts/mediatek/mt7988a.dtsi
+		if [[ "$board" == "bpi-r4pro" ]];then
+			DTS=arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro.dtsi
+		elif [[ "$board" == "bpi-r4lite" ]];then
+			DTS=arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite.dts
+			DTSI=arch/arm64/boot/dts/mediatek/mt7987a.dtsi
+		fi
 		;;
 	*) #bpir2
 		ARCH=arm
@@ -333,8 +346,8 @@ function pack {
 function pack_debs {
 	get_version
 	echo "pack linux-headers, linux-image, linux-libc-dev debs..."
-	echo "LOCALVERSION=${gitbranch} board=$board ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
-	LOCALVERSION="${gitbranch}" board="$board" KDEB_COMPRESS=gzip make bindeb-pkg
+	echo "LOCALVERSION=${gitbranch} board=$baseboard ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
+	LOCALVERSION="${gitbranch}" board="$baseboard" KDEB_COMPRESS=gzip make bindeb-pkg
 	if [[ $? -ne 0 ]];then exit 1;fi;
 	ls ../*.deb
 }
@@ -348,7 +361,7 @@ function upload {
 	bindir="";
 	if [[ -n "$builddir" ]];then bindir="$builddir/"; fi
 
-	b=${board//bpi/}
+	b=${baseboard//bpi/}
 	if [[ "${gitbranch}" =~ "${b}" ]]; then
 		b=""
 	fi
@@ -383,7 +396,7 @@ function upload {
 	else
 		if [[ "$fitupload" == "y" ]];
 		then
-			scp ${board}.itb ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
+			scp ${baseboard}.itb ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 		else
 			scp uImage_nodt ${uploaduser}@${uploadserver}:${uploaddir}/${imagename}
 			scp ${bindir}${DTBFILE} ${uploaduser}@${uploadserver}:${uploaddir}/${dtbname}
@@ -439,7 +452,7 @@ function install
 			dtinput=n
 			ndtinput=y
 			imginput=y
-			if [[ -e ${board}.its ]];then
+			if [[ -e ${baseboard}.its ]];then
 				read -e -i "y" -p "install FIT kernel (itb) [yn]? " itbinput
 				if [[ "$itbinput" == "y" ]];then
 					itbname=${imagename}.itb
@@ -449,7 +462,7 @@ function install
 						cp $itbfile $itbfile.bak
 					fi
 					echo "copy new kernel"
-					cp ./${board}.itb $itbfile
+					cp ./${baseboard}.itb $itbfile
 					if [[ $? -ne 0 ]];then exit 1;fi
 					ndtinput=n
 					imginput=n
@@ -803,7 +816,7 @@ function build {
 			if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
 
 			DTBFILE=${DTS%.*}.dtb
-			case "$board" in
+			case "$baseboard" in
 				"bpi-r2pro")
 					IMAGE=arch/arm64/boot/Image
 					LADDR=0x7f000001
@@ -849,12 +862,12 @@ function build {
 			#if [[ "$board" == "bpi-r2pro" ]];then
 			#	#skipping mkimage causes no choice, but uImage is not bootable on r2pro
 			#	mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
-			if [[ -e ${board}.its ]];then #"$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
+			if [[ -e ${baseboard}.its ]];then #"$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
-				sed "s/%version%/$kernver$gitbranch/" ${board}.its > ${board}.its.tmp
-				mkimage -f ${board}.its.tmp ${board}.itb
-				cp ${board}.itb ${board}-$kernver$gitbranch.itb
-				rm ${board}.its.tmp
+				sed "s/%version%/$kernver$gitbranch/" ${baseboard}.its > ${baseboard}.its.tmp
+				mkimage -f ${baseboard}.its.tmp ${baseboard}.itb
+				cp ${baseboard}.itb ${baseboard}-$kernver$gitbranch.itb
+				rm ${baseboard}.its.tmp
 			else
 				cat $IMAGE $DTBFILE > arch/arm/boot/zImage-dtb
 				mkimage -A arm -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d arch/arm/boot/zImage-dtb ./uImage
@@ -874,8 +887,8 @@ function build {
 					cp {,$builddir/}uImage
 				fi
 				cp {,$builddir/}uImage_nodt
-				if [[ -e ${board}.itb ]];then
-					cp {,$builddir/}${board}.itb
+				if [[ -e ${baseboard}.itb ]];then
+					cp {,$builddir/}${baseboard}.itb
 				fi
 			fi
 		fi
@@ -921,11 +934,11 @@ function prepare_SD {
 		fi
 		if [[ -e ./uImage_nodt ]];then
 			cp ./uImage_nodt $kerndir/uImage_nodt
-			cp ./$board.dtb $fdtdir/$board.dtb
+			cp ./$baseboard.dtb $fdtdir/$baseboard.dtb
 		fi
 	fi
-	if [[ -e ./$board.itb ]];then
-		cp ./$board.itb $kerndir/$board.itb
+	if [[ -e ./$baseboard.itb ]];then
+		cp ./$baseboard.itb $kerndir/$baseboard.itb
 	fi
 	make modules_install
 
