@@ -677,21 +677,21 @@
 	};
 };
 
-/* mPCIe SIM3 (11310000  near leds) */
+/* mPCIe (11310000 near leds) SIM3 */
 &pcie1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie1_pins>;
 	status = "okay";
 };
 
-/* M.2 key-B SIM1 (11280000) */
+/* M.2 (11280000) 1L0 key-m SSD1 CN13 / key-b SIM1 CN15 */
 &pcie2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie2_pins>;
 	status = "okay";
 };
 
-/* M.2 key-M SSD (11290000) */
+/* M.2 (11290000) 1L1 key-m SSD2 CN14 / key-b SIM2? CN18 */
 &pcie3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie3_pins>;
@@ -699,17 +699,20 @@
 };
 
 &pio {
-	/*pcie-0-hog {
+	// 1L0 0=key-b (CN15), 1=key-m (CN13)
+	pcie-2-hog {
 		gpio-hog;
-		gpios = <79 GPIO_ACTIVE_LOW>;
-		output-low;
+		gpios = <79 GPIO_ACTIVE_HIGH>;
+		//output-low; //works with key-b to key-m adapter (SSD1 led on in userspace)
+		output-high; //works
 	};
-
-	pcie-1-hog {
+	// 1L1 0=key-b (CN18), 1=key-m (CN14)
+	pcie-3-hog {
 		gpio-hog;
-		gpios = <63 GPIO_ACTIVE_LOW>;
-		output-low;
-	};*/
+		gpios = <63 GPIO_ACTIVE_HIGH>;
+		//output-low; //works with key-b to key-m adapter
+		output-high; //works, but SSD2-led seems inverted (off with ssd available)
+	};
 
 	i2c0_pins: i2c0-g0-pins {
 		mux {
