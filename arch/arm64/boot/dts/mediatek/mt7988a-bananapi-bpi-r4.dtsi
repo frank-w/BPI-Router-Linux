@@ -347,6 +347,10 @@
 	};
 };
 
+&mmc0 {
+	max-frequency = <52000000>;
+};
+
 /* mPCIe SIM2 */
 &pcie0 {
 	status = "okay";
