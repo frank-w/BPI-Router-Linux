@@ -45,13 +45,25 @@
 		i2c6 = &imux3_wifi;
 	};
 	chosen {
-		stdout-path = &uart0;
+		stdout-path = &serial0;
 		bootargs = "console=ttyS0,115200n1 loglevel=8  \
 			    earlycon=uart8250,mmio32,0x11000000 \
 			    pci=pcie_bus_perf ubi.block=0,firmware root=/dev/fit0 \
 			    rootwait";
 		rootdisk-spim-nand = <&ubi_rootfs>;
 	};
+
+	fan: pwm-fan {
+		compatible = "pwm-fan";
+		/* cooling level (0, 1, 2, 3) : (0% duty, 30% duty, 50% duty, 100% duty) */
+		cooling-levels = <0 80 128 255>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pwm0_pins>;
+		pwms = <&pwm 0 50000>;
+		#cooling-cells = <2>;
+		#thermal-sensor-cells = <1>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 		reset {
@@ -65,6 +77,7 @@
 			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
 		};
 	};
+
 	gpio-leds {
 		compatible = "gpio-leds";
 		led_red: sys-led-red {
@@ -81,36 +94,137 @@
 	memory {
 		reg = <0x00 0x40000000 0x00 0x10000000>;
 	};
+
+	reg_1p8v: regulator-1p8v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-1.8V";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_3p3v: regulator-3p3v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
 	/* SFP1 cage (LAN) */
-	sfp1: sfp1 {
+	/*sfp1: sfp1 {
 		compatible = "sff,sfp";
 		i2c-bus = <&imux1_gpio>;
 		los-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
 		mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
 		tx-disable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
 		maximum-power-milliwatt = <3000>;
-	};
+	};*/
+
 	/* SFP2 cage (WAN) */
-	sfp2: sfp2 {
+	/*sfp2: sfp2 {
 		compatible = "sff,sfp";
 		i2c-bus = <&imux2_sfp2>;
 		los-gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
 		mod-def0-gpios = <&pio 1 GPIO_ACTIVE_LOW>;
 		tx-disable-gpios = <&pio 0 GPIO_ACTIVE_HIGH>;
 		maximum-power-milliwatt = <3000>;
+	};*/
+};
+
+&cci {
+	proc-supply = <&rt5190_buck3>;
+};
+
+&cpu0 {
+	proc-supply = <&rt5190_buck3>;
+};
+
+&cpu1 {
+	proc-supply = <&rt5190_buck3>;
+};
+
+&cpu2 {
+	proc-supply = <&rt5190_buck3>;
+};
+
+&cpu3 {
+	proc-supply = <&rt5190_buck3>;
+};
+
+&cpu_thermal {
+	trips {
+		cpu_trip_hot: hot {
+			temperature = <120000>;
+			hysteresis = <2000>;
+			type = "hot";
+		};
+
+		cpu_trip_active_high: active-high {
+			temperature = <115000>;
+			hysteresis = <2000>;
+			type = "active";
+		};
+
+		cpu_trip_active_med: active-med {
+			temperature = <85000>;
+			hysteresis = <2000>;
+			type = "active";
+		};
+
+		cpu_trip_active_low: active-low {
+			temperature = <40000>;
+			hysteresis = <2000>;
+			type = "active";
+		};
+	};
+
+	cooling-maps {
+		map-cpu-active-high {
+			/* active: set fan to cooling level 2 */
+			cooling-device = <&fan 3 3>;
+			trip = <&cpu_trip_active_high>;
+		};
+
+		map-cpu-active-med {
+			/* active: set fan to cooling level 1 */
+			cooling-device = <&fan 2 2>;
+			trip = <&cpu_trip_active_med>;
+		};
+
+		map-cpu-active-low {
+			/* active: set fan to cooling level 0 */
+			cooling-device = <&fan 1 1>;
+			trip = <&cpu_trip_active_low>;
+		};
 	};
 };
+
+&fan {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm0_pins>;
+	pwms = <&pwm 0 50000>;
+	status = "okay";
+};
+
 &eth {
 	pinctrl-0 = <&mdio0_pins>;
 	pinctrl-names = "default";
 	status = "okay";
+
 	mux: mux-bus {
-		mux1: ethernet-mux@1 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		/*mux1: ethernet-mux@1 {
 			compatible = "mediatek,eth-mux";
 			reg = <1>;
 			chan-sel-gpios = <&pio 3 GPIO_ACTIVE_HIGH>;
 			mod-def0-gpios = <&pio 1 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 			channel_10: channel@0 {
 				reg = <0>;
 				phy-mode = "usxgmii";
@@ -124,13 +238,15 @@
 				managed = "in-band-status";
 				sfp = <&sfp2>;
 			};
-		};
-		mux2: ethernet-mux@2 {
+		};*/
+		/*mux2: ethernet-mux@2 {
 			compatible = "mediatek,eth-mux";
 			reg = <2>;
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
 			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 			channel_20: channel@0 {
 				reg = <0>;
 				phy-mode = "10gbase-r";
@@ -144,27 +260,30 @@
 				phy-connection-type = "usxgmii";
 				phy-handle = <&phy24>;
 			};
-		};
+		};*/
 	};
 };
+
 &gmac0 {
 	status = "okay";
-	nvmem-cell-names = "mac-address";
-	nvmem-cells = <&gmac0_mac>;
+	//nvmem-cell-names = "mac-address";
+	//nvmem-cells = <&gmac0_mac>;
 };
+
 &gmac1 {
 	phy-mode = "usxgmii";
 	phy-connection-type = "usxgmii";
-	phy = <&phy28>;
-	nvmem-cell-names = "mac-address";
-	nvmem-cells = <&gmac1_mac>;
-	status = "okay";
+	//phy = <&phy28>;
+	//nvmem-cell-names = "mac-address";
+	//nvmem-cells = <&gmac1_mac>;
+	//status = "okay";
 };
+
 &gmac2 {
 	phy-mode = "10gbase-r";
 	phy-connection-type = "10gbase-r";
-	nvmem-cell-names = "mac-address";
-	nvmem-cells = <&gmac2_mac>;
+	//nvmem-cell-names = "mac-address";
+	//nvmem-cells = <&gmac2_mac>;
 	status = "okay";
 	fixed-link {
 		speed = <10000>;
@@ -172,192 +291,51 @@
 		pause;
 	};
 };
-&int_2p5g_phy {
-	status = "disabled";
-};
-&mdio_bus {
-	/* external Airoha AN8831X is connected to Mxl 2.5G switch */
-	phy24: ethernet-phy@24 {
-		reg = <24>;
-		compatible = "ethernet-phy-ieee802.3-c45";
-		reset-gpios = <&pca9555 12 GPIO_ACTIVE_LOW>;
-		reset-assert-us = <200000>;
-		reset-deassert-us = <350000>;
-		firmware-name = "as21x1x_fw.bin";
-		leds {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			phy24_led0: an8831x_phy24_led0@0 {
-				reg = <0>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-			phy24_led1: an8831x_phy24_led1@1 {
-				reg = <1>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-		};
-	};
-	/* external Airoha AN8831X */
-	phy28: ethernet-phy@28 {
-		reg = <28>;
-		compatible = "ethernet-phy-ieee802.3-c45";
-		reset-gpios = <&pca9555 13 GPIO_ACTIVE_LOW>;
-		reset-assert-us = <200000>;
-		reset-deassert-us = <350000>;
-		firmware-name = "as21x1x_fw.bin";
-		leds {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			phy28_led0: an8831x_phy28_led0@0 {
-				reg = <0>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-			phy28_led1: an8831x_phy28_led1@1 {
-				reg = <1>;
-				linux,default-trigger = "netdev";
-				active-high;
-				status = "okay";
-			};
-		};
-	};
-	switch16: switch@16 {
-		compatible = "mxl,86252";
-		reg = <16>;
-		dsa,member = <0 0>;
-		status = "disabled";
-		ports {
-			port0: port@0 {
-				reg = <0>;
-				label = "mxl_lan0";
-				phy-handle = <&switchphy0>;
-				phy-mode = "internal";
-				status = "okay";
-			};
-			port1: port@1 {
-				reg = <1>;
-				label = "mxl_lan1";
-				phy-handle = <&switchphy1>;
-				phy-mode = "internal";
-				status = "okay";
-			};
-			port2: port@2 {
-				reg = <2>;
-				label = "mxl_lan2";
-				phy-handle = <&switchphy2>;
-				phy-mode = "internal";
-				status = "okay";
-			};
-			port3: port@3 {
-				reg = <3>;
-				label = "mxl_lan3";
-				phy-handle = <&switchphy3>;
-				phy-mode = "internal";
-				status = "okay";
-			};
-			port4: port@4 {
-				reg = <4>;
-				label = "mxl_lan4";
-				phy-handle = <&switchphy4>;
-				phy-mode = "internal";
-				status = "okay";
-			};
-			port12: port@12 {
-				reg = <12>;
-				label = "mxl_lan12";
-				phy-mode = "xfi";
-				status = "okay";
-			};
-			port8: port@8 {
-				reg = <8>;
-				label = "cpu";
-				phy-mode = "usxgmii";
-				ethernet = <&gmac2>;
-				dsa-tag-protocol = "mxl862_8021q";
-				fixed-link {
-					speed = <10000>;
-					full-duplex;
-				};
-			};
-		};
-		mdio {
-			switchphy0:switchphy@0 {
-				reg= <0>;
-			};
-			switchphy1:switchphy@1 {
-				reg= <1>;
-			};
-			switchphy2:switchphy@2 {
-				reg= <2>;
-			};
-			switchphy3:switchphy@3 {
-				reg= <3>;
-			};
-			switchphy4:switchphy@4 {
-				reg= <4>;
-			};
-		};
-	};
-};
-&switch {
-	dsa,member = <1 0>;
-	status = "okay";
-};
+
 &gsw_phy0 {
 	pinctrl-names = "gbe-led";
 	pinctrl-0 = <&gbe0_led0_pins>;
 };
+
 &gsw_port0 {
 	label = "wan";
 };
+
 &gsw_phy0_led0 {
 	status = "okay";
 	color = <LED_COLOR_ID_GREEN>;
 };
+
 &gsw_phy1 {
 	pinctrl-names = "gbe-led";
 	pinctrl-0 = <&gbe1_led0_pins>;
 };
+
 &gsw_phy1_led0 {
 	status = "okay";
 	color = <LED_COLOR_ID_GREEN>;
 };
+
 &gsw_phy2 {
 	pinctrl-names = "gbe-led";
 	pinctrl-0 = <&gbe2_led0_pins>;
 };
+
 &gsw_phy2_led0 {
 	status = "okay";
 	color = <LED_COLOR_ID_GREEN>;
 };
+
 &gsw_phy3 {
 	pinctrl-names = "gbe-led";
 	pinctrl-0 = <&gbe3_led0_pins>;
 };
+
 &gsw_phy3_led0 {
 	status = "okay";
 	color = <LED_COLOR_ID_GREEN>;
 };
-&cpu0 {
-	proc-supply = <&rt5190_buck3>;
-};
-&cpu1 {
-	proc-supply = <&rt5190_buck3>;
-};
-&cpu2 {
-	proc-supply = <&rt5190_buck3>;
-};
-&cpu3 {
-	proc-supply = <&rt5190_buck3>;
-};
-&cci {
-	proc-supply = <&rt5190_buck3>;
-};
+
 &i2c0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c0_pins>;
@@ -390,6 +368,7 @@
 				regulator-min-microvolt = <600000>;
 				regulator-max-microvolt = <1400000>;
 				regulator-boot-on;
+				regulator-always-on;
 			};
 			buck4 {
 				regulator-name = "rt5190a-buck4";
@@ -410,15 +389,18 @@
 		};
 	};
 };
+
 &i2c1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_pins>;
 	status = "okay";
 };
-&i2c2 {
+
+&i2c2 { //not working yet, but function i2c2_1 are mapped to gpio 71/72 in pinctrl driver
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_1_pins>;
 	status = "okay";
+
 	pca9545: i2c-switch@70 {
 		reg = <0x70>;
 		compatible = "nxp,pca9545";
@@ -444,6 +426,7 @@
 				size = <256>;
 			};
 		};
+
 		imux1_gpio: i2c@1 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -455,11 +438,13 @@
 				reg = <0x20>;
 			};
 		};
+
 		imux2_sfp2: i2c@2 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <2>;
 		};
+
 		imux3_wifi: i2c@3 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -474,69 +459,377 @@
 		};
 	};
 };
-/* mPCIe SIM2 */
+
+&int_2p5g_phy {
+	status = "disabled";
+};
+
+&mdio_bus {
+	clock-frequency = <12500000>;
+
+	switch16: switch@16 {
+		compatible = "mxl,86252";
+		reg = <16>;
+		dsa,member = <0 0>;
+		status = "okay";
+		
+		/*ds_mux: ds-mux-bus {
+			ds_mux0: ds-mux@0 {
+				compatible = "mxl862xx,ds-mux";
+				reg = <12>;
+				chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+				mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+				sfp-present-channel = <0>;
+
+				ds_channel_0: channel@0 {
+					reg = <0>;
+					phy-mode = "10gbase-r";
+					phy-connection-type = "10gbase-r";
+					managed = "in-band-status";
+					sfp = <&sfp1>;
+				};
+
+				ds_channel_1: channel@1 {
+					reg = <1>;
+					phy-mode = "10gbase-r";
+					phy-connection-type = "10gbase-r";
+					phy-handle = <&phy24>;
+				};
+			};
+		};*/
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port0: port@0 {
+				reg = <0>;
+				label = "mxl_lan0";
+				phy-handle = <&switchphy0>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port1: port@1 {
+				reg = <1>;
+				label = "mxl_lan1";
+				phy-handle = <&switchphy1>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port2: port@2 {
+				reg = <2>;
+				label = "mxl_lan2";
+				phy-handle = <&switchphy2>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port3: port@3 {
+				reg = <3>;
+				label = "mxl_lan3";
+				phy-handle = <&switchphy3>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port4: port@4 {
+				reg = <4>;
+				label = "mxl_lan4";
+				phy-handle = <&switchphy4>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port8: port@8 {
+				reg = <8>;
+				label = "cpu";
+				phy-mode = "usxgmii";
+				ethernet = <&gmac2>;
+				dsa-tag-protocol = "mxl862_8021q";
+				fixed-link {
+					speed = <10000>;
+					full-duplex;
+				};
+			};
+
+			/*port6: port@6 {
+				reg = <12>;
+				label = "mxl_lan5";
+				phy-mode = "usxgmii";
+				phy-handle = <&phy24>;
+				status = "okay";
+
+				fixed-link {
+					speed = <10000>;
+					full-duplex;
+				};
+			};*/
+		};
+
+		mdio {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			switchphy0:switchphy@0 {
+				reg= <0>;
+			};
+
+			switchphy1:switchphy@1 {
+				reg= <1>;
+			};
+
+			switchphy2:switchphy@2 {
+				reg= <2>;
+			};
+
+			switchphy3:switchphy@3 {
+				reg= <3>;
+			};
+
+			switchphy4:switchphy@4 {
+				reg= <4>;
+			};
+		};
+	};
+
+	/* external Airoha AN8831X is connected to Mxl 2.5G switch */
+	/*phy24: ethernet-phy@24 {
+		reg = <24>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pca9555 12 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "as21x1x_fw.bin";
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			phy24_led0: an8831x_phy24_led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+
+			phy24_led1: an8831x_phy24_led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};*/
+
+	/* external Airoha AN8831X connected to eth-mux on gmac1 */
+	/*phy28: ethernet-phy@28 {
+		reg = <28>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pca9555 13 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "as21x1x_fw.bin";
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			phy28_led0: an8831x_phy28_led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+
+			phy28_led1: an8831x_phy28_led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};*/
+
+};
+
+/* mPCIe SIM2 (11300000) */
 &pcie0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie0_pins>;
 	status = "okay";
+
 	slot0: pcie@0,0 {
+		#address-cells = <3>;
+		#size-cells = <2>;
+
 		reg = <0x0000 0 0 0 0>;
 		mt7996@0,0 {
 			compatible = "mediatek,mt76";
 			reg = <0x0000 0 0 0 0>;
 			device_type = "pci";
-			mediatek,mtd-eeprom = <&factory 0x0>;
+			//mediatek,mtd-eeprom = <&factory 0x0>;
 		};
 	};
 };
-/* mPCIe SIM3 */
+
+/* mPCIe SIM3 (11310000  near leds) */
 &pcie1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie1_pins>;
 	status = "okay";
 };
-/* M.2 key-B SIM1 */
+
+/* M.2 key-B SIM1 (11280000) */
 &pcie2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie2_pins>;
 	status = "okay";
 };
-/* M.2 key-M SSD */
+
+/* M.2 key-M SSD (11290000) */
 &pcie3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie3_pins>;
 	status = "okay";
 };
+
 &pio {
+	/*pcie-0-hog {
+		gpio-hog;
+		gpios = <79 GPIO_ACTIVE_LOW>;
+		output-low;
+	};
+
+	pcie-1-hog {
+		gpio-hog;
+		gpios = <63 GPIO_ACTIVE_LOW>;
+		output-low;
+	};*/
+
+	i2c0_pins: i2c0-g0-pins {
+		mux {
+			function = "i2c";
+			groups = "i2c0_1";
+		};
+	};
+
+	i2c1_pins: i2c1-g0-pins {
+		mux {
+			function = "i2c";
+			groups = "i2c1_0";
+		};
+	};
+
+	i2c2_1_pins: i2c2-g1-pins {
+		mux {
+			function = "i2c";
+			groups = "i2c2_1";
+		};
+	};
+
+	gbe0_led0_pins: gbe0-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe0_led0";
+		};
+	};
+
+	gbe1_led0_pins: gbe1-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe1_led0";
+		};
+	};
+
+	gbe2_led0_pins: gbe2-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe2_led0";
+		};
+	};
+
+	gbe3_led0_pins: gbe3-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe3_led0";
+		};
+	};
+
+	mdio0_pins: mdio0-pins {
+		mux {
+			function = "eth";
+			groups = "mdc_mdio0";
+		};
+
+		conf {
+			pins = "SMI_0_MDC", "SMI_0_MDIO";
+			drive-strength = <8>;
+		};
+	};
+
+	mmc0_pins_emmc_45: mmc0-emmc-45-pins {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	mmc0_pins_emmc_51: mmc0-emmc-51-pins {
+		mux {
+			function = "flash";
+			groups = "emmc_51";
+		};
+	};
+
+	mmc0_pins_sdcard: mmc0-sdcard-pins {
+		mux {
+			function = "flash";
+			groups = "sdcard";
+		};
+	};
+
 	pwm0_pins: pwm0-pins {
 		mux {
 			groups = "pwm0";
 			function = "pwm";
 		};
 	};
+
+	spi0_flash_pins: spi0-flash-pins {
+		mux {
+			function = "spi";
+			groups = "spi0", "spi0_wp_hold";
+		};
+	};
 };
+
 &pwm {
 	status = "okay";
 };
-&fan {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pwm0_pins>;
-	pwms = <&pwm 0 50000>;
-	status = "okay";
-};
+
 &ssusb0 {
 	/* Use U2P only instead of both U3P/U2P due to U3P serdes shared with pcie2 */
 	phys = <&xphyu2port0 PHY_TYPE_USB2>;
 	mediatek,u3p-dis-msk = <1>;
 	/delete-property/ mediatek,p0_speed_fixup;
-	status = "okay";
+	//status = "okay";
 };
+
+/* front USB */
 &ssusb1 {
 	status = "okay";
 };
+
+&switch {
+	dsa,member = <1 0>;
+	status = "okay";
+};
+
 &tphy {
 	status = "okay";
 };
+
 &spi0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi0_flash_pins>;
@@ -549,70 +842,70 @@
 		spi-rx-buswidth = <4>;
 	};
 };
+
 &spi_nand {
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
+
 		partition@0 {
-			label = "BL2";
-			reg = <0x00000 0x0100000>;
-			read-only;
+			label = "bl2";
+			reg = <0x0 0x200000>;
 		};
-		partition@100000 {
-			label = "u-boot-env";
-			reg = <0x0100000 0x0080000>;
-		};
-		factory: partition@180000 {
-			label = "Factory";
-			reg = <0x180000 0x0400000>;
-			nvmem-layout {
-				compatible = "fixed-layout";
-				#address-cells = <1>;
-				#size-cells = <1>;
-				gmac2_mac: eeprom@fffee {
-					reg = <0xfffee 0x6>;
-				};
-				gmac1_mac: eeprom@ffffa {
-					reg = <0xffffa 0x6>;
-				};
-				gmac0_mac: eeprom@ffff4 {
-					reg = <0xffff4 0x6>;
-				};
-			};
-		};
-		partition@580000 {
-			label = "FIP";
-			reg = <0x580000 0x0200000>;
-		};
-		partition@780000 {
+
+		partition@200000 {
 			label = "ubi";
-			reg = <0x780000 0x7080000>;
+			reg = <0x200000 0x7e00000>;
 			compatible = "linux,ubi";
+
 			volumes {
-				ubi_rootfs: ubi-volume-fit {
-					volname = "firmware";
+				ubi-volume-fip {
+					volname = "fip";
+				};
+
+				ubi-volume-ubootenv {
+					volname = "ubootenv";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool-layout";
+					};
+				};
+
+				ubi-volume-ubootenv2 {
+					volname = "ubootenv2";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool-layout";
+					};
+				};
+
+				ubi_rootfs: ubi-volume-rootfs {
+					volname = "rootfs";
 				};
 			};
 		};
 	};
 };
-&uart0 {
+
+&serial0 {
 	status = "okay";
 };
-&uart1 {
+
+&serial1 {
 	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart1_2_lite_pins>;
+	//pinctrl-names = "default";
+	//pinctrl-0 = <&uart1_2_lite_pins>;
 };
-&uart2 {
+
+&serial2 {
 	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart2_3_pins>;
+	//pinctrl-names = "default";
+	//pinctrl-0 = <&uart2_3_pins>;
 };
+
 &watchdog {
 	status = "okay";
 };
-&xphy {
+
+&xsphy {
 	status = "okay";
 };
