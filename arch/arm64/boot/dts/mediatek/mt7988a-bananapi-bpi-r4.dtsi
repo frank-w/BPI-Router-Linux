@@ -26,9 +26,9 @@
 		rootdisk-spim-nand = <&ubi_rootfs>;
 	};
 
-	memory {
+	/*memory {
 		reg = <0x00 0x40000000 0x00 0x10000000>;
-	};
+	};*/
 
 	fan: pwm-fan {
 		compatible = "pwm-fan";
@@ -42,7 +42,7 @@
 	gpio-keys {
 		compatible = "gpio-keys";
 
-		wps {
+		button-wps {
 			label = "WPS";
 			linux,code = <KEY_RESTART>;
 			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
@@ -318,8 +318,8 @@
 			eeprom@57 {
 				compatible = "atmel,24c02";
 				reg = <0x57>;
-				address-bits = <8>;
-				page-size = <8>;
+				address-width = <8>;
+				pagesize = <8>;
 				size = <256>;
 			};
 
