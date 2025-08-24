@@ -61,17 +61,18 @@
 		pinctrl-0 = <&pwm0_pins>;
 		pwms = <&pwm 0 50000>;
 		#cooling-cells = <2>;
-		#thermal-sensor-cells = <1>;
+		//#thermal-sensor-cells = <1>;
 	};
 
 	gpio-keys {
 		compatible = "gpio-keys";
-		reset {
+
+		button-reset {
 			label = "reset";
 			linux,code = <KEY_RESTART>;
 			gpios = <&pio 13 GPIO_ACTIVE_LOW>;
 		};
-		wps {
+		button-wps {
 			label = "WPS";
 			linux,code = <KEY_WPS_BUTTON>;
 			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
@@ -91,9 +92,9 @@
 			default-state = "on";
 		};
 	};
-	memory {
+	/*memory {
 		reg = <0x00 0x40000000 0x00 0x10000000>;
-	};
+	};*/
 
 	reg_1p8v: regulator-1p8v {
 		compatible = "regulator-fixed";
@@ -396,33 +397,37 @@
 	status = "okay";
 };
 
-&i2c2 { //not working yet, but function i2c2_1 are mapped to gpio 71/72 in pinctrl driver
+&i2c2 { //not working yet, but function i2c2_1 is mapped to gpio 71/72 in pinctrl driver
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_1_pins>;
 	status = "okay";
 
-	pca9545: i2c-switch@70 {
+	pca9545: i2c-mux@70 {
 		reg = <0x70>;
 		compatible = "nxp,pca9545";
 		#address-cells = <1>;
 		#size-cells = <0>;
+
 		imux0: i2c@0 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
+
 			ina226: adc@40 {
 				compatible = "ti,ina226";
 				reg = <0x40>;
 			};
+
 			pcf8563: rtc@51 {
 				compatible = "nxp,pcf8563";
 				reg = <0x51>;
 			};
+
 			p24c02: eeprom@57 {
 				compatible = "atmel,24c02";
 				reg = <0x57>;
-				address-bits = <8>;
-				page-size = <8>;
+				address-width = <8>;
+				pagesize = <8>;
 				size = <256>;
 			};
 		};
@@ -452,8 +457,8 @@
 			wifi_eeprom: eeprom@51 {
 				compatible = "atmel,24c02";
 				reg = <0x51>;
-				address-bits = <8>;
-				page-size = <8>;
+				address-width = <8>;
+				pagesize = <8>;
 				size = <256>;
 			};
 		};
@@ -841,12 +846,12 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi0_flash_pins>;
 	status = "okay";
-	spi_nand: spi_nand@0 {
+	spi_nand: nand@0 {
 		compatible = "spi-nand";
 		reg = <0>;
 		spi-max-frequency = <52000000>;
-		spi-tx-buswidth = <4>;
-		spi-rx-buswidth = <4>;
+		spi-tx-bus-width = <4>;
+		spi-rx-bus-width = <4>;
 	};
 };
 
@@ -874,14 +879,14 @@
 				ubi-volume-ubootenv {
 					volname = "ubootenv";
 					nvmem-layout {
-						compatible = "u-boot,env-redundant-bool-layout";
+						compatible = "u-boot,env-redundant-bool";
 					};
 				};
 
 				ubi-volume-ubootenv2 {
 					volname = "ubootenv2";
 					nvmem-layout {
-						compatible = "u-boot,env-redundant-bool-layout";
+						compatible = "u-boot,env-redundant-bool";
 					};
 				};
 
