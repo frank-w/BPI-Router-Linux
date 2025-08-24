@@ -34,9 +34,9 @@ config PCS_MTK_LYNXI
 
 config PCS_MTK_USXGMII
 	tristate "MediaTek USXGMII PCS"
+	select PHYLINK
 	select FWNODE_PCS
 	select PCS_MTK_LYNXI
-	select PHYLINK
 	imply PHY_MTK_PEXTP
 	help
 	  This module provides a driver for MediaTek's USXGMII PCS supporting
