@@ -108,6 +108,7 @@ properties:
       - items:
           - enum:
               - bananapi,bpi-r4
+              - bananapi,bpi-r4-pro
           - const: mediatek,mt7988a
       - items:
           - const: bananapi,bpi-r4-2g5
