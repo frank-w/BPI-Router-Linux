@@ -307,20 +307,20 @@
 			};
 			buck2 {
 				regulator-name = "vcore";
-				regulator-min-microvolt = <600000>;
+				regulator-min-microvolt = <600000>; //0.85 in shematic
 				regulator-max-microvolt = <1400000>;
 				regulator-boot-on;
 				regulator-always-on;
 			};
 			rt5190_buck3: buck3 {
 				regulator-name = "vproc";
-				regulator-min-microvolt = <600000>;
+				regulator-min-microvolt = <600000>; //0.85-1.0
 				regulator-max-microvolt = <1400000>;
 				regulator-boot-on;
 				regulator-always-on;
 			};
 			buck4 {
-				regulator-name = "rt5190a-buck4";
+				regulator-name = "rt5190a-buck4"; //1.8
 				regulator-min-microvolt = <850000>;
 				regulator-max-microvolt = <850000>;
 				regulator-allowed-modes =
@@ -330,7 +330,7 @@
 			};
 			ldo {
 				regulator-name = "rt5190a-ldo";
-				regulator-min-microvolt = <1200000>;
+				regulator-min-microvolt = <1200000>; //1.8
 				regulator-max-microvolt = <1200000>;
 				regulator-boot-on;
 				regulator-always-on;
