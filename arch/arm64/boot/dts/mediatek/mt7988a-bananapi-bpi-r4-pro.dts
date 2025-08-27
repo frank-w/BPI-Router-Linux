@@ -228,8 +228,8 @@
 			#size-cells = <0>;
 			channel_10: channel@0 {
 				reg = <0>;
-				phy-mode = "usxgmii";
-				phy-connection-type = "usxgmii";
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
 				phy-handle = <&phy28>;
 			};
 			channel_11: channel@1 {
@@ -272,8 +272,8 @@
 };
 
 &gmac1 {
-	phy-mode = "usxgmii";
-	phy-connection-type = "usxgmii";
+	phy-mode = "10gbase-r";
+	phy-connection-type = "10gbase-r";
 	//phy = <&phy28>;
 	//nvmem-cell-names = "mac-address";
 	//nvmem-cells = <&gmac1_mac>;
