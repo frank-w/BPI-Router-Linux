@@ -23,6 +23,8 @@ struct mtk_cpufreq_platform_data {
 	int sram_min_volt;
 	int sram_max_volt;
 	bool ccifreq_supported;
+	/* Flag indicating whether the processor voltage is fixed */
+	bool proc_fixed_volt;
 };
 
 /*
@@ -163,6 +165,9 @@ static int mtk_cpufreq_set_voltage(struct mtk_cpu_dvfs_info *info, int vproc)
 {
 	const struct mtk_cpufreq_platform_data *soc_data = info->soc_data;
 	int ret;
+
+	if (soc_data->proc_fixed_volt)
+		return 0;
 
 	if (info->need_voltage_tracking)
 		ret = mtk_cpufreq_voltage_tracking(info, vproc);
