@@ -62,6 +62,17 @@
 				algo = "sha1";
 			};
 		};
+		fdt-base-lite {
+			description = "Flattened Device Tree blob BPI-R4 Lite";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			load = <0x47000000>;
+			compression = "none";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		fdt-ov-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-sd.dtbo");
@@ -70,6 +81,36 @@
 		fdt-ov-emmc {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-emmc.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-lite-sd {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-sd.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-lite-emmc {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-emmc.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-lite-nand {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-nand.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-lite-nor {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-nor.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-lite-1pcie {
+			description = "DT overlay for R4Lite 1 pcie 2 Lanes";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-lite-2pcie {
+			description = "DT overlay for R4Lite 2 pcie a 1 Lanes";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-2pcie-1L.dtbo");
 			type = "flat_dt";
 		};
 		fdt-ov-pro-cn15 {
@@ -141,6 +182,15 @@
 				algo = "sha1";
 			};
 		};
+		conf-base-r4lite {
+			description = "Boot Linux kernel with base FDT blob for BPI-R4 Lite";
+			kernel = "kernel-1";
+			fdt = "fdt-base-lite";
+			//ramdisk = "ramdisk-1";
+			hash-1 {
+				algo = "sha1";
+			};
+		};
 		conf-sd {
 			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
@@ -166,6 +216,30 @@
 		ov-emmc {
 			description = "EMMC FDT overlay blob";
 			fdt = "fdt-ov-emmc";
+		};
+		ov-lite-sd {
+			description = "SD FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-sd";
+		};
+		ov-lite-emmc {
+			description = "EMMC FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-emmc";
+		};
+		ov-lite-nand {
+			description = "NAND FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-nand";
+		};
+		ov-lite-nor {
+			description = "NOR FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-nor";
+		};
+		ov-lite-1pcie2l {
+			description = "1 PCIe 2Lane FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-1pcie";
+		};
+		ov-lite-2pcie1l {
+			description = "2 PCIe 1Lane FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-2pcie";
 		};
 		ov-pro-cn15 {
 			description = "CN15 FDT overlay blob";
