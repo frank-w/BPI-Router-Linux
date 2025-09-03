@@ -603,19 +603,19 @@ static const char *const mt7987_pcie_groups[] = {"pcie_phy_i2c", "pcie0_pereset"
 						 "pcie1_wake",};
 static const char *const mt7987_i2s_groups[] = {"pcm0_0", "pcm0_1"};
 static const struct function_desc mt7987_functions[] = {
-	{"wdt", mt7987_wdt_groups, ARRAY_SIZE(mt7987_wdt_groups)},
-	{"jtag", mt7987_jtag_groups, ARRAY_SIZE(mt7987_jtag_groups)},
-	{"pcm", mt7987_pcm_groups, ARRAY_SIZE(mt7987_pcm_groups)},
-	{"uart", mt7987_uart_groups, ARRAY_SIZE(mt7987_uart_groups)},
-	{"pwm", mt7987_pwm_groups, ARRAY_SIZE(mt7987_pwm_groups)},
-	{"usb", mt7987_usb_groups, ARRAY_SIZE(mt7987_usb_groups)},
-	{"led", mt7987_led_groups, ARRAY_SIZE(mt7987_led_groups)},
-	{"eth", mt7987_ethernet_groups, ARRAY_SIZE(mt7987_ethernet_groups)},
-	{"spi", mt7987_spi_groups, ARRAY_SIZE(mt7987_spi_groups)},
-	{"flash", mt7987_flash_groups, ARRAY_SIZE(mt7987_flash_groups)},
-	{"i2c", mt7987_i2c_groups, ARRAY_SIZE(mt7987_i2c_groups)},
-	{"pcie", mt7987_pcie_groups, ARRAY_SIZE(mt7987_pcie_groups)},
-	{"i2s", mt7987_i2s_groups, ARRAY_SIZE(mt7987_i2s_groups)},
+	{{"wdt", mt7987_wdt_groups, ARRAY_SIZE(mt7987_wdt_groups)},NULL},
+	{{"jtag", mt7987_jtag_groups, ARRAY_SIZE(mt7987_jtag_groups)},NULL},
+	{{"pcm", mt7987_pcm_groups, ARRAY_SIZE(mt7987_pcm_groups)},NULL},
+	{{"uart", mt7987_uart_groups, ARRAY_SIZE(mt7987_uart_groups)},NULL},
+	{{"pwm", mt7987_pwm_groups, ARRAY_SIZE(mt7987_pwm_groups)},NULL},
+	{{"usb", mt7987_usb_groups, ARRAY_SIZE(mt7987_usb_groups)},NULL},
+	{{"led", mt7987_led_groups, ARRAY_SIZE(mt7987_led_groups)},NULL},
+	{{"eth", mt7987_ethernet_groups, ARRAY_SIZE(mt7987_ethernet_groups)},NULL},
+	{{"spi", mt7987_spi_groups, ARRAY_SIZE(mt7987_spi_groups)},NULL},
+	{{"flash", mt7987_flash_groups, ARRAY_SIZE(mt7987_flash_groups)},NULL},
+	{{"i2c", mt7987_i2c_groups, ARRAY_SIZE(mt7987_i2c_groups)},NULL},
+	{{"pcie", mt7987_pcie_groups, ARRAY_SIZE(mt7987_pcie_groups)},NULL},
+	{{"i2s", mt7987_i2s_groups, ARRAY_SIZE(mt7987_i2s_groups)},NULL},
 };
 static const struct mtk_eint_hw mt7987_eint_hw = {
 	.port_mask = 7,
