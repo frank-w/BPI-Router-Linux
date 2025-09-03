@@ -839,14 +839,9 @@ function build {
 			if [[ "$builddir" != "" ]];
 			then
 				cp $builddir/${IMAGE%.*}* ${IMAGE%/*}
-				DTBBASE=${DTBFILE%.*}
-				if [[ -e $builddir/${DTBBASE}.dtb ]];then
-					cp $builddir/${DTBBASE}*.dtb ${DTBFILE%/*}
-					cp $builddir/$DTBFILE $board.dtb
-				fi
-				if [[ -e $builddir/${DTBBASE}-sd.dtbo ]];then
-					cp $builddir/${DTBBASE}-*.dtbo ${DTBFILE%/*}
-				fi
+				cp $builddir/${DTBFILE%/*}/*.dtb ${DTBFILE%/*}
+				cp $builddir/$DTBFILE $board.dtb
+				cp $builddir/${DTBFILE%/*}/*.dtbo ${DTBFILE%/*}
 			elif [[ -e $DTBFILE ]];then
 				cp $DTBFILE $board.dtb
 			fi
