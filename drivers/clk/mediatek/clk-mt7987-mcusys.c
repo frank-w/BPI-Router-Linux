@@ -35,7 +35,7 @@ static struct platform_driver clk_mt7987_mcusys_drv = {
 		.of_match_table = of_match_clk_mt7987_mcusys,
 	},
 	.probe = mtk_clk_simple_probe,
-	.remove_new = mtk_clk_simple_remove,
+	.remove = mtk_clk_simple_remove,
 };
 module_platform_driver(clk_mt7987_mcusys_drv);
 MODULE_LICENSE("GPL");

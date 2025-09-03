@@ -73,7 +73,7 @@ static struct platform_driver clk_mt7987_eth_drv = {
 		.of_match_table = of_match_clk_mt7987_eth,
 	},
 	.probe = mtk_clk_simple_probe,
-	.remove_new = mtk_clk_simple_remove,
+	.remove = mtk_clk_simple_remove,
 };
 module_platform_driver(clk_mt7987_eth_drv);
 MODULE_DESCRIPTION("MediaTek MT7987 Ethernet clocks driver");
