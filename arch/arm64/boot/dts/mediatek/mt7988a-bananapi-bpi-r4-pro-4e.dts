@@ -2,6 +2,6 @@
 
 / {
 	model = "Bananapi BPI-R4";
-	compatible = "bananapi,bpi-r4-pro-8e",
+	compatible = "bananapi,bpi-r4-pro-4e",
 		     "mediatek,mt7988a";
 };
