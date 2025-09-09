@@ -1,0 +1,7 @@
+#include "mt7988a-bananapi-bpi-r4-pro.dtsi"
+
+/ {
+	model = "Bananapi BPI-R4";
+	compatible = "bananapi,bpi-r4-pro-4e",
+		     "mediatek,mt7988a";
+};
