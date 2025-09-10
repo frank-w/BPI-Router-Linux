@@ -115,4 +115,6 @@ DTC_FLAGS_mt7986a-bananapi-bpi-r3 := -@
 DTC_FLAGS_mt7986a-bananapi-bpi-r3-mini := -@
 DTC_FLAGS_mt7988a-bananapi-bpi-r4 := -@
 DTC_FLAGS_mt7988a-bananapi-bpi-r4-2g5 := -@
+DTC_FLAGS_mt7988a-bananapi-bpi-r4-pro-4e := -@
+DTC_FLAGS_mt7988a-bananapi-bpi-r4-pro-8x := -@
 DTC_FLAGS_mt8395-radxa-nio-12l := -@
