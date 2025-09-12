@@ -6,22 +6,12 @@
 /dts-v1/;
 /plugin/;
 #include <dt-bindings/gpio/gpio.h>
-/ {
-	fragment@0 {
-		target-path = "/soc/pinctrl@1001f000";
-		__overlay__ {
-			pcie_sel: aw35710qnr_sel {
-				gpio-hog;
-				gpios = <11 GPIO_ACTIVE_HIGH>;
-				output-low;
-			};
-		};
-	};
-	fragment@1 {
-		target-path = "/soc/pcie@11290000";
-		__overlay__ {
-			status = "okay";
-		};
-	};
+
+&{/soc/pinctrl@1001f000/pcie-1-hog} {
+	output-low;
 };
 
+
+&{/soc/pcie@11290000} {
+	status = "okay";
+};
