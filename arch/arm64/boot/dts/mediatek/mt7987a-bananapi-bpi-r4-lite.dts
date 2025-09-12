@@ -192,6 +192,19 @@
 		status = "okay";
 	};
 };
+
+&pcie1 {
+	status = "okay";
+};
+
+&pio {
+	pcie-1-hog {
+		gpio-hog;
+		gpios = <11 GPIO_ACTIVE_HIGH>;
+		output-low;
+	};
+};
+
 &ssusb {
 	mediatek,u3p-dis-msk=<0>;
 	phys = <&tphyu2port0 PHY_TYPE_USB2>,
