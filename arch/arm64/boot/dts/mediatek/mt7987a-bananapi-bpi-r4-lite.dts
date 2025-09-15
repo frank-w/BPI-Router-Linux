@@ -193,15 +193,12 @@
 	};
 };
 
-&pcie1 {
-	status = "okay";
-};
-
 &pio {
 	pcie-1-hog {
 		gpio-hog;
 		gpios = <11 GPIO_ACTIVE_HIGH>;
-		output-low;
+		// low: 2 PCIe 1 Lane, high: 1 PCIe 2 Lane
+		output-high;
 	};
 };
 
