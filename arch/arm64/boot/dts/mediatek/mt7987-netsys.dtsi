@@ -11,10 +11,16 @@
 		reg = <0 0x15031000 0 0x1000>;
 		#clock-cells = <1>;
 	};
+	eth_sram: sram@15400000 {
+		compatible = "mmio-sram";
+		reg = <0 0x15400000 0 0x20000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0 0x15400000 0 0x20000>;
+	};
 	eth: ethernet@15100000 {
 		compatible = "mediatek,mt7987-eth";
-		reg = <0 0x15100000 0 0x80000>,
-		      <0 0x15400000 0 0x20000>;
+		reg = <0 0x15100000 0 0x80000>;
 		interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>,
@@ -55,6 +61,7 @@
 		#reset-cells = <1>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		sram = <&eth_sram>;
 		status = "disabled";
 		gmac0: mac@0 {
 			compatible = "mediatek,eth-mac";
