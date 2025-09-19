@@ -115,9 +115,9 @@
 	/*sfp1: sfp1 {
 		compatible = "sff,sfp";
 		i2c-bus = <&imux1_gpio>;
-		los-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
-		mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
-		tx-disable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
+		los-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;//change4
+		mod-def0-gpios = <&pio 69 GPIO_ACTIVE_LOW>; //change3
+		tx-disable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>; //change1
 		maximum-power-milliwatt = <3000>;
 	};*/
 

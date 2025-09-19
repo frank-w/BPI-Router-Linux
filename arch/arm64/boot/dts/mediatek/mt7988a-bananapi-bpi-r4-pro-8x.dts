@@ -5,7 +5,8 @@
 	compatible = "bananapi,bpi-r4-pro-8x",
 		     "mediatek,mt7988a";
 };
-
+//not checked changes:
+// 2,3,
 &eth {
 	mux: mux-bus {
 		#address-cells = <1>;
@@ -62,7 +63,8 @@
 	/*phy24: ethernet-phy@24 {
 		reg = <24>;
 		compatible = "ethernet-phy-ieee802.3-c45";
-		reset-gpios = <&pca9555 12 GPIO_ACTIVE_LOW>;
+		//reset-gpios = <&pca9555 12 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&pio 83 GPIO_ACTIVE_LOW>; //change 5
 		reset-assert-us = <200000>;
 		reset-deassert-us = <350000>;
 		firmware-name = "as21x1x_fw.bin";
@@ -91,7 +93,8 @@
 	/*phy28: ethernet-phy@28 {
 		reg = <28>;
 		compatible = "ethernet-phy-ieee802.3-c45";
-		reset-gpios = <&pca9555 13 GPIO_ACTIVE_LOW>;
+		//reset-gpios = <&pca9555 13 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&pio 82 GPIO_ACTIVE_LOW>; //change 5
 		reset-assert-us = <200000>;
 		reset-deassert-us = <350000>;
 		firmware-name = "as21x1x_fw.bin";
