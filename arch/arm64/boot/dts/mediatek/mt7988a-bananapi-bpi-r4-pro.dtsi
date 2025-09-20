@@ -510,7 +510,7 @@
 };
 
 &mmc0 {
-	max-frequency = <12000000>;
+	max-frequency = <48000000>;
 };
 
 /* mPCIe SIM2 (11300000) */
