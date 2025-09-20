@@ -59,8 +59,10 @@
 };
 
 &mdio_bus {
+	clock-frequency = <12500000>; //for faster fw download to 10G phys
+
 	/* external Airoha AN8831X is connected to Mxl 2.5G switch */
-	/*phy24: ethernet-phy@24 {
+	phy24: ethernet-phy@24 {
 		reg = <24>;
 		compatible = "ethernet-phy-ieee802.3-c45";
 		//reset-gpios = <&pca9555 12 GPIO_ACTIVE_LOW>;
@@ -87,10 +89,10 @@
 				status = "okay";
 			};
 		};
-	};*/
+	};
 
 	/* external Airoha AN8831X connected to eth-mux on gmac1 */
-	/*phy28: ethernet-phy@28 {
+	phy28: ethernet-phy@28 {
 		reg = <28>;
 		compatible = "ethernet-phy-ieee802.3-c45";
 		//reset-gpios = <&pca9555 13 GPIO_ACTIVE_LOW>;
@@ -117,7 +119,7 @@
 				status = "okay";
 			};
 		};
-	};*/
+	};
 };
 
 &switch16 {
