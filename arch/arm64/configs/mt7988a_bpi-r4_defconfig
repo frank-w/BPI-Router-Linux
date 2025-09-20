@@ -1317,3 +1317,6 @@ CONFIG_INA2XX_ADC=y
 
 #for debugging
 CONFIG_STRICT_DEVMEM=n
+
+CONFIG_EXTRA_FIRMWARE="aeonsemi/as21x1x_fw.bin"
+CONFIG_EXTRA_FIRMWARE_DIR="utils/firmware/"
