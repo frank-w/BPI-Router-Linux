@@ -83,4 +83,6 @@ struct mxl862xx_priv {
 	 * might cause dead-locks / hang in previous versions
 	 */
 	struct mutex pce_table_lock;
+	bool force_isolate;
+	bool c22_extended;
 };

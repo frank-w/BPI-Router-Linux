@@ -2741,6 +2741,11 @@ static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port, struct dsa
 	int bridge_id;
 	int ret;
 
+	if (priv->force_isolate) {
+		dev_info(priv->dev, "ignore bridge join due to force isolate\n");
+		return 0;
+	}
+
 	mxl862xx_deisolate_port(ds, port);
 
 	bridge_id = mxl862xx_find_bridge_id(ds, bridge.dev);
@@ -3489,6 +3494,11 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	if (!priv->hw_info)
 		return -EINVAL;
 
+	if (of_property_read_bool(dev->of_node, "c22-extended")) {
+		priv->c22_extended = true;
+		dev_info(dev, "%s:%u: Enable c22 extended", __func__, __LINE__);
+	}
+
 	mutex_init(&priv->pce_table_lock);
 
 	ds = devm_kzalloc(dev, sizeof(*ds), GFP_KERNEL);
@@ -3521,6 +3531,11 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	dev_info(dev, "Firmware version %d.%d.%d.%d",
 		 fw_version.iv_major, fw_version.iv_minor,
 		 fw_version.iv_revision, fw_version.iv_build_num);
+
+	if (of_property_read_bool(dev->of_node, "force-isolate")) {
+		priv->force_isolate = true;
+		dev_info(dev, "%s:%u: Enable force isolate", __func__, __LINE__);
+	}
 
 	return 0;
 }
