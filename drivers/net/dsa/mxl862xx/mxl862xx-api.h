@@ -1466,3 +1466,36 @@ struct mxl862xx_sys_fw_image_version {
 	__le16 iv_revision;
 	__le32 iv_build_num;
 } __packed;
+
+/**
+ * struct mxl862xx_sys_sfp_cfg - Config SFP/Serdes ports
+ * @port_id: port id (0 or 1)
+ * @option: config options (0 - SFP mode/speed/link-status, 1 - flow control)
+ * @mode: SFP mode (0 - auto, 1 - fix, 2 - disable)
+ * @speed: select speed when mode is 1
+ * @link: get link state
+ * @fc_en: flow control (0 - disable, 1 - enable)
+ */
+struct mxl862xx_sys_sfp_cfg {
+	u8 port_id: 4;
+	u8 option: 4;
+	union {
+		struct {
+			u8 mode;
+			/** select speed when mode is 1
+			 *	0 - 10G Quad USXGMII
+			 *	1 - 1000BaseX ANeg
+			 *	2 - 10G	XFI
+			 *	3 - 10G Single USXGMII
+			 *	4 - 2.5G SGMII
+			 *	5 - 2500 Single USXGMI
+			 *	6 - 2500BaseX NonANeg
+			 *	7 - 1000BaseX NonANeg
+			 *	8 - 1G SGMI
+			 */
+			u8 speed;
+			u8 link;
+		};
+		u8 fc_en;
+	};
+};

@@ -14,7 +14,7 @@
 #define VID_RULES	2
 #define MAX_VLANS	100
 #define MAX_PORTS	MXL862XX_MAX_PORT_NUM
-#define MAX_BRIDGES 16
+#define MAX_BRIDGES 17
 
 struct mxl862xx_hw_info {
 	u8 max_ports;
@@ -81,6 +81,12 @@ struct mxl862xx_port_info {
 	struct mxl862xx_port_vlan_info vlan;
 };
 
+struct mxl862xx_pcs {
+	struct phylink_pcs pcs;
+	struct mxl862xx_priv *priv;
+	int port;
+};
+
 struct mxl862xx_priv {
 	struct dsa_switch *ds;
 	struct mii_bus *bus;
@@ -100,4 +106,5 @@ struct mxl862xx_priv {
 	uint8_t user_pnum;
 	bool force_isolate;
 	bool c22_extended;
+	struct mxl862xx_pcs pcs_port_1;
 };
