@@ -25,7 +25,7 @@
 #include "tag.h"
 
 
-#define MXL862_NAME	"mxl862xx"
+#define MXL862_TAG_8021Q_NAME	"mxl862_8021q"
 
 /* To define the outgoing port and to discover the incoming port
  * a special 4-byte outer VLAN tag is used by the MxL862xx.
@@ -79,7 +79,7 @@ static struct sk_buff *mxl862_8021q_tag_rcv(struct sk_buff *skb,
 }
 
 static const struct dsa_device_ops mxl862_8021q_netdev_ops = {
-	.name = "mxl862_8021q",
+	.name = MXL862_TAG_8021Q_NAME,
 	.proto = DSA_TAG_PROTO_MXL862_8021Q,
 	.xmit = mxl862_8021q_tag_xmit,
 	.rcv = mxl862_8021q_tag_rcv,
@@ -88,5 +88,5 @@ static const struct dsa_device_ops mxl862_8021q_netdev_ops = {
 };
 
 MODULE_LICENSE("GPL");
-MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_MXL862_8021Q, MXL862_NAME);
+MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_MXL862_8021Q, MXL862_TAG_8021Q_NAME);
 module_dsa_tag_driver(mxl862_8021q_netdev_ops);
