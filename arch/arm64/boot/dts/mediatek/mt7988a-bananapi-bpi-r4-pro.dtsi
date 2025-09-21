@@ -676,7 +676,7 @@
 	phys = <&xphyu2port0 PHY_TYPE_USB2>;
 	mediatek,u3p-dis-msk = <1>;
 	/delete-property/ mediatek,p0_speed_fixup;
-	//status = "okay";
+	status = "okay";
 };
 
 /* front USB */
