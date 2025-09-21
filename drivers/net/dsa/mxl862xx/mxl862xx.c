@@ -41,7 +41,6 @@
 #define MXL862XX_FDMA_PCTRLP(p) (0xA80 + ((p) * 0x6))
 #define MXL862XX_FDMA_PCTRL_EN BIT(0) /* FDMA Port Enable */
 
-#define MAX_BRIDGES 16
 #define MAX_VLAN_ENTRIES (1024 - 160)
 #define IDX_INVAL (-1)
 
@@ -189,8 +188,8 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 					    struct net_device *bridge, int action)
 {
 	struct mxl862xx_priv *priv = ds->priv;
-	u8 phy_ports = priv->hw_info->phy_ports;
-	u8 cpu_port = priv->hw_info->cpu_port;
+	u8 max_ports = priv->hw_info->max_ports;
+	u8 cpu_port = priv->cpu_port;
 	u8 i;
 	bool vlan_sp_tag = (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q);
 
@@ -200,8 +199,25 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 	 */
 	int ret;
 
-	if (!dsa_is_cpu_port(ds, port)) {
+	/* Update local bridge port map */
+	for (i = 0; i < max_ports; i++) {
 		int bridge_id = priv->port_info[i].bridge_id;
+
+		if (dsa_is_unused_port(ds, i))
+			continue;
+
+		/* CPU port is assigned to all bridges and cannot be modified  */
+		if ((dsa_is_cpu_port(ds, i)))
+			continue;
+
+		/* Skip if bridge does not match, except the self port assignment  */
+		if ((dsa_port_bridge_dev_get(dsa_to_port(ds, i)) != bridge) && (i != port))
+			continue;
+
+		/* Case for standalone bridges assigned only to single user and CPU ports.
+		 * Used only for initial ports isolation */
+		if ((bridge == NULL) && (i != port))
+			continue;
 
 		if (action)
 			priv->bridge_portmap[bridge_id] |= BIT(DSA_MXL_PORT(port));
@@ -211,7 +227,7 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 
 	/* Update switch according to local bridge port map */
 	/* Add this port to the port maps of other ports skiping it's own map */
-	for (i = 0; i < phy_ports; i++) {
+	for (i = 0; i < max_ports; i++) {
 		struct mxl862xx_bridge_port_config br_port_cfg = { };
 		int bridge_id = priv->port_info[i].bridge_id;
 
@@ -221,7 +237,7 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 		/* Case for standalone bridges assigned only to single user and CPU ports.
 		 * Used only for initial ports isolation
 		 */
-		if (bridge && i != port)
+		if (!bridge && i != port)
 			continue;
 
 		/* Do not reconfigure any standalone bridge if this is bridge join scenario */
@@ -237,7 +253,7 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 		if (ret) {
 			dev_err(ds->dev, "failed to set bridge port configuration on port %d\n",
 				port);
-			return ret;;
+			return ret;
 		}
 
 		/* Skip port map update if for the existing bridge the port
@@ -254,7 +270,7 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 
 		/* Skip the port itself in it's own portmap */
 		br_port_cfg.bridge_port_map[0] =
-			priv->bridge_portmap[bridge_id] & ~(BIT(i + 1));
+			priv->bridge_portmap[bridge_id] & ~(BIT(DSA_MXL_PORT(i)));
 
 		if (action) {
 			br_port_cfg.src_mac_learning_disable = !bridge;
@@ -281,7 +297,7 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 	/* Configure additional bridge port for VLAN based tagging */
 	if (vlan_sp_tag) {
 		int bridge_id = priv->port_info[port].bridge_id;
-		uint16_t bridge_port_cpu = port + 1 + 16;
+		uint16_t bridge_port_cpu = DSA_MXL_PORT(port) + 16;
 		struct mxl862xx_bridge_port_alloc bpa_param = { };
 		struct mxl862xx_bridge_port_config br_port_cfg = { };
 
@@ -304,8 +320,8 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 				MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING;
 			br_port_cfg.bridge_id = bridge_id;
 			br_port_cfg.bridge_port_id = bridge_port_cpu;
-			br_port_cfg.bridge_port_map[0] = BIT(port + 1);
-			br_port_cfg.dest_logical_port_id = cpu_port + 1;
+			br_port_cfg.bridge_port_map[0] = BIT(DSA_MXL_PORT(port));
+			br_port_cfg.dest_logical_port_id = DSA_MXL_PORT(cpu_port);
 			br_port_cfg.src_mac_learning_disable = true;
 
 			ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, br_port_cfg);
@@ -335,6 +351,24 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 	}
 
 	return 0;
+}
+
+static enum dsa_tag_protocol mxl862_parse_tag_proto(struct dsa_switch *ds, uint8_t port)
+{
+	/* Default value if no dt entry found */
+	enum dsa_tag_protocol tag_proto = DSA_TAG_PROTO_MXL862;
+	struct dsa_port *dp = (struct dsa_port *)dsa_to_port(ds, port);
+	const char *user_protocol = NULL;
+
+	if (dp != NULL)
+		user_protocol = of_get_property(dp->dn, "dsa-tag-protocol", NULL);
+	if (user_protocol != NULL) {
+		if (strcmp("mxl862", user_protocol) == 0)
+			tag_proto = DSA_TAG_PROTO_MXL862;
+		else if (strcmp("mxl862_8021q", user_protocol) == 0)
+			tag_proto = DSA_TAG_PROTO_MXL862_8021Q;
+	}
+	return tag_proto;
 }
 
 static int mxl862_configure_tag_proto(struct dsa_switch *ds, u8 port, bool enable)
@@ -385,15 +419,18 @@ static int mxl862xx_port_state(struct dsa_switch *ds, int port, bool enable)
 	if (!dsa_is_user_port(ds, port))
 		return 0;
 
+	if (enable && dsa_is_cpu_port(ds, port))
+		return 0;
+
 	ret = MXL862XX_API_WRITE(priv, MXL862XX_COMMON_REGISTERMOD, sdma_param);
 	if (ret) {
-		dev_err(ds->dev, "failed to enable SDMA on port %d\n", port);
+		dev_err(ds->dev, "failed to %s SDMA on port %d\n", (enable)?"enable":"disable", port);
 		return ret;
 	}
 
 	ret = MXL862XX_API_WRITE(priv, MXL862XX_COMMON_REGISTERMOD, fdma_param);
 	if (ret) {
-		dev_err(ds->dev, "failed to enable FDMA on port %d\n", port);
+		dev_err(ds->dev, "failed to %s FDMA on port %d\n", (enable)?"enable":"disable", port);
 		return ret;
 	}
 
@@ -1111,7 +1148,7 @@ static int prepare_vlan_ingress_filters_off(struct mxl862xx_priv *priv, uint8_t 
 	vlan_cfg.extended_vlan_block_id =
 		priv->port_info[port].vlan.ingress_vlan_block_info.block_id;
 	/* for cpu port this entry is fixed and always put at the end of the block */
-	if (port == priv->hw_info->cpu_port)
+	if (port == priv->cpu_port)
 		vlan_cfg.entry_index =  priv->port_info[port].vlan.ingress_vlan_block_info.filters_max - 1;
 	else {
 		vlan_cfg.entry_index =
@@ -2123,12 +2160,12 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 	struct mxl862xx_bridge_port_config br_port_cfg = { };
 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
 	bool pvid = vlan->flags & BRIDGE_VLAN_INFO_PVID;
-	uint8_t cpu_port = priv->hw_info->cpu_port;
+	uint8_t cpu_port = priv->cpu_port;
 	bool vlan_sp_tag = (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q);
 	bool standalone_port = false;
 	uint16_t vid = vlan->vid;
 
-	if (port < 0 || port >= MAX_PORTS) {
+	if (port < 0 || port >= priv->hw_info->max_ports) {
 		dev_err(priv->dev, "invalid port: %d\n", port);
 		NL_SET_ERR_MSG_MOD(extack, "Port out of range");
 		return ret;
@@ -2195,7 +2232,7 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 	 * keep VLAN rules separate for better readibility */
 	if (vlan_sp_tag) {
 		if (!dsa_is_cpu_port(ds, port)) {
-		/* Special rules for CPU port based on user port id */
+			/* Special rules for CPU port based on user port id */
 			ret = prepare_vlan_ingress_filters_sp_tag_cpu(ds, port, cpu_port);
 			if (ret) {
 				dev_err(ds->dev,
@@ -2278,7 +2315,7 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 		{
 			struct mxl862xx_ctp_port_config ctp_param = { };
 
-			ctp_param.logical_port_id = cpu_port + 1;
+			ctp_param.logical_port_id = DSA_MXL_PORT(cpu_port);
 			ctp_param.mask = MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_VLAN |
 					     MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN;
 			ctp_param.egress_extended_vlan_enable = true;
@@ -2344,7 +2381,7 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 		if (dsa_is_cpu_port(ds, port)) {
 			struct mxl862xx_ctp_port_config ctp_param = { };
 
-			ctp_param.logical_port_id = port + 1;
+			ctp_param.logical_port_id = DSA_MXL_PORT(port);
 			ctp_param.mask = MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_VLAN |
 					     MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN;
 			ctp_param.egress_extended_vlan_enable = true;
@@ -2368,7 +2405,7 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 	}
 
 	/* Update bridge port */
-	br_port_cfg.bridge_port_id = port + 1;
+	br_port_cfg.bridge_port_id = DSA_MXL_PORT(port);
 	br_port_cfg.mask |= MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_VLAN |
 			     MXL862XX_BRIDGE_PORT_CONFIG_MASK_INGRESS_VLAN |
 				  MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING;
@@ -2472,14 +2509,14 @@ static int mxl862xx_port_vlan_del(struct dsa_switch *ds, int port,
 static_rules_cleanup:
 		/* If this is the last vlan entry or no entries left,
 		 * remove static entries (placed at the end of the block) */
-		if (last_vlan) {
+		if (last_vlan && block_id) {
 			for (entry_idx = block_info->final_filters_idx; entry_idx < block_info->filters_max ; entry_idx++) {
 				ret = deactivate_vlan_filter_entry(ds, block_id, entry_idx);
 				if (ret)
 					return ret;
 			}
 			/* Entries cleared, so point out to the end */
-			block_info->final_filters_idx = entry_idx;
+			block_info->final_filters_idx = block_info->filters_max-1;
 		}
 	}
 
@@ -2491,7 +2528,7 @@ static int mxl862xx_isolate_port(struct dsa_switch *ds, int port)
 {
 	struct mxl862xx_bridge_alloc param = {};
 	struct mxl862xx_priv *priv = ds->priv;
-	uint8_t cpu_port = priv->hw_info->cpu_port;
+	uint8_t cpu_port = priv->cpu_port;
 	bool vlan_sp_tag = (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q);
 	int ret;
 
@@ -2541,7 +2578,7 @@ static void mxl862xx_deisolate_port(struct dsa_switch *ds, u8 port)
 {
 	struct mxl862xx_bridge_alloc bridge_alloc = { };
 	struct mxl862xx_priv *priv = ds->priv;
-	uint8_t cpu_port = priv->hw_info->cpu_port;
+	uint8_t cpu_port = priv->cpu_port;
 	bool vlan_sp_tag = (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q);
 	int ret;
 
@@ -2608,10 +2645,15 @@ static int mxl862xx_find_bridge_id(struct dsa_switch *ds, struct net_device *bri
 	struct mxl862xx_priv *priv = ds->priv;
 	u8 i;
 
-	if (bridge)
-		for (i = 0; i < priv->hw_info->phy_ports; i++)
+	if (bridge) {
+		for (i = 0; i < priv->hw_info->max_ports; i++) {
+			if (dsa_is_unused_port(ds, i))
+				continue;
+
 			if (priv->port_info[i].bridge == bridge)
 				return priv->port_info[i].bridge_id;
+		}
+	}
 
 	return 0;
 }
@@ -2640,7 +2682,7 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 	u16 user_ingress_entries;
 	u16 user_egress_entries;
 	struct mxl862xx_priv *priv = ds->priv;
-	u8 cpu_port = priv->hw_info->cpu_port;
+	u8 cpu_port = priv->cpu_port;
 	struct mxl862xx_port_vlan_info *vlan = &priv->port_info[cpu_port].vlan;
 
 	/* Set limits and indexes required for processing VLAN rules for CPU port */
@@ -2653,12 +2695,12 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 	 *  + cpu_ingress_entries + cpu_egress_entries
 	 */
 	if (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q) {
-		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->hw_info->phy_ports *
+		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->user_pnum *
 				   (EGRESS_FINAL_RULES + INGRESS_FINAL_RULES + 2) - 3) /
-				  (priv->hw_info->phy_ports *
+				  (priv->user_pnum *
 				   (EGRESS_VID_RULES + INGRESS_VID_RULES) + 2);
 		/* 2 entries per port and 1 entry for fixed rule */
-		cpu_ingress_entries = priv->hw_info->phy_ports * 2 + 1;
+		cpu_ingress_entries = priv->user_pnum * 2 + 1;
 		/* 2 entries per each vlan and 2 entries for fixed rules */
 		cpu_egress_entries = priv->max_vlans * 2 + 2;
 
@@ -2670,9 +2712,9 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 		user_ingress_entries = INGRESS_FINAL_RULES + INGRESS_VID_RULES * priv->max_vlans;
 		user_egress_entries = EGRESS_FINAL_RULES + EGRESS_VID_RULES * priv->max_vlans;
 	} else {
-		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->hw_info->phy_ports *
+		priv->max_vlans = (MAX_VLAN_ENTRIES - priv->user_pnum *
 				(EGRESS_FINAL_RULES + INGRESS_FINAL_RULES) - 1) /
-			(priv->hw_info->phy_ports * (EGRESS_VID_RULES + INGRESS_VID_RULES) + 2);
+			(priv->user_pnum * (EGRESS_VID_RULES + INGRESS_VID_RULES) + 2);
 		/* 1 entry for fixed rule */
 		cpu_ingress_entries =  1;
 		/* 2 entries per each vlan  */
@@ -2693,7 +2735,12 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 		vlan->egress_vlan_block_info.filters_max - 1;
 
 	/* Set limits and indexes required for processing VLAN rules for user ports */
-	for (i = 0; i < priv->hw_info->phy_ports; i++) {
+	for (i = 0; i < priv->hw_info->max_ports; i++) {
+		if (dsa_is_unused_port(ds, i))
+			continue;
+		if (dsa_is_cpu_port(ds, i))
+			continue;
+
 		vlan = &priv->port_info[i].vlan;
 		vlan->ingress_vlan_block_info.entries_per_vlan = INGRESS_VID_RULES;
 		vlan->ingress_vlan_block_info.filters_max = user_ingress_entries;
@@ -2705,10 +2752,10 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 		vlan->egress_vlan_block_info.final_filters_idx =
 			vlan->egress_vlan_block_info.filters_max - 1;
 	}
-	dev_info(ds->dev, "%s: phy_ports:%d, priv->max_vlans: %d, cpu_egress_entries: %d, "
-		 "user_ingress_entries: %d, INGRESS_VID_RULES: %d\n",
-		 __func__, priv->hw_info->phy_ports, priv->max_vlans,
-		 cpu_egress_entries, user_ingress_entries, INGRESS_VID_RULES);
+	dev_info(ds->dev, "%s: user_pnum:%d, priv->max_vlans: %d, cpu_ingress_entries: %d, "
+		 "cpu_egress_entries: %d, user_ingress_entries: %d, user_egress_entries: %d\n",
+		 __func__, priv->user_pnum, priv->max_vlans, cpu_ingress_entries,
+		 cpu_egress_entries, user_ingress_entries, user_egress_entries);
 }
 
 static int mxl862xx_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
@@ -2736,7 +2783,7 @@ static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port, struct dsa
 
 {
 	struct mxl862xx_priv *priv = ds->priv;
-	uint8_t cpu_port = priv->hw_info->cpu_port;
+	uint8_t cpu_port = priv->cpu_port;
 	bool vlan_sp_tag = (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q);
 	int bridge_id;
 	int ret;
@@ -2791,7 +2838,7 @@ static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port, struct dsa
 			return ret;
 
 		/* update cpu port */
-		ctp_param.logical_port_id = cpu_port + 1;
+		ctp_param.logical_port_id = DSA_MXL_PORT(cpu_port);
 		ctp_param.mask = MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_VLAN |
 				     MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN;
 		ctp_param.egress_extended_vlan_enable = true;
@@ -2811,7 +2858,7 @@ static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port, struct dsa
 		}
 
 		/* Update bridge port */
-		br_port_cfg.bridge_port_id = port + 1;
+		br_port_cfg.bridge_port_id = DSA_MXL_PORT(port);
 		br_port_cfg.mask |= MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_VLAN |
 			     MXL862XX_BRIDGE_PORT_CONFIG_MASK_INGRESS_VLAN;
 		br_port_cfg.egress_extended_vlan_enable = true;
@@ -2840,7 +2887,7 @@ static void mxl862xx_port_bridge_leave(struct dsa_switch *ds, int port,
 	struct mxl862xx_bridge_alloc bridge_alloc = {
 		.bridge_id = priv->port_info[port].bridge_id,
 	};
-	unsigned int cpu_port = priv->hw_info->cpu_port;
+	unsigned int cpu_port = priv->cpu_port;
 	int bridge_id;
 	int ret;
 
@@ -2889,6 +2936,7 @@ static int mxl862xx_phy_write_c45_mii_bus(struct mii_bus *bus, int port,
 
 static int mxl862xx_setup_mdio(struct dsa_switch *ds)
 {
+	struct mxl862xx_priv *priv = ds->priv;
 	struct device *dev = ds->dev;
 	struct mii_bus *bus;
 	static int idx;
@@ -2909,6 +2957,10 @@ static int mxl862xx_setup_mdio(struct dsa_switch *ds)
 	bus->parent = dev;
 	bus->phy_mask = ~ds->phys_mii_mask;
 
+	/* 10G ports do not support slave MDIO bus yet */
+	if (priv->hw_info->ext_ports <= 2)
+		 bus->phy_mask |= 0xff00;
+
 	ret = devm_mdiobus_register(dev, bus);
 	if (ret)
 		dev_err(dev, "failed to register MDIO bus: %d\n", ret);
@@ -2919,9 +2971,19 @@ static int mxl862xx_setup_mdio(struct dsa_switch *ds)
 static int mxl862xx_setup(struct dsa_switch *ds)
 {
 	struct mxl862xx_priv *priv = ds->priv;
-	unsigned int cpu_port = priv->hw_info->cpu_port;
+	unsigned int cpu_port, j;
 	int ret;
 	u8 i;
+
+	priv->user_pnum = 0;
+	for (j = 0; j < ds->num_ports; j++) {
+		if (dsa_is_user_port(ds, j))
+			priv->user_pnum++;
+		else if (dsa_is_cpu_port(ds, j))
+			priv->cpu_port = cpu_port = j;
+	}
+	dev_info(ds->dev, "\tMxl862xx CPU Port %u, User Port number %u\n",
+		 cpu_port, priv->user_pnum);
 
 	ret = mxl862xx_setup_mdio(ds);
 	if (ret) {
@@ -2942,9 +3004,9 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	}
 	usleep_range(4000000, 6000000);
 
-	priv->port_info[priv->hw_info->cpu_port].tag_protocol = DSA_TAG_PROTO_MXL862_8021Q;
+	priv->port_info[priv->cpu_port].tag_protocol = mxl862_parse_tag_proto(ds, priv->cpu_port);
 
-	if (priv->port_info[priv->hw_info->cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862) {
+	if (priv->port_info[priv->cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862) {
 		ret = mxl862_configure_tag_proto(ds, cpu_port, true);
 		if (ret)
 			return ret;
@@ -2959,9 +3021,16 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	for (i = 0; i < MAX_VLANS; i++)
 		priv->port_info[cpu_port].vlan.egress_vlan_block_info.vlans[i].untagged = true;
 
-	for (i = 0; i < priv->hw_info->phy_ports; i++) {
+	for (i = 0; i < priv->hw_info->max_ports; i++) {
+		if (dsa_is_unused_port(ds, i))
+			continue;
+
 		priv->port_info[i].vlan.filtering_mode_locked = false;
-		priv->port_info[i].isolated = true;
+		priv->port_info[i].isolated = false;
+
+		if (dsa_is_cpu_port(ds, i)) {
+			continue;
+		}
 
 		mxl862xx_port_state(ds, i, false);
 		mxl862xx_isolate_port(ds, i);
@@ -3017,12 +3086,17 @@ static void mxl862xx_phylink_get_caps(struct dsa_switch *ds, int port,
 	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE | MAC_10 |
 				   MAC_100 | MAC_1000 | MAC_2500FD;
 
-	if (port >= 0 && port < priv->hw_info->phy_ports) {
+	if ((port >= 0 && port < priv->hw_info->phy_ports) ||
+	    (port >= 8 && priv->hw_info->ext_ports >= 7)) {
 		__set_bit(PHY_INTERFACE_MODE_INTERNAL, config->supported_interfaces);
-	} else if (port == 8 || port == 9) {
+	} else if (port >= 8 && priv->hw_info->ext_ports == 2) {
+		__set_bit(PHY_INTERFACE_MODE_SGMII, config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_1000BASEX, config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_2500BASEX, config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_10GBASER, config->supported_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_USXGMII, config->supported_interfaces);
 		config->mac_capabilities |= MAC_5000FD | MAC_10000FD;
-	} else if (port > 9) {
+	} else {
 		__set_bit(PHY_INTERFACE_MODE_NA, config->supported_interfaces);
 	}
 }
@@ -3046,20 +3120,8 @@ static void mxl862xx_phylink_mac_config(struct phylink_config *config, unsigned 
 static void mxl862xx_phylink_mac_link_down(struct phylink_config *config, unsigned int mode,
 					   phy_interface_t interface)
 {
-	struct dsa_port *dp = dsa_phylink_to_port(config);
-	struct mxl862xx_port_link_cfg param = {
-		.port_id = DSA_MXL_PORT(dp->index),
-		.link_force = true,
-		.link = MXL862XX_PORT_LINK_DOWN,
-	};
-	int ret;
-
-	if (dsa_is_cpu_port(dp->ds, dp->index))
-		return;
-
-	ret = MXL862XX_API_WRITE(dp->ds->priv, MXL862XX_COMMON_PORTLINKCFGSET, param);
-	if (ret)
-		dev_err(dp->ds->dev, "failed to stop link on port %d\n", dp->index);
+	/* MxL862xx system automatically synchronize the state between MAC link and PHY link or Serdes link*/
+	return;
 }
 
 static void mxl862xx_phylink_mac_link_up(struct phylink_config *config,
@@ -3067,82 +3129,8 @@ static void mxl862xx_phylink_mac_link_up(struct phylink_config *config,
 					 phy_interface_t interface, int speed, int duplex,
 					 bool tx_pause, bool rx_pause)
 {
-	struct dsa_port *dp = dsa_phylink_to_port(config);
-	struct mxl862xx_port_link_cfg port_link_cfg = {
-		.port_id = DSA_MXL_PORT(dp->index),
-		.link = MXL862XX_PORT_LINK_UP,
-		.duplex_force = true,
-		.speed_force = true,
-		.link_force = true,
-	};
-	struct mxl862xx_port_cfg port_cfg = {
-		.port_id = DSA_MXL_PORT(dp->index),
-	};
-	int ret;
-
-	if (dsa_is_cpu_port(dp->ds, dp->index))
-		return;
-
-	switch (speed) {
-	case SPEED_10:
-		port_link_cfg.speed = MXL862XX_PORT_SPEED_10;
-		break;
-	case SPEED_100:
-		port_link_cfg.speed = MXL862XX_PORT_SPEED_100;
-		break;
-	case SPEED_1000:
-		port_link_cfg.speed = MXL862XX_PORT_SPEED_1000;
-		break;
-	case SPEED_2500:
-		port_link_cfg.speed = MXL862XX_PORT_SPEED_2500;
-		break;
-	case SPEED_5000:
-		port_link_cfg.speed = MXL862XX_PORT_SPEED_5000;
-		break;
-	case SPEED_10000:
-		port_link_cfg.speed = MXL862XX_PORT_SPEED_10000;
-		break;
-	default:
-		dev_err(dp->ds->dev, "unsupported links speed on port %d\n", dp->index);
-		return;
-	}
-
-	switch (duplex) {
-	case DUPLEX_HALF:
-		port_link_cfg.duplex = MXL862XX_DUPLEX_HALF;
-		break;
-	case DUPLEX_FULL:
-		port_link_cfg.duplex = MXL862XX_DUPLEX_FULL;
-		break;
-	default:
-		port_link_cfg.duplex = MXL862XX_DUPLEX_AUTO;
-		break;
-	}
-
-	ret = MXL862XX_API_WRITE(dp->ds->priv, MXL862XX_COMMON_PORTLINKCFGSET, port_link_cfg);
-	if (ret) {
-		dev_err(dp->ds->dev, "failed to configure link on port %d\n", dp->index);
-		return;
-	}
-
-	ret = MXL862XX_API_READ(dp->ds->priv, MXL862XX_COMMON_PORTCFGGET, port_cfg);
-	if (ret) {
-		dev_err(dp->ds->dev, "failed to read configuration on port %d\n", dp->index);
-		return;
-	}
-
-	if (tx_pause && rx_pause)
-		port_cfg.flow_ctrl = MXL862XX_FLOW_RXTX;
-	else if (tx_pause)
-		port_cfg.flow_ctrl = MXL862XX_FLOW_TX;
-	else if (rx_pause)
-		port_cfg.flow_ctrl = MXL862XX_FLOW_RX;
-	else
-		port_cfg.flow_ctrl = MXL862XX_FLOW_OFF;
-
-	ret = MXL862XX_API_WRITE(dp->ds->priv, MXL862XX_COMMON_PORTCFGSET, port_cfg);
-	if (ret)
-		dev_err(dp->ds->dev, "failed to configure port %d\n", dp->index);
+	/* MxL862xx system automatically synchronize the state between MAC link and PHY link or Serdes link*/
+	return;
 }
 
 static void mxl862xx_get_ethtool_stats(struct dsa_switch *ds, int port,
@@ -3247,7 +3235,7 @@ static void mxl862xx_port_mirror_del(struct dsa_switch *ds, int port,
 		.mask = MXL862XX_CTP_PORT_CONFIG_LOOPBACK_AND_MIRROR,
 	};
 	struct mxl862xx_priv *priv = ds->priv;
-	u8 phy_ports = priv->hw_info->phy_ports;
+	u8 max_ports = priv->hw_info->max_ports;
 	int active_mirrors = 0;
 	int ret, i;
 
@@ -3256,16 +3244,23 @@ static void mxl862xx_port_mirror_del(struct dsa_switch *ds, int port,
 	else
 		priv->port_info[port].egress_mirror_enabled = false;
 
+	param.ingress_mirror_enable = priv->port_info[port].ingress_mirror_enabled;
+	param.egress_mirror_enable = priv->port_info[port].egress_mirror_enabled;
 	ret = MXL862XX_API_WRITE(priv, MXL862XX_CTP_PORTCONFIGSET, param);
 	if (ret) {
 		dev_err(ds->dev, "failed to disable mirroring on port %d\n", port);
 		return;
 	}
 
-	for (i = 0; i < phy_ports; i++)
+	for (i = 0; i < max_ports; i++)
+	{
+		if (dsa_is_unused_port(ds, i))
+			continue;
+
 		if (priv->port_info[i].egress_mirror_enabled ||
 		    priv->port_info[i].egress_mirror_enabled)
 			active_mirrors = 1;
+	}
 
 	if (!active_mirrors) {
 		struct mxl862xx_monitor_port_cfg monitor_port = { };
@@ -3289,7 +3284,10 @@ static int mxl862xx_port_fdb_add(struct dsa_switch *ds, int port,
 
 	memcpy(param.mac, addr, ETH_ALEN);
 
-	for (i = 0; i < priv->hw_info->phy_ports; i++) {
+	for (i = 0; i < priv->hw_info->max_ports; i++) {
+		if (dsa_is_unused_port(ds, i))
+			continue;
+
 		if (!dsa_is_cpu_port(ds, port) && i != port)
 			continue;
 
@@ -3319,7 +3317,10 @@ static int mxl862xx_port_fdb_del(struct dsa_switch *ds, int port,
 
 	memcpy(param.mac, addr, ETH_ALEN);
 
-	for (i = 0; i < priv->hw_info->phy_ports; i++) {
+	for (i = 0; i < priv->hw_info->max_ports; i++) {
+		if (dsa_is_unused_port(ds, i))
+			continue;
+
 		if (!dsa_is_cpu_port(ds, port) && i != port)
 			continue;
 
@@ -3416,7 +3417,7 @@ static int mxl862xx_port_bridge_flags(struct dsa_switch *ds, int port,
 		if (ret) {
 			dev_err(ds->dev, "%s: Port:%d bridge:%d configuration  failed\n",
 				__func__, port, bridge_config.bridge_id);
-			return ret;;
+			return ret;
 		}
 	}
 
@@ -3430,7 +3431,7 @@ static enum dsa_tag_protocol mxl862xx_get_tag_protocol(struct dsa_switch *ds,
 						       int port, enum dsa_tag_protocol m)
 {
 /* ToDo */
-	return DSA_TAG_PROTO_MXL862_8021Q;
+	return mxl862_parse_tag_proto(ds, port);
 }
 
 static int mxl862xx_change_tag_protocol(struct dsa_switch *ds,
@@ -3522,6 +3523,14 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 		return ret;
 	}
 
+	if (!dsa_is_cpu_port(ds, priv->cpu_port)) {
+		dev_err(dev,
+			"wrong CPU port defined, HW only supports port: %i",
+			priv->cpu_port);
+		dsa_unregister_switch(ds);
+		return -EINVAL;
+	}
+
 	ret = MXL862XX_API_READ(priv, SYS_MISC_FW_VERSION, fw_version);
 	if (ret) {
 		dev_err(dev, "failed to read firmware version\n");
@@ -3548,15 +3557,15 @@ static void mxl862xx_remove(struct mdio_device *mdiodev)
 }
 
 static const struct mxl862xx_hw_info mxl86282_data = {
-	.max_ports = 9,
-	.phy_ports = 8,
-	.cpu_port = 8,
+	.max_ports = MXL862XX_MAX_PORT_NUM,
+	.phy_ports = MXL86282_PHY_PORT_NUM,
+	.ext_ports = MXL86282_EXT_PORT_NUM,
 };
 
 static const struct mxl862xx_hw_info mxl86252_data = {
-	.max_ports = 9,
-	.phy_ports = 5,
-	.cpu_port = 8,
+	.max_ports = MXL862XX_MAX_PORT_NUM,
+	.phy_ports = MXL86252_PHY_PORT_NUM,
+	.ext_ports = MXL86252_EXT_PORT_NUM,
 };
 
 static const struct of_device_id mxl862xx_of_match[] = {
