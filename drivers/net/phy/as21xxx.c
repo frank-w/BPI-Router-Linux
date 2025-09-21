@@ -361,6 +361,7 @@ static int aeon_firmware_load(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
+	phydev_err(phydev, "%s:%d firmware-name:%s\n",__func__,__LINE__,fw_name);
 	ret = request_firmware(&fw, fw_name, dev);
 	if (ret) {
 		phydev_err(phydev, "failed to find FW file %s (%d)\n",
@@ -372,6 +373,7 @@ static int aeon_firmware_load(struct phy_device *phydev)
 
 	release_firmware(fw);
 
+	phydev_err(phydev, "%s:%d ret:%d\n",__func__,__LINE__,ret);
 	return ret;
 }
 
@@ -584,7 +586,7 @@ static int aeon_ipc_get_fw_version(struct phy_device *phydev)
 	memcpy(fw_version, ret_data, ret);
 	fw_version[ret] = '\0';
 
-	phydev_info(phydev, "Firmware Version: %s\n", fw_version);
+	phydev_err(phydev, "Firmware Version: %s\n", fw_version);
 
 	return 0;
 }
@@ -605,6 +607,7 @@ static int as21xxx_probe(struct phy_device *phydev)
 	struct as21xxx_priv *priv;
 	int ret;
 
+	phydev_err(phydev, "%s:%d\n",__func__,__LINE__);
 	priv = devm_kzalloc(&phydev->mdio.dev,
 			    sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -630,13 +633,17 @@ static int as21xxx_probe(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
-	return aeon_dpc_ra_enable(phydev);
+	ret = aeon_dpc_ra_enable(phydev);
+	phydev_err(phydev, "%s:%d: ret:%d\n",__func__,__LINE__, ret);
+
+	return ret;
 }
 
 static int as21xxx_read_link(struct phy_device *phydev, int *bmcr)
 {
 	int status;
 
+	phydev_err(phydev, "%s:%d\n",__func__,__LINE__);
 	/* Normal C22 BMCR report inconsistent data, use
 	 * the mapped C22 in C45 to have more consistent link info.
 	 */
@@ -658,6 +665,8 @@ static int as21xxx_read_link(struct phy_device *phydev, int *bmcr)
 		return status;
 
 	phydev->link = !!(status & MDIO_STAT1_LSTATUS);
+
+	phydev_err(phydev, "%s:%d\n",__func__,__LINE__);
 
 	return 0;
 }
@@ -913,16 +922,20 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	mutex_init(&priv->ipc_lock);
 
 	ret = aeon_firmware_load(phydev);
+	phydev_err(phydev, "%s:%d ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		goto out;
+	phydev_err(phydev, "%s:%d\n",__func__,__LINE__);
 
 	/* Sync parity... */
 	ret = aeon_ipc_sync_parity(phydev, priv);
+	phydev_err(phydev, "%s:%d ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		goto out;
 
 	/* ...and send a third NOOP cmd to wait for firmware finish loading */
 	ret = aeon_ipc_noop(phydev, priv, &ret_sts);
+	phydev_err(phydev, "%s:%d ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		goto out;
 
@@ -939,6 +952,8 @@ out:
 	 * This relies on the driver probe order where the first PHY driver
 	 * probed is the generic one.
 	 */
+	
+	phydev_err(phydev, "%s:%d ret:%d\n",__func__,__LINE__,ret);
 	return ret;
 }
 
