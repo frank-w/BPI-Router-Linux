@@ -28,14 +28,92 @@
 #define MMD_API_GET_DATA_0 (0x0 + 0x5)
 #define MMD_API_RST_DATA (0x0 + 0x8)
 
+/* Clause 22 extended read/write access */
+#define MXL862XX_MMD_DATA		0xE
+#define MXL862XX_MMD_CTRL		0xD
+#define MXL862XX_ACTYPE_ADDRESS	(0 << 14)
+#define MXL862XX_ACTYPE_DATA	(1 << 14)
+
+/**
+ *  write access to MMD register of PHYs via Clause 22 extended access
+ */
+static int __mxl862xx_c22_ext_mmd_write(const struct mxl862xx_priv *dev, struct mii_bus *bus, int sw_addr, int mmd,
+			    int reg, u16 data)
+{
+	int res;
+
+	/* Set the DevID for Write Command */
+	res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_CTRL, mmd);
+	if (res < 0)
+		goto error;
+
+	/* Issue the write command */
+	res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_DATA, reg);
+	if (res < 0)
+		goto error;
+
+	/* Set the DevID for Write Command */
+	res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_CTRL, MXL862XX_ACTYPE_DATA | mmd);
+	if (res < 0)
+		goto error;
+
+	/* Issue the write command */
+	if (mmd == 0x1e && reg == 0)	/* ctrl register can't write twice */
+		res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_DATA, data);
+	else
+		res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_DATA, data);
+	if (res < 0)
+		goto error;
+
+error:
+	return res;
+}
+
+/**
+ *  read access to MMD register of PHYs via Clause 22 extended access
+ */
+static int __mxl862xx_c22_ext_mmd_read(const struct mxl862xx_priv *dev, struct mii_bus *bus, int sw_addr, int mmd, int reg)
+{
+	int res;
+
+	/* Set the DevID for Write Command */
+	res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_CTRL, mmd);
+	if (res < 0)
+		goto error;
+
+	/* Issue the write command */
+	res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_DATA, reg);
+	if (res < 0)
+		goto error;
+
+	/* Set the DevID for Write Command */
+	res = __mdiobus_write(bus, sw_addr, MXL862XX_MMD_CTRL, MXL862XX_ACTYPE_DATA | mmd);
+	if (res < 0)
+		goto error;
+
+	/* Read the data */
+	res = __mdiobus_read(bus, sw_addr, MXL862XX_MMD_DATA);
+	if (res < 0)
+		goto error;
+
+error:
+	return res;
+}
+
 static int mxl862xx_read(struct mxl862xx_priv *dev, u32 addr)
 {
-	return __mdiobus_c45_read(dev->bus, dev->sw_addr, MXL862XX_MMD_DEV, addr);
+	if (dev->c22_extended)
+		return __mxl862xx_c22_ext_mmd_read(dev, dev->bus, dev->sw_addr, MXL862XX_MMD_DEV, addr);
+	else
+		return __mdiobus_c45_read(dev->bus, dev->sw_addr, MXL862XX_MMD_DEV, addr);
 }
 
 int mxl862xx_write(struct mxl862xx_priv *dev, u32 addr, u16 data)
 {
-	return  __mdiobus_c45_write(dev->bus, dev->sw_addr, MXL862XX_MMD_DEV, addr, data);
+	if (dev->c22_extended)
+		return __mxl862xx_c22_ext_mmd_write(dev, dev->bus, dev->sw_addr, MXL862XX_MMD_DEV, addr, data);
+	else
+		return __mdiobus_c45_write(dev->bus, dev->sw_addr, MXL862XX_MMD_DEV, addr, data);
 }
 
 static int mxl862xx_busy_wait(struct mxl862xx_priv *dev)
