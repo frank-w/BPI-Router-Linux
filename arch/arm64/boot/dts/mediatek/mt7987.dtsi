@@ -212,7 +212,7 @@
 	};
 	fan: pwm-fan {
 		compatible = "pwm-fan";
-		cooling-levels = <0 128 255>;
+		cooling-levels = <0 100 128 255>;
 		#cooling-cells = <2>;
 		#thermal-sensor-cells = <1>;
 		status = "disabled";
