@@ -41,7 +41,7 @@
 #define MXL862XX_FDMA_PCTRLP(p) (0xA80 + ((p) * 0x6))
 #define MXL862XX_FDMA_PCTRL_EN BIT(0) /* FDMA Port Enable */
 
-#define MAX_VLAN_ENTRIES (1024 - 160)
+#define MAX_VLAN_ENTRIES (1024)
 #define IDX_INVAL (-1)
 
 #define INGRESS_FINAL_RULES 5
@@ -266,7 +266,8 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 		br_port_cfg.mask |=
 			MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_PORT_MAP |
 			MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_ID |
-			MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING;
+			MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING |
+			MXL862XX_BRIDGE_PORT_CONFIG_MASK_VLAN_BASED_MAC_LEARNING;
 
 		/* Skip the port itself in it's own portmap */
 		br_port_cfg.bridge_port_map[0] =
@@ -274,12 +275,15 @@ static int mxl862xx_update_bridge_conf_port(struct dsa_switch *ds, u8 port,
 
 		if (action) {
 			br_port_cfg.src_mac_learning_disable = !bridge;
+			br_port_cfg.vlan_src_mac_vid_enable = br_port_cfg.vlan_dst_mac_vid_enable =
+				(vlan_sp_tag) ? false : (bridge != NULL);
 			br_port_cfg.bridge_id = bridge_id;
 		} else {
 			/* When port is removed from the bridge, assign it back to the default
 			 * bridge 0
 			 */
 			br_port_cfg.src_mac_learning_disable = true;
+			br_port_cfg.vlan_src_mac_vid_enable = br_port_cfg.vlan_dst_mac_vid_enable = false;
 			/* Cleanup the port own map leaving only the CPU port mapping. */
 			if (i == port) {
 				br_port_cfg.bridge_port_map[0] = BIT(DSA_MXL_PORT(cpu_port));
@@ -2257,7 +2261,7 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 			/* vlan_filtering disabled */
 			/* skiping this configuration for vlan_sp_tag/cpu port as it requires special rules defined above */
 			if (!priv->port_info[port].vlan.filtering) {
-				dev_info(ds->dev,
+				dev_dbg(ds->dev,
 					"%s: port:%d setting VLAN:%d with vlan_filtering disabled\n",
 					__func__, port, vid);
 				ret = prepare_vlan_ingress_filters_off_sp_tag(ds, port, vid);
@@ -2412,8 +2416,9 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 	/* Update bridge port */
 	br_port_cfg.bridge_port_id = DSA_MXL_PORT(port);
 	br_port_cfg.mask |= MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_VLAN |
-			     MXL862XX_BRIDGE_PORT_CONFIG_MASK_INGRESS_VLAN |
-				  MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING;
+			    MXL862XX_BRIDGE_PORT_CONFIG_MASK_INGRESS_VLAN |
+				MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING |
+				MXL862XX_BRIDGE_PORT_CONFIG_MASK_VLAN_BASED_MAC_LEARNING;
 	br_port_cfg.egress_extended_vlan_enable = true;
 	br_port_cfg.egress_extended_vlan_block_id =
 		priv->port_info[port].vlan.egress_vlan_block_info.block_id;
@@ -2422,8 +2427,9 @@ static int mxl862xx_port_vlan_add(struct dsa_switch *ds, int port,
 		priv->port_info[port].vlan.ingress_vlan_block_info.block_id;
 
 	/* Disable MAC learning for standalone ports. */
-	br_port_cfg.src_mac_learning_disable =
-				(standalone_port) ? true : false;
+	br_port_cfg.src_mac_learning_disable = (standalone_port) ? true : false;
+	br_port_cfg.vlan_src_mac_vid_enable = br_port_cfg.vlan_dst_mac_vid_enable =
+		(vlan_sp_tag) ? false : !standalone_port;
 
 	ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, br_port_cfg);
 	if (ret) {
@@ -2514,7 +2520,7 @@ static int mxl862xx_port_vlan_del(struct dsa_switch *ds, int port,
 static_rules_cleanup:
 		/* If this is the last vlan entry or no entries left,
 		 * remove static entries (placed at the end of the block) */
-		if (last_vlan && block_id) {
+		if (last_vlan && block_id != 0xffff) {
 			for (entry_idx = block_info->final_filters_idx; entry_idx < block_info->filters_max ; entry_idx++) {
 				ret = deactivate_vlan_filter_entry(ds, block_id, entry_idx);
 				if (ret)
@@ -2666,12 +2672,18 @@ static int mxl862xx_find_bridge_id(struct dsa_switch *ds, struct net_device *bri
 static int mxl862xx_mac_learning(struct dsa_switch *ds, int port, bool enable)
 {
 	struct mxl862xx_bridge_port_config param = {
-		.mask = MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING,
+		.mask = MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING |
+				MXL862XX_BRIDGE_PORT_CONFIG_MASK_VLAN_BASED_MAC_LEARNING,
 		.bridge_port_id = DSA_MXL_PORT(port),
 		.src_mac_learning_disable = !enable,
 	};
 	int ret;
+	struct mxl862xx_priv *priv = ds->priv;
+	u8 cpu_port = priv->cpu_port;
+	bool vlan_sp_tag = (priv->port_info[cpu_port].tag_protocol == DSA_TAG_PROTO_MXL862_8021Q);
 
+	param.vlan_src_mac_vid_enable = param.vlan_dst_mac_vid_enable =
+		(vlan_sp_tag) ? false : enable;
 	ret = MXL862XX_API_WRITE(ds->priv, MXL862XX_BRIDGEPORT_CONFIGSET, param);
 	if (ret)
 		dev_err(ds->dev, "failed to %s MAC learning on port %d\n",
@@ -2738,6 +2750,10 @@ static void mxl862xx_set_vlan_filter_limits(struct dsa_switch *ds)
 		vlan->ingress_vlan_block_info.filters_max - 1;
 	vlan->egress_vlan_block_info.final_filters_idx =
 		vlan->egress_vlan_block_info.filters_max - 1;
+
+	/* block_id uninitialized */
+	vlan->ingress_vlan_block_info.block_id = 0xffff;
+	vlan->egress_vlan_block_info.block_id = 0xffff;
 
 	/* Set limits and indexes required for processing VLAN rules for user ports */
 	for (i = 0; i < priv->hw_info->max_ports; i++) {
