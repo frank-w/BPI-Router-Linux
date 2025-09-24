@@ -9,6 +9,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/jiffies.h>
 #include <linux/mdio.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mutex.h>
@@ -103,6 +104,9 @@ struct mtk_pcs_lynxi {
 	struct			phylink_pcs pcs;
 	u32			flags;
 	int			advertise;
+	unsigned long		link_poll_expire;
+	unsigned int		neg_mode;
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertising);
 	struct reset_control	*rstc;
 	struct clk		*sgmii_sel;
 	struct clk		*sgmii_rx;
@@ -110,6 +114,11 @@ struct mtk_pcs_lynxi {
 	struct phy		*xfi_tphy;
 	struct list_head	node;
 };
+
+static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+				phy_interface_t interface,
+				const unsigned long *advertising,
+				bool permit_pause_to_mac);
 
 static struct mtk_pcs_lynxi *pcs_to_mtk_pcs_lynxi(struct phylink_pcs *pcs)
 {
@@ -146,6 +155,13 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
 	phylink_mii_c22_pcs_decode_state(state, neg_mode,
 					 FIELD_GET(SGMII_BMSR, bm),
 					 FIELD_GET(SGMII_LPA, adv));
+
+	/* Continuously repeat re-configuration sequence until link comes up */
+	if (!state->link && time_after(jiffies, mpcs->link_poll_expire)) {
+		mpcs->link_poll_expire = jiffies + HZ;
+		mtk_pcs_lynxi_config(pcs, mpcs->neg_mode,
+				     state->interface, mpcs->advertising, false);
+	}
 }
 
 static void mtk_sgmii_reset(struct mtk_pcs_lynxi *mpcs)
@@ -203,7 +219,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 		trxbuf_thr = 0x2111;
 	}
 
-	if (mpcs->interface != interface) {
+	if (mpcs->interface != interface || mpcs->neg_mode != neg_mode) {
 		link_timer = phylink_get_link_timer_ns(interface);
 		if (link_timer < 0)
 			return link_timer;
@@ -243,6 +259,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 			     SGMII_LINK_TIMER_VAL(link_timer));
 
 		mpcs->interface = interface;
+		mpcs->neg_mode = neg_mode;
+		linkmode_copy(mpcs->advertising, advertising);
 		mode_changed = true;
 	}
 
@@ -405,6 +423,7 @@ static struct phylink_pcs *mtk_pcs_lynxi_init(struct device *dev, struct regmap 
 	mpcs->pcs.ops = &mtk_pcs_lynxi_ops;
 	mpcs->pcs.poll = true;
 	mpcs->interface = PHY_INTERFACE_MODE_NA;
+	mpcs->link_poll_expire = jiffies + HZ;
 
 	__set_bit(PHY_INTERFACE_MODE_SGMII, mpcs->pcs.supported_interfaces);
 	__set_bit(PHY_INTERFACE_MODE_1000BASEX, mpcs->pcs.supported_interfaces);
