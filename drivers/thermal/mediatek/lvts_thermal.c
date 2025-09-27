@@ -1871,17 +1871,6 @@ static const struct lvts_ctrl_data mt8195_lvts_ap_data_ctrl[] = {
 
 static const struct lvts_data mt7987_lvts_ap_data = {
 	.lvts_ctrl	= mt7987_lvts_ap_data_ctrl,
-	/*.cal_data = {
-		.default_golden_temp = 60,
-		.default_cal_data = 19380,
-	},
-	.ops = {
-		.lvts_ctrl_connect	= mt7987_lvts_ctrl_connect,
-		.lvts_ctrl_initialize	= mt7987_lvts_ctrl_initialize,
-		.lvts_ctrl_start	= mt7987_lvts_ctrl_start,
-	},
-	.irq_enable	= 0,
-	.hw_protection	= 1,*/
 	.num_lvts_ctrl	= ARRAY_SIZE(mt7987_lvts_ap_data_ctrl),
 	.conn_cmd	= mt7988_conn_cmds,
 	.init_cmd	= mt7987_init_cmds,
@@ -1889,7 +1878,7 @@ static const struct lvts_data mt7987_lvts_ap_data = {
 	.num_init_cmd	= ARRAY_SIZE(mt7987_init_cmds),
 	.temp_factor	= LVTS_COEFF_A_MT7987,
 	.temp_offset	= LVTS_COEFF_B_MT7987,
-	.golden_temp	= LVTS_GOLDEN_TEMP_DEFAULT,
+	.golden_temp	= 60,
 	.gt_calib_bit_offset = 32,
 	.def_calibration = 19380,
 	.irq_enable	= false,
