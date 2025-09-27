@@ -6,7 +6,7 @@ CC              = $(CROSS_COMPILE)gcc
 #OBJDUMP         = $(CROSS_COMPILE)objdump
 #READELF         = $(CROSS_COMPILE)readelf
 #STRIP           = $(CROSS_COMPILE)strip
-
+CFLAGS += -static
 
 EXEC = regs
 all: $(EXEC)
