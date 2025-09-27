@@ -490,9 +490,12 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 	if (IS_ERR(mpcs->sgmii_tx))
 		return PTR_ERR(mpcs->sgmii_tx);
 
-	mpcs->xfi_tphy = devm_of_phy_get(mpcs->dev, np, NULL);
-	if (IS_ERR(mpcs->xfi_tphy))
-		return PTR_ERR(mpcs->xfi_tphy);
+	if (of_parse_phandle(dev->of_node, "phys", 0)) {
+		mpcs->xfi_tphy = devm_of_phy_get(mpcs->dev, dev->of_node, NULL);
+		if (IS_ERR(mpcs->xfi_tphy))
+			return PTR_ERR(mpcs->xfi_tphy);
+	} else
+		mpcs->xfi_tphy = NULL;
 
 	pcs = mtk_pcs_lynxi_init(dev, of_fwnode_handle(np), regmap,
 				 (uintptr_t)of_device_get_match_data(dev),
