@@ -234,6 +234,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 		else
 			rgc3 = SGMII_PHY_SPEED_1_25G;
 
+		dev_err(mpcs->dev,"%s:%d TX:%d,RX:%d",__func__,__LINE__,pnswap_tx,pnswap_rx);
 		/* Configure the underlying interface speed */
 		regmap_update_bits(mpcs->regmap, mpcs->ana_rgc3,
 				   SGMII_PHY_SPEED_MASK, rgc3);

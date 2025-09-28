@@ -121,6 +121,7 @@ mt7531_create_sgmii(struct mt7530_priv *priv)
 			break;
 		}
 		priv->ports[5 + i].sgmii_pcs = pcs;
+		dev_err(priv->dev,"%s:%d %s",__func__,__LINE__,mt7531_pcs_config[i]->name);
 	}
 
 	if (ret && i)
