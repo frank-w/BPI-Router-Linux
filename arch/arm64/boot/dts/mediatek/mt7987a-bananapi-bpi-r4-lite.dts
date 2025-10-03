@@ -193,10 +193,6 @@
 	};
 };
 
-//&sgmiipcs0 {
-&sgmiisys0 {
-	mediatek,pnswap-tx;
-};
 &pio {
 	pcie-1-hog {
 		gpio-hog;
