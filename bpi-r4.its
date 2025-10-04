@@ -93,6 +93,16 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-emmc.dtbo");
 			type = "flat_dt";
 		};
+		fdt-ov-lite-nand {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-nand.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-lite-nor {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-nor.dtbo");
+			type = "flat_dt";
+		};
 		fdt-ov-lite-1pcie {
 			description = "DT overlay for R4Lite 1 pcie 2 Lanes";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo");
@@ -214,6 +224,14 @@
 		ov-lite-emmc {
 			description = "EMMC FDT overlay blob for R4 Lite";
 			fdt = "fdt-ov-lite-emmc";
+		};
+		ov-lite-nand {
+			description = "NAND FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-nand";
+		};
+		ov-lite-nor {
+			description = "NOR FDT overlay blob for R4 Lite";
+			fdt = "fdt-ov-lite-nor";
 		};
 		ov-lite-1pcie2l {
 			description = "1 PCIe 2Lane FDT overlay blob for R4 Lite";
