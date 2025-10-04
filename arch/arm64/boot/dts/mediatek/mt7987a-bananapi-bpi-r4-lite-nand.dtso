@@ -14,6 +14,7 @@
 &{/soc/spi@11009800} {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	status = "okay";
 
 	spi_nand: flash@0 {
 		compatible = "spi-nand";
