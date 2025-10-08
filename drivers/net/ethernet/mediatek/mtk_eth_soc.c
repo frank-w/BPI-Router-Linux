@@ -589,6 +589,38 @@ static int mtk_mac_prepare(struct phylink_config *config, unsigned int mode,
 	return 0;
 }
 
+static void mtk_set_mcr_max_rx(struct mtk_mac *mac, u32 val)
+{
+	struct mtk_eth *eth = mac->hw;
+	u32 mcr_cur, mcr_new;
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628))
+		return;
+
+	if (!mtk_interface_mode_is_xgmii(eth, mac->interface)) {
+		mcr_cur = mtk_r32(mac->hw, MTK_MAC_MCR(mac->id));
+		mcr_new = mcr_cur & ~MAC_MCR_MAX_RX_MASK;
+
+		if (val <= 1518)
+			mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1518);
+		else if (val <= 1536)
+			mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1536);
+		else if (val <= 1552)
+			mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1552);
+		else
+			mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_2048);
+
+		if (mcr_new != mcr_cur)
+			mtk_w32(mac->hw, mcr_new, MTK_MAC_MCR(mac->id));
+	} else if (mtk_is_netsys_v3_or_greater(mac->hw) && mac->id != MTK_GMAC1_ID) {
+		mcr_cur = mtk_r32(mac->hw, MTK_XMAC_RX_CFG2(mac->id));
+		mcr_new = FIELD_PREP(MTK_XMAC_MAX_RX_MASK, val);
+
+		if (mcr_new != mcr_cur)
+			mtk_w32(mac->hw, mcr_new, MTK_XMAC_RX_CFG2(mac->id));
+	}
+}
+
 static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 			   const struct phylink_link_state *state)
 {
@@ -738,6 +770,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 	}
 
 	mac->interface = state->interface;
+	mtk_set_mcr_max_rx(mac, MTK_MAX_RX_LENGTH);
 
 	return;
 
@@ -1332,8 +1365,8 @@ static void mtk_get_stats64(struct net_device *dev,
 static inline int mtk_max_frag_size(int mtu)
 {
 	/* make sure buf_size will be at least MTK_MAX_RX_LENGTH */
-	if (mtu + MTK_RX_ETH_HLEN < MTK_MAX_RX_LENGTH_2K)
-		mtu = MTK_MAX_RX_LENGTH_2K - MTK_RX_ETH_HLEN;
+	if (mtu + MTK_RX_ETH_HLEN < MTK_MAX_RX_LENGTH)
+		mtu = MTK_MAX_RX_LENGTH - MTK_RX_ETH_HLEN;
 
 	return SKB_DATA_ALIGN(MTK_RX_HLEN + mtu) +
 		SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
@@ -1344,7 +1377,7 @@ static inline int mtk_max_buf_size(int frag_size)
 	int buf_size = frag_size - NET_SKB_PAD - NET_IP_ALIGN -
 		       SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
 
-	WARN_ON(buf_size < MTK_MAX_RX_LENGTH_2K);
+	WARN_ON(buf_size < MTK_MAX_RX_LENGTH);
 
 	return buf_size;
 }
@@ -4265,30 +4298,6 @@ static void mtk_dim_tx(struct work_struct *work)
 	dim->state = DIM_START_MEASURE;
 }
 
-static void mtk_set_mcr_max_rx(struct mtk_mac *mac, u32 val)
-{
-	struct mtk_eth *eth = mac->hw;
-	u32 mcr_cur, mcr_new;
-
-	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628))
-		return;
-
-	mcr_cur = mtk_r32(mac->hw, MTK_MAC_MCR(mac->id));
-	mcr_new = mcr_cur & ~MAC_MCR_MAX_RX_MASK;
-
-	if (val <= 1518)
-		mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1518);
-	else if (val <= 1536)
-		mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1536);
-	else if (val <= 1552)
-		mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1552);
-	else
-		mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_2048);
-
-	if (mcr_new != mcr_cur)
-		mtk_w32(mac->hw, mcr_new, MTK_MAC_MCR(mac->id));
-}
-
 static void mtk_hw_reset(struct mtk_eth *eth)
 {
 	u32 val;
@@ -4628,8 +4637,6 @@ static int mtk_hw_init(struct mtk_eth *eth, bool reset)
 			continue;
 
 		mtk_w32(eth, MAC_MCR_FORCE_LINK_DOWN, MTK_MAC_MCR(i));
-		mtk_set_mcr_max_rx(netdev_priv(dev),
-				   dev->mtu + MTK_RX_ETH_HLEN);
 	}
 
 	/* Indicates CDM to parse the MTK special tag from CPU
@@ -5809,10 +5816,7 @@ no_pcs:
 
 	mac->phylink = phylink;
 
-	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628))
-		eth->netdev[id]->max_mtu = MTK_MAX_RX_LENGTH - MTK_RX_ETH_HLEN;
-	else
-		eth->netdev[id]->max_mtu = MTK_MAX_RX_LENGTH_2K - MTK_RX_ETH_HLEN;
+	eth->netdev[id]->max_mtu = MTK_MAX_RX_LENGTH - MTK_RX_ETH_HLEN;
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_QDMA)) {
 		mac->device_notifier.notifier_call = mtk_device_event;

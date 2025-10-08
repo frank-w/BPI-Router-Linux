@@ -597,6 +597,10 @@
 #define XMAC_FORCE_TX_FC	BIT(4)
 #define XMAC_FORCE_LINK		BIT(0)
 
+/* XFI Mac RX configuration 2 registers */
+#define MTK_XMAC_RX_CFG2(x)	(MTK_XMAC_MCR(x) + 0xd0)
+#define MTK_XMAC_MAX_RX_MASK	GENMASK(13, 0)
+
 /* XFI Mac count global control */
 #define MTK_XMAC_CNT_CTRL(x)	(MTK_XMAC_BASE(x) + 0x100)
 #define XMAC_GLB_CNTCLR		BIT(0)
