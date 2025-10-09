@@ -116,7 +116,7 @@ enum {
 
 static int mt7987_2p5ge_phy_load_fw(struct phy_device *phydev)
 {
-	struct mtk_i2p5ge_phy_priv *priv = phydev->priv;
+	struct mtk_socphy_priv *priv = phydev->priv;
 	struct device *dev = &phydev->mdio.dev;
 	void __iomem *xbz_pcs_reg_base;
 	void __iomem *xbz_pma_rx_base;
@@ -637,6 +637,14 @@ static int mt798x_2p5ge_phy_probe(struct phy_device *phydev)
 	struct pinctrl *pinctrl;
 	int ret;
 
+	priv = devm_kzalloc(&phydev->mdio.dev, sizeof(struct mtk_socphy_priv),
+			    GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
+
+	priv->fw_loaded = false;
+	phydev->priv = priv;
+
 	switch (phydev->drv->phy_id) {
 	case MTK_2P5GPHY_ID_MT7987:
 	case MTK_2P5GPHY_ID_MT7988:
@@ -690,15 +698,15 @@ static int mt798x_2p5ge_phy_probe(struct phy_device *phydev)
 	if (IS_ERR(pinctrl))
 		dev_err(&phydev->mdio.dev, "Fail to set LED pins!\n");
 
-	priv = devm_kzalloc(&phydev->mdio.dev, sizeof(struct mtk_socphy_priv),
-			    GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-	phydev->priv = priv;
-
 	mtk_phy_leds_state_init(phydev);
 
 	return 0;
+}
+
+static void mt798x_2p5ge_phy_remove(struct phy_device *phydev)
+{
+	struct mtk_i2p5ge_phy_priv *priv = phydev->priv;
+	kfree(priv);
 }
 
 static struct phy_driver mtk_2p5gephy_driver[] = {
@@ -706,6 +714,7 @@ static struct phy_driver mtk_2p5gephy_driver[] = {
 		PHY_ID_MATCH_MODEL(MTK_2P5GPHY_ID_MT7987),
 		.name = "MediaTek MT7987 2.5GbE PHY",
 		.probe = mt798x_2p5ge_phy_probe,
+		.remove = mt798x_2p5ge_phy_remove,
 		.config_init = mt798x_2p5ge_phy_config_init,
 		.config_aneg = mt798x_2p5ge_phy_config_aneg,
 		.get_features = mt798x_2p5ge_phy_get_features,
@@ -720,6 +729,7 @@ static struct phy_driver mtk_2p5gephy_driver[] = {
 		PHY_ID_MATCH_MODEL(MTK_2P5GPHY_ID_MT7988),
 		.name = "MediaTek MT7988 2.5GbE PHY",
 		.probe = mt798x_2p5ge_phy_probe,
+		.remove = mt798x_2p5ge_phy_remove,
 		.config_init = mt798x_2p5ge_phy_config_init,
 		.config_aneg = mt798x_2p5ge_phy_config_aneg,
 		.get_features = mt798x_2p5ge_phy_get_features,
