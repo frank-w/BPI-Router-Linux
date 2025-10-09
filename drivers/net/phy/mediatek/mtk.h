@@ -70,6 +70,7 @@
 
 struct mtk_socphy_priv {
 	unsigned long		led_state;
+	bool			fw_loaded;
 };
 
 void __mtk_tr_modify(struct phy_device *phydev, u8 ch_addr, u8 node_addr,
