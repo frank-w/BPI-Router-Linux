@@ -107,6 +107,10 @@
 /* ch_addr = 0x0, node_addr = 0xf, data_addr = 0x3c */
 #define AUTO_NP_10XEN				BIT(6)
 
+struct mtk_i2p5ge_phy_priv {
+	bool fw_loaded;
+};
+
 enum {
 	PHY_AUX_SPD_10 = 0,
 	PHY_AUX_SPD_100,
@@ -562,8 +566,17 @@ static int mt798x_2p5ge_phy_get_rate_matching(struct phy_device *phydev,
 
 static int mt798x_2p5ge_phy_probe(struct phy_device *phydev)
 {
+	struct mtk_i2p5ge_phy_priv *priv;
 	struct pinctrl *pinctrl;
 	int ret;
+
+	priv = devm_kzalloc(&phydev->mdio.dev,
+			    sizeof(struct mtk_i2p5ge_phy_priv), GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
+
+	priv->fw_loaded = false;
+	phydev->priv = priv;
 
 	switch (phydev->drv->phy_id) {
 	case MTK_2P5GPHY_ID_MT7987:
@@ -614,11 +627,18 @@ static int mt798x_2p5ge_phy_probe(struct phy_device *phydev)
 	return 0;
 }
 
+static void mt798x_2p5ge_phy_remove(struct phy_device *phydev)
+{
+	struct mtk_i2p5ge_phy_priv *priv = phydev->priv;
+	kfree(priv);
+}
+
 static struct phy_driver mtk_2p5gephy_driver[] = {
 	{
 		PHY_ID_MATCH_MODEL(MTK_2P5GPHY_ID_MT7987),
 		.name = "MediaTek MT7987 2.5GbE PHY",
 		.probe = mt798x_2p5ge_phy_probe,
+		.remove = mt798x_2p5ge_phy_remove,
 		.config_init = mt798x_2p5ge_phy_config_init,
 		.config_aneg = mt798x_2p5ge_phy_config_aneg,
 		.get_features = mt798x_2p5ge_phy_get_features,
@@ -633,6 +653,7 @@ static struct phy_driver mtk_2p5gephy_driver[] = {
 		PHY_ID_MATCH_MODEL(MTK_2P5GPHY_ID_MT7988),
 		.name = "MediaTek MT7988 2.5GbE PHY",
 		.probe = mt798x_2p5ge_phy_probe,
+		.remove = mt798x_2p5ge_phy_remove,
 		.config_init = mt798x_2p5ge_phy_config_init,
 		.config_aneg = mt798x_2p5ge_phy_config_aneg,
 		.get_features = mt798x_2p5ge_phy_get_features,
