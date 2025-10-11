@@ -556,7 +556,8 @@ static const struct pwm_mediatek_of_data mt7986_pwm_data = {
 static const struct pwm_mediatek_of_data mt7987_pwm_data = {
 	.num_pwms = 3,
 	.pwm45_fixup = false,
-	.reg_offset = mtk_pwm_reg_offset_v3,
+	.chanreg_base = 0x100,
+	.chanreg_width = 0x100,
 };
 
 static const struct pwm_mediatek_of_data mt7988_pwm_data = {
