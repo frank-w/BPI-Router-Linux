@@ -294,6 +294,19 @@ static struct as21xxx_led_pattern_info as21xxx_led_supported_pattern[] = {
 	}
 };
 
+static void aeon_mdio_patch(struct phy_device *phydev)
+{
+	struct device *dev = &phydev->mdio.dev;
+	struct mii_bus *bus = phydev->mdio.bus;
+	if (!bus) {
+		dev_err(dev, "MDIO bus is NULL\r\n");
+		return;
+	}
+	mutex_lock(&bus->mdio_lock);
+	__mdiobus_c45_write(bus, 30, 0x1, 0x1, 0x1);
+	mutex_unlock(&bus->mdio_lock);
+}
+
 static int aeon_firmware_boot(struct phy_device *phydev, const u8 *data,
 			      size_t size)
 {
@@ -946,6 +959,7 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	//	return ret;
 
 	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
+	aeon_mdio_patch(phydev);
 out:
 	mutex_destroy(&priv->ipc_lock);
 	kfree(priv);
