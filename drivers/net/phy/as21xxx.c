@@ -356,6 +356,7 @@ static int aeon_firmware_load(struct phy_device *phydev)
 	const char *fw_name;
 	int ret;
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	ret = of_property_read_string(dev->of_node, "firmware-name",
 				      &fw_name);
 	if (ret)
@@ -372,6 +373,7 @@ static int aeon_firmware_load(struct phy_device *phydev)
 
 	release_firmware(fw);
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	return ret;
 }
 
@@ -592,12 +594,15 @@ static int aeon_ipc_get_fw_version(struct phy_device *phydev)
 static int aeon_dpc_ra_enable(struct phy_device *phydev)
 {
 	u16 data[2];
+	int ret;
 
 	data[0] = IPC_CFG_PARAM_DIRECT;
 	data[1] = IPC_CFG_PARAM_DIRECT_DPC_RA;
 
-	return aeon_ipc_send_msg(phydev, IPC_CMD_CFG_PARAM, data,
+	ret=aeon_ipc_send_msg(phydev, IPC_CMD_CFG_PARAM, data,
 				 sizeof(data), NULL);
+	phydev_err(phydev, "DEBUG %s:%d ret:%d\n", __func__,__LINE__,ret);
+	return ret;
 }
 
 static int as21xxx_probe(struct phy_device *phydev)
@@ -605,6 +610,7 @@ static int as21xxx_probe(struct phy_device *phydev)
 	struct as21xxx_priv *priv;
 	int ret;
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	priv = devm_kzalloc(&phydev->mdio.dev,
 			    sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -630,6 +636,7 @@ static int as21xxx_probe(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	return aeon_dpc_ra_enable(phydev);
 }
 
@@ -699,6 +706,8 @@ static int as21xxx_read_status(struct phy_device *phydev)
 	int bmcr, old_link = phydev->link;
 	int ret;
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
+
 	ret = as21xxx_read_link(phydev, &bmcr);
 	if (ret)
 		return ret;
@@ -765,6 +774,7 @@ static int as21xxx_read_status(struct phy_device *phydev)
 		}
 	}
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	return 0;
 }
 
@@ -884,6 +894,7 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	u32 phy_id;
 	int ret;
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	/* Skip PHY that are not AS21xxx */
 	if (!phy_id_compare_vendor(phydev->c45_ids.device_ids[MDIO_MMD_PCS],
 				   PHY_VENDOR_AEONSEMI))
@@ -917,6 +928,7 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	if (ret)
 		goto out;
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	/* Sync parity... */
 	ret = aeon_ipc_sync_parity(phydev, priv);
 	if (ret)
@@ -927,6 +939,13 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	if (ret)
 		goto out;
 
+	//phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
+
+	//ret = aeon_ipc_get_fw_version(phydev);
+	//if (ret)
+	//	return ret;
+
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 out:
 	mutex_destroy(&priv->ipc_lock);
 	kfree(priv);
