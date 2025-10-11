@@ -116,7 +116,7 @@ enum {
 
 static int mt7987_2p5ge_phy_load_fw(struct phy_device *phydev)
 {
-	struct mtk_i2p5ge_phy_priv *priv = phydev->priv;
+	struct mtk_socphy_priv *priv = phydev->priv;
 	struct device *dev = &phydev->mdio.dev;
 	void __iomem *xbz_pcs_reg_base;
 	void __iomem *xbz_pma_rx_base;
