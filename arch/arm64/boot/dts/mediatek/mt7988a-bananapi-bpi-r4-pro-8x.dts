@@ -37,7 +37,7 @@
 			compatible = "mediatek,eth-mux";
 			reg = <2>;
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
-			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+			mod-def0-gpios = <&pio 69 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -135,7 +135,7 @@
 			compatible = "mxl862xx,ds-mux";
 			reg = <12>;
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
-			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+			mod-def0-gpios = <&pio 69 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <0>;
 
 			ds_channel_0: channel@0 {
