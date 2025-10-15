@@ -21,8 +21,8 @@
 			#size-cells = <0>;
 			channel_10: channel@0 {
 				reg = <0>;
-				phy-mode = "10gbase-r";
-				phy-connection-type = "10gbase-r";
+				phy-mode = "usxgmii";
+				phy-connection-type = "usxgmii";
 				phy-handle = <&phy28>;
 			};
 			channel_11: channel@1 {
@@ -59,14 +59,16 @@
 };
 
 &gmac1 {
-	phy-mode = "10gbase-r";
-	phy-connection-type = "10gbase-r";
+	phy-mode = "usxgmii";
+	phy-connection-type = "usxgmii";
 	phy = <&phy28>;
 	status = "okay";
 };
 
 &mdio_bus {
-	clock-frequency = <12500000>; //for faster fw download to 10G phys
+	// increase mdio bus speed for faster fw download to 10G phys, needs firmware 1.8.5
+	// current mainline (linux-firmware) is 1.8.2, so disable this for now
+	//clock-frequency = <12500000>;
 
 	/* external Airoha AN8831X is connected to Mxl 2.5G switch */
 	phy24: ethernet-phy@24 {
@@ -148,8 +150,8 @@
 
 			ds_channel_1: channel@1 {
 				reg = <1>;
-				phy-mode = "10gbase-r";
-				phy-connection-type = "10gbase-r";
+				phy-mode = "usxgmii";
+				phy-connection-type = "usxgmii";
 				phy-handle = <&phy24>;
 			};
 		};
