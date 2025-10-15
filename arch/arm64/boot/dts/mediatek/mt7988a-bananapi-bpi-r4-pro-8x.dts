@@ -11,7 +11,7 @@
 	mux: mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
-		mux1: ethernet-mux@1 {
+		/*mux1: ethernet-mux@1 {
 			compatible = "mediatek,eth-mux";
 			reg = <1>;
 			chan-sel-gpios = <&pio 3 GPIO_ACTIVE_HIGH>;
@@ -32,7 +32,7 @@
 				managed = "in-band-status";
 				sfp = <&sfp2>;
 			};
-		};
+		};*/
 		/*mux2: ethernet-mux@2 {
 			compatible = "mediatek,eth-mux";
 			reg = <2>;
@@ -59,6 +59,7 @@
 };
 
 &gmac1 {
+	managed = "in-band-status";
 	phy-mode = "usxgmii";
 	phy-connection-type = "usxgmii";
 	phy = <&phy28>;
