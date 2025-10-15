@@ -68,7 +68,7 @@
 &mdio_bus {
 	// increase mdio bus speed for faster fw download to 10G phys, needs firmware 1.8.5
 	// current mainline (linux-firmware) is 1.8.2, so disable this for now
-	//clock-frequency = <12500000>;
+	clock-frequency = <12500000>;
 
 	/* external Airoha AN8831X is connected to Mxl 2.5G switch */
 	phy24: ethernet-phy@24 {
