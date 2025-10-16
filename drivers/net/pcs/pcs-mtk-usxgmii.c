@@ -213,6 +213,8 @@ static void mtk_usxgmii_pcs_get_fixed_speed(struct mtk_usxgmii_pcs *mpcs,
 	u32 val = mtk_r32(mpcs, RG_PHY_TOP_SPEED_CTRL1);
 	int speed;
 
+	pr_info("VAL FIXED SPEED %x\n", val);
+
 	/* Calculate speed from interface speed and rate adapt mode */
 	switch (FIELD_GET(USXGMII_XFI_RX_MODE, val)) {
 	case USXGMII_XFI_MODE_10G:
