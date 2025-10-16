@@ -121,7 +121,9 @@ static int mtk_usxgmii_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode
 	bool mode_changed = false;
 
 	if (interface == PHY_INTERFACE_MODE_USXGMII) {
-		an_ctrl = FIELD_PREP(USXGMII_AN_SYNC_CNT, 0x1FF) | USXGMII_AN_ENABLE;
+		an_ctrl = FIELD_PREP(USXGMII_AN_SYNC_CNT, 0x1FF);
+		if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED)
+			an_ctrl |= USXGMII_AN_ENABLE;
 		link_timer = FIELD_PREP(USXGMII_LINK_TIMER_IDLE_DETECT, 0x7B) |
 			     FIELD_PREP(USXGMII_LINK_TIMER_COMP_ACK_DETECT, 0x7B) |
 			     FIELD_PREP(USXGMII_LINK_TIMER_AN_RESTART, 0x7B);
@@ -345,19 +347,15 @@ static void mtk_usxgmii_pcs_disable(struct phylink_pcs *pcs)
 static unsigned int mtk_usxgmii_pcs_inband_caps(struct phylink_pcs *pcs,
 						phy_interface_t interface)
 {
-#if 0
 	switch (interface) {
 	case PHY_INTERFACE_MODE_5GBASER:
 	case PHY_INTERFACE_MODE_10GBASER:
 	case PHY_INTERFACE_MODE_USXGMII:
-		return LINK_INBAND_ENABLE;
+		return LINK_INBAND_ENABLE | LINK_INBAND_DISABLE;
 
 	default:
 		return 0;
 	}
-#else
-       return 0;
-#endif
 }
 
 static const struct phylink_pcs_ops mtk_usxgmii_pcs_ops = {
