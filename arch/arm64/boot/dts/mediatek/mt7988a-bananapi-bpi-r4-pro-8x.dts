@@ -7,6 +7,7 @@
 };
 
 &gmac1 {
+	managed = "in-band-status";
 	phy-mode = "usxgmii";
 	phy-connection-type = "usxgmii";
 	phy-handle = <&phy28>;
