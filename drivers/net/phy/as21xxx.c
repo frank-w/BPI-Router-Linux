@@ -700,7 +700,7 @@ static int aeon_ipc_get_fw_version(struct phy_device *phydev)
 	return 0;
 }
 
-static int aeon_dpc_ra_enable(struct phy_device *phydev)
+/*static int aeon_dpc_ra_enable(struct phy_device *phydev)
 {
 	u16 data[2];
 	u16 ret_sts;
@@ -709,7 +709,7 @@ static int aeon_dpc_ra_enable(struct phy_device *phydev)
 
 	return aeon_ipc_send_msg(phydev, IPC_CMD_CFG_PARAM, data,
 				 sizeof(data), &ret_sts);
-}
+}*/
 
 static int aeon_read_abilities(struct phy_device *phydev)
 {
@@ -1276,8 +1276,8 @@ static int as21xxx_config_init(struct phy_device *phydev)
 		}
 	}
 	as21xxx_config_led(phydev);
-	if (phydev->interface == PHY_INTERFACE_MODE_USXGMII)
-		ret = aeon_dpc_ra_enable(phydev);
+	//if (phydev->interface == PHY_INTERFACE_MODE_USXGMII)
+	//	ret = aeon_dpc_ra_enable(phydev);
 	return ret;
 }
 
