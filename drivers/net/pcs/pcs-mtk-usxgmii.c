@@ -345,6 +345,7 @@ static void mtk_usxgmii_pcs_disable(struct phylink_pcs *pcs)
 static unsigned int mtk_usxgmii_pcs_inband_caps(struct phylink_pcs *pcs,
 						phy_interface_t interface)
 {
+#if 0
 	switch (interface) {
 	case PHY_INTERFACE_MODE_5GBASER:
 	case PHY_INTERFACE_MODE_10GBASER:
@@ -354,6 +355,9 @@ static unsigned int mtk_usxgmii_pcs_inband_caps(struct phylink_pcs *pcs,
 	default:
 		return 0;
 	}
+#else
+       return 0;
+#endif
 }
 
 static const struct phylink_pcs_ops mtk_usxgmii_pcs_ops = {
