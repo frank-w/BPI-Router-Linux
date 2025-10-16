@@ -14,8 +14,6 @@
 };
 
 &mdio_bus {
-	clock-frequency = <12500000>;
-
 	/* external Airoha AN8831X */
 	phy28: ethernet-phy@28 {
 		reg = <28>;
