@@ -1276,8 +1276,8 @@ static int as21xxx_config_init(struct phy_device *phydev)
 		}
 	}
 	as21xxx_config_led(phydev);
-	if (phydev->interface == PHY_INTERFACE_MODE_USXGMII)
-		ret = aeon_dpc_ra_enable(phydev);
+	//if (phydev->interface == PHY_INTERFACE_MODE_USXGMII)
+	//	ret = aeon_dpc_ra_enable(phydev);
 	return ret;
 }
 
