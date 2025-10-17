@@ -661,16 +661,24 @@ static int mt798x_2p5ge_phy_probe(struct phy_device *phydev)
 		return -EINVAL;
 	}
 
+	u16 polarity=MTK_PHY_LED_ON_POLARITY;
+
+	struct device_node *of_node = phydev->mdio.dev.of_node;
+	if (of_property_read_bool(of_node, "active-low"))
+		polarity=0;
+
 	switch (phydev->drv->phy_id) {
 	case MTK_2P5GPHY_ID_MT7987:
 		ret = mt7987_2p5ge_phy_load_fw(phydev);
-		phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED0_ON_CTRL,
-				   MTK_PHY_LED_ON_POLARITY);
+		phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED0_ON_CTRL,
+				 polarity);
+		dev_err(&phydev->mdio.dev, "DEBUG: mt7987 detected!\n");
 		break;
 	case MTK_2P5GPHY_ID_MT7988:
 		ret = mt7988_2p5ge_phy_load_fw(phydev);
 		phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED0_ON_CTRL,
-				 MTK_PHY_LED_ON_POLARITY);
+				 polarity);
+		dev_err(&phydev->mdio.dev, "DEBUG: mt7988 detected!\n");
 		break;
 	default:
 		return -EINVAL;
@@ -682,7 +690,7 @@ static int mt798x_2p5ge_phy_probe(struct phy_device *phydev)
 	 * LED1, it blinks as tx/rx transmission takes place.
 	 */
 	phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED0_ON_CTRL,
-			 MTK_PHY_LED_ON_POLARITY | MTK_2P5GPHY_LED_ON_SET);
+			 polarity | MTK_2P5GPHY_LED_ON_SET);
 	phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, MTK_PHY_LED0_BLINK_CTRL,
 			   MTK_2P5GPHY_LED_TX_BLINK_SET |
 			   MTK_2P5GPHY_LED_RX_BLINK_SET);
