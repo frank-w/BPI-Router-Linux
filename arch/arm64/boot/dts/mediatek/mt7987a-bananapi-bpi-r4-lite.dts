@@ -184,6 +184,7 @@
 		compatible = "ethernet-phy-ieee802.3-c45";
 		reg = <15>;
 		phy-mode = "internal";
+		active-low;
 	};
 	switch31: switch@31 {
 		compatible = "mediatek,mt7531";
