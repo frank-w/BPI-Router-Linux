@@ -74,6 +74,30 @@
 };
 
 &switch16 {
+	ds_mux: ds-mux-bus {
+		ds_mux0: ds-mux@0 {
+			compatible = "mxl862xx,ds-mux";
+			reg = <12>;
+			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+			sfp-present-channel = <0>;
+
+			ds_channel_0: channel@0 {
+				reg = <0>;
+				phy-mode = "usxgmii";
+				phy-connection-type = "usxgmii";
+				managed = "in-band-status";
+				sfp = <&sfp1>;
+			};
+
+			ds_channel_1: channel@1 {
+				reg = <1>;
+				phy-mode = "usxgmii";
+				phy-connection-type = "usxgmii";
+				phy-handle = <&phy24>;
+			};
+		};
+	};
 	ports {
 		port6: port@6 {
 			reg = <12>;
