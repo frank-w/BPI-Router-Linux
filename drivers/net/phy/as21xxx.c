@@ -978,6 +978,21 @@ static int as21xxx_config_inband(struct phy_device *phydev,
 	return 0;
 }
 
+static int as21xxx_read_mmd(struct phy_device *phydev, int devad,
+			    u16 regnum)
+{
+	struct mii_bus *bus = phydev->mdio.bus;
+	int val;
+
+	val = __mdiobus_c45_read(bus, phydev->mdio.addr, devad,
+				 regnum);
+
+	/* FIXME: verify if it's actually ok to limit this to MII_BMSR */
+	__mdiobus_write(bus, 0x0, MII_BMSR, 0x1);
+
+	return val;
+}
+
 static struct phy_driver as21xxx_drivers[] = {
 	{
 		/* PHY expose in C45 as 0x7500 0x9410
@@ -997,6 +1012,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1012,6 +1028,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1027,6 +1044,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1042,6 +1060,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1057,6 +1076,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1072,6 +1092,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1087,6 +1108,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1102,6 +1124,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1117,6 +1140,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
@@ -1132,6 +1156,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.config_inband	= as21xxx_config_inband,
 		.match_phy_device = as21xxx_match_phy_device,
 		.read_status	= as21xxx_read_status,
+		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
