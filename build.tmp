@@ -1,15 +1,18 @@
+# BPI Router Linux Build Configuration Template
+# This file will be processed by config_dialog.sh to generate build.conf
+
+# Upload Configuration
 uploaduser=$USER
 uploadserver=r3
 uploaddir=/var/lib/tftp
-#uploaduser=root
-#uploadserver=192.168.0.11
-#uploaddir=/boot/bananapi/bpi-r2/linux
 
+# Build Configuration  
 builddir=../build
 ramdisksize=8G
-#numproc=8
+#numproc=${NUM_PROC}
 
-board=bpi-r2
+# Board Selection (uncomment one)
+board=bpi-r4
 #board=bpi-r64
 #board=bpi-r2pro
 #board=bpi-r3
@@ -18,13 +21,16 @@ board=bpi-r2
 #board=bpi-r4pro
 #board=bpi-r4lite
 
+# Board Version (uncomment if needed)
 #r64 with rtl8367
 #boardversion=v0.1
 #r2pro with rtl8367
 #boardversion=v00
 
+# Architecture Settings
 #mainline uboot for r64 (old ATF) needs 64bit uImage
 #uimagearch=arm64
 
+# Module Configuration
 #grep whitelist filter for adding modules to initramfs
-ownmodules='mt76\|bluetooth'
+ownmodules='${OWN_MODULES}'

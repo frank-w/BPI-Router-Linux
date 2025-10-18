@@ -7,6 +7,14 @@ fi
 
 numproc=$(grep ^processor /proc/cpuinfo  | wc -l)
 
+# Check if build.conf exists, if not provide helpful message
+if [ ! -f "build.conf" ]; then
+    echo "build.conf not found!"
+    echo "Please run ./config_dialog.sh to generate build.conf from template"
+    echo "or copy build.tmp to build.conf and edit manually"
+    exit 1
+fi
+
 . build.conf
 
 r64newswver=1.0
@@ -1267,6 +1275,25 @@ if [ -n "$kernver" ]; then
 		"help")
 			echo "print help"
 			sed -n -e '/case "$action" in/,/esac/{//!p}'  $0 | grep -A1 '")$' | sed -e 's/echo "\(.*\)"/\1/'
+			;;
+		"config")
+			echo "Launch configuration dialog"
+			if command -v dialog &> /dev/null; then
+				if [ -f "./config_dialog.sh" ]; then
+					./config_dialog.sh
+				else
+					echo "config_dialog.sh not found!"
+					exit 1
+				fi
+			else
+				echo "dialog not found, using text-based configuration"
+				if [ -f "./config_text.sh" ]; then
+					./config_text.sh
+				else
+					echo "config_text.sh not found!"
+					exit 1
+				fi
+			fi
 			;;
 		*)
 			if [[ -n "$action" ]];then
