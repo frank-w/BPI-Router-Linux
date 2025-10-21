@@ -3294,7 +3294,7 @@ static void mxl862xx_phylink_mac_config(struct phylink_config *config, unsigned 
 
 		ret = MXL862XX_API_WRITE(dp->ds->priv, SYS_MISC_SFP_SET, ser_intf);
 		if (ret)
-			dev_err(dp->ds->dev, "failed to set intf on port %d\n", dp->index);
+			dev_err(dp->ds->dev, "failed to set intf on port %d (hw:%d,ser_port_id:%d) to %d (ret:%d)\n", dp->index,hw_port,ser_intf.port_id,ser_intf.speed,ret);
 	} else {
 		/* Internal phy */
 		if (state->interface != PHY_INTERFACE_MODE_INTERNAL) {
