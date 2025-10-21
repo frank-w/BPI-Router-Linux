@@ -2978,7 +2978,7 @@ static struct mxl862xx_pcs *pcs_to_mxl862xx_pcs(struct phylink_pcs *pcs)
 	return container_of(pcs, struct mxl862xx_pcs, pcs);
 }
 
-static void mxl862xx_pcs_get_state(struct phylink_pcs *pcs,
+static void mxl862xx_pcs_get_state(struct phylink_pcs *pcs, unsigned int neg_mode,
 				 struct phylink_link_state *state)
 {
 	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
