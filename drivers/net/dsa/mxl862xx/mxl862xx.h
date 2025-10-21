@@ -340,6 +340,23 @@ union mxl862xx_fw_version {
 #define MXL862XX_FLAG_CRC_ERR		0
 #define MXL862XX_FLAG_WORK_STOPPED	1
 
+
+struct dp_mux_data {
+	struct device_node	*of_node;
+	struct phylink		*phylink;
+};
+
+struct combo_port_mux {
+	struct dsa_port		*dp;
+	struct gpio_desc	*mod_def0_gpio;
+	struct gpio_desc	*chan_sel_gpio;
+	struct dp_mux_data	*data[2];
+	unsigned int		channel;
+	unsigned int		sfp_present_channel;
+	struct delayed_work	sfp_monitor_work;
+	bool			initialized;
+};
+
 /**
  * struct mxl862xx_priv - driver private data for an MxL862xx switch
  * @ds:                 pointer to the DSA switch instance
@@ -410,6 +427,7 @@ struct mxl862xx_priv {
 	bool block_host;
 	bool skip_teardown;
 	struct delayed_work stats_work;
+	struct combo_port_mux *ds_mux[MXL862XX_MAX_PORTS];
 };
 
 #endif /* __MXL862XX_H */
