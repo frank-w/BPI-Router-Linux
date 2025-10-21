@@ -20,6 +20,9 @@
 #include <linux/phylink.h>
 #include <linux/dsa/8021q.h>
 #include <net/dsa.h>
+#include <linux/stddef.h>
+#include <linux/gpio/consumer.h>
+#include <linux/of_net.h>
 
 #include "mxl862xx.h"
 #include "mxl862xx-api.h"
@@ -4516,10 +4519,219 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.devlink_flash_update = mxl862xx_devlink_flash_update,
 };
 
+static void sfp_monitor_work_func(struct work_struct *work)
+{
+	struct combo_port_mux *mux = container_of(work, struct combo_port_mux, sfp_monitor_work.work);
+	struct dsa_switch *ds = mux->dp->ds;
+	struct dsa_port *dp = mux->dp;
+	struct net_device *dev = mux->dp->user;
+	unsigned int new_channel;
+	int sfp_present;
+
+	if (IS_ERR(mux->mod_def0_gpio) || IS_ERR(mux->chan_sel_gpio))
+		goto reschedule;
+
+	if (!netif_running(dev))
+		goto reschedule;
+
+	sfp_present = gpiod_get_value_cansleep(mux->mod_def0_gpio);
+	new_channel = sfp_present ? mux->sfp_present_channel : !mux->sfp_present_channel;
+
+	if (mux->initialized && mux->channel == new_channel)
+		goto reschedule;
+
+	rtnl_lock();
+
+	phylink_stop(dp->pl);
+	phylink_disconnect_phy(dp->pl);
+
+	dp->dn = mux->data[new_channel]->of_node;
+	dp->pl = mux->data[new_channel]->phylink;
+
+	phylink_of_phy_connect(dp->pl, dp->dn, 0);
+	phylink_start(dp->pl);
+
+	dev_info(ds->dev, "dsa mux: switch to channel%d\n", new_channel);
+
+	gpiod_set_value_cansleep(mux->chan_sel_gpio, new_channel);
+
+	rtnl_unlock();
+
+	mux->channel = new_channel;
+	mux->initialized = true;
+
+reschedule:
+	mod_delayed_work(system_wq, &mux->sfp_monitor_work, msecs_to_jiffies(100));
+}
+
+static int ds_add_mux_channel(struct combo_port_mux *mux, struct device_node *np)
+{
+	const __be32 *_id = of_get_property(np, "reg", NULL);
+	struct dsa_switch *ds = mux->dp->ds;
+	struct dp_mux_data *data;
+	struct phylink *phylink;
+	phy_interface_t phy_mode;
+	int id, err;
+
+	if (!_id) {
+		dev_err(ds->dev, "missing mux channel id\n");
+		return -EINVAL;
+	}
+
+	id = be32_to_cpup(_id);
+	if (id < 0 || id > 1) {
+		dev_err(ds->dev, "%d is not a valid mux channel id\n", id);
+		return -EINVAL;
+	}
+
+	data = kmalloc(sizeof(*data), GFP_KERNEL);
+	if (unlikely(!data)) {
+		dev_err(ds->dev, "failed to create mux data structure\n");
+		return -ENOMEM;
+	}
+
+	err = of_get_phy_mode(np, &phy_mode);
+	if (err) {
+		dev_err(ds->dev, "incorrect phy-mode\n");
+		goto err_free_data;
+	}
+
+	phylink = phylink_create(&mux->dp->pl_config,
+				 of_fwnode_handle(np),
+				 phy_mode, ds->phylink_mac_ops);
+	if (IS_ERR(phylink)) {
+		dev_err(ds->dev, "failed to create phylink structure\n");
+		err = PTR_ERR(phylink);
+		goto err_free_data;
+	}
+
+	data->of_node = np;
+	data->phylink = phylink;
+	mux->data[id] = data;
+
+	return 0;
+
+err_free_data:
+	kfree(data);
+	return err;
+}
+
+static int ds_add_mux(struct mxl862xx_priv *priv, struct device_node *np)
+{
+	const __be32 *_id = of_get_property(np, "reg", NULL);
+	struct device_node *child;
+	struct combo_port_mux *mux;
+	unsigned int id;
+	int err;
+
+	if (!_id) {
+		dev_err(priv->ds->dev, "missing attach dp id\n");
+		return -EINVAL;
+	}
+
+	id = be32_to_cpup(_id);
+	if (id < 0 || id >= MXL862XX_MAX_PORTS) {
+		dev_err(priv->ds->dev, "%d is not a valid attach dp id\n", id);
+		return -EINVAL;
+	}
+
+	mux = kmalloc(sizeof(struct combo_port_mux), GFP_KERNEL);
+	if (unlikely(!mux)) {
+		dev_err(priv->ds->dev, "failed to create mux structure\n");
+		return -ENOMEM;
+	}
+
+	mux->mod_def0_gpio = fwnode_gpiod_get_index(of_fwnode_handle(np),
+				"mod-def0", 0, GPIOD_IN |
+				GPIOD_FLAGS_BIT_NONEXCLUSIVE, "?");
+
+	if (IS_ERR(mux->mod_def0_gpio)) {
+		dev_err(priv->ds->dev, "failed to requset gpio for mod-def0\n");
+		err = PTR_ERR(mux->mod_def0_gpio);
+		goto err_free_mux;
+	}
+
+	mux->chan_sel_gpio = fwnode_gpiod_get_index(of_fwnode_handle(np),
+				"chan-sel", 0, GPIOD_OUT_LOW, "?");
+
+	if (IS_ERR(mux->chan_sel_gpio)) {
+		dev_err(priv->ds->dev, "failed to requset gpio for chan-sel\n");
+		err = PTR_ERR(mux->chan_sel_gpio);
+		goto err_put_mod_def0;
+	}
+
+	of_property_read_u32(np, "sfp-present-channel",
+		&mux->sfp_present_channel);
+
+	priv->ds_mux[id] = mux;
+	mux->dp = dsa_to_port(priv->ds, id);
+	/* configure default channel to 10G PHY */
+	mux->channel = !mux->sfp_present_channel;
+	mux->initialized = false;
+
+	for_each_child_of_node(np, child) {
+		err = ds_add_mux_channel(mux, child);
+		if (err) {
+			dev_err(priv->ds->dev, "failed to add ds_mux\n");
+			of_node_put(child);
+			goto err_put_chan_sel;
+		}
+	}
+
+	INIT_DELAYED_WORK(&mux->sfp_monitor_work, sfp_monitor_work_func);
+	mod_delayed_work(system_wq, &mux->sfp_monitor_work, msecs_to_jiffies(3000));
+
+	return 0;
+
+err_put_chan_sel:
+	gpiod_put(mux->chan_sel_gpio);
+err_put_mod_def0:
+	gpiod_put(mux->mod_def0_gpio);
+err_free_mux:
+	kfree(mux);
+	priv->ds_mux[id] = NULL;
+	return err;
+}
+
+static void mxl862xx_release_mux(struct mxl862xx_priv *priv, int id)
+{
+	struct combo_port_mux *mux = priv->ds_mux[id];
+	int i;
+
+	if (!mux)
+		return;
+
+	cancel_delayed_work_sync(&mux->sfp_monitor_work);
+
+	if (!IS_ERR_OR_NULL(mux->mod_def0_gpio))
+		gpiod_put(mux->mod_def0_gpio);
+
+	if (!IS_ERR_OR_NULL(mux->chan_sel_gpio))
+		gpiod_put(mux->chan_sel_gpio);
+
+	for (i = 0; i < 2; i++) {
+		if (mux->data[i]) {
+			if (mux->data[i]->phylink)
+				phylink_destroy(mux->data[i]->phylink);
+			kfree(mux->data[i]);
+		}
+	}
+	kfree(mux);
+	priv->ds_mux[id] = NULL;
+}
+
+static void mxl862xx_release_all_muxes(struct mxl862xx_priv *priv)
+{
+	int i;
+	for (i = 0; i < MXL862XX_MAX_PORTS; i++)
+		mxl862xx_release_mux(priv, i);
+}
+
 static int mxl862xx_probe(struct mdio_device *mdiodev)
 {
 	struct device *dev = &mdiodev->dev;
 	struct mxl862xx_priv *priv;
+	struct device_node *mux_np;
 	struct dsa_switch *ds;
 	int err, i;
 
@@ -4565,9 +4777,30 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 		mxl862xx_host_shutdown(priv);
 		for (i = 0; i < MXL862XX_MAX_PORTS; i++)
 			cancel_work_sync(&priv->ports[i].host_flood_work);
+		return err;
 	}
 
-	return err;
+	mux_np = of_get_child_by_name(priv->ds->dev->of_node, "ds-mux-bus");
+	if (mux_np) {
+		struct device_node *child;
+
+		for_each_available_child_of_node(mux_np, child) {
+			if (!of_device_is_compatible(child,
+						     "mxl862xx,ds-mux"))
+				continue;
+
+			if (!of_device_is_available(child))
+				continue;
+
+			err = ds_add_mux(priv, child);
+			if (err)
+				dev_err(dev, "failed to add mux\n");
+
+			of_node_put(mux_np);
+		};
+	}
+
+	return 0;
 }
 
 static void mxl862xx_remove(struct mdio_device *mdiodev)
@@ -4597,6 +4830,7 @@ static void mxl862xx_remove(struct mdio_device *mdiodev)
 		rtnl_unlock();
 	}
 
+	mxl862xx_release_all_muxes(ds->priv);
 	dsa_unregister_switch(ds);
 
 	mxl862xx_host_shutdown(priv);
