@@ -121,8 +121,8 @@
 
 			ds_channel_1: channel@1 {
 				reg = <1>;
-				phy-mode = "usxgmii";
-				phy-connection-type = "usxgmii";
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
 				phy-handle = <&phy24>;
 			};
 		};
