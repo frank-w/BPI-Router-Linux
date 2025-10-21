@@ -784,6 +784,7 @@ static int as21xxx_probe(struct phy_device *phydev)
 	struct as21xxx_priv *priv;
 	int ret;
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	priv = devm_kzalloc(&phydev->mdio.dev,
 			    sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -963,6 +964,7 @@ static int as21xxx_read_status(struct phy_device *phydev)
 		aeon_read_speed(phydev);
 	}
 
+	phydev_err(phydev, "DEBUG %s:%d\n", __func__,__LINE__);
 	return 0;
 }
 
