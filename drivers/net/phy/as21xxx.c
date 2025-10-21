@@ -349,6 +349,13 @@ static int aeon_firmware_boot(struct phy_device *phydev, const u8 *data,
 			      VEND1_GLB_CPU_CTRL_MASK, AEON_CPU_CTRL_FW_START);
 }
 
+static void aeon_set_fast_mdc_timing(struct phy_device *phydev)
+{
+	phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x53, 0xFFFF);
+	phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x54, 0xFFFF);
+	phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x55, 0xFFFF);
+}
+
 static int aeon_firmware_load(struct phy_device *phydev)
 {
 	struct device *dev = &phydev->mdio.dev;
@@ -932,6 +939,8 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 		return -ENOMEM;
 
 	mutex_init(&priv->ipc_lock);
+
+	aeon_set_fast_mdc_timing(phydev);
 
 	ret = aeon_firmware_load(phydev);
 	if (ret)
