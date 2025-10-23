@@ -133,7 +133,7 @@ static const struct mtk_gate_regs infra3_cg_regs = {
 		.regs = _regs, .shift = _shift, .flags = CLK_IS_CRITICAL, \
 		.ops = &mtk_clk_gate_ops_setclr,                          \
 	}
-static const struct mtk_gate infra_clks[] __initconst = {
+static const struct mtk_gate infra_clks[] = {
 	/* INFRA1 */
 	GATE_INFRA1(CLK_INFRA_66M_GPT_BCK, "infra_hf_66m_gpt_bck",
 		    "sysaxi_sel", 0),
