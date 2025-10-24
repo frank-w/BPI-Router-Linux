@@ -21,36 +21,36 @@
 
 static DEFINE_SPINLOCK(mt7988_clk_lock);
 
-static const char *const infra_mux_uart0_parents[] __initconst = { "csw_infra_f26m_sel",
+static const char *const infra_mux_uart0_parents[] = { "csw_infra_f26m_sel",
 								   "uart_sel" };
 
-static const char *const infra_mux_uart1_parents[] __initconst = { "csw_infra_f26m_sel",
+static const char *const infra_mux_uart1_parents[] = { "csw_infra_f26m_sel",
 								   "uart_sel" };
 
-static const char *const infra_mux_uart2_parents[] __initconst = { "csw_infra_f26m_sel",
+static const char *const infra_mux_uart2_parents[] = { "csw_infra_f26m_sel",
 								   "uart_sel" };
 
-static const char *const infra_mux_spi0_parents[] __initconst = { "i2c_sel", "spi_sel" };
+static const char *const infra_mux_spi0_parents[] = { "i2c_sel", "spi_sel" };
 
-static const char *const infra_mux_spi1_parents[] __initconst = { "i2c_sel", "spim_mst_sel" };
+static const char *const infra_mux_spi1_parents[] = { "i2c_sel", "spim_mst_sel" };
 
-static const char *const infra_pwm_bck_parents[] __initconst = { "top_rtc_32p7k",
+static const char *const infra_pwm_bck_parents[] = { "top_rtc_32p7k",
 								 "csw_infra_f26m_sel", "sysaxi_sel",
 								 "pwm_sel" };
 
-static const char *const infra_pcie_gfmux_tl_ck_o_p0_parents[] __initconst = {
+static const char *const infra_pcie_gfmux_tl_ck_o_p0_parents[] = {
 	"top_rtc_32p7k", "csw_infra_f26m_sel", "csw_infra_f26m_sel", "pextp_tl_sel"
 };
 
-static const char *const infra_pcie_gfmux_tl_ck_o_p1_parents[] __initconst = {
+static const char *const infra_pcie_gfmux_tl_ck_o_p1_parents[] = {
 	"top_rtc_32p7k", "csw_infra_f26m_sel", "csw_infra_f26m_sel", "pextp_tl_p1_sel"
 };
 
-static const char *const infra_pcie_gfmux_tl_ck_o_p2_parents[] __initconst = {
+static const char *const infra_pcie_gfmux_tl_ck_o_p2_parents[] = {
 	"top_rtc_32p7k", "csw_infra_f26m_sel", "csw_infra_f26m_sel", "pextp_tl_p2_sel"
 };
 
-static const char *const infra_pcie_gfmux_tl_ck_o_p3_parents[] __initconst = {
+static const char *const infra_pcie_gfmux_tl_ck_o_p3_parents[] = {
 	"top_rtc_32p7k", "csw_infra_f26m_sel", "csw_infra_f26m_sel", "pextp_tl_p3_sel"
 };
 
