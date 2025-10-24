@@ -3,15 +3,19 @@
  * Copyright (C) 2025 MediaTek Inc.
  * Author: Sam.Shih <sam.shih@mediatek.com>
  */
+
 /dts-v1/;
+
 #include "mt7987a.dtsi"
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/leds/common.h>
 #include "mt7987a-bananapi-bpi-r4-lite-mikrobus.dtsi"
+
 / {
 	model = "Bananapi BPI-R4-LITE";
 	compatible = "bananapi,bpi-r4-lite",
 		     "mediatek,mt7987a", "mediatek,mt7987";
+
 	aliases {
 		/* mt7987 I2C0 */
 		i2c0 = &i2c0;
@@ -21,12 +25,14 @@
 		i2c3 = &imux2_MikroBus;
 		i2c4 = &imux3;
 	};
+
 	chosen {
 		bootargs = "console=ttyS0,115200n1 loglevel=6  \
 			    earlycon=uart8250,mmio32,0x11000000 \
 			    pci=pcie_bus_perf ubi.block=0,firmware \
 			    root=/dev/fit0 rootwait";
 	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 		reset {
@@ -42,6 +48,7 @@
 			debounce-interval = <10>;
 		};
 	};
+
 	pwm-leds {
 		compatible = "pwm-leds";
 		status = "okay";
@@ -83,10 +90,12 @@
 		maximum-power-milliwatt = <3000>;
 	};
 };
+
 &fan {
 	pwms = <&pwm 2 50000>;
 	status = "okay";
 };
+
 &gmac0 {
 	phy-mode = "2500base-x";
 	status = "okay";
@@ -96,20 +105,24 @@
 		pause;
 	};
 };
+
 &gmac1 {
 	phy-mode = "internal";
 	phy-handle = <&phy15>;
 	status = "okay";
 };
+
 &hnat {
 	mtketh-lan2 = "eth2";
 	mtketh-max-gmac = <3>;
 };
+
 &pwm {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm_pins>;
 	status = "okay";
 };
+
 &pwm_pins {
 	mux {
 		/*
@@ -121,6 +134,7 @@
 		groups = "pwm0", "pwm1_0", "pwm2_0";
 	};
 };
+
 &i2c0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c0_pins>;
@@ -130,14 +144,17 @@
 		reg = <0x70>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+
 		imux0_rtc: i2c@0 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0>;
+
 			rtc@51 {
 				compatible = "nxp,pcf8563";
 				reg = <0x51>;
 			};
+
 			eeprom@57 {
 				compatible = "atmel,24c02";
 				reg = <0x57>;
@@ -146,26 +163,31 @@
 				size = <256>;
 			};
 		};
+
 		imux1_sfp: i2c@1 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x1>;
 		};
+
 		imux2_MikroBus: i2c@2 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x2>;
 		};
+
 		imux3: i2c@3 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x3>;
+
 			pca9555: i2c-gpio-expander@20 {
 				compatible = "nxp,pca9555";
 				gpio-controller;
 				#gpio-cells = <2>;
 				reg = <0x20>;
 			};
+
 			wifi_eeprom@50 {
 				compatible = "atmel,24c02";
 				reg = <0x50>;
@@ -176,6 +198,7 @@
 		};
 	};
 };
+
 &mdio {
 	/* built-in 2.5G Ethernet PHY */
 	phy15: phy@15 {
@@ -186,6 +209,7 @@
 		phy-mode = "internal";
 		active-low;
 	};
+
 	switch31: switch@31 {
 		compatible = "mediatek,mt7531";
 		reg = <31>;
@@ -208,26 +232,32 @@
 	phys = <&tphyu2port0 PHY_TYPE_USB2>,
 	       <&tphyu3port0 PHY_TYPE_USB3>;
 };
+
 &switch31 {
 	ports {
 		#address-cells = <1>;
 		#size-cells = <0>;
+
 		port@0 {
 			reg = <0>;
 			label = "lan0";
 		};
+
 		port@1 {
 			reg = <1>;
 			label = "lan1";
 		};
+
 		port@2 {
 			reg = <2>;
 			label = "lan2";
 		};
+
 		port@3 {
 			reg = <3>;
 			label = "lan3";
 		};
+
 		port@5 {
 			reg = <5>;
 			label = "sfp0";
@@ -235,6 +265,7 @@
 			sfp = <&sfp>;
 			managed = "in-band-status";
 		};
+
 		port@6 {
 			reg = <6>;
 			label = "cpu";
@@ -248,6 +279,7 @@
 		};
 	};
 };
+
 &tphyu3port0 {
 	status = "okay";
 };
