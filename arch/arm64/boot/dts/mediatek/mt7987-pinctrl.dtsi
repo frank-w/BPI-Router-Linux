@@ -4,7 +4,7 @@
  * Author: Sam.Shih <sam.shih@mediatek.com>
  */
 &pio {
-	mmc_pins_default: mmc-pins-default {
+	mmc_pins_default: mmc-default-pins {
 		mux {
 			function = "flash";
 			groups = "emmc_45";
@@ -28,7 +28,7 @@
 			mediatek,pull-up-adv = <1>;	/* pull-up 10K */
 		};
 	};
-	mmc_pins_uhs: mmc-pins-uhs {
+	mmc_pins_uhs: mmc-uhs-pins {
 		mux {
 			function = "flash";
 			groups = "emmc_45";
@@ -52,7 +52,7 @@
 			mediatek,pull-up-adv = <1>;	/* pull-up 10K */
 		};
 	};
-	sd_pins_default: sd-pins-default {
+	sd_pins_default: sd-default-pins {
 		mux {
 			function = "flash";
 			groups = "sd";
@@ -70,7 +70,7 @@
 			mediatek,pull-down-adv = <2>;	/* pull-down 50K */
 		};
 	};
-	sd_pins_uhs: sd-pins-uhs {
+	sd_pins_uhs: sd-uhs-pins {
 		mux {
 			function = "flash";
 			groups = "sd";
@@ -116,7 +116,7 @@
 			groups = "2p5gbe_led1_1";
 		};
 	};
-	i2c0_pins: i2c0-pins-g2 {
+	i2c0_pins: i2c0-g2-pins {
 		mux {
 			function = "i2c";
 			groups = "i2c0_2";
