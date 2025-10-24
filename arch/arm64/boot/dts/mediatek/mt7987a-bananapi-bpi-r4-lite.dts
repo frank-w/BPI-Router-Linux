@@ -13,8 +13,7 @@
 
 / {
 	model = "Bananapi BPI-R4-LITE";
-	compatible = "bananapi,bpi-r4-lite",
-		     "mediatek,mt7987a", "mediatek,mt7987";
+	compatible = "bananapi,bpi-r4-lite", "mediatek,mt7987a";
 
 	aliases {
 		/* mt7987 I2C0 */
