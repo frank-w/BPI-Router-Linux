@@ -961,9 +961,7 @@
 		};
 
 		pcie1: pcie@11290000 {
-			compatible = "mediatek,mt7988-pcie",
-				     "mediatek,mt7988-pcie",
-				     "mediatek,mt7986-pcie",
+			compatible = "mediatek,mt7987-pcie",
 				     "mediatek,mt8192-pcie";
 			device_type = "pci";
 			#address-cells = <3>;
