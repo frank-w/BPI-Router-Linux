@@ -35,13 +35,15 @@
 
 	gpio-keys {
 		compatible = "gpio-keys";
-		reset {
+
+		button-reset {
 			label = "reset";
 			linux,code = <KEY_RESTART>;
 			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
 			debounce-interval = <10>;
 		};
-		wps {
+
+		button-wps {
 			label = "wps";
 			linux,code = <KEY_WPS_BUTTON>;
 			gpios = <&pio 0 GPIO_ACTIVE_LOW>;
@@ -52,8 +54,9 @@
 	pwm-leds {
 		compatible = "pwm-leds";
 		status = "okay";
+
 		/* ACT LED on bpi-r4-lite */
-		sys-led {
+		led-0 {
 			color = <LED_COLOR_ID_BLUE>;
 			label = "act:blue";
 			pwms = <&pwm 0 50000>;

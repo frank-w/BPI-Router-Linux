@@ -17,52 +17,66 @@
  * --------------------------------------------------------------
  */
 / {
-	mikrobus: MikroBus {
+	mikrobus: mikro-bus {
 		compatible = "simple-bus";
+		#address-cells = <0>;
+		#size-cells = <0>;
+		ranges;
+
+
 		/* MikroBus pins 5,6,7,8 as GPIOs */
 		mikrobus_gpios_0: gpio-export@0 {
 			compatible = "gpio-export";
 			status = "disabled";
+
 			gpio-3 {
 				gpio-export,name = "mikrobus-gpio-RX";
 				gpio-export,output = <1>;
 				gpios = <&pio 3 GPIO_ACTIVE_HIGH>;
 			};
+
 			gpio-4 {
 				gpio-export,name = "mikrobus-gpio-TX";
 				gpio-export,output = <1>;
 				gpios = <&pio 4 GPIO_ACTIVE_HIGH>;
 			};
+
 			gpio-5 {
 				gpio-export,name = "mikrobus-gpio-INT";
 				gpio-export,output = <1>;
 				gpios = <&pio 5 GPIO_ACTIVE_HIGH>;
 			};
+
 			gpio-6 {
 				gpio-export,name = "mikrobus-gpio-INT";
 				gpio-export,output = <1>;
 				gpios = <&pio 5 GPIO_ACTIVE_HIGH>;
 			};
 		};
+
 		/* MikroBus pins 11,12,13,14 as GPIOs */
 		mikrobus_gpios_1: gpio-export@1 {
 			compatible = "gpio-export";
 			status = "disabled";
+
 			gpio-46 {
 				gpio-export,name = "mikrobus-gpio-CS";
 				gpio-export,output = <1>;
 				gpios = <&pio 46 GPIO_ACTIVE_HIGH>;
 			};
+
 			gpio-47 {
 				gpio-export,name = "mikrobus-gpio-MOSI";
 				gpio-export,output = <1>;
 				gpios = <&pio 47 GPIO_ACTIVE_HIGH>;
 			};
+
 			gpio-48 {
 				gpio-export,name = "mikrobus-gpio-MISO";
 				gpio-export,output = <1>;
 				gpios = <&pio 48 GPIO_ACTIVE_HIGH>;
 			};
+
 			gpio-49 {
 				gpio-export,name = "mikrobus-gpio-SCK";
 				gpio-export,output = <1>;
@@ -71,6 +85,7 @@
 		};
 	};
 };
+
 /* MikroBus pins 3,4 as I2C3 (Provided by PCA9548 i2c-mux) */
 /* Please refer to &imux2_MikroBus device tree node */
 /* MikroBus pins 5,6,7,10 as PCM function */
@@ -79,24 +94,28 @@
 	pinctrl-0 = <&pcm_pins>;
 	status = "disabled";
 };
+
 &pcm_pins {
 	mux {
 		function = "pcm";
 		groups = "pcm0_0";
 	};
 };
+
 /* MikroBus pins 5,6,7,10 as UART1 function */
 &uart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart1_pins>;
 	status = "okay";
 };
+
 &uart1_pins {
 	mux {
 		function = "uart";
 		groups = "uart1_0";
 	};
 };
+
 /* MikroBus pins 8 as PWM1 */
 /* Please refer to &pwm device tree node */
 /* MikroBus pins 11,12,13,14 as SPI1 function */
@@ -105,6 +124,7 @@
 	pinctrl-0 = <&spic_pins>;
 	status = "okay";
 };
+
 &spic_pins {
 	mux {
 		function = "spi";
