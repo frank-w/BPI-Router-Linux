@@ -49,6 +49,7 @@ properties:
       - items:
           - enum:
               - mediatek,mt7986-pcie
+              - mediatek,mt7987-pcie
               - mediatek,mt8188-pcie
               - mediatek,mt8195-pcie
           - const: mediatek,mt8192-pcie
@@ -265,6 +266,36 @@ allOf:
             - const: tl_26m
             - const: peri_26m
             - const: top_133m
+
+        resets:
+          minItems: 1
+          maxItems: 2
+
+        reset-names:
+          minItems: 1
+          maxItems: 2
+
+        mediatek,pbus-csr: false
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - mediatek,mt7987-pcie
+    then:
+      properties:
+        clocks:
+          minItems: 5
+          maxItems: 5
+
+        clock-names:
+          items:
+            - const: pl_250m
+            - const: tl_26m
+            - const: peri_26m
+            - const: top_133m
+            - const: pextp_clk
 
         resets:
           minItems: 1
