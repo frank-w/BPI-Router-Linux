@@ -16,6 +16,8 @@
 / {
 	aliases {
 		ethernet0 = &gmac0;
+		ethernet1 = &gmac1;
+		ethernet2 = &gmac2;
 		i2c0 = &i2c0;
 		i2c1 = &i2c1;
 		i2c2 = &i2c2;
@@ -196,6 +198,23 @@
 
 &gmac0 {
 	status = "okay";
+};
+
+&gmac1 {
+	phy-mode = "10gbase-r";
+	phy-connection-type = "10gbase-r";
+	status = "okay";
+};
+
+&gmac2 {
+	phy-mode = "10gbase-r";
+	phy-connection-type = "10gbase-r";
+	status = "okay";
+	fixed-link {
+		speed = <10000>;
+		full-duplex;
+		pause;
+	};
 };
 
 &gsw_phy0 {
