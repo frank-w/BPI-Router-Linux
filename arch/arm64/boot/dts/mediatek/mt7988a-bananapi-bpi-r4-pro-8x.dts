@@ -15,6 +15,37 @@
 		     "mediatek,mt7988a";
 };
 
+&eth {
+	mux: mux-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		mux1: ethernet-mux@1 {
+			compatible = "mediatek,eth-mux";
+			reg = <1>; //map to gmac1
+			chan-sel-gpios = <&pio 3 GPIO_ACTIVE_HIGH>;
+			mod-def0-gpios = <&pio 1 GPIO_ACTIVE_LOW>; //also moddef0 of sfp2
+			sfp-present-channel = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			channel_10: channel@0 {
+				reg = <0>;
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
+				phy-handle = <&phy28>;
+			};
+
+			channel_11: channel@1 {
+				reg = <1>;
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
+				managed = "in-band-status";
+				sfp = <&sfp2>;
+			};
+		};
+	};
+};
+
 &gmac1 {
 	phy-mode = "usxgmii";
 	phy-connection-type = "usxgmii";
