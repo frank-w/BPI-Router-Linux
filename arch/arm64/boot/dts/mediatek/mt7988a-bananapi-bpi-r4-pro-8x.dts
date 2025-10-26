@@ -14,3 +14,71 @@
 		     "bananapi,bpi-r4-pro",
 		     "mediatek,mt7988a";
 };
+
+&gmac1 {
+	phy-mode = "usxgmii";
+	phy-connection-type = "usxgmii";
+	phy-handle = <&phy28>;
+	status = "okay";
+};
+
+&mdio_bus {
+	/* external Airoha AN8831X connected to MXL switch */
+
+	phy24: ethernet-phy@24 {
+		reg = <24>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pio 83 GPIO_ACTIVE_LOW>; //change 5
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "aeonsemi/as21x1x_fw.bin";
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			phy24_led0: led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+
+			phy24_led1: led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};
+
+	/* external Airoha AN8831X connected to eth-mux on gmac1 */
+	phy28: ethernet-phy@28 {
+		reg = <28>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pio 82 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "aeonsemi/as21x1x_fw.bin";
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			phy28_led0: led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+
+			phy28_led1: led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};
+};
