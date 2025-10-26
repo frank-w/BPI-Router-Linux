@@ -82,3 +82,50 @@
 		};
 	};
 };
+
+&switch16 {
+	ds_mux: ds-mux-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ds_mux0: ds-mux@0 {
+			compatible = "mxl862xx,ds-mux";
+			reg = <12>;
+			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+			sfp-present-channel = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ds_channel_0: channel@0 {
+				reg = <0>;
+				phy-mode = "usxgmii";
+				phy-connection-type = "usxgmii";
+				managed = "in-band-status";
+				sfp = <&sfp1>;
+			};
+
+			ds_channel_1: channel@1 {
+				reg = <1>;
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
+				phy-handle = <&phy24>;
+			};
+		};
+	};
+	ports {
+		port6: port@6 {
+			reg = <12>;
+			label = "mxl_lan5";
+			phy-mode = "usxgmii";
+			phy-handle = <&phy24>;
+			status = "okay";
+
+			fixed-link {
+				speed = <10000>;
+				full-duplex;
+			};
+		};
+
+	};
+};
