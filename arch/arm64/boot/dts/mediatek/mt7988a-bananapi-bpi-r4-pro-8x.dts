@@ -14,3 +14,149 @@
 		     "bananapi,bpi-r4-pro",
 		     "mediatek,mt7988a";
 };
+
+&eth {
+	mux: mux-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		mux1: ethernet-mux@1 {
+			compatible = "mediatek,eth-mux";
+			reg = <1>; //map to gmac1
+			chan-sel-gpios = <&pio 3 GPIO_ACTIVE_HIGH>;
+			mod-def0-gpios = <&pio 1 GPIO_ACTIVE_LOW>; //also moddef0 of sfp2
+			sfp-present-channel = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			channel_10: channel@0 {
+				reg = <0>;
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
+				phy-handle = <&phy28>;
+			};
+
+			channel_11: channel@1 {
+				reg = <1>;
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
+				managed = "in-band-status";
+				sfp = <&sfp2>;
+			};
+		};
+	};
+};
+
+&gmac1 {
+	phy-mode = "usxgmii";
+	phy-connection-type = "usxgmii";
+	phy-handle = <&phy28>;
+	status = "okay";
+};
+
+&mdio_bus {
+	/* external Airoha AN8831X connected to MXL switch */
+
+	phy24: ethernet-phy@24 {
+		reg = <24>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pio 83 GPIO_ACTIVE_LOW>; //change 5
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "aeonsemi/as21x1x_fw.bin";
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			phy24_led0: led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+
+			phy24_led1: led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};
+
+	/* external Airoha AN8831X connected to eth-mux on gmac1 */
+	phy28: ethernet-phy@28 {
+		reg = <28>;
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reset-gpios = <&pio 82 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <200000>;
+		reset-deassert-us = <350000>;
+		firmware-name = "aeonsemi/as21x1x_fw.bin";
+
+		leds {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			phy28_led0: led0@0 {
+				reg = <0>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+
+			phy28_led1: led1@1 {
+				reg = <1>;
+				linux,default-trigger = "netdev";
+				active-high;
+				status = "okay";
+			};
+		};
+	};
+};
+
+&switch16 {
+	ds_mux: ds-mux-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ds_mux0: ds-mux@0 {
+			compatible = "mxl862xx,ds-mux";
+			reg = <12>;
+			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+			sfp-present-channel = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ds_channel_0: channel@0 {
+				reg = <0>;
+				phy-mode = "usxgmii";
+				phy-connection-type = "usxgmii";
+				managed = "in-band-status";
+				sfp = <&sfp1>;
+			};
+
+			ds_channel_1: channel@1 {
+				reg = <1>;
+				phy-mode = "10gbase-r";
+				phy-connection-type = "10gbase-r";
+				phy-handle = <&phy24>;
+			};
+		};
+	};
+	ports {
+		port6: port@6 {
+			reg = <13>;
+			label = "mxl_lan6";
+			phy-mode = "usxgmii";
+			phy-handle = <&phy24>;
+			status = "okay";
+
+			fixed-link {
+				speed = <10000>;
+				full-duplex;
+			};
+		};
+
+	};
+};
