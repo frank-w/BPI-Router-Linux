@@ -4951,7 +4951,6 @@ static int mtk_add_mux_channel(struct mtk_mux *mux, struct device_node *np)
 	struct mtk_mac *mac = mux->mac;
 	struct mtk_eth *eth = mac->hw;
 	struct mtk_mux_data *data;
-	struct phylink *phylink;
 	phy_interface_t phy_mode;
 	int id, err;
 
