@@ -603,6 +603,18 @@
 	status = "okay";
 };
 
+&serial1 {
+	status = "okay";
+	//pinctrl-names = "default";
+	//pinctrl-0 = <&uart1_2_lite_pins>;
+};
+
+&serial2 {
+	status = "okay";
+	//pinctrl-names = "default";
+	//pinctrl-0 = <&uart2_3_pins>;
+};
+
 &spi0 {
 	pinctrl-0 = <&spi0_flash_pins>;
 	pinctrl-names = "default";
