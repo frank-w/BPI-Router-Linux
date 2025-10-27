@@ -516,6 +516,30 @@
 			compatible = "linux,ubi";
 			reg = <0x200000 0xfe00000>;
 			label = "ubi";
+
+			volumes {
+				ubi-volume-fip {
+					volname = "fip";
+				};
+
+				ubi-volume-ubootenv {
+					volname = "ubootenv";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool";
+					};
+				};
+
+				ubi-volume-ubootenv2 {
+					volname = "ubootenv2";
+					nvmem-layout {
+						compatible = "u-boot,env-redundant-bool";
+					};
+				};
+
+				ubi_rootfs: ubi-volume-rootfs {
+					volname = "rootfs";
+				};
+			};
 		};
 	};
 };
