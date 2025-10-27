@@ -1808,7 +1808,6 @@ static const struct lvts_data mt7987_lvts_ap_data = {
 	.num_init_cmd	= ARRAY_SIZE(mt7987_init_cmds),
 	.temp_factor	= LVTS_COEFF_A_MT7987,
 	.temp_offset	= LVTS_COEFF_B_MT7987,
-	.golden_temp	= 60,
 	.gt_calib_bit_offset = 32,
 	.def_calibration = 19380,
 	.irq_enable	= false,
