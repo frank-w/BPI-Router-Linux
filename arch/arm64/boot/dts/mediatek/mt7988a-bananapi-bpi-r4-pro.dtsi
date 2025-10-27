@@ -28,6 +28,8 @@
 
 	chosen {
 		stdout-path = &serial0;
+		bootargs = "console=ttyS0,115200n1 \
+			    earlycon=uart8250,mmio32,0x11000000";
 	};
 
 	fan: pwm-fan {
