@@ -1322,3 +1322,7 @@ CONFIG_STRICT_DEVMEM=n
 
 CONFIG_EXTRA_FIRMWARE="aeonsemi/as21x1x_fw.bin mediatek/mt7987/i2p5ge-phy-DSPBitTb.bin mediatek/mt7987/i2p5ge-phy-pmb.bin"
 CONFIG_EXTRA_FIRMWARE_DIR="utils/firmware/"
+
+#hw crypto (eip197)
+CONFIG_CRYPTO_DEV_SAFEXCEL=y
+
