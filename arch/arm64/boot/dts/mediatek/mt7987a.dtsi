@@ -5,16 +5,17 @@
  */
 
 /dts-v1/;
+
 #include <dt-bindings/leds/common.h>
 #include "mt7987.dtsi"
+#include "mt7987-pinctrl.dtsi"
+#include "mt7987-netsys.dtsi"
 
 / {
 	compatible = "mediatek,mt7987a", "mediatek,mt7987";
-
 	memory {
 		reg = <0 0x40000000 0 0x10000000>;
 	};
-
 };
 
 &boottrap {
