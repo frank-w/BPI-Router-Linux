@@ -347,7 +347,7 @@ function pack_debs {
 	get_version
 	echo "pack linux-headers, linux-image, linux-libc-dev debs..."
 	echo "LOCALVERSION=${gitbranch} board=$baseboard ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
-	LOCALVERSION="${gitbranch}" board="$baseboard" KDEB_COMPRESS=gzip make bindeb-pkg
+	LOCALVERSION="${gitbranch}" board="$baseboard" KDEB_COMPRESS=gzip make -j${numproc} bindeb-pkg
 	if [[ $? -ne 0 ]];then exit 1;fi;
 	ls ../*.deb
 }
