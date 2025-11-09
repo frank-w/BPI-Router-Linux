@@ -6334,7 +6334,7 @@ static const struct mtk_soc_data mt7987_data = {
 	.hash_offset = 4,
 	.has_accounting = true,
 	.foe_entry_size = MTK_FOE_ENTRY_V3_SIZE,
-	//.rss_num = 4,
+	.rss_num = 4,
 	.tx = {
 		.desc_size = sizeof(struct mtk_tx_dma_v2),
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
@@ -6344,7 +6344,7 @@ static const struct mtk_soc_data mt7987_data = {
 	},
 	.rx = {
 		.desc_size = sizeof(struct mtk_rx_dma_v2),
-		.irq_done_mask = MTK_RX_DONE_INT_V2,
+		//.irq_done_mask = MTK_RX_DONE_INT_V2,
 		.dma_l4_valid = RX_DMA_L4_VALID_V2,
 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
 		.dma_len_offset = 8,
