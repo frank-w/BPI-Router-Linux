@@ -67,7 +67,7 @@
 
 #define MTK_MAX_RX_RING_NUM	(8)
 #define MTK_HW_LRO_DMA_SIZE(eth)	(mtk_is_netsys_v3_or_greater(eth) ? 64 : 8)
-#define	MTK_MAX_LRO_RX_LENGTH		(4096 * 3 + MTK_MAX_RX_LENGTH)
+#define	MTK_MAX_LRO_RX_LENGTH		(4096 * 3 + eth->rx_buf_len)
 #define	MTK_MAX_LRO_IP_CNT		2
 #define	MTK_HW_LRO_TIMER_UNIT		1	/* 20 us */
 #define	MTK_HW_LRO_REFRESH_TIME		50000	/* 1 sec. */
@@ -1506,6 +1506,7 @@ struct mtk_eth {
 
 	spinlock_t			dim_lock;
 
+	u32				rx_buf_len;
 	u32				rx_events;
 	u32				rx_packets;
 	u32				rx_bytes;
