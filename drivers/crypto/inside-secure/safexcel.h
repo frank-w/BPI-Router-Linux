@@ -743,6 +743,9 @@ struct safexcel_priv_data {
 /* Priority we use for advertising our algorithms */
 #define SAFEXCEL_CRA_PRIORITY		300
 
+/* System cache line size */
+#define SYSTEM_CACHELINE_SIZE		64
+
 /* SM3 digest result for zero length message */
 #define EIP197_SM3_ZEROM_HASH	"\x1A\xB2\x1D\x83\x55\xCF\xA1\x7F" \
 				"\x8E\x61\x19\x48\x31\xE8\x1A\x8F" \
