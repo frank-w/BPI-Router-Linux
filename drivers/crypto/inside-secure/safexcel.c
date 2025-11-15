@@ -1443,6 +1443,7 @@ static int safexcel_probe_generic(void *pdev,
 			priv->hwconfig.hiaver = EIP197_VERSION_SWAP(version);
 			priv->flags |= SAFEXCEL_HW_EIP197;
 		} else {
+			dev_err(dev, "DBG %s:%d (version:%d)\n",__func__,__LINE__,version);
 			return -ENODEV;
 		}
 	}
