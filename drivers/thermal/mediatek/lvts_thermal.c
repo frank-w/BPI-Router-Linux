@@ -541,6 +541,7 @@ static irqreturn_t lvts_ctrl_irq_handler(struct lvts_ctrl *lvts_ctrl)
 
 		thermal_zone_device_update(lvts_ctrl->sensors[i].tz,
 					   THERMAL_TRIP_VIOLATED);
+		printk(KERN_ALERT "THERMAL_TRIP_VIOLATED sensor %d.\n",i);
 		iret = IRQ_HANDLED;
 	}
 
@@ -577,7 +578,7 @@ static irqreturn_t lvts_irq_handler(int irq, void *data)
 		aux = lvts_ctrl_irq_handler(&lvts_td->lvts_ctrl[i]);
 		if (aux != IRQ_HANDLED)
 			continue;
-
+		printk(KERN_ALERT "IRQ for lvts_ctrl %d triggered.\n",i);
 		iret = IRQ_HANDLED;
 	}
 
@@ -1810,7 +1811,7 @@ static const struct lvts_data mt7987_lvts_ap_data = {
 	.temp_offset	= LVTS_COEFF_B_MT7987,
 	.gt_calib_bit_offset = 32,
 	.def_calibration = 19380,
-	.irq_enable	= false,
+	.irq_enable	= true,
 };
 
 static const struct lvts_data mt7988_lvts_ap_data = {
