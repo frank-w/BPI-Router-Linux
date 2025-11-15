@@ -813,7 +813,6 @@ function build {
 		export DTC_FLAGS="-@"
 		make ${MAKEFLAGS} ${CFLAGS} ${OWNCONFIGS} 2>&3
 		ret=$?
-		exec 3>&-
 
 		if [[ $ret == 0 ]]; then
 			if [[ -z "${uimagearch}" ]];then uimagearch=arm;fi
@@ -867,8 +866,9 @@ function build {
 			#	mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
 			if [[ -e ${baseboard}.its ]];then #"$board" == "bpi-r64" || "$board" == "bpi-r3" ]];then
 				mkimage -A ${uimagearch} -O linux -T kernel -C none -a $LADDR -e $ENTRY -n "Linux Kernel $kernver$gitbranch" -d $IMAGE ./uImage_nodt
-				sed "s/%version%/$kernver$gitbranch/" ${baseboard}.its > ${baseboard}.its.tmp
-				mkimage -f ${baseboard}.its.tmp ${baseboard}.itb
+				sed "s/%version%/$kernver$gitbranch/" ${baseboard}.its > ${baseboard}.its.tmp 2>&3
+				mkimage -f ${baseboard}.its.tmp ${baseboard}.itb 2>&3
+				ret=$?
 				cp ${baseboard}.itb ${baseboard}-$kernver$gitbranch.itb
 				rm ${baseboard}.its.tmp
 			else
@@ -895,6 +895,7 @@ function build {
 				fi
 			fi
 		fi
+		exec 3>&-
 	else
 		echo "No Configfile found, Please Configure Kernel"
 	fi
