@@ -194,6 +194,9 @@ function check_dep()
 	then
 		if [[ $@ =~ "build" ]];then
 			NEEDED_PKGS+=" u-boot-tools bc gcc libc6-dev libncurses-dev ccache libssl-dev"
+			if [[ "$ARCH" == "arm64" ]]; then
+				NEEDED_PKGS+=" device-tree-compiler"
+			fi
 		fi
 		if [[ $@ =~ "deb" ]];then
 			NEEDED_PKGS+=" fakeroot"
