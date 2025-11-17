@@ -1324,5 +1324,4 @@ CONFIG_EXTRA_FIRMWARE="aeonsemi/as21x1x_fw.bin mediatek/mt7987/i2p5ge-phy-DSPBit
 CONFIG_EXTRA_FIRMWARE_DIR="utils/firmware/"
 
 #hw crypto (eip197)
-CONFIG_CRYPTO_DEV_SAFEXCEL=y
-
+CONFIG_CRYPTO_DEV_SAFEXCEL=m
