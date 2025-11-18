@@ -278,7 +278,7 @@
 
 			trips {
 				cpu_trip_crit: crit {
-					temperature = <125000>;
+					temperature = <50000>;
 					hysteresis = <2000>;
 					type = "critical";
 				};
@@ -290,7 +290,7 @@
 				};
 
 				cpu_trip_active_hot: active-hot {
-					temperature = <117000>;
+					temperature = <40000>;
 					hysteresis = <2000>;
 					type = "active";
 				};

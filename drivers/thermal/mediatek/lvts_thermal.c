@@ -354,6 +354,7 @@ static void lvts_update_irq_mask(struct lvts_ctrl *lvts_ctrl)
 	u32 value = 0;
 	int i;
 
+	printk("lvts_update_irq_mask\n");
 	value = readl(LVTS_MONINT(lvts_ctrl->base));
 
 	lvts_for_each_valid_sensor(i, lvts_ctrl) {
@@ -406,6 +407,7 @@ static int lvts_set_trips(struct thermal_zone_device *tz, int low, int high)
 	u32 raw_high = lvts_temp_to_raw(high, lvts_data->temp_factor);
 	bool should_update_thresh;
 
+	printk("lvts_set_trips high: %d, low: %d\n", high, low);
 	lvts_sensor->low_thresh = low;
 	lvts_sensor->high_thresh = high;
 
@@ -421,7 +423,7 @@ static int lvts_set_trips(struct thermal_zone_device *tz, int low, int high)
 
 	if (!should_update_thresh)
 		return 0;
-
+	printk("write raw_low and raw_high to register\n");
 	/*
 	 * Low offset temperature threshold
 	 *
@@ -541,7 +543,7 @@ static irqreturn_t lvts_ctrl_irq_handler(struct lvts_ctrl *lvts_ctrl)
 
 		thermal_zone_device_update(lvts_ctrl->sensors[i].tz,
 					   THERMAL_TRIP_VIOLATED);
-		printk(KERN_ALERT "THERMAL_TRIP_VIOLATED sensor %d.\n",i);
+		//printk(KERN_ALERT "THERMAL_TRIP_VIOLATED sensor %d.\n",i);
 		iret = IRQ_HANDLED;
 	}
 
@@ -578,7 +580,7 @@ static irqreturn_t lvts_irq_handler(int irq, void *data)
 		aux = lvts_ctrl_irq_handler(&lvts_td->lvts_ctrl[i]);
 		if (aux != IRQ_HANDLED)
 			continue;
-		printk(KERN_ALERT "IRQ for lvts_ctrl %d triggered.\n",i);
+		//printk(KERN_ALERT "IRQ for lvts_ctrl %d triggered.\n",i);
 		iret = IRQ_HANDLED;
 	}
 
@@ -1378,6 +1380,7 @@ static int lvts_probe(struct platform_device *pdev)
 	 * safely enable the interrupt.
 	 */
 	if (lvts_data->irq_enable) {
+		printk("devm_request_threaded_irq\n");
 		ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
 						IRQF_ONESHOT, dev_name(dev), lvts_td);
 		if (ret)
