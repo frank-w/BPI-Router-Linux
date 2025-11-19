@@ -1148,7 +1148,7 @@ static int aeon_c45_pma_setup_forced(struct phy_device *phydev)
 
 static int aeon_c45_an_config_aneg(struct phy_device *phydev)
 {
-	int changed, ret;
+	int changed = 0, ret;
 	u32 adv;
 	linkmode_and(phydev->advertising, phydev->advertising,
 		     phydev->supported);
