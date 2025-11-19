@@ -516,7 +516,7 @@ static int aeon_ipc_send_cmd(struct phy_device *phydev,
 {
 	bool curr_parity;
 	int ret;
-	unsigned int val;
+	int val;
 
 	/* The IPC sync by using a single parity bit.
 	 * Each CMD have alternately this bit set or clear
