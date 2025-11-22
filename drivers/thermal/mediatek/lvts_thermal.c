@@ -543,7 +543,7 @@ static irqreturn_t lvts_ctrl_irq_handler(struct lvts_ctrl *lvts_ctrl)
 
 		thermal_zone_device_update(lvts_ctrl->sensors[i].tz,
 					   THERMAL_TRIP_VIOLATED);
-		//printk(KERN_ALERT "THERMAL_TRIP_VIOLATED sensor %d.\n",i);
+		printk(KERN_ALERT "THERMAL_TRIP_VIOLATED sensor %d.\n",i);
 		iret = IRQ_HANDLED;
 	}
 
@@ -580,7 +580,7 @@ static irqreturn_t lvts_irq_handler(int irq, void *data)
 		aux = lvts_ctrl_irq_handler(&lvts_td->lvts_ctrl[i]);
 		if (aux != IRQ_HANDLED)
 			continue;
-		//printk(KERN_ALERT "IRQ for lvts_ctrl %d triggered.\n",i);
+		printk(KERN_ALERT "IRQ for lvts_ctrl %d triggered.\n",i);
 		iret = IRQ_HANDLED;
 	}
 
