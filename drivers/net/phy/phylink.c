@@ -1150,6 +1150,7 @@ static enum inband_type phylink_get_inband_type(phy_interface_t interface)
 
 	case PHY_INTERFACE_MODE_1000BASEX:
 	case PHY_INTERFACE_MODE_2500BASEX:
+	case PHY_INTERFACE_MODE_10GBASER:
 		/* 1000base-X is designed for use media-side for Fibre
 		 * connections, and thus the Autoneg bit needs to be
 		 * taken into account. We also do this for 2500base-X
