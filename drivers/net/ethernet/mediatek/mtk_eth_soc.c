@@ -4036,10 +4036,13 @@ static int mtk_open(struct net_device *dev)
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_RX_9K) &&
 	    mtk_interface_mode_is_xgmii(eth, mac->interface))
+	{
 		eth->netdev[mac->id]->max_mtu = MTK_MAX_RX_LENGTH_9K - MTK_RX_ETH_HLEN;
-	else
+		netdev_err(dev, "%s: set max-mtu of mac #%d to %d (9K+XGMII)\n", __func__,mac->id,eth->netdev[mac->id]->max_mtu);
+	}else{
 		eth->netdev[mac->id]->max_mtu = MTK_MAX_RX_LENGTH_2K - MTK_RX_ETH_HLEN;
-
+		netdev_err(dev, "%s: set max-mtu of mac #%d to %d\n", __func__,mac->id,eth->netdev[mac->id]->max_mtu);
+	}
 	if (mtk_is_netsys_v2_or_greater(eth))
 		return 0;
 
