@@ -5365,6 +5365,7 @@ static void mux_poll(struct work_struct *work)
 	struct mtk_eth *eth = mac->hw;
 	struct net_device *dev = eth->netdev[mac->id];
 	unsigned int new_channel;
+	struct phylink *tmp_pl;
 	int sfp_present;
 
 	//dev_info(eth->dev, "ethernet mux: %s:%d\n",__func__,__LINE__);
@@ -5381,23 +5382,24 @@ static void mux_poll(struct work_struct *work)
 
 	rtnl_lock();
 	mtk_stop(dev);
+	rtnl_unlock();
 
 	/* Destroy old phylink if it exists */
 	if (mux->data[mux->channel] && mux->data[mux->channel]->phylink) {
+		tmp_pl = mux->data[mux->channel]->phylink;
 		dev_info(eth->dev, "Destroying phylink for channel %u\n", mux->channel);
-		phylink_destroy(mux->data[mux->channel]->phylink);
-		phylink_stop(mux->data[mux->channel]->phylink);
-		phylink_disconnect_phy(mux->data[mux->channel]->phylink);
-		phylink_destroy(mux->data[mux->channel]->phylink);
+	} else {
+		/* phylink was created by mtk_add_mac,
+		   we need to release the reference to available PCS from phylink config
+		*/
+		tmp_pl = mac->phylink;
+	}
+	if (tmp_pl) {
+		phylink_destroy(tmp_pl);
 		mux->data[mux->channel]->phylink = NULL;
 	}
-	rtnl_unlock();
 
 	dev_info(eth->dev, "ethernet mux: switch to channel%d\n", new_channel);
-
-	gpiod_set_value_cansleep(mux->chan_sel_gpio, new_channel);
-
-	usleep_range(100000,200000);
 
 	/* Create new phylink if not yet present */
 	if (!mux->data[new_channel]->phylink) {
@@ -5414,9 +5416,9 @@ static void mux_poll(struct work_struct *work)
 
 	rtnl_lock();
 	mtk_open(dev);
-
 	rtnl_unlock();
 
+	gpiod_set_value_cansleep(mux->chan_sel_gpio, new_channel);
 	mux->channel = new_channel;
 	goto reschedule;
 
