@@ -147,7 +147,7 @@
 	ports {
 		port6: port@6 {
 			reg = <12>;
-			label = "mxl_lan5";
+			label = "mxl_lan4";
 			phy-mode = "usxgmii";
 			phy-handle = <&phy24>;
 			status = "okay";
