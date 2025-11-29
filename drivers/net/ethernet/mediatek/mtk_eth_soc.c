@@ -3720,7 +3720,7 @@ static int mtk_get_irqs_fe(struct platform_device *pdev, struct mtk_eth *eth)
 
 static int mtk_get_irqs_pdma(struct platform_device *pdev, struct mtk_eth *eth)
 {
-	char *rxring = "pdma0";
+	char rxring[] = "pdma0";
 	int i;
 
 	for (i = 0; i < MTK_PDMA_IRQ_NUM; i++) {
