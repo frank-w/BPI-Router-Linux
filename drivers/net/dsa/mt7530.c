@@ -2405,9 +2405,10 @@ mt7530_setup(struct dsa_switch *ds)
 		usleep_range(5000, 5100);
 		reset_control_deassert(priv->rstc);
 	} else {
-		gpiod_set_value_cansleep(priv->reset, 0);
+		int is_active_low = !!gpiod_is_active_low(priv->reset);
+		gpiod_set_value_cansleep(priv->reset, is_active_low);
 		usleep_range(5000, 5100);
-		gpiod_set_value_cansleep(priv->reset, 1);
+		gpiod_set_value_cansleep(priv->reset, !is_active_low);
 	}
 
 	/* Waiting for MT7530 got to stable */
@@ -2643,9 +2644,10 @@ mt7531_setup(struct dsa_switch *ds)
 		usleep_range(5000, 5100);
 		reset_control_deassert(priv->rstc);
 	} else {
-		gpiod_set_value_cansleep(priv->reset, 0);
+		int is_active_low = !!gpiod_is_active_low(priv->reset);
+		gpiod_set_value_cansleep(priv->reset, is_active_low);
 		usleep_range(5000, 5100);
-		gpiod_set_value_cansleep(priv->reset, 1);
+		gpiod_set_value_cansleep(priv->reset, !is_active_low);
 	}
 
 	/* Waiting for MT7530 got to stable */
