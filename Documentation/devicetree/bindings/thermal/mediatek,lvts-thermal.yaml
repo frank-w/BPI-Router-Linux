@@ -64,16 +64,6 @@ allOf:
         compatible:
           contains:
             enum:
-              - mediatek,mt7988-lvts-ap
-    then:
-      required:
-        - interrupts
-
-  - if:
-      properties:
-        compatible:
-          contains:
-            enum:
               - mediatek,mt8188-lvts-ap
               - mediatek,mt8188-lvts-mcu
               - mediatek,mt8192-lvts-ap
@@ -85,9 +75,6 @@ allOf:
 
         nvmem-cell-names:
           maxItems: 1
-
-      required:
-        - interrupts
 
   - if:
       properties:
@@ -105,12 +92,10 @@ allOf:
         nvmem-cell-names:
           minItems: 2
 
-      required:
-        - interrupts
-
 required:
   - compatible
   - reg
+  - interrupts
   - clocks
   - resets
   - nvmem-cells
