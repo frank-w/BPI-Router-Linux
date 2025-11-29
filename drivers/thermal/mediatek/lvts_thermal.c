@@ -96,8 +96,6 @@
 #define LVTS_MSR_READ_TIMEOUT_US	400
 #define LVTS_MSR_READ_WAIT_US		(LVTS_MSR_READ_TIMEOUT_US / 2)
 
-#define LVTS_HW_RESET_TEMP		125000
-
 #define LVTS_MINIMUM_THRESHOLD		20000
 
 static int golden_temp = LVTS_GOLDEN_TEMP_DEFAULT;
@@ -138,7 +136,6 @@ struct lvts_data {
 	int temp_offset;
 	int gt_calib_bit_offset;
 	unsigned int def_calibration;
-	bool irq_enable;
 };
 
 struct lvts_sensor {
@@ -156,7 +153,6 @@ struct lvts_ctrl {
 	const struct lvts_data *lvts_data;
 	u32 calibration[LVTS_SENSOR_MAX];
 	u8 valid_sensor_mask;
-	u32 hw_reset_raw_temp;
 	int mode;
 	void __iomem *base;
 	int low_thresh;
@@ -415,9 +411,6 @@ static int lvts_set_trips(struct thermal_zone_device *tz, int low, int high)
 		lvts_ctrl->low_thresh = low;
 	}
 	lvts_update_irq_mask(lvts_ctrl);
-
-	if (!lvts_data->irq_enable)
-		return 0;
 
 	if (!should_update_thresh)
 		return 0;
@@ -868,14 +861,6 @@ static int lvts_ctrl_init(struct device *dev, struct lvts_domain *lvts_td,
 		 */
 		lvts_ctrl[i].mode = lvts_data->lvts_ctrl[i].mode;
 
-		/*
-		 * The temperature to raw temperature must be done
-		 * after initializing the calibration.
-		 */
-		lvts_ctrl[i].hw_reset_raw_temp =
-			lvts_temp_to_raw(LVTS_HW_RESET_TEMP,
-					 lvts_data->temp_factor);
-
 		lvts_ctrl[i].low_thresh = INT_MIN;
 		lvts_ctrl[i].high_thresh = INT_MIN;
 	}
@@ -932,13 +917,12 @@ static void lvts_write_config(struct lvts_ctrl *lvts_ctrl, const u32 *cmds, int 
 	 */
 	for (i = 0; i < nr_cmds; i++) {
 		writel(cmds[i], LVTS_CONFIG(lvts_ctrl->base));
-		usleep_range(5, 15);
+		usleep_range(2, 4);
 	}
 }
 
 static int lvts_irq_init(struct lvts_ctrl *lvts_ctrl)
 {
-	const struct lvts_data *lvts_data = lvts_ctrl->lvts_data;
 	/*
 	 * LVTS_PROTCTL : Thermal Protection Sensor Selection
 	 *
@@ -972,12 +956,8 @@ static int lvts_irq_init(struct lvts_ctrl *lvts_ctrl)
 	 * The LVTS_MONINT register layout is the same as the LVTS_MONINTSTS
 	 * register, except we set the bits to enable the interrupt.
 	 */
-	if (lvts_data->irq_enable) {
-		writel(0, LVTS_MONINT(lvts_ctrl->base));
-	} else {
-		writel(BIT(16), LVTS_PROTCTL(lvts_ctrl->base));
-		writel(lvts_ctrl->hw_reset_raw_temp, LVTS_PROTTC(lvts_ctrl->base));
-	}
+	writel(0, LVTS_MONINT(lvts_ctrl->base));
+
 	return 0;
 }
 
@@ -1360,11 +1340,9 @@ static int lvts_probe(struct platform_device *pdev)
 	if (IS_ERR(lvts_td->reset))
 		return dev_err_probe(dev, PTR_ERR(lvts_td->reset), "Failed to get reset control\n");
 
-	if (lvts_data->irq_enable) {
-		irq = platform_get_irq(pdev, 0);
-		if (irq < 0)
-			return irq;
-	}
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0)
+		return irq;
 
 	golden_temp_offset = lvts_data->temp_offset;
 
@@ -1376,12 +1354,10 @@ static int lvts_probe(struct platform_device *pdev)
 	 * At this point the LVTS is initialized and enabled. We can
 	 * safely enable the interrupt.
 	 */
-	if (lvts_data->irq_enable) {
-		ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
-						IRQF_ONESHOT, dev_name(dev), lvts_td);
-		if (ret)
-			return dev_err_probe(dev, ret, "Failed to request interrupt\n");
-	}
+	ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
+					IRQF_ONESHOT, dev_name(dev), lvts_td);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to request interrupt\n");
 
 	platform_set_drvdata(pdev, lvts_td);
 
@@ -1823,7 +1799,6 @@ static const struct lvts_data mt7988_lvts_ap_data = {
 	.temp_factor	= LVTS_COEFF_A_MT7988,
 	.temp_offset	= LVTS_COEFF_B_MT7988,
 	.gt_calib_bit_offset = 24,
-	.irq_enable = true,
 };
 
 static const struct lvts_data mt8186_lvts_data = {
@@ -1837,7 +1812,6 @@ static const struct lvts_data mt8186_lvts_data = {
 	.temp_offset	= LVTS_COEFF_B_MT7988,
 	.gt_calib_bit_offset = 24,
 	.def_calibration = 19000,
-	.irq_enable = true,
 };
 
 static const struct lvts_data mt8188_lvts_mcu_data = {
@@ -1851,7 +1825,6 @@ static const struct lvts_data mt8188_lvts_mcu_data = {
 	.temp_offset	= LVTS_COEFF_B_MT8195,
 	.gt_calib_bit_offset = 20,
 	.def_calibration = 35000,
-	.irq_enable = true,
 };
 
 static const struct lvts_data mt8188_lvts_ap_data = {
@@ -1865,7 +1838,6 @@ static const struct lvts_data mt8188_lvts_ap_data = {
 	.temp_offset	= LVTS_COEFF_B_MT8195,
 	.gt_calib_bit_offset = 20,
 	.def_calibration = 35000,
-	.irq_enable = true,
 };
 
 static const struct lvts_data mt8192_lvts_mcu_data = {
@@ -1879,7 +1851,6 @@ static const struct lvts_data mt8192_lvts_mcu_data = {
 	.temp_offset	= LVTS_COEFF_B_MT8195,
 	.gt_calib_bit_offset = 24,
 	.def_calibration = 35000,
-	.irq_enable = true,
 };
 
 static const struct lvts_data mt8192_lvts_ap_data = {
@@ -1893,7 +1864,6 @@ static const struct lvts_data mt8192_lvts_ap_data = {
 	.temp_offset	= LVTS_COEFF_B_MT8195,
 	.gt_calib_bit_offset = 24,
 	.def_calibration = 35000,
-	.irq_enable = true,
 };
 
 static const struct lvts_data mt8195_lvts_mcu_data = {
@@ -1907,7 +1877,6 @@ static const struct lvts_data mt8195_lvts_mcu_data = {
 	.temp_offset	= LVTS_COEFF_B_MT8195,
 	.gt_calib_bit_offset = 24,
 	.def_calibration = 35000,
-	.irq_enable = true,
 };
 
 static const struct lvts_data mt8195_lvts_ap_data = {
