@@ -1786,7 +1786,6 @@ static const struct lvts_data mt7987_lvts_ap_data = {
 	.temp_offset	= LVTS_COEFF_B_MT7987,
 	.gt_calib_bit_offset = 32,
 	.def_calibration = 19380,
-	.irq_enable	= false,
 };
 
 static const struct lvts_data mt7988_lvts_ap_data = {
