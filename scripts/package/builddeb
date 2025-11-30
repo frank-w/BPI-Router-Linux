@@ -82,7 +82,7 @@ install_linux_image () {
 			mkdir -p ${pdir}/boot/extlinux/
 			cp arch/arm64/boot/Image.gz "${pdir}/boot/extlinux/Image-${KERNELRELEASE}.gz"
 			;;
-		bpi-r3|bpi-r4)
+		bpi-r3|bpi-r3mini|bpi-r4|bpi-r4pro|bpi-r4lite)
 			#R3/R4 only use FIT and no standalone kernel/dtbs
 			;;
 		*)
