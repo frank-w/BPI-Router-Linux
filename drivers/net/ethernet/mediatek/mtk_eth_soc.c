@@ -5703,9 +5703,13 @@ static int mtk_probe(struct platform_device *pdev)
 	char *irqname;
 	int err, i;
 
+	dev_err(&pdev->dev, "%s entered\n", __func__);
+
 	eth = devm_kzalloc(&pdev->dev, sizeof(*eth), GFP_KERNEL);
 	if (!eth)
 		return -ENOMEM;
+
+	dev_err(&pdev->dev, "%s allocated\n", __func__);
 
 	eth->soc = of_device_get_match_data(&pdev->dev);
 
@@ -5714,6 +5718,8 @@ static int mtk_probe(struct platform_device *pdev)
 	eth->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(eth->base))
 		return PTR_ERR(eth->base);
+
+	dev_err(eth->dev, "%s io remaped\n", __func__);
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628))
 		eth->ip_align = NET_IP_ALIGN;
@@ -5729,10 +5735,14 @@ static int mtk_probe(struct platform_device *pdev)
 		}
 	}
 
+	dev_err(eth->dev, "%s DMA configured\n", __func__);
+
 	spin_lock_init(&eth->page_lock);
 	spin_lock_init(&eth->tx_irq_lock);
 	spin_lock_init(&eth->rx_irq_lock);
 	spin_lock_init(&eth->dim_lock);
+
+	dev_err(eth->dev, "%s locks initialized\n", __func__);
 
 	eth->rx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
 	INIT_WORK(&eth->rx_dim.work, mtk_dim_rx);
@@ -5750,6 +5760,8 @@ static int mtk_probe(struct platform_device *pdev)
 		}
 	}
 
+	dev_err(eth->dev, "%s ethsys acquired\n", __func__);
+
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_INFRA)) {
 		eth->infra = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
 							     "mediatek,infracfg");
@@ -5758,6 +5770,8 @@ static int mtk_probe(struct platform_device *pdev)
 			return PTR_ERR(eth->infra);
 		}
 	}
+
+	dev_err(eth->dev, "%s infracfg acquired\n", __func__);
 
 	if (of_dma_is_coherent(pdev->dev.of_node)) {
 		struct regmap *cci;
@@ -5768,6 +5782,8 @@ static int mtk_probe(struct platform_device *pdev)
 		if (!IS_ERR(cci))
 			regmap_write(cci, 0, 3);
 	}
+
+	dev_err(eth->dev, "%s CCI acquired\n", __func__);
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SGMII) &&
 	    !mtk_is_netsys_v3_or_greater(eth)) {
@@ -5786,6 +5802,8 @@ static int mtk_probe(struct platform_device *pdev)
 			goto err_destroy_sgmii;
 		}
 	}
+
+	dev_err(eth->dev, "%s pctl acquired\n", __func__);
 
 	if (mtk_is_netsys_v2_or_greater(eth)) {
 		res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -5812,6 +5830,8 @@ static int mtk_probe(struct platform_device *pdev)
 		}
 	}
 
+	dev_err(eth->dev, "%s SRAM acquired\n", __func__);
+
 	if (eth->soc->offload_version) {
 		for (i = 0;; i++) {
 			struct device_node *np;
@@ -5833,15 +5853,21 @@ static int mtk_probe(struct platform_device *pdev)
 		}
 	}
 
+	dev_err(eth->dev, "%s offloading initialized\n", __func__);
+
 	err = mtk_get_irqs_fe(pdev, eth);
 	if (err)
 		goto err_wed_exit;
+
+	dev_err(eth->dev, "%s FE IRQ initialized\n", __func__);
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT)) {
 		err = mtk_get_irqs_pdma(pdev, eth);
 		if (err)
 			goto err_wed_exit;
 	}
+
+	dev_err(eth->dev, "%s PDMA IRQ initialized\n", __func__);
 
 	for (i = 0; i < ARRAY_SIZE(eth->clks); i++) {
 		eth->clks[i] = devm_clk_get(eth->dev,
@@ -5861,12 +5887,16 @@ static int mtk_probe(struct platform_device *pdev)
 		}
 	}
 
+	dev_err(eth->dev, "%s clocks acquired\n", __func__);
+
 	eth->msg_enable = netif_msg_init(mtk_msg_level, MTK_DEFAULT_MSG_ENABLE);
 	INIT_WORK(&eth->pending_work, mtk_pending_work);
 
 	err = mtk_hw_init(eth, false);
 	if (err)
 		goto err_wed_exit;
+
+	dev_err(eth->dev, "%s hw initialized\n", __func__);
 
 	eth->hwlro = MTK_HAS_CAPS(eth->soc->caps, MTK_HWLRO);
 
@@ -5884,6 +5914,8 @@ static int mtk_probe(struct platform_device *pdev)
 			goto err_deinit_hw;
 		}
 	}
+
+	dev_err(eth->dev, "%s MACs registered\n", __func__);
 
 	/* check if all MAC address providers are available and return
 	 * -EPROBE_DEFER in case at least one of them is not ready
