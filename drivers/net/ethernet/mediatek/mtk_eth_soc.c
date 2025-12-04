@@ -3187,19 +3187,13 @@ static int mtk_rss_init(struct mtk_eth *eth)
 	const struct mtk_soc_data *soc = eth->soc;
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	struct mtk_rss_params *rss_params = &eth->rss_params;
-	static u8 hash_key[MTK_RSS_HASH_KEYSIZE] = {
-		0xfa, 0x01, 0xac, 0xbe, 0x3b, 0xb7, 0x42, 0x6a,
-		0x0c, 0xf2, 0x30, 0x80, 0xa3, 0x2d, 0xcb, 0x77,
-		0xb4, 0x30, 0x7b, 0xae, 0xcb, 0x2b, 0xca, 0xd0,
-		0xb0, 0x8f, 0xa3, 0x43, 0x3d, 0x25, 0x67, 0x41,
-		0xc2, 0x0e, 0x5b, 0x25, 0xda, 0x56, 0x5a, 0x6d};
 	u32 val;
 	int i;
 
-	memcpy(rss_params->hash_key, hash_key, MTK_RSS_HASH_KEYSIZE);
+	netdev_rss_key_fill(rss_params->hash_key, MTK_RSS_HASH_KEYSIZE);
 
 	for (i = 0; i < MTK_RSS_MAX_INDIRECTION_TABLE; i++)
-		rss_params->indirection_table[i] = i % eth->soc->rss_num;
+		rss_params->indirection_table[i] = ethtool_rxfh_indir_default(i, eth->soc->rss_num);
 
 	if (soc->rx.desc_size == sizeof(struct mtk_rx_dma)) {
 		/* Set RSS rings to PSE modes */
@@ -4921,8 +4915,7 @@ static int mtk_get_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh)
 	struct mtk_rss_params *rss_params = &eth->rss_params;
 	int i;
 
-	if (rxfh->hfunc)
-		rxfh->hfunc = ETH_RSS_HASH_TOP;	/* Toeplitz */
+	rxfh->hfunc = ETH_RSS_HASH_TOP;	/* Toeplitz */
 
 	if (rxfh->key) {
 		memcpy(rxfh->key, rss_params->hash_key,
