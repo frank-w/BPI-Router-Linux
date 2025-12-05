@@ -40,7 +40,7 @@
 				algo = "sha1";
 			};
 		};
-		fdt-base-r4pro-4e {
+		/*fdt-base-r4pro-4e {
 			description = "Flattened Device Tree blob BPI-R4 Pro 4E";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-4e.dtb");
 			type = "flat_dt";
@@ -72,7 +72,7 @@
 			hash-1 {
 				algo = "sha1";
 			};
-		};
+		};*/
 		fdt-ov-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-sd.dtbo");
@@ -83,7 +83,7 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-emmc.dtbo");
 			type = "flat_dt";
 		};
-		fdt-ov-lite-sd {
+		/*fdt-ov-lite-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-sd.dtbo");
 			type = "flat_dt";
@@ -132,7 +132,7 @@
 			description = "DT overlay for R4Pro EMMC";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-emmc.dtbo");
 			type = "flat_dt";
-		};
+		};*/
 /*		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");
@@ -165,7 +165,7 @@
 				algo = "sha1";
 			};
 		};
-		conf-base-r4pro {
+		/*conf-base-r4pro {
 			description = "Boot Linux kernel with base FDT blob for BPI-R4 Pro";
 			kernel = "kernel-1";
 			fdt = "fdt-base-r4pro-8x";
@@ -200,7 +200,7 @@
 			hash-1 {
 				algo = "sha1";
 			};
-		};
+		};*/
 		conf-sd {
 			description = "Boot Linux kernel with SD FDT blob";
 			kernel = "kernel-1";
@@ -227,7 +227,7 @@
 			description = "EMMC FDT overlay blob for R4";
 			fdt = "fdt-ov-emmc";
 		};
-		ov-lite-sd {
+		/*ov-lite-sd {
 			description = "SD FDT overlay blob for R4 Lite";
 			fdt = "fdt-ov-lite-sd";
 		};
@@ -266,6 +266,6 @@
 		ov-pro-cn18 {
 			description = "CN18 FDT overlay blob for R4 Pro";
 			fdt = "fdt-ov-pro-cn18";
-		};
+		};*/
 	};
 };
