@@ -5785,7 +5785,7 @@ static int mtk_probe(struct platform_device *pdev)
 			if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
 				for (i = 1; i < MTK_RX_RSS_NUM; i++) {
 					irqname = devm_kasprintf(eth->dev, GFP_KERNEL,
-								 "%s RSS RX %d",
+								 "%s PDMA RX %d",
 								 dev_name(eth->dev), i);
 					err = devm_request_irq(eth->dev,
 							       eth->irq_pdma[MTK_RSS_RING(i)],
