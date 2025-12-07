@@ -55,6 +55,7 @@ static int set_mux_gdm1_to_gmac1_esw(struct mtk_eth *eth, u64 path)
 	bool updated = true;
 	u32 mask, set, reg;
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	switch (path) {
 	case MTK_ETH_PATH_GMAC1_SGMII:
 		mask = ~(u32)MTK_MUX_TO_ESW;
@@ -74,10 +75,11 @@ static int set_mux_gdm1_to_gmac1_esw(struct mtk_eth *eth, u64 path)
 	else
 		reg = MTK_MAC_MISC;
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	if (updated)
 		mtk_m32(eth, mask, set, reg);
 
-	dev_dbg(eth->dev, "path %s in %s updated = %d\n",
+	dev_info(eth->dev, "path %s in %s updated = %d\n",
 		mtk_eth_path_name(path), __func__, updated);
 
 	return 0;
@@ -165,11 +167,14 @@ static int set_mux_gmac1_gmac2_to_sgmii_rgmii(struct mtk_eth *eth, u64 path)
 	unsigned int val = 0;
 	bool updated = true;
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	switch (path) {
 	case MTK_ETH_PATH_GMAC1_SGMII:
+		dev_err(eth->dev, "DEBUG: gmac1_sgmii %s:%d\n",__func__,__LINE__);
 		val = SYSCFG0_SGMII_GMAC1;
 		break;
 	case MTK_ETH_PATH_GMAC2_SGMII:
+		dev_err(eth->dev, "DEBUG: gmac2_sgmii %s:%d\n",__func__,__LINE__);
 		val = SYSCFG0_SGMII_GMAC2;
 		break;
 	case MTK_ETH_PATH_GMAC1_RGMII:
@@ -188,11 +193,12 @@ static int set_mux_gmac1_gmac2_to_sgmii_rgmii(struct mtk_eth *eth, u64 path)
 		break;
 	}
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	if (updated)
 		regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
 				   SYSCFG0_SGMII_MASK, val);
 
-	dev_dbg(eth->dev, "path %s in %s updated = %d\n",
+	dev_info(eth->dev, "path %s in %s updated = %d\n",
 		mtk_eth_path_name(path), __func__, updated);
 
 	return 0;
@@ -246,8 +252,10 @@ static int set_mux_gmac123_to_gephy_sgmii(struct mtk_eth *eth, u64 path)
 
 	regmap_read(eth->ethsys, ETHSYS_SYSCFG0, &val);
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	switch (path) {
 	case MTK_ETH_PATH_GMAC1_SGMII:
+		dev_err(eth->dev, "DEBUG: gmac1_sgmii %s:%d\n",__func__,__LINE__);
 		val |= SYSCFG0_SGMII_GMAC1_V2;
 		break;
 	case MTK_ETH_PATH_GMAC2_GEPHY:
@@ -263,11 +271,12 @@ static int set_mux_gmac123_to_gephy_sgmii(struct mtk_eth *eth, u64 path)
 		updated = false;
 	}
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	if (updated)
 		regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
 				   SYSCFG0_SGMII_MASK, val);
 
-	dev_dbg(eth->dev, "path %s in %s updated = %d\n",
+	dev_info(eth->dev, "path %s in %s updated = %d\n",
 		mtk_eth_path_name(path), __func__, updated);
 
 	return 0;

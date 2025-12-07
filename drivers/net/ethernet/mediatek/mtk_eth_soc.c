@@ -5523,11 +5523,13 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
 	u32 flags;
 	int i;
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	for (i = 0; i < MTK_MAX_DEVS; i++) {
 		np = of_parse_phandle(eth->dev->of_node, "mediatek,sgmiisys", i);
 		if (!np)
 			break;
 
+		dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 		regmap = syscon_node_to_regmap(np);
 		flags = 0;
 		if (of_property_read_bool(np, "mediatek,pnswap"))
@@ -5538,11 +5540,13 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
 		if (IS_ERR(regmap))
 			return PTR_ERR(regmap);
 
+		dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 		eth->sgmii_pcs[i] = mtk_pcs_lynxi_create(eth->dev, regmap,
 							 eth->soc->ana_rgc3,
 							 flags);
 	}
 
+	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	return 0;
 }
 
@@ -5644,7 +5648,7 @@ static int mtk_probe(struct platform_device *pdev)
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SGMII) &&
 	    !mtk_is_netsys_v3_or_greater(eth)) {
 		err = mtk_sgmii_init(eth);
-
+		dev_err(eth->dev, "DEBUG: %s:%d err:%d\n",__func__,__LINE__,err);
 		if (err)
 			return err;
 	}
