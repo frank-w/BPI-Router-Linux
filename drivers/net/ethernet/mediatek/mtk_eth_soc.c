@@ -3030,11 +3030,11 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	/* enable cpu reason black list */
 	lro_ctrl_dw0 |= MTK_LRO_CRSN_BNW;
 
-	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3);
-	mtk_w32(eth, lro_ctrl_dw0, MTK_PDMA_LRO_CTRL_DW0);
-
 	/* no use PPE cpu reason */
 	mtk_w32(eth, 0xffffffff, MTK_PDMA_LRO_CTRL_DW1);
+
+	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3);
+	mtk_w32(eth, lro_ctrl_dw0, MTK_PDMA_LRO_CTRL_DW0);
 
 	if (mtk_is_netsys_v2_or_greater(eth)) {
 		i = (soc->rx.desc_size == sizeof(struct mtk_rx_dma_v2)) ? 1 : 0;
