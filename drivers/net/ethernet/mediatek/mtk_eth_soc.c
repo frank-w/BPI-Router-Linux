@@ -603,6 +603,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 		case PHY_INTERFACE_MODE_RGMII_ID:
 		case PHY_INTERFACE_MODE_RGMII:
 		case PHY_INTERFACE_MODE_MII:
+			dev_info(eth->dev, "mtk_mac_config: trying rgmii path setup for mac %d\n", mac->id);
 			if (MTK_HAS_CAPS(eth->soc->caps, MTK_RGMII)) {
 				err = mtk_gmac_rgmii_path_setup(eth, mac->id);
 				if (err)
@@ -612,11 +613,14 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 		case PHY_INTERFACE_MODE_1000BASEX:
 		case PHY_INTERFACE_MODE_2500BASEX:
 		case PHY_INTERFACE_MODE_SGMII:
+			dev_info(eth->dev, "mtk_mac_config: trying sgmii path setup for mac %d\n", mac->id);
 			err = mtk_gmac_sgmii_path_setup(eth, mac->id);
+			dev_err(eth->dev, "DEBUG %s:%d err:%d\n",__func__,__LINE__,err);
 			if (err)
 				goto init_err;
 			break;
 		case PHY_INTERFACE_MODE_GMII:
+			dev_info(eth->dev, "mtk_mac_config: trying gephy path setup for mac %d\n", mac->id);
 			if (MTK_HAS_CAPS(eth->soc->caps, MTK_GEPHY)) {
 				err = mtk_gmac_gephy_path_setup(eth, mac->id);
 				if (err)
@@ -626,6 +630,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 		case PHY_INTERFACE_MODE_USXGMII:
 		case PHY_INTERFACE_MODE_10GBASER:
 		case PHY_INTERFACE_MODE_5GBASER:
+			dev_info(eth->dev, "mtk_mac_config: trying usxgmii path setup for mac %d\n", mac->id);
 			if (MTK_HAS_CAPS(eth->soc->caps, MTK_USXGMII)) {
 				err = mtk_gmac_usxgmii_path_setup(eth, mac->id);
 				if (err)
@@ -633,6 +638,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 			}
 			break;
 		case PHY_INTERFACE_MODE_INTERNAL:
+			dev_info(eth->dev, "mtk_mac_config: trying internal path setup for mac %d\n", mac->id);
 			if (mac->id == MTK_GMAC2_ID &&
 			    MTK_HAS_CAPS(eth->soc->caps, MTK_2P5GPHY)) {
 				err = mtk_gmac_2p5gphy_path_setup(eth, mac->id);
@@ -644,6 +650,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 			goto err_phy;
 		}
 
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 		/* Setup clock for 1st gmac */
 		if (!mac->id && state->interface != PHY_INTERFACE_MODE_SGMII &&
 		    !phy_interface_mode_is_8023z(state->interface) &&
@@ -669,7 +676,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 				mtk_m32(mac->hw, RXC_RST, 0, TRGMII_RCK_CTRL);
 			}
 		}
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 		switch (state->interface) {
 		case PHY_INTERFACE_MODE_MII:
 		case PHY_INTERFACE_MODE_GMII:
@@ -693,12 +700,13 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 		/* The path GMAC to SGMII will be enabled once the SGMIISYS is
 		 * being setup done.
 		 */
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 		regmap_read(eth->ethsys, ETHSYS_SYSCFG0, &val);
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 		regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
 				   SYSCFG0_SGMII_MASK,
 				   ~(u32)SYSCFG0_SGMII_MASK);
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 		/* Save the syscfg0 value for mac_finish */
 		mac->syscfg0 = val;
 	} else if (state->interface != PHY_INTERFACE_MODE_USXGMII &&
@@ -732,7 +740,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 	}
 
 	mac->interface = state->interface;
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	return;
 
 err_phy:
@@ -753,22 +761,23 @@ static int mtk_mac_finish(struct phylink_config *config, unsigned int mode,
 	struct mtk_eth *eth = mac->hw;
 	u32 mcr_cur, mcr_new;
 
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	/* Enable SGMII */
 	if (interface == PHY_INTERFACE_MODE_SGMII ||
 	    phy_interface_mode_is_8023z(interface))
 		regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
 				   SYSCFG0_SGMII_MASK, mac->syscfg0);
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	/* Setup gmac */
 	mcr_cur = mtk_r32(mac->hw, MTK_MAC_MCR(mac->id));
 	mcr_new = mcr_cur;
 	mcr_new |= MAC_MCR_IPG_CFG | MAC_MCR_FORCE_MODE |
 		   MAC_MCR_BACKOFF_EN | MAC_MCR_BACKPR_EN | MAC_MCR_RX_FIFO_CLR_DIS;
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	/* Only update control register when needed! */
 	if (mcr_new != mcr_cur)
 		mtk_w32(mac->hw, mcr_new, MTK_MAC_MCR(mac->id));
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	return 0;
 }
 
@@ -870,8 +879,9 @@ static void mtk_gdm_mac_link_up(struct mtk_mac *mac,
 				int speed, int duplex, bool tx_pause,
 				bool rx_pause)
 {
+	struct mtk_eth *eth = mac->hw;
 	u32 mcr;
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	mcr = mtk_r32(mac->hw, MTK_MAC_MCR(mac->id));
 	mcr &= ~(MAC_MCR_SPEED_100 | MAC_MCR_SPEED_1000 |
 		 MAC_MCR_FORCE_DPX | MAC_MCR_FORCE_TX_FC |
@@ -888,7 +898,7 @@ static void mtk_gdm_mac_link_up(struct mtk_mac *mac,
 		mcr |= MAC_MCR_SPEED_100;
 		break;
 	}
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	/* Configure duplex */
 	if (duplex == DUPLEX_FULL)
 		mcr |= MAC_MCR_FORCE_DPX;
@@ -901,6 +911,7 @@ static void mtk_gdm_mac_link_up(struct mtk_mac *mac,
 
 	mcr |= MAC_MCR_TX_EN | MAC_MCR_RX_EN | MAC_MCR_FORCE_LINK;
 	mtk_w32(mac->hw, mcr, MTK_MAC_MCR(mac->id));
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 }
 
 static void mtk_xgdm_mac_link_up(struct mtk_mac *mac,
@@ -944,13 +955,15 @@ static void mtk_mac_link_up(struct phylink_config *config,
 {
 	struct mtk_mac *mac = container_of(config, struct mtk_mac,
 					   phylink_config);
-
+	struct mtk_eth *eth = mac->hw;
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	if (mtk_interface_mode_is_xgmii(mac->hw, interface))
 		mtk_xgdm_mac_link_up(mac, phy, mode, interface, speed, duplex,
 				     tx_pause, rx_pause);
 	else
 		mtk_gdm_mac_link_up(mac, phy, mode, interface, speed, duplex,
 				    tx_pause, rx_pause);
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 }
 
 static void mtk_mac_disable_tx_lpi(struct phylink_config *config)
@@ -3930,7 +3943,9 @@ static int mtk_open(struct net_device *dev)
 		refcount_inc(&eth->dma_refcnt);
 	}
 
+	dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	phylink_start(mac->phylink);
+	dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	netif_tx_start_all_queues(dev);
 
 	if (mtk_is_netsys_v2_or_greater(eth))
@@ -5372,7 +5387,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 			  mac->phylink_config.pcs_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_2500BASEX,
 			  mac->phylink_config.pcs_interfaces);
-
+		dev_err(eth->dev, "DEBUG %s:%d MTK_SGMII\n",__func__,__LINE__);
 		if (mtk_is_netsys_v3_or_greater(mac->hw)) {
 			__set_bit(PHY_INTERFACE_MODE_5GBASER,
 				mac->phylink_config.pcs_interfaces);
@@ -5399,19 +5414,21 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 
 			mac->phylink_config.available_pcs = mac->available_pcs;
 			mac->phylink_config.num_available_pcs = count;
+			dev_err(eth->dev, "DEBUG %s:%d available pcs: %d\n",__func__,__LINE__,count);
 		} else {
 			sid = (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) ?
 			       0 : id;
 
 			mac->phylink_config.available_pcs = &eth->sgmii_pcs[sid];
 			mac->phylink_config.num_available_pcs = 1;
+			dev_err(eth->dev, "DEBUG %s:%d available pcs: 1 (fixed)\n",__func__,__LINE__);
 		}
 
 		phy_interface_or(mac->phylink_config.supported_interfaces,
 				 mac->phylink_config.supported_interfaces,
 				 mac->phylink_config.pcs_interfaces);
 	}
-
+dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 no_pcs:
 	if (mtk_is_netsys_v3_or_greater(mac->hw) &&
 	    MTK_HAS_CAPS(mac->hw->soc->caps, MTK_ESW) &&
@@ -5437,6 +5454,7 @@ no_pcs:
 		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
 			  mac->phylink_config.supported_interfaces);
 
+	dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	SET_NETDEV_DEV(eth->netdev[id], eth->dev);
 	eth->netdev[id]->watchdog_timeo = 5 * HZ;
 	eth->netdev[id]->netdev_ops = &mtk_netdev_ops;
@@ -5462,6 +5480,7 @@ no_pcs:
 		goto free_netdev;
 	}
 
+	dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	mac->phylink = phylink;
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628))
@@ -5480,6 +5499,7 @@ no_pcs:
 						NETDEV_XDP_ACT_NDO_XMIT |
 						NETDEV_XDP_ACT_NDO_XMIT_SG;
 
+	dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	return 0;
 
 free_netdev:

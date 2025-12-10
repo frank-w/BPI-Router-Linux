@@ -166,6 +166,7 @@ static int set_mux_gmac1_gmac2_to_sgmii_rgmii(struct mtk_eth *eth, u64 path)
 {
 	unsigned int val = 0;
 	bool updated = true;
+	int ret;
 
 	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
 	switch (path) {
@@ -194,10 +195,18 @@ static int set_mux_gmac1_gmac2_to_sgmii_rgmii(struct mtk_eth *eth, u64 path)
 	}
 
 	dev_err(eth->dev, "DEBUG: %s:%d\n",__func__,__LINE__);
-	if (updated)
-		regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
-				   SYSCFG0_SGMII_MASK, val);
-
+	if (updated) {
+		//regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
+		//		   SYSCFG0_SGMII_MASK, val);
+		/* 
+		 * Replace regmap_update_bits() with separate set/clear operations:
+		 * - This avoids read-modify-write cycles which can hang on MT7622
+		 *   if PCS/SGMIISYS clocks/power are not fully enabled yet.
+		 */
+		ret = regmap_clear_bits(eth->ethsys, ETHSYS_SYSCFG0, ~val & SYSCFG0_SGMII_MASK);
+		if (!ret)
+			ret = regmap_set_bits(eth->ethsys, ETHSYS_SYSCFG0, val & SYSCFG0_SGMII_MASK);
+	}
 	dev_info(eth->dev, "path %s in %s updated = %d\n",
 		mtk_eth_path_name(path), __func__, updated);
 
@@ -322,6 +331,7 @@ static int mtk_eth_mux_setup(struct mtk_eth *eth, u64 path)
 {
 	int i, err = 0;
 
+	dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	if (!MTK_HAS_CAPS(eth->soc->caps, path)) {
 		dev_err(eth->dev, "path %s isn't support on the SoC\n",
 			mtk_eth_path_name(path));
@@ -333,8 +343,12 @@ static int mtk_eth_mux_setup(struct mtk_eth *eth, u64 path)
 
 	/* Setup MUX in path fabric */
 	for (i = 0; i < ARRAY_SIZE(mtk_eth_muxc); i++) {
+		dev_info(eth->dev, "mux[%d]=%s, cap_bit=0x%llx\n",
+             i, mtk_eth_muxc[i].name, mtk_eth_muxc[i].cap_bit);
 		if (MTK_HAS_CAPS(eth->soc->caps, mtk_eth_muxc[i].cap_bit)) {
+			dev_info(eth->dev, "calling set_path %s\n", mtk_eth_muxc[i].name);
 			err = mtk_eth_muxc[i].set_path(eth, path);
+			dev_info(eth->dev, "set_path %s returned %d\n", mtk_eth_muxc[i].name, err);
 			if (err)
 				goto out;
 		} else {
@@ -344,6 +358,7 @@ static int mtk_eth_mux_setup(struct mtk_eth *eth, u64 path)
 	}
 
 out:
+	dev_err(eth->dev, "DEBUG %s:%d err:%d\n",__func__,__LINE__,err);
 	return err;
 }
 
@@ -368,6 +383,7 @@ int mtk_gmac_sgmii_path_setup(struct mtk_eth *eth, int mac_id)
 					  MTK_ETH_PATH_GMAC3_SGMII;
 
 	/* Setup proper MUXes along the path */
+	dev_err(eth->dev, "DEBUG %s:%d\n",__func__,__LINE__);
 	return mtk_eth_mux_setup(eth, path);
 }
 
