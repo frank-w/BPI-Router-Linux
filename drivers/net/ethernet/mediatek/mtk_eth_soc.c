@@ -3019,8 +3019,8 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 {
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
-	int i;
 	u32 val;
+	int i;
 
 	/* relinquish lro rings, flush aggregated packets */
 	mtk_w32(eth, MTK_LRO_RING_RELINQUISH_REQ(eth), MTK_PDMA_LRO_CTRL_DW0(reg_map));
@@ -3126,13 +3126,12 @@ static int mtk_hwlro_get_ipaddr_idx(struct net_device *dev, u32 ip4dst)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
 	int i;
 
 	/* find out DIP index that matches the given IP address */
 	for (i = 1; i <= MTK_HW_LRO_DIP_NUM(eth); i++) {
-		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(reg_map, i));
+		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(eth->soc->reg_map, i));
 		if (reg_val == ip4dst)
 			break;
 	}
