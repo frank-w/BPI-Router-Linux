@@ -2772,7 +2772,7 @@ static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 
 	if (rx_flag == MTK_RX_FLAGS_HWLRO) {
 		rx_data_len = MTK_MAX_LRO_RX_LENGTH;
-		rx_dma_size = MTK_HW_LRO_DMA_SIZE;
+		rx_dma_size = MTK_HW_LRO_DMA_SIZE(eth);
 	} else {
 		rx_data_len = ETH_DATA_LEN;
 		rx_dma_size = soc->rx.dma_size;
