@@ -249,7 +249,7 @@
 #define MTK_PDMA_DELAY_PTIME_MASK	0xff
 
 /* PDMA HW LRO Alter Flow Delta Register */
-#define MTK_PDMA_LRO_ALT_SCORE_DELTA	(reg_map->pdma.lro_alt_score_delta)
+#define MTK_PDMA_LRO_ALT_SCORE_DELTA(reg_map)	(reg_map->pdma.lro_alt_score_delta)
 
 /* PDMA HW LRO IP Setting Registers */
 #define MTK_LRO_DIP_DW0_CFG(reg_map, x)	(reg_map->pdma.lro_ring_dip_dw0 + ((x) * 0x40))
