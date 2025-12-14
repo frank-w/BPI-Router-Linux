@@ -2961,13 +2961,13 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	}
 
 	/* IPv4 checksum update enable */
-	lro_ctrl_dw0 |= MTK_L3_CKS_UPD_EN;
+	lro_ctrl_dw0 |= MTK_L3_CKS_UPD_EN(eth);
 
 	/* switch priority comparison to packet count mode */
 	lro_ctrl_dw0 |= MTK_LRO_ALT_PKT_CNT_MODE;
 
 	/* bandwidth threshold setting */
-	mtk_w32(eth, MTK_HW_LRO_BW_THRE, MTK_PDMA_LRO_CTRL_DW2);
+	mtk_w32(eth, MTK_HW_LRO_BW_THRE, MTK_PDMA_LRO_CTRL_DW2(reg_map));
 
 	/* auto-learn score delta setting */
 	mtk_w32(eth, MTK_HW_LRO_REPLACE_DELTA, MTK_PDMA_LRO_ALT_SCORE_DELTA);
@@ -2984,10 +2984,10 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 		lro_ctrl_dw0 |= MTK_PDMA_LRO_SDL << MTK_CTRL_DW0_SDL_OFFSET;
 
 		/* enable cpu reason black list */
-		lro_ctrl_dw0 |= MTK_LRO_CRSN_BNW;
+		lro_ctrl_dw0 |= MTK_LRO_CRSN_BNW(eth);
 
 		/* no use PPE cpu reason */
-		mtk_w32(eth, 0xffffffff, MTK_PDMA_LRO_CTRL_DW1);
+		mtk_w32(eth, 0xffffffff, MTK_PDMA_LRO_CTRL_DW1(reg_map));
 	} else {
 		/* set HW LRO mode & the max aggregation count for rx packets */
 		lro_ctrl_dw3 |= MTK_ADMA_MODE | (MTK_HW_LRO_MAX_AGG_CNT & 0xff);
@@ -2999,17 +2999,18 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	/* enable HW LRO */
 	lro_ctrl_dw0 |= MTK_LRO_EN;
 
-	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3);
-	mtk_w32(eth, lro_ctrl_dw0, MTK_PDMA_LRO_CTRL_DW0);
+	mtk_w32(eth, lro_ctrl_dw3, MTK_PDMA_LRO_CTRL_DW3(reg_map));
+	mtk_w32(eth, lro_ctrl_dw0, MTK_PDMA_LRO_CTRL_DW0(reg_map));
 
 	if (mtk_is_netsys_v2_or_greater(eth)) {
 		i = (soc->rx.desc_size == sizeof(struct mtk_rx_dma_v2)) ? 1 : 0;
-		mtk_m32(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i)),
-			MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i)), reg_map->pdma.int_grp);
-		mtk_m32(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i + 1)),
-			MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i + 1)), reg_map->pdma.int_grp + 0x4);
-		mtk_m32(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i + 2)),
-			MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i + 2)), reg_map->pdma.int_grp3);
+		mtk_m32(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(eth, i)),
+			MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(eth, i)), reg_map->pdma.int_grp);
+		mtk_m32(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(eth, i + 1)),
+			MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(eth, i + 1)),
+			reg_map->pdma.int_grp + 0x4);
+		mtk_m32(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(eth, i + 2)),
+			MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(eth, i + 2)), reg_map->pdma.int_grp3);
 	}
 
 	return 0;
@@ -3022,12 +3023,12 @@ static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 	u32 val;
 
 	/* relinquish lro rings, flush aggregated packets */
-	mtk_w32(eth, MTK_LRO_RING_RELINQUISH_REQ, MTK_PDMA_LRO_CTRL_DW0);
+	mtk_w32(eth, MTK_LRO_RING_RELINQUISH_REQ(eth), MTK_PDMA_LRO_CTRL_DW0(reg_map));
 
 	/* wait for relinquishments done */
 	for (i = 0; i < 10; i++) {
-		val = mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0);
-		if (val & MTK_LRO_RING_RELINQUISH_DONE) {
+		val = mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0(reg_map));
+		if (val & MTK_LRO_RING_RELINQUISH_DONE(eth)) {
 			msleep(20);
 			continue;
 		}
@@ -3039,7 +3040,7 @@ static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 		mtk_w32(eth, 0, MTK_LRO_CTRL_DW2_CFG(reg_map, i));
 
 	/* disable HW LRO */
-	mtk_w32(eth, 0, MTK_PDMA_LRO_CTRL_DW0);
+	mtk_w32(eth, 0, MTK_PDMA_LRO_CTRL_DW0(reg_map));
 }
 
 static void mtk_hwlro_val_ipaddr(struct mtk_eth *eth, int idx, __be32 ip)
@@ -3052,7 +3053,7 @@ static void mtk_hwlro_val_ipaddr(struct mtk_eth *eth, int idx, __be32 ip)
 	/* invalidate the IP setting */
 	mtk_w32(eth, (reg_val & ~MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
 
-	mtk_w32(eth, ip, MTK_LRO_DIP_DW0_CFG(idx));
+	mtk_w32(eth, ip, MTK_LRO_DIP_DW0_CFG(reg_map, idx));
 
 	/* validate the IP setting */
 	mtk_w32(eth, (reg_val | MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
@@ -3068,7 +3069,7 @@ static void mtk_hwlro_inval_ipaddr(struct mtk_eth *eth, int idx)
 	/* invalidate the IP setting */
 	mtk_w32(eth, (reg_val & ~MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
 
-	mtk_w32(eth, 0, MTK_LRO_DIP_DW0_CFG(idx));
+	mtk_w32(eth, 0, MTK_LRO_DIP_DW0_CFG(reg_map, idx));
 }
 
 static int mtk_hwlro_get_ip_cnt(struct mtk_mac *mac)
@@ -3093,26 +3094,27 @@ static int mtk_hwlro_add_ipaddr_idx(struct net_device *dev, u32 ip4dst)
 	int i;
 
 	reg_map = eth->soc->reg_map;
+
 	/* check for duplicate IP address in the current DIP list */
-	for (i = 1; i <= MTK_HW_LRO_DIP_NUM; i++) {
-		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(i));
+	for (i = 1; i <= MTK_HW_LRO_DIP_NUM(eth); i++) {
+		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(reg_map, i));
 		if (reg_val == ip4dst)
 			break;
 	}
 
-	if (i < MTK_HW_LRO_DIP_NUM + 1) {
+	if (i < MTK_HW_LRO_DIP_NUM(eth) + 1) {
 		netdev_warn(dev, "Duplicate IP address at DIP(%d)!\n", i);
 		return -EEXIST;
 	}
 
 	/* find out available DIP index */
-	for (i = 1; i <= MTK_HW_LRO_DIP_NUM; i++) {
-		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(i));
+	for (i = 1; i <= MTK_HW_LRO_DIP_NUM(eth); i++) {
+		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(reg_map, i));
 		if (reg_val == 0UL)
 			break;
 	}
 
-	if (i >= MTK_HW_LRO_DIP_NUM + 1) {
+	if (i >= MTK_HW_LRO_DIP_NUM(eth) + 1) {
 		netdev_warn(dev, "DIP index is currently out of resource!\n");
 		return -EBUSY;
 	}
@@ -3129,13 +3131,13 @@ static int mtk_hwlro_get_ipaddr_idx(struct net_device *dev, u32 ip4dst)
 	int i;
 
 	/* find out DIP index that matches the given IP address */
-	for (i = 1; i <= MTK_HW_LRO_DIP_NUM; i++) {
-		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(i));
+	for (i = 1; i <= MTK_HW_LRO_DIP_NUM(eth); i++) {
+		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(reg_map, i));
 		if (reg_val == ip4dst)
 			break;
 	}
 
-	if (i >= MTK_HW_LRO_DIP_NUM + 1) {
+	if (i >= MTK_HW_LRO_DIP_NUM(eth) + 1) {
 		netdev_warn(dev, "DIP address is not exist!\n");
 		return -ENOENT;
 	}
@@ -3469,7 +3471,7 @@ static int mtk_dma_init(struct mtk_eth *eth)
 
 	if (eth->hwlro) {
 		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
-			err = mtk_rx_alloc(eth, MTK_HW_LRO_RING(i), MTK_RX_FLAGS_HWLRO);
+			err = mtk_rx_alloc(eth, MTK_HW_LRO_RING(eth, i), MTK_RX_FLAGS_HWLRO);
 			if (err)
 				return err;
 		}
@@ -3532,7 +3534,7 @@ static void mtk_dma_free(struct mtk_eth *eth)
 	if (eth->hwlro) {
 		mtk_hwlro_rx_uninit(eth);
 		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++)
-			mtk_rx_clean(eth, &eth->rx_ring[MTK_HW_LRO_RING(i)], false);
+			mtk_rx_clean(eth, &eth->rx_ring[MTK_HW_LRO_RING(eth, i)], false);
 	}
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
@@ -3887,8 +3889,9 @@ static int mtk_open(struct net_device *dev)
 
 		if (eth->hwlro) {
 			for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
-				napi_enable(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
-				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i)));
+				napi_enable(&eth->rx_napi[MTK_HW_LRO_RING(eth, i)].napi);
+				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth,
+								       MTK_HW_LRO_RING(eth, i)));
 			}
 		}
 
@@ -3989,9 +3992,9 @@ static int mtk_stop(struct net_device *dev)
 
 	if (eth->hwlro) {
 		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
-			mtk_rx_irq_disable(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(i)));
-			napi_synchronize(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
-			napi_disable(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
+			mtk_rx_irq_disable(eth, MTK_RX_DONE_INT(eth, MTK_HW_LRO_RING(eth, i)));
+			napi_synchronize(&eth->rx_napi[MTK_HW_LRO_RING(eth, i)].napi);
+			napi_disable(&eth->rx_napi[MTK_HW_LRO_RING(eth, i)].napi);
 		}
 	}
 
@@ -4396,9 +4399,9 @@ static int mtk_napi_init(struct mtk_eth *eth)
 
 	if (eth->hwlro) {
 		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
-			rx_napi = &eth->rx_napi[MTK_HW_LRO_RING(i)];
+			rx_napi = &eth->rx_napi[MTK_HW_LRO_RING(eth, i)];
 			rx_napi->eth = eth;
-			rx_napi->rx_ring = &eth->rx_ring[MTK_HW_LRO_RING(i)];
+			rx_napi->rx_ring = &eth->rx_ring[MTK_HW_LRO_RING(eth, i)];
 		}
 	}
 
@@ -5676,10 +5679,10 @@ static int mtk_probe(struct platform_device *pdev)
 								 "%s LRO RX %d",
 								 dev_name(eth->dev), i);
 					err = devm_request_irq(eth->dev,
-							       eth->irq_pdma[MTK_HW_LRO_IRQ(i)],
+							       eth->irq_pdma[MTK_HW_LRO_IRQ(eth, i)],
 							       mtk_handle_irq_rx, IRQF_SHARED,
 							       irqname,
-							       &eth->rx_napi[MTK_HW_LRO_RING(i)]);
+							       &eth->rx_napi[MTK_HW_LRO_RING(eth, i)]);
 					if (err)
 						goto err_free_dev;
 				}
@@ -5757,7 +5760,7 @@ static int mtk_probe(struct platform_device *pdev)
 
 	if (eth->hwlro) {
 		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
-			netif_napi_add(eth->dummy_dev, &eth->rx_napi[MTK_HW_LRO_RING(i)].napi,
+			netif_napi_add(eth->dummy_dev, &eth->rx_napi[MTK_HW_LRO_RING(eth, i)].napi,
 				       mtk_napi_rx);
 		}
 	}
@@ -5813,7 +5816,7 @@ static void mtk_remove(struct platform_device *pdev)
 
 	if (eth->hwlro) {
 		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++)
-			netif_napi_del(&eth->rx_napi[MTK_HW_LRO_RING(i)].napi);
+			netif_napi_del(&eth->rx_napi[MTK_HW_LRO_RING(eth, i)].napi);
 	}
 
 	mtk_cleanup(eth);
