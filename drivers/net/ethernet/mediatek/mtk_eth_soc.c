@@ -2931,11 +2931,11 @@ static void mtk_rx_clean(struct mtk_eth *eth, struct mtk_rx_ring *ring, bool in_
 
 static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 {
+	u32 ring_ctrl_dw1 = 0, ring_ctrl_dw2 = 0, ring_ctrl_dw3 = 0;
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	const struct mtk_soc_data *soc = eth->soc;
-	int i, val;
-	u32 ring_ctrl_dw1 = 0, ring_ctrl_dw2 = 0, ring_ctrl_dw3 = 0;
 	u32 lro_ctrl_dw0 = 0, lro_ctrl_dw3 = 0;
+	int i, val;
 
 	/* set LRO rings to auto-learn modes */
 	ring_ctrl_dw2 |= MTK_RING_AUTO_LERAN_MODE;
@@ -3087,11 +3087,12 @@ static int mtk_hwlro_get_ip_cnt(struct mtk_mac *mac)
 static int mtk_hwlro_add_ipaddr_idx(struct net_device *dev, u32 ip4dst)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
+	const struct mtk_reg_map *reg_map;
 	struct mtk_eth *eth = mac->hw;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
 	int i;
 
+	reg_map = eth->soc->reg_map;
 	/* check for duplicate IP address in the current DIP list */
 	for (i = 1; i <= MTK_HW_LRO_DIP_NUM; i++) {
 		reg_val = mtk_r32(eth, MTK_LRO_DIP_DW0_CFG(i));
