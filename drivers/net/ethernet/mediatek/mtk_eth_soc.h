@@ -318,7 +318,7 @@
 
 #define MTK_RX_DONE_INT_V2(ring_no)	BIT(24 + (ring_no))
 
-#define MTK_RX_DONE_INT(ring_no)		\
+#define MTK_RX_DONE_INT(eth, ring_no)		\
 	(mtk_is_netsys_v3_or_greater(eth) ?  \
 	 MTK_RX_DONE_INT_V2(ring_no) : \
 	 MTK_RX_DONE_INT_V1(ring_no))
