@@ -2954,9 +2954,9 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	ring_ctrl_dw3 |= MTK_RING_MAX_AGG_CNT_H;
 
 	for (i = 1; i < MTK_MAX_RX_RING_NUM; i++) {
-		mtk_w32(eth, ring_ctrl_dw1, MTK_LRO_CTRL_DW1_CFG(i));
-		mtk_w32(eth, ring_ctrl_dw2, MTK_LRO_CTRL_DW2_CFG(i));
-		mtk_w32(eth, ring_ctrl_dw3, MTK_LRO_CTRL_DW3_CFG(i));
+		mtk_w32(eth, ring_ctrl_dw1, MTK_LRO_CTRL_DW1_CFG(reg_map, i));
+		mtk_w32(eth, ring_ctrl_dw2, MTK_LRO_CTRL_DW2_CFG(reg_map, i));
+		mtk_w32(eth, ring_ctrl_dw3, MTK_LRO_CTRL_DW3_CFG(reg_map, i));
 	}
 
 	/* IPv4 checksum update enable */
@@ -3011,7 +3011,7 @@ static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 
 	/* invalidate lro rings */
 	for (i = 1; i < MTK_MAX_RX_RING_NUM; i++)
-		mtk_w32(eth, 0, MTK_LRO_CTRL_DW2_CFG(i));
+		mtk_w32(eth, 0, MTK_LRO_CTRL_DW2_CFG(reg_map, i));
 
 	/* disable HW LRO */
 	mtk_w32(eth, 0, MTK_PDMA_LRO_CTRL_DW0);
@@ -3022,15 +3022,15 @@ static void mtk_hwlro_val_ipaddr(struct mtk_eth *eth, int idx, __be32 ip)
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
 
-	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(idx));
+	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
 
 	/* invalidate the IP setting */
-	mtk_w32(eth, (reg_val & ~MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(idx));
+	mtk_w32(eth, (reg_val & ~MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
 
 	mtk_w32(eth, ip, MTK_LRO_DIP_DW0_CFG(idx));
 
 	/* validate the IP setting */
-	mtk_w32(eth, (reg_val | MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(idx));
+	mtk_w32(eth, (reg_val | MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
 }
 
 static void mtk_hwlro_inval_ipaddr(struct mtk_eth *eth, int idx)
@@ -3038,10 +3038,10 @@ static void mtk_hwlro_inval_ipaddr(struct mtk_eth *eth, int idx)
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	u32 reg_val;
 
-	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(idx));
+	reg_val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
 
 	/* invalidate the IP setting */
-	mtk_w32(eth, (reg_val & ~MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(idx));
+	mtk_w32(eth, (reg_val & ~MTK_RING_MYIP_VLD), MTK_LRO_CTRL_DW2_CFG(reg_map, idx));
 
 	mtk_w32(eth, 0, MTK_LRO_DIP_DW0_CFG(idx));
 }
@@ -3198,9 +3198,9 @@ static int mtk_rss_init(struct mtk_eth *eth)
 	if (soc->rx.desc_size == sizeof(struct mtk_rx_dma)) {
 		/* Set RSS rings to PSE modes */
 		for (i = 1; i <= MTK_HW_LRO_RING_NUM(eth); i++) {
-			val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(i));
+			val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(reg_map, i));
 			val |= MTK_RING_PSE_MODE;
-			mtk_w32(eth, val, MTK_LRO_CTRL_DW2_CFG(i));
+			mtk_w32(eth, val, MTK_LRO_CTRL_DW2_CFG(reg_map, i));
 		}
 
 		/* Enable non-lro multiple rx */

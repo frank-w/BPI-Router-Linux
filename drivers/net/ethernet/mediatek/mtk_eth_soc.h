@@ -250,9 +250,9 @@
 #define MTK_RING_MYIP_VLD		BIT(9)
 
 /* PDMA HW LRO Ring Control Registers */
-#define MTK_LRO_CTRL_DW1_CFG(x)		(reg_map->pdma.lro_ring_ctrl_dw1 + ((x) * 0x40))
-#define MTK_LRO_CTRL_DW2_CFG(x)		(reg_map->pdma.lro_ring_ctrl_dw1 + 0x4 + ((x) * 0x40))
-#define MTK_LRO_CTRL_DW3_CFG(x)		(reg_map->pdma.lro_ring_ctrl_dw1 + 0x8 + ((x) * 0x40))
+#define MTK_LRO_CTRL_DW1_CFG(reg_map, x)	(reg_map->pdma.lro_ring_ctrl_dw1 + ((x) * 0x40))
+#define MTK_LRO_CTRL_DW2_CFG(reg_map, x)	(reg_map->pdma.lro_ring_ctrl_dw1 + 0x4 + ((x) * 0x40))
+#define MTK_LRO_CTRL_DW3_CFG(reg_map, x)	(reg_map->pdma.lro_ring_ctrl_dw1 + 0x8 + ((x) * 0x40))
 #define MTK_RING_AGE_TIME_L		((MTK_HW_LRO_AGE_TIME & 0x3ff) << 22)
 #define MTK_RING_AGE_TIME_H		((MTK_HW_LRO_AGE_TIME >> 10) & 0x3f)
 #define MTK_RING_PSE_MODE		BIT(6)
