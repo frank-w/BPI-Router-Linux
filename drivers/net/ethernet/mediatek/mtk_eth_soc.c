@@ -3197,7 +3197,7 @@ static int mtk_rss_init(struct mtk_eth *eth)
 
 	if (soc->rx.desc_size == sizeof(struct mtk_rx_dma)) {
 		/* Set RSS rings to PSE modes */
-		for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++) {
+		for (i = 1; i <= MTK_HW_LRO_RING_NUM(eth); i++) {
 			val = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(i));
 			val |= MTK_RING_PSE_MODE;
 			mtk_w32(eth, val, MTK_LRO_CTRL_DW2_CFG(i));
