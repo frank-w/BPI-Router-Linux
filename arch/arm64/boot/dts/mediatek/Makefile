@@ -42,6 +42,8 @@ mt7986a-bananapi-bpi-r3-sd-nor-dtbs := \
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-bananapi-bpi-r3-sd-nor.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-rfb.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986b-rfb.dtb
+
+# scripts/Makefile.dtbs:20: .dtbo is not applied to any base: mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo mt7987a-bananapi-bpi-r4-lite-2pcie-1L.dtbo mt7988a-bananapi-bpi-r4-nopcie2.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-2pcie-1L.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd.dtbo
@@ -49,6 +51,27 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-emmc.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-nand.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-nor.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite.dtb
+mt7987a-bananapi-bpi-r4-lite-emmc-nand-dtbs := \
+	mt7987a-bananapi-bpi-r4-lite.dtb \
+	mt7987a-bananapi-bpi-r4-lite-emmc.dtbo \
+	mt7987a-bananapi-bpi-r4-lite-nand.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-emmc-nand.dtb
+mt7987a-bananapi-bpi-r4-lite-emmc-nor-dtbs := \
+	mt7987a-bananapi-bpi-r4-lite.dtb \
+	mt7987a-bananapi-bpi-r4-lite-emmc.dtbo \
+	mt7987a-bananapi-bpi-r4-lite-nor.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-emmc-nor.dtb
+mt7987a-bananapi-bpi-r4-lite-sd-nand-dtbs := \
+	mt7987a-bananapi-bpi-r4-lite.dtb \
+	mt7987a-bananapi-bpi-r4-lite-sd.dtbo \
+	mt7987a-bananapi-bpi-r4-lite-nand.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd-nand.dtb
+mt7987a-bananapi-bpi-r4-lite-sd-nor-dtbs := \
+	mt7987a-bananapi-bpi-r4-lite.dtb \
+	mt7987a-bananapi-bpi-r4-lite-sd.dtbo \
+	mt7987a-bananapi-bpi-r4-lite-nor.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd-nor.dtb
+
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-2g5.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-emmc.dtbo
