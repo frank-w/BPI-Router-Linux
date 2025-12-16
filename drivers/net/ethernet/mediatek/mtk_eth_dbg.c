@@ -1440,7 +1440,7 @@ void hw_lro_stats_update(u32 ring_no, struct mtk_rx_dma_v2 *rxd)
 		agg_cnt = FIELD_GET(RX_DMA_GET_AGG_CNT, rxd->rxd2);
 	}
 
-	if (idx >= MTK_HW_LRO_RING_NUM)
+	if (idx >= MTK_HW_LRO_RING_NUM(eth))
 		return;
 
 	agg_size = RX_DMA_GET_PLEN0(rxd->rxd2);
@@ -1464,7 +1464,7 @@ void hw_lro_flush_stats_update(u32 ring_no, struct mtk_rx_dma_v2 *rxd)
 		flush_reason = FIELD_GET(RX_DMA_GET_REV, rxd->rxd2);
 	}
 
-	if (idx >= MTK_HW_LRO_RING_NUM)
+	if (idx >= MTK_HW_LRO_RING_NUM(eth))
 		return;
 
 	if ((flush_reason & 0x7) == MTK_HW_LRO_AGG_FLUSH)
@@ -1730,10 +1730,9 @@ static const struct proc_ops hw_lro_stats_fops = {
 static int hwlro_agg_cnt_ctrl(int cnt)
 {
 	struct mtk_eth *eth = g_eth;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
 
-	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++)
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM(eth); i++)
 		SET_PDMA_RXRING_MAX_AGG_CNT(eth, i, cnt);
 
 	return 0;
@@ -1742,10 +1741,9 @@ static int hwlro_agg_cnt_ctrl(int cnt)
 static int hwlro_agg_time_ctrl(int time)
 {
 	struct mtk_eth *eth = g_eth;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
 
-	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++)
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM(eth); i++)
 		SET_PDMA_RXRING_AGG_TIME(eth, i, time);
 
 	return 0;
@@ -1754,10 +1752,9 @@ static int hwlro_agg_time_ctrl(int time)
 static int hwlro_age_time_ctrl(int time)
 {
 	struct mtk_eth *eth = g_eth;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
 
-	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++)
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM(eth); i++)
 		SET_PDMA_RXRING_AGE_TIME(eth, i, time);
 	return 0;
 }
@@ -1765,7 +1762,6 @@ static int hwlro_age_time_ctrl(int time)
 static int hwlro_threshold_ctrl(int bandwidth)
 {
 	struct mtk_eth *eth = g_eth;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 
 	SET_PDMA_LRO_BW_THRESHOLD(eth, bandwidth);
 
@@ -1775,12 +1771,11 @@ static int hwlro_threshold_ctrl(int bandwidth)
 static int hwlro_ring_enable_ctrl(int enable)
 {
 	struct mtk_eth *eth = g_eth;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
 
 	pr_info("[%s] %s HW LRO rings\n", __func__, (enable) ? "Enable" : "Disable");
 
-	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++)
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM(eth); i++)
 		SET_PDMA_RXRING_VALID(eth, i, enable);
 
 	return 0;
@@ -1845,7 +1840,6 @@ static void hw_lro_auto_tlb_dump_v1(struct seq_file *seq, u32 index)
 {
 	struct mtk_eth *eth = g_eth;
 	struct mtk_lro_alt_v1 alt;
-	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	__be32 addr;
 	u32 tlb_info[9];
 	u32 dw_len, cnt, priority;
@@ -1867,7 +1861,7 @@ static void hw_lro_auto_tlb_dump_v1(struct seq_file *seq, u32 index)
 	dw_len = alt.alt_info7.dw_len;
 	cnt = alt.alt_info6.cnt;
 
-	if (mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0) & MTK_LRO_ALT_PKT_CNT_MODE)
+	if (mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0(eth->soc->reg_map)) & MTK_LRO_ALT_PKT_CNT_MODE)
 		priority = cnt;		/* packet count */
 	else
 		priority = dw_len;	/* byte count */
@@ -1919,7 +1913,7 @@ static void hw_lro_auto_tlb_dump_v2(struct seq_file *seq, u32 index)
 
 	memcpy(&alt, tlb_info, sizeof(struct mtk_lro_alt_v2));
 
-	if (mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0) & MTK_LRO_ALT_PKT_CNT_MODE)
+	if (mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0(eth->soc->reg_map)) & MTK_LRO_ALT_PKT_CNT_MODE)
 		score = 1;	/* packet count */
 	else
 		score = 0;	/* byte count */
@@ -2013,11 +2007,11 @@ static int hw_lro_auto_tlb_read(struct seq_file *seq, void *v)
 	/* Read the agg_time/age_time/agg_cnt of LRO rings */
 	seq_puts(seq, "\nHW LRO Ring Settings\n");
 
-	for (i = 1; i <= MTK_HW_LRO_RING_NUM; i++) {
-		reg_op1 = mtk_r32(eth, MTK_LRO_CTRL_DW1_CFG(i));
-		reg_op2 = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(i));
-		reg_op3 = mtk_r32(eth, MTK_LRO_CTRL_DW3_CFG(i));
-		reg_op4 = mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW2);
+	for (i = 1; i <= MTK_HW_LRO_RING_NUM(eth); i++) {
+		reg_op1 = mtk_r32(eth, MTK_LRO_CTRL_DW1_CFG(reg_map, i));
+		reg_op2 = mtk_r32(eth, MTK_LRO_CTRL_DW2_CFG(reg_map, i));
+		reg_op3 = mtk_r32(eth, MTK_LRO_CTRL_DW3_CFG(reg_map, i));
+		reg_op4 = mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW2(reg_map));
 
 		agg_cnt =
 		    ((reg_op3 & 0x3) << 6) |
