@@ -128,7 +128,7 @@ jobs:
 
       - name: Build for bananapi-r3 (mini)
         run: |
-          sed -ri 's/^#(board=bpi-r3)/\1/' build.conf #change board to r3
+          sed -ri 's/^#(board=bpi-r3)$/\1/' build.conf #change board to r3
           bash build.sh importconfig
           bash build.sh build
       - name: Pack for bananapi-r3
