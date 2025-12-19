@@ -72,6 +72,15 @@ mt7987a-bananapi-bpi-r4-lite-sd-nor-dtbs := \
 	mt7987a-bananapi-bpi-r4-lite-nor.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd-nor.dtb
 
+mt7987a-bananapi-bpi-r4-lite-sd-nand-1pci2lane-dtbs := \
+	mt7987a-bananapi-bpi-r4-lite-sd-nand.dtb \
+	mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd-nand-1pci2lane.dtb
+mt7987a-bananapi-bpi-r4-lite-sd-nand-2pci1lane-dtbs := \
+	mt7987a-bananapi-bpi-r4-lite-sd-nand.dtb \
+	mt7987a-bananapi-bpi-r4-lite-2pcie-1L.dtbo
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd-nand-2pci1lane.dtb
+
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-2g5.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-emmc.dtbo
