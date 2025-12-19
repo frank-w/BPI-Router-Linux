@@ -43,7 +43,6 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-bananapi-bpi-r3-sd-nor.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986a-rfb.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7986b-rfb.dtb
 
-# scripts/Makefile.dtbs:20: .dtbo is not applied to any base: mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo mt7987a-bananapi-bpi-r4-lite-2pcie-1L.dtbo mt7988a-bananapi-bpi-r4-nopcie2.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-2pcie-1L.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd.dtbo
@@ -71,7 +70,6 @@ mt7987a-bananapi-bpi-r4-lite-sd-nor-dtbs := \
 	mt7987a-bananapi-bpi-r4-lite-sd.dtbo \
 	mt7987a-bananapi-bpi-r4-lite-nor.dtbo
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt7987a-bananapi-bpi-r4-lite-sd-nor.dtb
-
 mt7987a-bananapi-bpi-r4-lite-sd-nand-1pci2lane-dtbs := \
 	mt7987a-bananapi-bpi-r4-lite-sd-nand.dtb \
 	mt7987a-bananapi-bpi-r4-lite-1pcie-2L.dtbo
