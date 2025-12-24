@@ -32,6 +32,14 @@ properties:
     items:
       - description: USXGMII top-level clock
 
+  "#pcs-cells":
+    const: 0
+
+  phys:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description:
+      Phandle to the (xfi) phy.
+
   resets:
     items:
       - description: XFI reset
