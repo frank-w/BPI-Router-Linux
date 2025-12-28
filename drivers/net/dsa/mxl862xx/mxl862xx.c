@@ -4021,8 +4021,8 @@ static const struct mxl862xx_hw_info mxl86252_data = {
 };
 
 static const struct of_device_id mxl862xx_of_match[] = {
-	{ .compatible = "mxl,86282", .data = &mxl86282_data },
-	{ .compatible = "mxl,86252", .data = &mxl86252_data },
+	{ .compatible = "maxlinear,mxl86282", .data = &mxl86282_data },
+	{ .compatible = "maxlinear,mxl86252", .data = &mxl86252_data },
 	{ /* sentinel */ },
 };
 
