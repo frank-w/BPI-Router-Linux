@@ -396,7 +396,7 @@
 	clock-frequency = <12500000>;
 
 	switch16: switch@16 {
-		compatible = "mxl,86252";
+		compatible = "maxlinear,mxl86252";
 		reg = <16>;
 		dsa,member = <0 0>;
 		status = "okay";
