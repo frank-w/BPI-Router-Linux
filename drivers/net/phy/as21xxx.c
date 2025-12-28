@@ -1236,10 +1236,12 @@ static int as21xxx_config_led(struct phy_device *phydev)
 static int as21xxx_match_phy_device(struct phy_device *phydev,
 				    const struct phy_driver *phydrv)
 {
+	u32 phy_id = aeon_read_pid(phydev);
 	/* AEONSEMI get pid. */
-	phydev->phy_id = aeon_read_pid(phydev);
 	if (phydev->phy_id != PHY_ID_AS21XXX)
 		return 0;
+
+	phydev->phy_id = phy_id;
 	aeon_mdio_write(phydev, 0x1E, 0x142, 0x48);
 	return 1;
 }
