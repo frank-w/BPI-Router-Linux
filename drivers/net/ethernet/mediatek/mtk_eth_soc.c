@@ -625,6 +625,19 @@ static void mtk_set_mcr_max_rx(struct mtk_mac *mac, u32 val)
 	}
 }
 
+static void mtk_set_max_mtu(struct mtk_mac *mac)
+{
+	struct mtk_eth *eth = mac->hw;
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_RX_9K) &&
+	    mtk_interface_mode_is_xgmii(eth, mac->interface))
+		eth->netdev[mac->id]->max_mtu = MTK_MAX_RX_LENGTH_9K - MTK_RX_ETH_HLEN;
+	else
+		eth->netdev[mac->id]->max_mtu = MTK_MAX_RX_LENGTH_2K - MTK_RX_ETH_HLEN;
+
+	dev_err(eth->dev, "%s: set max-mtu of mac #%d to %d\n", __func__,mac->id,eth->netdev[mac->id]->max_mtu);
+}
+
 static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 			   const struct phylink_link_state *state)
 {
@@ -774,6 +787,7 @@ static void mtk_mac_config(struct phylink_config *config, unsigned int mode,
 	}
 
 	mac->interface = state->interface;
+	mtk_set_max_mtu(mac);
 	mtk_set_mcr_max_rx(mac, eth->rx_buf_len);
 
 	return;
@@ -839,19 +853,6 @@ static void mtk_mac_link_down(struct phylink_config *config, unsigned int mode,
 		else
 			mtk_m32(mac->hw, MTK_XGMAC_FORCE_LINK(mac->id), 0, MTK_XGMAC_STS(mac->id));
 	}
-}
-
-static void mtk_set_max_mtu(struct mtk_mac *mac)
-{
-	struct mtk_eth *eth = mac->hw;
-
-	if (MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_RX_9K) &&
-	    mtk_interface_mode_is_xgmii(eth, mac->interface))
-		eth->netdev[mac->id]->max_mtu = MTK_MAX_RX_LENGTH_9K - MTK_RX_ETH_HLEN;
-	else
-		eth->netdev[mac->id]->max_mtu = MTK_MAX_RX_LENGTH_2K - MTK_RX_ETH_HLEN;
-
-	dev_err(eth->dev, "%s: set max-mtu of mac #%d to %d\n", __func__,mac->id,eth->netdev[mac->id]->max_mtu);
 }
 
 static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
