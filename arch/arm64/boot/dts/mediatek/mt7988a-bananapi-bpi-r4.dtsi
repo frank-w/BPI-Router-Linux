@@ -86,7 +86,9 @@
 		i2c-bus = <&i2c_sfp1>;
 		maximum-power-milliwatt = <3000>;
 
-		los-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+		//los-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
+		//based on https://forum.banana-pi.org/t/bpi-r3-access-ssh-sfp-gpon-onu-without-plugging-fiber/16457/7
+		los-gpios = <&pio 52 GPIO_ACTIVE_HIGH>; //pin 26 to be connected to gnd to be active
 		mod-def0-gpios = <&pio 82 GPIO_ACTIVE_LOW>;
 		rate-select0-gpios = <&pio 21 GPIO_ACTIVE_LOW>;
 		tx-disable-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
