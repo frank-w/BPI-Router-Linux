@@ -564,25 +564,6 @@ static bool mtk_check_gmac23_idle(struct mtk_mac *mac)
 	return false;
 }
 
-static struct phylink_pcs *mtk_mac_select_pcs(struct phylink_config *config,
-					      phy_interface_t interface)
-{
-	struct mtk_mac *mac = container_of(config, struct mtk_mac,
-					   phylink_config);
-	struct mtk_eth *eth = mac->hw;
-	unsigned int sid;
-
-	if (interface == PHY_INTERFACE_MODE_SGMII ||
-	    phy_interface_mode_is_8023z(interface)) {
-		sid = (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) ?
-		       0 : mac->id;
-
-		return eth->sgmii_pcs[sid];
-	}
-
-	return NULL;
-}
-
 static int mtk_mac_prepare(struct phylink_config *config, unsigned int mode,
 			   phy_interface_t iface)
 {
@@ -1077,7 +1058,6 @@ static int mtk_mac_enable_tx_lpi(struct phylink_config *config, u32 timer,
 
 static const struct phylink_mac_ops mtk_phylink_ops = {
 	.mac_prepare = mtk_mac_prepare,
-	.mac_select_pcs = mtk_mac_select_pcs,
 	.mac_config = mtk_mac_config,
 	.mac_finish = mtk_mac_finish,
 	.mac_link_down = mtk_mac_link_down,
@@ -5762,11 +5742,11 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 			mac->phylink_config.available_pcs = mac->available_pcs;
 			mac->phylink_config.num_available_pcs = count;
 		} else {
-			/*sid = (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) ?
+			sid = (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) ?
 			       0 : id;
 
 			mac->phylink_config.available_pcs = &eth->sgmii_pcs[sid];
-			mac->phylink_config.num_available_pcs = 1;*/
+			mac->phylink_config.num_available_pcs = 1;
 		}
 
 		phy_interface_or(mac->phylink_config.supported_interfaces,
