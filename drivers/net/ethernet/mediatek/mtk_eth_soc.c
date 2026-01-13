@@ -1550,6 +1550,26 @@ static void setup_tx_buf(struct mtk_eth *eth, struct mtk_tx_buf *tx_buf,
 	}
 }
 
+static bool mtk_uses_dsa(struct net_device *dev)
+{
+#if IS_ENABLED(CONFIG_NET_DSA)
+	return netdev_uses_dsa(dev) &&
+	       dev->dsa_ptr->tag_ops->proto == DSA_TAG_PROTO_MTK;
+#else
+	return false;
+#endif
+}
+
+static bool non_mtk_uses_dsa(struct net_device *dev)
+{
+#if IS_ENABLED(CONFIG_NET_DSA)
+	return netdev_uses_dsa(dev) &&
+	       dev->dsa_ptr->tag_ops->proto != DSA_TAG_PROTO_MTK;
+#else
+	return false;
+#endif
+}
+
 static void mtk_tx_set_dma_desc_v1(struct net_device *dev, void *txd,
 				   struct mtk_tx_dma_desc_info *info)
 {
@@ -1622,7 +1642,7 @@ static void mtk_tx_set_dma_desc_v2(struct net_device *dev, void *txd,
 		/* tx checksum offload */
 		if (info->csum)
 			data |= TX_DMA_CHKSUM_V2;
-		if (mtk_is_netsys_v3_or_greater(eth) && netdev_uses_dsa(dev))
+		if (mtk_is_netsys_v3_or_greater(eth) && mtk_uses_dsa(dev))
 			data |= TX_DMA_SPTAG_V3;
 	}
 	WRITE_ONCE(desc->txd5, data);
@@ -2411,7 +2431,7 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 		 * hardware treats the MTK special tag as a VLAN and untags it.
 		 */
 		if (mtk_is_netsys_v1(eth) && (trxd.rxd2 & RX_DMA_VTAG) &&
-		    netdev_uses_dsa(netdev)) {
+		    mtk_uses_dsa(netdev)) {
 			unsigned int port = RX_DMA_VPID(trxd.rxd3) & GENMASK(2, 0);
 
 			if (port < ARRAY_SIZE(eth->dsa_meta) &&
@@ -3482,6 +3502,14 @@ static netdev_features_t mtk_fix_features(struct net_device *dev,
 		}
 	}
 
+	if ((features & NETIF_F_IP_CSUM) &&
+	    non_mtk_uses_dsa(dev))
+		features &= ~NETIF_F_IP_CSUM;
+
+	if ((features & NETIF_F_IPV6_CSUM) &&
+	    non_mtk_uses_dsa(dev))
+		features &= ~NETIF_F_IPV6_CSUM;
+
 	return features;
 }
 
@@ -3846,22 +3874,12 @@ static void mtk_gdm_config(struct mtk_eth *eth, u32 id, u32 config)
 
 	val |= config;
 
-	if (eth->netdev[id] && netdev_uses_dsa(eth->netdev[id]))
+	if (eth->netdev[id] && mtk_uses_dsa(eth->netdev[id]))
 		val |= MTK_GDMA_SPECIAL_TAG;
 
 	mtk_w32(eth, val, MTK_GDMA_FWD_CFG(id));
 }
 
-
-static bool mtk_uses_dsa(struct net_device *dev)
-{
-#if IS_ENABLED(CONFIG_NET_DSA)
-	return netdev_uses_dsa(dev) &&
-	       dev->dsa_ptr->tag_ops->proto == DSA_TAG_PROTO_MTK;
-#else
-	return false;
-#endif
-}
 
 static int mtk_device_event(struct notifier_block *n, unsigned long event, void *ptr)
 {
