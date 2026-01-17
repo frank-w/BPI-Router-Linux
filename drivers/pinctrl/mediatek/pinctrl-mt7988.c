@@ -1052,6 +1052,9 @@ static int mt7988_uart1_1_funcs[] = { 2, 2, 2, 2 };
 static const int mt7988_uart2_3_pins[] = { 58, 59, 60, 61 };
 static int mt7988_uart2_3_funcs[] = { 3, 3, 3, 3 };
 
+static const int mt7988_uart2_3_lite_pins[] = { 58, 59 };
+static int mt7988_uart2_3_lite_funcs[] = { 3, 3 };
+
 static const int mt7988_uart1_2_pins[] = { 80, 81, 82, 83 };
 static int mt7988_uart1_2_funcs[] = { 1, 1, 1, 1 };
 
@@ -1277,6 +1280,8 @@ static const struct group_desc mt7988_groups[] = {
 	PINCTRL_PIN_GROUP("tops_jtag0_1", mt7988_tops_jtag0_1),
 	/*  @GPIO(58,59,60,61) uart2_3 */
 	PINCTRL_PIN_GROUP("uart2_3", mt7988_uart2_3),
+	/*  @GPIO(58,59) uart2_3_lite */
+	PINCTRL_PIN_GROUP("uart2_3_lite", mt7988_uart2_3_lite),
 	/*  @GPIO(58,59,60,61) uart1_1 */
 	PINCTRL_PIN_GROUP("uart1_1", mt7988_uart1_1),
 	/*  @GPIO(58,59,60,61) gbe_led1 */
@@ -1443,6 +1448,7 @@ static const char * const mt7988_uart_groups[] = {
 	"uart2_3",
 	"uart1_2",
 	"uart1_2_lite",
+	"uart2_3_lite",
 	"tops_uart1_2",
 	"net_wo0_uart_txd_1",
 	"net_wo1_uart_txd_1",
