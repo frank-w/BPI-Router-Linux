@@ -419,6 +419,20 @@
 			groups = "spi0", "spi0_wp_hold";
 		};
 	};
+
+	uart1_2_lite_pins: uart1-2-lite-pins {
+		mux {
+			function = "uart";
+			groups = "uart1_2_lite";
+		};
+	};
+
+	uart2_3_lite_pins: uart2-3-lite-pins {
+		mux {
+			function = "uart";
+			groups = "uart2_3_lite";
+		};
+	};
 };
 
 &pwm {
@@ -426,6 +440,18 @@
 };
 
 &serial0 {
+	status = "okay";
+};
+
+&serial1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1_2_lite_pins>;
+	status = "okay";
+};
+
+&serial2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart2_3_lite_pins>;
 	status = "okay";
 };
 
