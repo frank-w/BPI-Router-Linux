@@ -716,7 +716,7 @@
 		xsphy: xs-phy@11e10000 {
 			compatible = "mediatek,mt7988-xsphy",
 				     "mediatek,xsphy";
-			reg = <0 0x11e10000 0 0x1000>;
+			reg = <0 0x11e10000 0 0x4000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges;
@@ -730,7 +730,7 @@
 			};
 
 			xphyu3port0: usb-phy@11e13000 {
-				reg = <0x400 0x500>;
+				reg = <0x3400 0x500>;
 				clocks = <&infracfg CLK_INFRA_USB_PIPE>;
 				clock-names = "ref";
 				#phy-cells = <1>;
