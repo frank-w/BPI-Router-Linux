@@ -406,7 +406,7 @@
 			#size-cells = <0>;
 			port0: port@0 {
 				reg = <0>;
-				label = "mxl_lan0";
+				label = "lan0";
 				phy-handle = <&switchphy0>;
 				phy-mode = "internal";
 				status = "okay";
@@ -414,7 +414,7 @@
 
 			port1: port@1 {
 				reg = <1>;
-				label = "mxl_lan1";
+				label = "lan1";
 				phy-handle = <&switchphy1>;
 				phy-mode = "internal";
 				status = "okay";
@@ -422,7 +422,7 @@
 
 			port2: port@2 {
 				reg = <2>;
-				label = "mxl_lan2";
+				label = "lan2";
 				phy-handle = <&switchphy2>;
 				phy-mode = "internal";
 				status = "okay";
@@ -430,7 +430,7 @@
 
 			port3: port@3 {
 				reg = <3>;
-				label = "mxl_lan3";
+				label = "lan3";
 				phy-handle = <&switchphy3>;
 				phy-mode = "internal";
 				status = "okay";
