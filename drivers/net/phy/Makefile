@@ -37,6 +37,7 @@ obj-$(CONFIG_AMCC_QT2025_PHY)	+= qt2025.o
 obj-$(CONFIG_AQUANTIA_PHY)	+= aquantia/
 obj-$(CONFIG_AS21XXX_PHY)	+= as21xxx.o
 obj-$(CONFIG_AS21XXX_PHY_DS)	+= as21xxx/
+obj-y				+= as21xx_1.9.2/
 ifdef CONFIG_AX88796B_RUST_PHY
   obj-$(CONFIG_AX88796B_PHY)	+= ax88796b_rust.o
 else

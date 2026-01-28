@@ -102,6 +102,8 @@ config AS21XXX_PHY_DS
           AS21210PB1 that all register with the PHY ID 0x7500 0x7500
           before the firmware is loaded.
 
+source "drivers/net/phy/as21xx_1.9.2/Kconfig"
+
 config AIR_AN8801_PHY
 	tristate "Airoha AN8801 Gigabit PHY"
 	select AIR_NET_PHYLIB
