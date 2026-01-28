@@ -33,7 +33,8 @@ obj-$(CONFIG_AIR_EN8811H_PHY)   += air_en8811h.o
 obj-$(CONFIG_AMD_PHY)		+= amd.o
 obj-$(CONFIG_AMCC_QT2025_PHY)	+= qt2025.o
 obj-$(CONFIG_AQUANTIA_PHY)	+= aquantia/
-obj-$(CONFIG_AS21XXX_PHY)	+= as21xxx.o
+obj-$(CONFIG_AS21XXX_PHY)	+= aeon_as21xxx.o
+aeon_as21xxx-objs	:= as21xxx.o as21xx_bbu_api/as21xx_debugfs.o as21xx_bbu_api/as21xx_api.o
 ifdef CONFIG_AX88796B_RUST_PHY
   obj-$(CONFIG_AX88796B_PHY)	+= ax88796b_rust.o
 else
