@@ -784,6 +784,7 @@ static int as21xxx_probe(struct phy_device *phydev)
 	struct as21xxx_priv *priv;
 	int ret;
 
+	phydev_err(phydev, "%s:%d\n",__func__,__LINE__);
 	priv = devm_kzalloc(&phydev->mdio.dev,
 			    sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -793,16 +794,20 @@ static int as21xxx_probe(struct phy_device *phydev)
 		aeon_set_fast_mdc_timing(phydev);
 		aeon_set_default_value(phydev);
 	}
+	phydev_err(phydev, "%s:%d phy_id:%08x\n",__func__,__LINE__,phydev->phy_id);
 	ret = aeon_firmware_load(phydev);
 	mutex_init(&priv->ipc_lock);
+	phydev_err(phydev, "%s:%d mutex init ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = aeon_ipc_sync_parity(phydev, priv);
+	phydev_err(phydev, "%s:%d ipc:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = aeon_ipc_get_fw_version(phydev);
+	phydev_err(phydev, "%s:%d get fw ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 	//ret = as21xxx_debugfs_init(phydev);
@@ -811,6 +816,7 @@ static int as21xxx_probe(struct phy_device *phydev)
 	/* Enable PTP clk if not already Enabled */
 	ret = phy_set_bits_mmd(phydev, MDIO_MMD_VEND1, VEND1_PTP_CLK,
 			       VEND1_PTP_CLK_EN);
+	phydev_err(phydev, "%s:%d PTP ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 	return 0;
@@ -1240,6 +1246,8 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	/* AEONSEMI get pid. */
 	if (phy_id != PHY_ID_AS21XXX)
 		return 0;
+
+	phydev_err(phydev, "%s:%d phy_id:%08x\n",__func__,__LINE__,phy_id);
 
 	phydev->phy_id = phy_id;
 	aeon_mdio_write(phydev, 0x1E, 0x142, 0x48);
