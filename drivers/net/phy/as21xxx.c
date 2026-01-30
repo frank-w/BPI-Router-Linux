@@ -1238,7 +1238,7 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 {
 	u32 phy_id = aeon_read_pid(phydev);
 	/* AEONSEMI get pid. */
-	if (phydev->phy_id != PHY_ID_AS21XXX)
+	if (phy_id != PHY_ID_AS21XXX)
 		return 0;
 
 	phydev->phy_id = phy_id;
