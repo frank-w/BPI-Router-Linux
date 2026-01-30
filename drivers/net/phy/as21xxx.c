@@ -605,6 +605,8 @@ static int as21xxx_probe(struct phy_device *phydev)
 	struct as21xxx_priv *priv;
 	int ret;
 
+	phydev_err(phydev, "%s:%d\n",__func__,__LINE__);
+
 	priv = devm_kzalloc(&phydev->mdio.dev,
 			    sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -613,20 +615,24 @@ static int as21xxx_probe(struct phy_device *phydev)
 
 	ret = devm_mutex_init(&phydev->mdio.dev,
 			      &priv->ipc_lock);
+	phydev_err(phydev, "%s:%d mutex init ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = aeon_ipc_sync_parity(phydev, priv);
+	phydev_err(phydev, "%s:%d sync parity ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	ret = aeon_ipc_get_fw_version(phydev);
+	phydev_err(phydev, "%s:%d get firmware version ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 
 	/* Enable PTP clk if not already Enabled */
 	ret = phy_set_bits_mmd(phydev, MDIO_MMD_VEND1, VEND1_PTP_CLK,
 			       VEND1_PTP_CLK_EN);
+	phydev_err(phydev, "%s:%d PTP clk ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		return ret;
 
@@ -906,6 +912,8 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	if (phy_id != PHY_ID_AS21XXX)
 		return phy_id == phydrv->phy_id;
 
+	phydev_err(phydev, "%s:%d phy-id:%08x\n",__func__,__LINE__,phy_id);
+
 	/* Allocate temp priv and load the firmware */
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -914,16 +922,19 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	mutex_init(&priv->ipc_lock);
 
 	ret = aeon_firmware_load(phydev);
+	phydev_err(phydev, "%s:%d firmware load ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		goto out;
 
 	/* Sync parity... */
 	ret = aeon_ipc_sync_parity(phydev, priv);
+	phydev_err(phydev, "%s:%d ipc parity ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		goto out;
 
 	/* ...and send a third NOOP cmd to wait for firmware finish loading */
 	ret = aeon_ipc_noop(phydev, priv, &ret_sts);
+	phydev_err(phydev, "%s:%d noop ret:%d\n",__func__,__LINE__,ret);
 	if (ret)
 		goto out;
 
@@ -940,6 +951,7 @@ out:
 	 * This relies on the driver probe order where the first PHY driver
 	 * probed is the generic one.
 	 */
+	phydev_err(phydev, "%s:%d final return\n",__func__,__LINE__);
 	return ret;
 }
 
