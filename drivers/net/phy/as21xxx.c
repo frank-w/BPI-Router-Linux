@@ -909,8 +909,8 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	/* With PHY ID not the generic AS21xxx one assume
 	 * the firmware just loaded
 	 */
-	if (phy_id != PHY_ID_AS21XXX)
-		return phy_id == phydrv->phy_id;
+	//if (phy_id != PHY_ID_AS21XXX)
+	//	return phy_id == phydrv->phy_id;
 
 	phydev_err(phydev, "%s:%d phy-id:%08x\n",__func__,__LINE__,phy_id);
 
