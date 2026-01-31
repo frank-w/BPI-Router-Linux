@@ -882,153 +882,21 @@ static int as21xxx_led_polarity_set(struct phy_device *phydev, int index,
 			      mask, val);
 }
 
-static int aeon_wait_reset_complete(struct phy_device *phydev)
-{
-	int val;
-	return read_poll_timeout(aeon_ipc_get_fw_version, val,
-				 val == 0, 10000, 2000000, false, phydev);
-}
-
-static int as21xxx_wait_for_mdio(struct phy_device *phydev)
-{
-    int val, timeout = 500; /* ms */
-
-    do {
-        val = phy_read(phydev, MII_BMCR);
-        if (val >= 0 && !(val & BMCR_RESET))
-            return 0;
-
-        msleep(10);
-        timeout -= 10;
-    } while (timeout > 0);
-
-    return -ETIMEDOUT;
-}
-
-/*static int aeon_set_default_value(struct phy_device *phydev)
-{
-	static const unsigned char base_data[] = {0x32, 0x30, 0x32, 0x33, 0x30, 0x37, 0x31, 0x34};
-	unsigned char bytebuf[16];
-	unsigned short *wdata;
-	unsigned int mask;
-	int byte_count, wdata_count = 0;
-	int pos = 0, val, ret = 0, remaining;
-	unsigned char padded_bytes[MEM_WORD_SIZE] = {0};
-	mask = param1 | 14;
-	memcpy(bytebuf, base_data, sizeof(base_data));
-	bytebuf[8] = mask & 0xff;
-	bytebuf[9] = (mask >> 8) & 0xff;
-	byte_count = 10;
-	wdata = kmalloc(MAX_WDATA_SIZE * sizeof(unsigned short), GFP_KERNEL);
-	if (!wdata) {
-		pr_err("Failed to allocate wdata array\n");
-		return -ENOMEM;
-	}
-	while (pos + MEM_WORD_SIZE <= byte_count) {
-		if (wdata_count + 2 > MAX_WDATA_SIZE) {
-			pr_err("wdata array overflow\n");
-			ret = -ENOSPC;
-			goto cleanup;
-		}
-		wdata[wdata_count++] = le16_to_cpu(*(unsigned short *)&bytebuf[pos]);
-		wdata[wdata_count++] = le16_to_cpu(*(unsigned short *)&bytebuf[pos + 2]);
-		pos += MEM_WORD_SIZE;
-	}
-	remaining = byte_count - pos;
-	if (remaining > 0) {
-		if (wdata_count + 2 <= MAX_WDATA_SIZE) {
-			// Here we just need padded_bytes once, otherwise we need to read from mem
-			memcpy(padded_bytes, &bytebuf[pos], remaining);
-			wdata[wdata_count++] = le16_to_cpu(*(unsigned short *)&padded_bytes[0]);
-			wdata[wdata_count++] = le16_to_cpu(*(unsigned short *)&padded_bytes[2]);
-		}
-	}
-	val = aeon_cl45_read(phydev, MDIO_MMD_VEND1, VEND1_GLB_REG_CPU_CTRL); //GLB_REG_CPU_CTRL
-	val |= 0x12;
-	phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLB_REG_CPU_CTRL, val);
-	phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_FW_START_ADDR,
-			(u16)(AEON_MEM_DEFAULT_ADDR & 0xFFFF));
-	phy_modify_mmd(phydev, MDIO_MMD_VEND1,
-			VEND1_GLB_REG_MDIO_INDIRECT_ADDRCMD,
-			0x3ffc, 0xc000);
-	aeon_cl45_write_burst(phydev, MDIO_MMD_VEND1, VEND1_GLB_REG_MDIO_INDIRECT_LOAD,
-			(unsigned char *)wdata, wdata_count*2);
-	val = aeon_cl45_read(phydev, MDIO_MMD_VEND1,
-			VEND1_GLB_REG_MDIO_INDIRECT_ADDRCMD); //GLB_REG_MDIO_INDIRECT_ADDRCMD
-	val &= 0x3FFF;
-	phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLB_REG_MDIO_INDIRECT_ADDRCMD, val);
-	val = aeon_cl45_read(phydev, MDIO_MMD_VEND1, VEND1_GLB_REG_CPU_CTRL); //GLB_REG_CPU_CTRL
-	val &= 0xFFED;
-	phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLB_REG_CPU_CTRL, val);
-cleanup:
-	kfree(wdata);
-	return 0;
-}*/
-
-static void aeon_set_fast_mdc_timing(struct phy_device *phydev)
-{
-	phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x53, 0xFFFF);
-	phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x54, 0xFFFF);
-	phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x55, 0xFFFF);
-}
-
-/*static int as21xxx_wait_for_boot(struct phy_device *phydev)
-{
-    int val, timeout = 5000; // ms
-
-    do {
-        val = phy_read(phydev, AS21XXX_STATUS);
-        if (val < 0)
-            return val;
-
-        if (val & AS21XXX_BOOT_DONE)
-            return 0;
-
-        msleep(10);
-        timeout -= 10;
-    } while (timeout > 0);
-
-    return -ETIMEDOUT;
-}*/
-
-static int as21xxx_config_init(struct phy_device *phydev)
+static int as21xxx_match_phy_device(struct phy_device *phydev,
+				    const struct phy_driver *phydrv)
 {
 	struct as21xxx_priv *priv;
 	u16 ret_sts;
 	u32 phy_id;
 	int ret;
 
-	if (phydev->priv)
-		return 0;
-
-	/* Allocate temp priv and load the firmware */
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	phydev->priv = priv;
-
-	mutex_init(&priv->ipc_lock);
-
-	aeon_set_fast_mdc_timing(phydev);
-	phydev_err(phydev, "%s:%d fast_mdc:%d\n",__func__,__LINE__,ret);
-	/*ret=aeon_set_default_value(phydev);
-	phydev_err(phydev, "%s:%d set default:%d\n",__func__,__LINE__,ret);*/
-
-	ret = aeon_firmware_load(phydev);
-	phydev_err(phydev, "%s:%d firmware load ret:%d\n",__func__,__LINE__,ret);
-	if (ret)
-		goto out;
-
-	//aeon_wait_reset_complete(phydev); //causes crash
-	//usleep(10000);
-	//ret = as21xxx_wait_for_boot(phydev);
-	ret=aeon_wait_reset_complete(phydev);
-	if (ret)
-		goto out;
+	/* Skip PHY that are not AS21xxx */
+	if (!phy_id_compare_vendor(phydev->c45_ids.device_ids[MDIO_MMD_PCS],
+				   PHY_VENDOR_AEONSEMI))
+		return genphy_match_phy_device(phydev, phydrv);
 
 	/* Read PHY ID to handle firmware loaded or HW reset */
-	/*ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
+	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
 	if (ret < 0)
 		return ret;
 	phy_id = ret << 16;
@@ -1036,13 +904,27 @@ static int as21xxx_config_init(struct phy_device *phydev)
 	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
 	if (ret < 0)
 		return ret;
-	phy_id |= ret;*/
-	/* PHY-ID nach FW neu auslesen */
-	phy_id  = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1) << 16;
-	phy_id |= phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
+	phy_id |= ret;
 
-	phydev_info(phydev, "AS21xxx firmware loaded, new phy-id: %08x\n", phy_id);
-	phydev->phy_id = phy_id;
+	/* With PHY ID not the generic AS21xxx one assume
+	 * the firmware just loaded
+	 */
+	if (phy_id != PHY_ID_AS21XXX)
+		return phy_id == phydrv->phy_id;
+
+	phydev_err(phydev, "%s:%d phy-id:%08x\n",__func__,__LINE__,phy_id);
+
+	/* Allocate temp priv and load the firmware */
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
+
+	mutex_init(&priv->ipc_lock);
+
+	ret = aeon_firmware_load(phydev);
+	phydev_err(phydev, "%s:%d firmware load ret:%d\n",__func__,__LINE__,ret);
+	if (ret)
+		goto out;
 
 	/* Sync parity... */
 	ret = aeon_ipc_sync_parity(phydev, priv);
@@ -1073,43 +955,6 @@ out:
 	return ret;
 }
 
-static int as21xxx_match_phy_device(struct phy_device *phydev,
-                                   const struct phy_driver *phydrv)
-{
-	u32 phy_id;
-	int ret;
-
-	if (!phy_id_compare_vendor(phydev->c45_ids.device_ids[MDIO_MMD_PCS],
-				   PHY_VENDOR_AEONSEMI))
-		return genphy_match_phy_device(phydev, phydrv);
-
-	phydev_err(phydev, "%s:%d phy-id:%08x == %08x\n",__func__,__LINE__,phydev->phy_id,PHY_ID_AS21XXX);
-
-	//Read PHY ID to handle firmware loaded or HW reset
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
-	if (ret < 0)
-		return ret;
-	phy_id = ret << 16;
-
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
-	if (ret < 0)
-		return ret;
-	phy_id |= ret;
-
-	//With PHY ID not the generic AS21xxx one assume
-	// the firmware just loaded
-	//
-	phydev_err(phydev, "%s:%d phy-id:%08x\n",__func__,__LINE__,phy_id);
-	//if (phy_id != PHY_ID_AS21XXX)
-		return phy_id == phydrv->phy_id;
-
-	return 0;
-
-
-	return phydev->phy_id == PHY_ID_AS21XXX;
-}
-
-
 static struct phy_driver as21xxx_drivers[] = {
 	{
 		/* PHY expose in C45 as 0x7500 0x9410
@@ -1122,7 +967,6 @@ static struct phy_driver as21xxx_drivers[] = {
 		.match_phy_device = as21xxx_match_phy_device,
 		.probe		= as21xxx_probe,
 		.read_status	= as21xxx_read_status,
-		.config_init	= as21xxx_config_init,
 		.led_brightness_set = as21xxx_led_brightness_set,
 		.led_hw_is_supported = as21xxx_led_hw_is_supported,
 		.led_hw_control_set = as21xxx_led_hw_control_set,
