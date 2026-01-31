@@ -965,6 +965,13 @@ static struct phy_driver as21xxx_drivers[] = {
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21XXX),
 		.name		= "Aeonsemi AS21xxx",
 		.match_phy_device = as21xxx_match_phy_device,
+		.probe		= as21xxx_probe,
+		.read_status	= as21xxx_read_status,
+		.led_brightness_set = as21xxx_led_brightness_set,
+		.led_hw_is_supported = as21xxx_led_hw_is_supported,
+		.led_hw_control_set = as21xxx_led_hw_control_set,
+		.led_hw_control_get = as21xxx_led_hw_control_get,
+		.led_polarity_set = as21xxx_led_polarity_set,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_AS21011JB1),
