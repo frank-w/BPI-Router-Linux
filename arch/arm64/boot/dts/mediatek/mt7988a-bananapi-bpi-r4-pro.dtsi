@@ -185,6 +185,103 @@
 	status = "okay";
 };
 
+&mdio_bus {
+	clock-frequency = <20000000>;
+	switch@10 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "maxlinear,mxl86252";
+		reg = <0x10>;
+		dsa,member = <0 0>;
+
+		status = "okay";
+
+		reset-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <100000>;
+		reset-deassert-us = <1000000>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			/* Microcontroller port */
+			port@0 {
+				reg = <0>;
+				status = "disabled";
+			};
+
+			port@1 {
+				reg = <1>;
+				label = "lan1";
+				phy-handle = <&swphy0>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port@2 {
+				reg = <2>;
+				label = "lan2";
+				phy-handle = <&swphy1>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port@3 {
+				reg = <3>;
+				label = "lan3";
+				phy-handle = <&swphy2>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port@4 {
+				reg = <4>;
+				label = "lan4";
+				phy-handle = <&swphy3>;
+				phy-mode = "internal";
+				status = "okay";
+			};
+
+			port@9 {
+				reg = <9>;
+				label = "cpu";
+				phy-mode = "10gbase-r";
+				ethernet = <&gmac2>;
+				dsa-tag-protocol = "mxl862xx-8021q";
+
+				fixed-link {
+					speed = <10000>;
+					full-duplex;
+				};
+			};
+
+			port@13 {
+				reg = <13>;
+				label = "sfp-lan";
+				sfp = <&sfp1>;
+			};
+		};
+
+		mdio {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			swphy0: swphy@0 {
+				reg = <0>;
+			};
+			swphy1: swphy@1 {
+				reg = <1>;
+			};
+			swphy2: swphy@2 {
+				reg = <2>;
+			};
+			swphy3: swphy@3 {
+				reg = <3>;
+			};
+		};
+	};
+};
+
 &fan {
 	pinctrl-0 = <&pwm0_pins>;
 	pinctrl-names = "default";
@@ -195,6 +292,27 @@
 &gmac0 {
 	status = "okay";
 };
+
+
+&gmac1 {
+	label = "sfp-wan";
+	sfp = <&sfp2>;
+	status = "okay";
+};
+
+&gmac2 {
+	label = "dsa1";
+	phy-mode = "10gbase-r";
+
+	status = "okay";
+
+	fixed-link {
+		speed = <10000>;
+		full-duplex;
+		pause;
+	};
+};
+
 
 &gsw_phy0 {
 	pinctrl-0 = <&gbe0_led0_pins>;
