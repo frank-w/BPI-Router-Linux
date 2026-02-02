@@ -249,7 +249,7 @@
 				label = "cpu";
 				phy-mode = "10gbase-r";
 				ethernet = <&gmac2>;
-				//dsa-tag-protocol = "mxl862xx-8021q";
+				dsa-tag-protocol = "mxl862xx-8021q";
 
 				fixed-link {
 					speed = <10000>;
@@ -260,6 +260,8 @@
 			port@13 {
 				reg = <13>;
 				label = "sfp-lan";
+				phy-mode = "10gbase-r";
+				managed = "in-band-status";
 				sfp = <&sfp1>;
 			};
 		};
@@ -292,6 +294,10 @@
 &gmac1 {
 	label = "sfp-wan";
 	sfp = <&sfp2>;
+	phy-mode = "10gbase-r";
+	managed = "in-band-status";
+	sfp = <&sfp2>;
+
 	status = "okay";
 };
 
