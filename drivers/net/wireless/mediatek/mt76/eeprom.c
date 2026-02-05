@@ -8,6 +8,7 @@
 #include <linux/mtd/partitions.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/etherdevice.h>
+#include <linux/firmware.h>
 #include "mt76.h"
 
 static int mt76_get_of_eeprom_data(struct mt76_dev *dev, void *eep, int len)
@@ -147,43 +148,37 @@ EXPORT_SYMBOL_GPL(mt76_get_of_data_from_nvmem);
 static int
 mt76_get_eeprom_file(struct mt76_dev *dev, int len)
 {
-	char path[64]="";
-	struct file *fp;
-	loff_t pos=0;
-	int ret;
-	struct inode *inode = NULL;
-	loff_t size;
+    char fw_name[128];
+    const struct firmware *fw;
+    int ret;
 
-	ret = snprintf(path,sizeof(path),"/lib/firmware/mediatek/%s_rf.bin",dev->dev->driver->name);
-	if(ret<0)
-		return -EINVAL;
-	dev_info(dev->dev,"Load eeprom: %s\n",path);
-	fp = filp_open(path, O_RDONLY, 0);
-	if (IS_ERR(fp)) {
-		dev_info(dev->dev,"Open eeprom file failed: %s\n",path);
-		return -ENOENT;
-	}
+    ret = snprintf(fw_name, sizeof(fw_name), "mediatek/%s_rf.bin",
+                   dev->dev->driver->name);
+    if (ret < 0 || ret >= sizeof(fw_name))
+        return -EINVAL;
 
-	inode = file_inode(fp);
-	if ((!S_ISREG(inode->i_mode) && !S_ISBLK(inode->i_mode))) {
-		printk(KERN_ALERT "invalid file type: %s\n", path);
-		return -ENOENT;
-	}
-	size = i_size_read(inode->i_mapping->host);
-	if (size < 0)
-	{
-		printk(KERN_ALERT "failed getting size of %s size:%lld \n",path,size);
-		return -ENOENT;
-	}
-	ret = kernel_read(fp, dev->eeprom.data, len, &pos);
-	if(ret < size){
-		dev_info(dev->dev,"Load eeprom ERR, count %d byte (len:%d)\n",ret,len);
-		return -ENOENT;
-	}
-	filp_close(fp, 0);
-	dev_info(dev->dev,"Load eeprom OK, count %d byte\n",ret);
+    dev_info(dev->dev, "Requesting EEPROM: %s\n", fw_name);
 
-	return 0;
+    ret = request_firmware(&fw, fw_name, dev->dev);
+    if (ret) {
+        dev_err(dev->dev, "Failed to load EEPROM %s: %d\n", fw_name, ret);
+        return ret;
+    }
+
+    if (fw->size < len) {
+        dev_err(dev->dev,
+                "EEPROM file too small (%zu bytes, expected at least %d): %s\n",
+                fw->size, len, fw_name);
+        release_firmware(fw);
+        return -EINVAL;
+    }
+
+    memcpy(dev->eeprom.data, fw->data, len);
+
+    dev_info(dev->dev, "Loaded EEPROM %s (%zu bytes)\n", fw_name, fw->size);
+
+    release_firmware(fw);
+    return 0;
 }
 
 static int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int len)
@@ -199,10 +194,6 @@ static int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int len)
 		return 0;
 
 	ret = mt76_get_of_data_from_mtd(dev, eep, 0, len);
-	if (!ret)
-		return 0;
-
-	ret=mt76_get_eeprom_file(dev, len);
 	if (!ret)
 		return 0;
 
@@ -475,10 +466,15 @@ EXPORT_SYMBOL_GPL(mt76_get_rate_power_limits);
 int
 mt76_eeprom_init(struct mt76_dev *dev, int len)
 {
+	int ret;
 	dev->eeprom.size = len;
 	dev->eeprom.data = devm_kzalloc(dev->dev, len, GFP_KERNEL);
 	if (!dev->eeprom.data)
 		return -ENOMEM;
+
+	ret = mt76_get_eeprom_file(dev, len);
+	if (!ret)
+		return 0;
 
 	return !mt76_get_of_eeprom(dev, dev->eeprom.data, len);
 }
