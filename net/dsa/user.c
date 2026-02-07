@@ -2762,6 +2762,7 @@ int dsa_user_create(struct dsa_port *port)
 	struct dsa_switch *ds = port->ds;
 	struct net_device *user_dev;
 	struct dsa_user_priv *p;
+	bool have_rtnl;
 	const char *name;
 	int assign_type;
 	int ret;
@@ -2827,7 +2828,9 @@ int dsa_user_create(struct dsa_port *port)
 		goto out_gcells;
 	}
 
-	rtnl_lock();
+	have_rtnl = rtnl_is_locked();
+	if (!have_rtnl)
+		rtnl_lock();
 
 	ret = dsa_user_change_mtu(user_dev, ETH_DATA_LEN);
 	if (ret && ret != -EOPNOTSUPP)
@@ -2838,7 +2841,8 @@ int dsa_user_create(struct dsa_port *port)
 	if (ret) {
 		netdev_err(conduit, "error %d registering interface %s\n",
 			   ret, user_dev->name);
-		rtnl_unlock();
+		if (!have_rtnl)
+			rtnl_unlock();
 		goto out_phy;
 	}
 
@@ -2848,14 +2852,16 @@ int dsa_user_create(struct dsa_port *port)
 			netdev_err(user_dev,
 				   "failed to initialize DCB: %pe\n",
 				   ERR_PTR(ret));
-			rtnl_unlock();
+			if (!have_rtnl)
+				rtnl_unlock();
 			goto out_unregister;
 		}
 	}
 
 	ret = netdev_upper_dev_link(conduit, user_dev, NULL);
 
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 
 	if (ret)
 		goto out_unregister;
@@ -2863,11 +2869,16 @@ int dsa_user_create(struct dsa_port *port)
 	return 0;
 
 out_unregister:
-	unregister_netdev(user_dev);
+	if (have_rtnl)
+		unregister_netdevice(user_dev);
+	else
+		unregister_netdev(user_dev);
 out_phy:
-	rtnl_lock();
+	if (!have_rtnl)
+		rtnl_lock();
 	phylink_disconnect_phy(p->dp->pl);
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 	dsa_port_phylink_destroy(p->dp);
 out_gcells:
 	gro_cells_destroy(&p->gcells);
@@ -2882,13 +2893,16 @@ void dsa_user_destroy(struct net_device *user_dev)
 	struct net_device *conduit = dsa_user_to_conduit(user_dev);
 	struct dsa_port *dp = dsa_user_to_port(user_dev);
 	struct dsa_user_priv *p = netdev_priv(user_dev);
+	bool have_rtnl = rtnl_is_locked();
 
 	netif_carrier_off(user_dev);
-	rtnl_lock();
+	if (!have_rtnl)
+		rtnl_lock();
 	netdev_upper_dev_unlink(conduit, user_dev);
 	unregister_netdevice(user_dev);
 	phylink_disconnect_phy(dp->pl);
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 
 	dsa_port_phylink_destroy(dp);
 	gro_cells_destroy(&p->gcells);

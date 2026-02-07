@@ -786,9 +786,12 @@ static int dsa_tree_setup_switches(struct dsa_switch_tree *dst)
 static int dsa_tree_setup_conduit(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *cpu_dp;
+	bool have_rtnl;
 	int err = 0;
 
-	rtnl_lock();
+	have_rtnl = rtnl_is_locked();
+	if (!have_rtnl)
+		rtnl_lock();
 
 	dsa_tree_for_each_cpu_port(cpu_dp, dst) {
 		struct net_device *conduit = cpu_dp->conduit;
@@ -805,7 +808,8 @@ static int dsa_tree_setup_conduit(struct dsa_switch_tree *dst)
 						   netif_oper_up(conduit));
 	}
 
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 
 	return err;
 }
@@ -813,8 +817,10 @@ static int dsa_tree_setup_conduit(struct dsa_switch_tree *dst)
 static void dsa_tree_teardown_conduit(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *cpu_dp;
+	bool have_rtnl = rtnl_is_locked();
 
-	rtnl_lock();
+	if (!have_rtnl)
+		rtnl_lock();
 
 	dsa_tree_for_each_cpu_port(cpu_dp, dst) {
 		struct net_device *conduit = cpu_dp->conduit;
@@ -828,7 +834,8 @@ static void dsa_tree_teardown_conduit(struct dsa_switch_tree *dst)
 		dsa_conduit_teardown(conduit);
 	}
 
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 }
 
 static int dsa_tree_setup_lags(struct dsa_switch_tree *dst)
