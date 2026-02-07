@@ -30,6 +30,12 @@ int register_fwnode_pcs_notifier(struct notifier_block *nb)
 }
 EXPORT_SYMBOL_GPL(register_fwnode_pcs_notifier);
 
+int unregister_fwnode_pcs_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&fwnode_pcs_notify_list, nb);
+}
+EXPORT_SYMBOL_GPL(unregister_fwnode_pcs_notifier);
+
 struct phylink_pcs *fwnode_pcs_simple_get(struct fwnode_reference_args *pcsspec,
 					  void *data)
 {
