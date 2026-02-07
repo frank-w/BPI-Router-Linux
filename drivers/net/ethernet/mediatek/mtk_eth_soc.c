@@ -5460,65 +5460,76 @@ static void mux_poll(struct work_struct *work)
 	struct mtk_eth *eth = mac->hw;
 	struct net_device *dev = eth->netdev[mac->id];
 	unsigned int new_channel;
-	struct phylink *tmp_pl;
+	struct phylink *old_pl;
 	int sfp_present;
+	int err;
+	bool running;
+	bool transitional_old_pl;
 
 	//dev_info(eth->dev, "ethernet mux: %s:%d\n",__func__,__LINE__);
 	if (IS_ERR(mux->mod_def0_gpio) || IS_ERR(mux->chan_sel_gpio))
 		goto reschedule;
 
 	sfp_present = gpiod_get_value_cansleep(mux->mod_def0_gpio);
+	if (sfp_present < 0)
+		goto reschedule;
 	new_channel = sfp_present ? mux->sfp_present_channel : !mux->sfp_present_channel;
 
-	if (mux->channel == new_channel || !netif_running(dev))
+	if (mux->channel == new_channel)
 		goto reschedule;
+
+	running = netif_running(dev);
 
 	dev_info(eth->dev, "ethernet mux: line:%d new channel:%d,sfp:%d\n",__LINE__, new_channel,sfp_present);
 
+	if (mux->data[mux->channel] && mux->data[mux->channel]->phylink)
+		old_pl = mux->data[mux->channel]->phylink;
+	else
+		old_pl = mac->phylink;
+	transitional_old_pl = old_pl && old_pl == mux->initial_phylink;
+
 	rtnl_lock();
-	mtk_stop(dev);
+	if (running)
+		mtk_stop(dev);
 	rtnl_unlock();
 
-	/* Destroy old phylink if it exists */
-	if (mux->data[mux->channel] && mux->data[mux->channel]->phylink) {
-		tmp_pl = mux->data[mux->channel]->phylink;
+	if (old_pl) {
 		dev_info(eth->dev, "Destroying phylink for channel %u\n", mux->channel);
-	} else {
-		/* phylink was created by mtk_add_mac,
-		   we need to release the reference to available PCS from phylink config
-		*/
-		tmp_pl = mac->phylink;
-	}
-	if (tmp_pl) {
-		phylink_destroy(tmp_pl);
-		mux->data[mux->channel]->phylink = NULL;
+		if (mux->data[mux->channel] &&
+		    mux->data[mux->channel]->phylink == old_pl)
+			mux->data[mux->channel]->phylink = NULL;
+		phylink_destroy(old_pl);
+		if (transitional_old_pl)
+			mux->initial_phylink = NULL;
 	}
 
-	dev_info(eth->dev, "ethernet mux: switch to channel%d\n", new_channel);
-
-	/* Create new phylink if not yet present */
+	/* Build target phylink after tearing down the old one, since both
+	 * instances share the same PCS objects in mac->available_pcs.
+	 */
 	if (!mux->data[new_channel]->phylink) {
 		mux->data[new_channel]->phylink = mtk_mux_create_phylink(mux, new_channel);
 		if (IS_ERR(mux->data[new_channel]->phylink)) {
 			dev_err(eth->dev, "Failed to create new phylink\n");
-			mux->data[new_channel]->phylink=NULL;
-			goto out_unlock;
+			mux->data[new_channel]->phylink = NULL;
+			goto reschedule;
 		}
 	}
 
+	rtnl_lock();
 	mac->of_node = mux->data[new_channel]->of_node;
 	mac->phylink = mux->data[new_channel]->phylink;
 
-	rtnl_lock();
-	mtk_open(dev);
-	rtnl_unlock();
+	if (running) {
+		err = mtk_open(dev);
+		if (err)
+			dev_err(eth->dev, "ethernet mux: failed to open dev on channel %u: %d\n",
+				new_channel, err);
+	}
 
 	gpiod_set_value_cansleep(mux->chan_sel_gpio, new_channel);
 	mux->channel = new_channel;
-	goto reschedule;
-
-out_unlock:
 	rtnl_unlock();
+
 reschedule:
 	mod_delayed_work(system_wq, &mux->poll, msecs_to_jiffies(100));
 }
@@ -5599,6 +5610,13 @@ static void mtk_release_mux(struct mtk_eth *eth, int id)
 			kfree(mux->data[i]);
 		}
 	}
+
+	/* Destroy transitional phylink created by mtk_add_mac() when it was
+	 * never promoted into a mux channel instance.
+	 */
+	if (mux->initial_phylink)
+		phylink_destroy(mux->initial_phylink);
+
 	kfree(mux);
 	eth->mux[id] = NULL;
 }
@@ -5616,7 +5634,8 @@ static int mtk_add_mux(struct mtk_eth *eth, struct device_node *np)
 	struct device_node *child;
 	struct mtk_mux *mux;
 	unsigned int id;
-	int err;
+	unsigned int initial_channel;
+	int err, sfp_present;
 
 	if (!_id) {
 		dev_err(eth->dev, "missing attach mac id\n");
@@ -5629,7 +5648,7 @@ static int mtk_add_mux(struct mtk_eth *eth, struct device_node *np)
 		return -EINVAL;
 	}
 
-	mux = kmalloc(sizeof(struct mtk_mux), GFP_KERNEL);
+	mux = kzalloc(sizeof(struct mtk_mux), GFP_KERNEL);
 	if (unlikely(!mux)) {
 		dev_err(eth->dev, "failed to create mux structure\n");
 		return -ENOMEM;
@@ -5637,7 +5656,7 @@ static int mtk_add_mux(struct mtk_eth *eth, struct device_node *np)
 
 	eth->mux[id] = mux;
 	mux->mac = eth->mac[id];
-	mux->channel = 0;//more than channels, just to make current channel invalid for switching the first time the gpio is read
+	mux->initial_phylink = mux->mac ? mux->mac->phylink : NULL;
 
 	mux->mod_def0_gpio = fwnode_gpiod_get_index(of_fwnode_handle(np),
 				"mod-def0", 0, GPIOD_IN |
@@ -5658,8 +5677,11 @@ static int mtk_add_mux(struct mtk_eth *eth, struct device_node *np)
 		goto err_put_mod_def0;
 	}
 
-	of_property_read_u32(np, "sfp-present-channel",
-		&mux->sfp_present_channel);
+	if (of_property_read_u32(np, "sfp-present-channel",
+				 &mux->sfp_present_channel))
+		mux->sfp_present_channel = 0;
+	else if (mux->sfp_present_channel > 1)
+		mux->sfp_present_channel = 1;
 
 	for_each_child_of_node(np, child) {
 		err = mtk_add_mux_channel(mux, child);
@@ -5671,7 +5693,18 @@ static int mtk_add_mux(struct mtk_eth *eth, struct device_node *np)
 		//should set initial mux->channel be set if ! mux->sfp_present_channel?
 	}
 
-	gpiod_set_value_cansleep(mux->chan_sel_gpio, mux->sfp_present_channel ? 0 : 1);
+	/* Configure initial mux channel based on current module presence. */
+	sfp_present = gpiod_get_value_cansleep(mux->mod_def0_gpio);
+	if (sfp_present < 0) {
+		dev_warn(eth->dev, "failed to read mod-def0 gpio, defaulting to non-SFP channel\n");
+		initial_channel = !mux->sfp_present_channel;
+	} else {
+		initial_channel = sfp_present ? mux->sfp_present_channel :
+						!mux->sfp_present_channel;
+	}
+	gpiod_set_value_cansleep(mux->chan_sel_gpio, initial_channel);
+	/* Force first poll pass to (re)build phylink for selected channel. */
+	mux->channel = !initial_channel;
 
 	dev_info(eth->dev, "ethernet mux: line:%d added new mux\n",__LINE__);
 	INIT_DELAYED_WORK(&mux->poll, mux_poll);
