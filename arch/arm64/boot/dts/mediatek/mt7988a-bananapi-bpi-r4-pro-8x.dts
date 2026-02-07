@@ -114,7 +114,7 @@
 	};
 };
 
-/*&switch16 {
+&switch16 {
 	ds_mux: ds-mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -123,7 +123,8 @@
 			compatible = "mxl862xx,ds-mux";
 			reg = <12>;
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
-			mod-def0-gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+			/* SFP1 module detect (shared with sfp1 node) */
+			mod-def0-gpios = <&pio 69 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -144,19 +145,16 @@
 			};
 		};
 	};
+
 	ports {
-		port6: port@6 {
+		port13: port@6 {
 			reg = <13>;
 			label = "lan6";
-			phy-mode = "usxgmii";
+			phy-mode = "10gbase-r";
+			phy-connection-type = "10gbase-r";
 			phy-handle = <&phy24>;
 			status = "okay";
-
-			fixed-link {
-				speed = <10000>;
-				full-duplex;
-			};
 		};
 
 	};
-};*/
+};
