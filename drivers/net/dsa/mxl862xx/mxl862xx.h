@@ -14,12 +14,18 @@
 #define VID_RULES	2
 #define MAX_VLANS	100
 #define MAX_PORTS	MXL862XX_MAX_PORT_NUM
-#define MAX_BRIDGES 17
+#define MAX_BRIDGES 	17
 
 struct mxl862xx_hw_info {
 	u8 max_ports;
 	u8 phy_ports;
 	u8 ext_ports;
+};
+
+struct mxl862xx_pcs {
+	struct phylink_pcs pcs;
+	struct mxl862xx_priv *priv;
+	int port;
 };
 
 struct mxl862xx_filter_ids {
@@ -81,12 +87,6 @@ struct mxl862xx_port_info {
 	struct mxl862xx_port_vlan_info vlan;
 };
 
-struct mxl862xx_pcs {
-	struct phylink_pcs pcs;
-	struct mxl862xx_priv *priv;
-	int port;
-};
-
 struct dp_mux_data {
 	struct device_node	*of_node;
 	struct phylink		*phylink;
@@ -100,7 +100,6 @@ struct combo_port_mux {
 	unsigned int		channel;
 	unsigned int		sfp_present_channel;
 	struct delayed_work	sfp_monitor_work;
-	bool			initialized;
 };
 
 struct mxl862xx_priv {
@@ -120,8 +119,6 @@ struct mxl862xx_priv {
 	struct mutex pce_table_lock;
 	uint8_t cpu_port;
 	uint8_t user_pnum;
-	bool force_isolate;
-	bool c22_extended;
 	struct mxl862xx_pcs pcs_port_1;
 	struct combo_port_mux *ds_mux[MAX_PORTS];
 };

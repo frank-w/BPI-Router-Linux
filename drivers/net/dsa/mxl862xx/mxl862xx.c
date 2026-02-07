@@ -138,7 +138,7 @@ static int mxl862xx_phy_read_mmd(struct mxl862xx_priv *priv, int port, int devad
 
 	ret = MXL862XX_API_READ(priv, INT_GPHY_READ, param);
 	if (ret) {
-		pr_err("mxl862xx: failed to read mmd on port %d\n", port);
+		pr_debug("mxl862xx: failed to read mmd on port %d\n", port);
 		return ret;
 	}
 
@@ -359,17 +359,36 @@ static enum dsa_tag_protocol mxl862_parse_tag_proto(struct dsa_switch *ds, uint8
 {
 	/* Default value if no dt entry found */
 	enum dsa_tag_protocol tag_proto = DSA_TAG_PROTO_MXL862;
-	struct dsa_port *dp = (struct dsa_port *)dsa_to_port(ds, port);
-	const char *user_protocol = NULL;
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	const char *selected_proto = "mxl862";
+	const char *user_protocol;
+	int ret;
 
-	if (dp != NULL)
-		user_protocol = of_get_property(dp->dn, "dsa-tag-protocol", NULL);
-	if (user_protocol != NULL) {
-		if (strcmp("mxl862", user_protocol) == 0)
-			tag_proto = DSA_TAG_PROTO_MXL862;
-		else if (strcmp("mxl862_8021q", user_protocol) == 0)
-			tag_proto = DSA_TAG_PROTO_MXL862_8021Q;
+	if (!dp || !dp->dn)
+		return tag_proto;
+
+	ret = of_property_read_string(dp->dn, "dsa-tag-protocol", &user_protocol);
+	if (ret) {
+		dev_info(ds->dev,
+			 "port %u has no dsa-tag-protocol in DT, using %s\n",
+			 port, selected_proto);
+		return tag_proto;
 	}
+
+	if (!strcmp(user_protocol, "mxl862"))
+		tag_proto = DSA_TAG_PROTO_MXL862;
+	else if (!strcmp(user_protocol, "mxl862_8021q")) {
+		tag_proto = DSA_TAG_PROTO_MXL862_8021Q;
+		selected_proto = "mxl862_8021q";
+	} else {
+		dev_warn(ds->dev,
+			 "port %u has unsupported dsa-tag-protocol \"%s\", falling back to mxl862\n",
+			 port, user_protocol);
+	}
+
+	dev_info(ds->dev, "port %u dsa-tag-protocol=\"%s\" -> using %s\n",
+		 port, user_protocol, selected_proto);
+
 	return tag_proto;
 }
 
@@ -2795,11 +2814,6 @@ static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port, struct dsa
 	int bridge_id;
 	int ret;
 
-	if (priv->force_isolate) {
-		dev_info(priv->dev, "ignore bridge join due to force isolate\n");
-		return 0;
-	}
-
 	mxl862xx_deisolate_port(ds, port);
 
 	bridge_id = mxl862xx_find_bridge_id(ds, bridge.dev);
@@ -2980,7 +2994,8 @@ static struct mxl862xx_pcs *pcs_to_mxl862xx_pcs(struct phylink_pcs *pcs)
 	return container_of(pcs, struct mxl862xx_pcs, pcs);
 }
 
-static void mxl862xx_pcs_get_state(struct phylink_pcs *pcs, unsigned int neg_mode,
+static void mxl862xx_pcs_get_state(struct phylink_pcs *pcs,
+				 unsigned int neg_mode,
 				 struct phylink_link_state *state)
 {
 	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
@@ -2993,6 +3008,8 @@ static void mxl862xx_pcs_get_state(struct phylink_pcs *pcs, unsigned int neg_mod
 		.port_id = port,
 	};
 	int ret;
+
+	(void)neg_mode;
 
 	ret = MXL862XX_API_READ(priv, MXL862XX_COMMON_PORTLINKCFGGET, port_link_cfg);
 	if (ret) {
@@ -3130,7 +3147,7 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 		dev_err(ds->dev, "failed to reset switch\n");
 		return ret;
 	}
-	usleep_range(4000000, 6000000);
+	usleep_range(5000000, 6000000);
 
 	priv->port_info[priv->cpu_port].tag_protocol = mxl862_parse_tag_proto(ds, priv->cpu_port);
 
@@ -3146,6 +3163,7 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 		priv->bridge_portmap[i] = BIT(DSA_MXL_PORT(cpu_port));
 
 	mxl862xx_set_vlan_filter_limits(ds);
+	dev_info(ds->dev, "setup: vlan limits configured, start per-port init\n");
 	for (i = 0; i < MAX_VLANS; i++)
 		priv->port_info[cpu_port].vlan.egress_vlan_block_info.vlans[i].untagged = true;
 
@@ -3157,16 +3175,28 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 		priv->port_info[i].isolated = false;
 
 		if (dsa_is_cpu_port(ds, i)) {
+			dev_info(ds->dev, "setup: skip cpu port %u\n", i);
 			continue;
 		}
 
-		mxl862xx_port_state(ds, i, false);
-		mxl862xx_isolate_port(ds, i);
+		dev_info(ds->dev, "setup: init user port %u (disable)\n", i);
+		ret = mxl862xx_port_state(ds, i, false);
+		if (ret)
+			return ret;
+
+		dev_info(ds->dev, "setup: init user port %u (isolate)\n", i);
+		ret = mxl862xx_isolate_port(ds, i);
+		if (ret)
+			return ret;
+
+		dev_info(ds->dev, "setup: init user port %u (fast_age)\n", i);
 		mxl862xx_port_fast_age(ds, i);
+		dev_info(ds->dev, "setup: init user port %u done\n", i);
 		priv->bridge_portmap[0] |= BIT(DSA_MXL_PORT(i));
 	}
 
 	/* Update CPU bridge port */
+	dev_info(ds->dev, "setup: update cpu bridge port map\n");
 	br_port_cfg.bridge_port_id = DSA_MXL_PORT(cpu_port),
 	br_port_cfg.bridge_port_map[0] = priv->bridge_portmap[0];
 	ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, br_port_cfg);
@@ -3175,7 +3205,9 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 		return ret;
 	}
 
+	dev_info(ds->dev, "setup: cpu fast_age\n");
 	mxl862xx_port_fast_age(ds, cpu_port);
+	dev_info(ds->dev, "setup: complete\n");
 
 	return 0;
 }
@@ -3188,6 +3220,11 @@ static void mxl862xx_port_stp_state_set(struct dsa_switch *ds, int port,
 	};
 	struct mxl862xx_priv *priv = ds->priv;
 	int ret;
+
+	/* CPU port does not participate in bridge STP states on this switch. */
+	if (dsa_is_cpu_port(ds, port)) {
+		return;
+	}
 
 	switch (state) {
 	case BR_STATE_DISABLED:
@@ -3294,7 +3331,7 @@ static void mxl862xx_phylink_mac_config(struct phylink_config *config, unsigned 
 
 		ret = MXL862XX_API_WRITE(dp->ds->priv, SYS_MISC_SFP_SET, ser_intf);
 		if (ret)
-			dev_err(dp->ds->dev, "failed to set intf on port %d (hw:%d,ser_port_id:%d) to %d (ret:%d)\n", dp->index,hw_port,ser_intf.port_id,ser_intf.speed,ret);
+			dev_err(dp->ds->dev, "failed to set intf on port %d\n", dp->index);
 	} else {
 		/* Internal phy */
 		if (state->interface != PHY_INTERFACE_MODE_INTERNAL) {
@@ -3335,7 +3372,7 @@ mxl862xx_phylink_mac_select_pcs(struct phylink_config *config,
 static void mxl862xx_phylink_mac_link_down(struct phylink_config *config, unsigned int mode,
 					   phy_interface_t interface)
 {
-	/* MxL862xx system automatically synchronize the state between MAC link and PHY link or Serdes link*/
+	/* MxL862xx system automatically synchornize the state between MAC link and PHY link or Serdes link*/
 	return;
 }
 
@@ -3344,7 +3381,7 @@ static void mxl862xx_phylink_mac_link_up(struct phylink_config *config,
 					 phy_interface_t interface, int speed, int duplex,
 					 bool tx_pause, bool rx_pause)
 {
-	/* MxL862xx system automatically synchronize the state between MAC link and PHY link or Serdes link*/
+	/* MxL862xx system automatically synchornize the state between MAC link and PHY link or Serdes link*/
 	return;
 }
 
@@ -3706,29 +3743,59 @@ static void sfp_monitor_work_func(struct work_struct *work)
 	struct net_device *dev = mux->dp->user;
 	unsigned int new_channel;
 	int sfp_present;
+	bool running;
 
 	if (IS_ERR(mux->mod_def0_gpio) || IS_ERR(mux->chan_sel_gpio))
 		goto reschedule;
 
-	if (!netif_running(dev))
-		goto reschedule;
-
 	sfp_present = gpiod_get_value_cansleep(mux->mod_def0_gpio);
+	if (sfp_present < 0)
+		goto reschedule;
 	new_channel = sfp_present ? mux->sfp_present_channel : !mux->sfp_present_channel;
 
-	if (mux->initialized && mux->channel == new_channel)
+	if (mux->channel == new_channel)
 		goto reschedule;
+
+	/* Create channel phylink lazily to avoid boot-time SFP probe stalls. */
+	if (!mux->data[new_channel]->phylink) {
+		phy_interface_t phy_mode;
+
+		if (of_get_phy_mode(mux->data[new_channel]->of_node, &phy_mode)) {
+			dev_err(ds->dev, "dsa mux: channel %u has invalid phy-mode\n",
+				new_channel);
+			goto reschedule;
+		}
+
+		mux->data[new_channel]->phylink =
+			phylink_create(&mux->dp->pl_config,
+				       of_fwnode_handle(mux->data[new_channel]->of_node),
+				       phy_mode, ds->phylink_mac_ops);
+		if (IS_ERR(mux->data[new_channel]->phylink)) {
+			dev_err(ds->dev, "dsa mux: failed to create phylink for channel %u\n",
+				new_channel);
+			mux->data[new_channel]->phylink = NULL;
+			goto reschedule;
+		}
+		dev_info(ds->dev, "dsa mux: created phylink for channel %u\n",
+			 new_channel);
+	}
+
+	running = dev && netif_running(dev);
 
 	rtnl_lock();
 
-	phylink_stop(dp->pl);
-	phylink_disconnect_phy(dp->pl);
+	if (running) {
+		phylink_stop(dp->pl);
+		phylink_disconnect_phy(dp->pl);
+	}
 
 	dp->dn = mux->data[new_channel]->of_node;
 	dp->pl = mux->data[new_channel]->phylink;
 
-	phylink_of_phy_connect(dp->pl, dp->dn, 0);
-	phylink_start(dp->pl);
+	if (running) {
+		phylink_of_phy_connect(dp->pl, dp->dn, 0);
+		phylink_start(dp->pl);
+	}
 
 	dev_info(ds->dev, "dsa mux: switch to channel%d\n", new_channel);
 
@@ -3737,7 +3804,6 @@ static void sfp_monitor_work_func(struct work_struct *work)
 	rtnl_unlock();
 
 	mux->channel = new_channel;
-	mux->initialized = true;
 
 reschedule:
 	mod_delayed_work(system_wq, &mux->sfp_monitor_work, msecs_to_jiffies(100));
@@ -3748,7 +3814,6 @@ static int ds_add_mux_channel(struct combo_port_mux *mux, struct device_node *np
 	const __be32 *_id = of_get_property(np, "reg", NULL);
 	struct dsa_switch *ds = mux->dp->ds;
 	struct dp_mux_data *data;
-	struct phylink *phylink;
 	phy_interface_t phy_mode;
 	int id, err;
 
@@ -3775,17 +3840,23 @@ static int ds_add_mux_channel(struct combo_port_mux *mux, struct device_node *np
 		goto err_free_data;
 	}
 
-	phylink = phylink_create(&mux->dp->pl_config,
-				 of_fwnode_handle(np),
-				 phy_mode, ds->phylink_mac_ops);
-	if (IS_ERR(phylink)) {
-		dev_err(ds->dev, "failed to create phylink structure\n");
-		err = PTR_ERR(phylink);
-		goto err_free_data;
-	}
-
 	data->of_node = np;
-	data->phylink = phylink;
+	/* Defer SFP channel phylink creation to runtime switch to avoid
+	 * boot-time hangs when modules are already inserted.
+	 */
+	if (id == mux->sfp_present_channel) {
+		data->phylink = NULL;
+		dev_info(ds->dev, "dsa mux: channel %d phylink deferred\n", id);
+	} else {
+		data->phylink = phylink_create(&mux->dp->pl_config,
+					       of_fwnode_handle(np),
+					       phy_mode, ds->phylink_mac_ops);
+		if (IS_ERR(data->phylink)) {
+			dev_err(ds->dev, "failed to create phylink structure\n");
+			err = PTR_ERR(data->phylink);
+			goto err_free_data;
+		}
+	}
 	mux->data[id] = data;
 
 	return 0;
@@ -3801,7 +3872,7 @@ static int ds_add_mux(struct mxl862xx_priv *priv, struct device_node *np)
 	struct device_node *child;
 	struct combo_port_mux *mux;
 	unsigned int id;
-	int err;
+	int err, sfp_present;
 
 	if (!_id) {
 		dev_err(priv->dev, "missing attach dp id\n");
@@ -3814,7 +3885,7 @@ static int ds_add_mux(struct mxl862xx_priv *priv, struct device_node *np)
 		return -EINVAL;
 	}
 
-	mux = kmalloc(sizeof(struct combo_port_mux), GFP_KERNEL);
+	mux = kzalloc(sizeof(struct combo_port_mux), GFP_KERNEL);
 	if (unlikely(!mux)) {
 		dev_err(priv->dev, "failed to create mux structure\n");
 		return -ENOMEM;
@@ -3839,14 +3910,27 @@ static int ds_add_mux(struct mxl862xx_priv *priv, struct device_node *np)
 		goto err_put_mod_def0;
 	}
 
-	of_property_read_u32(np, "sfp-present-channel",
-		&mux->sfp_present_channel);
+	if (of_property_read_u32(np, "sfp-present-channel",
+				 &mux->sfp_present_channel))
+		mux->sfp_present_channel = 0;
+	else if (mux->sfp_present_channel > 1)
+		mux->sfp_present_channel = 1;
 
 	priv->ds_mux[id] = mux;
 	mux->dp = dsa_to_port(priv->ds, id);
-	/* configure default channel to 10G PHY */
+	/* Keep probe deterministic: always start from non-SFP channel.
+	 * The monitor worker will switch to SFP channel after boot if needed.
+	 */
+	sfp_present = gpiod_get_value_cansleep(mux->mod_def0_gpio);
+	if (sfp_present < 0) {
+		dev_warn(priv->dev,
+			 "failed to read mod-def0 gpio, forcing non-SFP init channel\n");
+	}
 	mux->channel = !mux->sfp_present_channel;
-	mux->initialized = false;
+	gpiod_set_value_cansleep(mux->chan_sel_gpio, mux->channel);
+	dev_info(priv->dev,
+		 "dsa mux: id %u init channel %u (forced non-SFP, sfp-present-channel=%u, mod-def0=%d)\n",
+		 id, mux->channel, mux->sfp_present_channel, sfp_present);
 
 	for_each_child_of_node(np, child) {
 		err = ds_add_mux_channel(mux, child);
@@ -3856,6 +3940,11 @@ static int ds_add_mux(struct mxl862xx_priv *priv, struct device_node *np)
 			goto err_put_chan_sel;
 		}
 	}
+
+	mux->dp->dn = mux->data[mux->channel]->of_node;
+	mux->dp->pl = mux->data[mux->channel]->phylink;
+	dev_info(priv->dev, "dsa mux: id %u initial phylink attached to channel %u\n",
+		 id, mux->channel);
 
 	INIT_DELAYED_WORK(&mux->sfp_monitor_work, sfp_monitor_work_func);
 	mod_delayed_work(system_wq, &mux->sfp_monitor_work, msecs_to_jiffies(3000));
@@ -3926,11 +4015,6 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	if (!priv->hw_info)
 		return -EINVAL;
 
-	if (of_property_read_bool(dev->of_node, "c22-extended")) {
-		priv->c22_extended = true;
-		dev_info(dev, "%s:%u: Enable c22 extended", __func__, __LINE__);
-	}
-
 	mutex_init(&priv->pce_table_lock);
 
 	ds = devm_kzalloc(dev, sizeof(*ds), GFP_KERNEL);
@@ -3953,6 +4037,7 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 			dev_err(dev, "failed to register DSA switch\n");
 		return ret;
 	}
+	dev_info(dev, "probe: dsa_register_switch complete\n");
 
 	if (!dsa_is_cpu_port(ds, priv->cpu_port)) {
 		dev_err(dev,
@@ -3971,16 +4056,13 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	dev_info(dev, "Firmware version %d.%d.%d.%d",
 		 fw_version.iv_major, fw_version.iv_minor,
 		 fw_version.iv_revision, fw_version.iv_build_num);
-
-	if (of_property_read_bool(dev->of_node, "force-isolate")) {
-		priv->force_isolate = true;
-		dev_info(dev, "%s:%u: Enable force isolate", __func__, __LINE__);
-	}
+	dev_info(dev, "probe: firmware version read complete\n");
 
 	mux_np = of_get_child_by_name(priv->ds->dev->of_node, "ds-mux-bus");
 	if (mux_np) {
 		struct device_node *child;
 
+		dev_info(dev, "probe: start ds-mux enumeration\n");
 		for_each_available_child_of_node(mux_np, child) {
 			if (!of_device_is_compatible(child,
 						     "mxl862xx,ds-mux"))
@@ -3992,10 +4074,12 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 			ret = ds_add_mux(priv, child);
 			if (ret)
 				dev_err(dev, "failed to add mux\n");
-
-			of_node_put(mux_np);
+			else
+				dev_info(dev, "probe: ds-mux added\n");
 		};
+		of_node_put(mux_np);
 	}
+	dev_info(dev, "probe: complete\n");
 
 	return 0;
 }
