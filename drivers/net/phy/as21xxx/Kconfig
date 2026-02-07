@@ -1,0 +1,11 @@
+config AS21XXX_PHY
+	tristate "Aeonsemi AS21xxx PHYs"
+	help
+	  Currently supports the Aeonsemi AS21xxx PHY.
+
+	  These are C45 PHYs 10G that require all a generic firmware.
+
+	  Supported PHYs AS21011JB1, AS21011PB1, AS21010JB1, AS21010PB1,
+	  AS21511JB1, AS21511PB1, AS21510JB1, AS21510PB1, AS21210JB1,
+	  AS21210PB1, AN8831X that all register with the PHY ID 0x7500
+	  0x7500 before the firmware is loaded.
