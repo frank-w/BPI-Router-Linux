@@ -216,28 +216,56 @@ int dsa_port_enable_rt(struct dsa_port *dp, struct phy_device *phy)
 	int port = dp->index;
 	int err;
 
+	dev_info(ds->dev, "dsa_port_enable_rt: port %d begin\n", port);
 	if (ds->ops->port_enable) {
+		dev_info(ds->dev, "dsa_port_enable_rt: port %d -> ops->port_enable begin\n",
+			 port);
 		err = ds->ops->port_enable(ds, port, phy);
+		dev_info(ds->dev, "dsa_port_enable_rt: port %d -> ops->port_enable err=%d\n",
+			 port, err);
 		if (err)
 			return err;
 	}
 
-	if (!dp->bridge)
+	if (!dp->bridge) {
+		dev_info(ds->dev, "dsa_port_enable_rt: port %d -> set_state_now(FORWARDING) begin\n",
+			 port);
 		dsa_port_set_state_now(dp, BR_STATE_FORWARDING, false);
+		dev_info(ds->dev, "dsa_port_enable_rt: port %d -> set_state_now(FORWARDING) end\n",
+			 port);
+	}
 
-	if (dp->pl)
+	if (dp->pl) {
+		dev_info(ds->dev, "dsa_port_enable_rt: port %d -> phylink_start begin\n",
+			 port);
 		phylink_start(dp->pl);
+		dev_info(ds->dev, "dsa_port_enable_rt: port %d -> phylink_start end\n",
+			 port);
+	}
 
+	dev_info(ds->dev, "dsa_port_enable_rt: port %d complete\n", port);
 	return 0;
 }
 
 int dsa_port_enable(struct dsa_port *dp, struct phy_device *phy)
 {
+	struct dsa_switch *ds = dp->ds;
+	int port = dp->index;
+	bool have_rtnl = rtnl_is_locked();
 	int err;
 
-	rtnl_lock();
+	dev_info(ds->dev,
+		 "dsa_port_enable: port %d before rtnl_lock (have_rtnl=%d)\n",
+		 port, have_rtnl);
+	if (!have_rtnl)
+		rtnl_lock();
+	dev_info(ds->dev, "dsa_port_enable: port %d entered critical section\n", port);
 	err = dsa_port_enable_rt(dp, phy);
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
+	dev_info(ds->dev,
+		 "dsa_port_enable: port %d exit err=%d (have_rtnl=%d)\n",
+		 port, err, have_rtnl);
 
 	return err;
 }
@@ -259,9 +287,13 @@ void dsa_port_disable_rt(struct dsa_port *dp)
 
 void dsa_port_disable(struct dsa_port *dp)
 {
-	rtnl_lock();
+	bool have_rtnl = rtnl_is_locked();
+
+	if (!have_rtnl)
+		rtnl_lock();
 	dsa_port_disable_rt(dp);
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 }
 
 static void dsa_port_reset_vlan_filtering(struct dsa_port *dp,
@@ -1671,11 +1703,18 @@ static int dsa_shared_port_phylink_register(struct dsa_port *dp)
 	dp->pl_config.dev = ds->dev;
 	dp->pl_config.type = PHYLINK_DEV;
 
+	dev_info(ds->dev, "dsa shared port %d: phylink create begin\n", dp->index);
 	err = dsa_port_phylink_create(dp);
+	dev_info(ds->dev, "dsa shared port %d: phylink create err=%d\n",
+		 dp->index, err);
 	if (err)
 		return err;
 
+	dev_info(ds->dev, "dsa shared port %d: phylink_of_phy_connect begin\n",
+		 dp->index);
 	err = phylink_of_phy_connect(dp->pl, port_dn, 0);
+	dev_info(ds->dev, "dsa shared port %d: phylink_of_phy_connect err=%d\n",
+		 dp->index, err);
 	if (err && err != -ENODEV) {
 		pr_err("could not attach to PHY: %d\n", err);
 		goto err_phy_connect;

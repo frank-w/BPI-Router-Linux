@@ -1576,6 +1576,7 @@ struct mtk_mux {
 	struct gpio_desc		*chan_sel_gpio;
 	struct mtk_mux_data		*data[2];
 	struct mtk_mac			*mac;
+	struct phylink			*initial_phylink;
 	unsigned int			channel;
 	unsigned int			sfp_present_channel;
 };
