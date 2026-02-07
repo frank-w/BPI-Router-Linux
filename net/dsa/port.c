@@ -222,22 +222,27 @@ int dsa_port_enable_rt(struct dsa_port *dp, struct phy_device *phy)
 			return err;
 	}
 
-	if (!dp->bridge)
+	if (!dp->bridge) {
 		dsa_port_set_state_now(dp, BR_STATE_FORWARDING, false);
+	}
 
-	if (dp->pl)
+	if (dp->pl) {
 		phylink_start(dp->pl);
+	}
 
 	return 0;
 }
 
 int dsa_port_enable(struct dsa_port *dp, struct phy_device *phy)
 {
+	bool have_rtnl = rtnl_is_locked();
 	int err;
 
-	rtnl_lock();
+	if (!have_rtnl)
+		rtnl_lock();
 	err = dsa_port_enable_rt(dp, phy);
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 
 	return err;
 }
@@ -259,9 +264,13 @@ void dsa_port_disable_rt(struct dsa_port *dp)
 
 void dsa_port_disable(struct dsa_port *dp)
 {
-	rtnl_lock();
+	bool have_rtnl = rtnl_is_locked();
+
+	if (!have_rtnl)
+		rtnl_lock();
 	dsa_port_disable_rt(dp);
-	rtnl_unlock();
+	if (!have_rtnl)
+		rtnl_unlock();
 }
 
 static void dsa_port_reset_vlan_filtering(struct dsa_port *dp,
