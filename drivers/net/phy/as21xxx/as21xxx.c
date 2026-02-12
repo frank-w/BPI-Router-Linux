@@ -12,9 +12,6 @@
 #include <linux/phy.h>
 #include "as21xxx.h"
 
-#define aeon_dbg(_phydev, _fmt, ...) \
-	phydev_dbg((_phydev), "DBG: " _fmt, ##__VA_ARGS__)
-
 #define VEND1_GLB_REG_CPU_RESET_ADDR_LO_BASEADDR 0x3
 #define VEND1_GLB_REG_CPU_RESET_ADDR_HI_BASEADDR 0x4
 
@@ -720,7 +717,6 @@ static int aeon_firmware_load(struct phy_device *phydev)
 	struct device *dev = &phydev->mdio.dev;
 	const struct firmware *fw;
 	const char *fw_name;
-	size_t fw_size;
 	int ret;
 
 	ret = of_property_read_string(dev->of_node, "firmware-name",
@@ -731,8 +727,6 @@ static int aeon_firmware_load(struct phy_device *phydev)
 		return ret;
 	}
 
-	aeon_dbg(phydev, "requesting firmware '%s'\n", fw_name);
-
 	ret = request_firmware(&fw, fw_name, dev);
 	if (ret) {
 		phydev_err(phydev, "failed to find FW file %s (%d)\n",
@@ -740,15 +734,11 @@ static int aeon_firmware_load(struct phy_device *phydev)
 		return ret;
 	}
 
-	fw_size = fw->size;
 	ret = aeon_firmware_boot(phydev, fw->data, fw->size);
 	release_firmware(fw);
 	if (ret)
 		phydev_err(phydev, "firmware boot failed for %s (%d)\n",
 			   fw_name, ret);
-	else
-		aeon_dbg(phydev, "firmware loaded: %s (%zu bytes)\n",
-			 fw_name, fw_size);
 
 	return ret;
 }
@@ -1050,9 +1040,6 @@ static int aeon_gen1_probe(struct phy_device *phydev)
 	u32 phy_id;
 	int ret;
 
-	aeon_dbg(phydev, "gen1 probe start (mdio addr=%d)\n",
-		 phydev->mdio.addr);
-
 	priv = devm_kzalloc(&phydev->mdio.dev,
 			    sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -1091,8 +1078,6 @@ static int aeon_gen1_probe(struct phy_device *phydev)
 	if (!ret && phy_id)
 		phydev->phy_id = phy_id;
 
-	aeon_dbg(phydev, "gen1 probe complete\n");
-
 	return 0;
 }
 
@@ -1101,9 +1086,6 @@ static int aeon_gen2_probe(struct phy_device *phydev)
 	struct as21xxx_priv *priv;
 	u32 phy_id;
 	int ret = 0;
-
-	aeon_dbg(phydev, "gen2 probe start (mdio addr=%d)\n",
-		 phydev->mdio.addr);
 
 	priv = devm_kzalloc(&phydev->mdio.dev,
 				sizeof(*priv), GFP_KERNEL);
@@ -1133,8 +1115,6 @@ static int aeon_gen2_probe(struct phy_device *phydev)
 	ret = aeon_gen2_read_pid(phydev, &phy_id);
 	if (!ret && phy_id)
 		phydev->phy_id = phy_id;
-
-	aeon_dbg(phydev, "gen2 probe complete\n");
 
 	return 0;
 }
@@ -1530,27 +1510,12 @@ static int aeon_gen1_match_phy_device(struct phy_device *phydev,
 	int ret;
 
 	ret = aeon_gen1_read_pid(phydev, &phy_id);
-	if (ret < 0) {
-		aeon_dbg(phydev, "gen1 match: failed to read PHY ID (%d)\n", ret);
+	if (ret < 0)
 		return 0;
-	}
-
-	aeon_dbg(phydev, "gen1 match: read PHY ID=0x%08x, trying driver=%s (0x%08x)\n",
-		 phy_id, phydrv->name, phydrv->phy_id);
 
 	/* Match post-firmware specific IDs with their exact driver entry. */
-	if (phy_id != PHY_ID_AS21XXX) {
-		if (phy_id == phydrv->phy_id)
-			aeon_dbg(phydev,
-				 "gen1 match: post-fw PHY ID 0x%08x matched %s\n",
-				 phy_id, phydrv->name);
+	if (phy_id != PHY_ID_AS21XXX)
 		return phy_id == phydrv->phy_id;
-	}
-
-	if (phydrv->phy_id == PHY_ID_AS21XXX)
-		aeon_dbg(phydev,
-			 "gen1 match: pre-fw generic PHY ID 0x%08x matched %s\n",
-			 phy_id, phydrv->name);
 
 	/* Generic pre-firmware AS21xxx entry. */
 	return phydrv->phy_id == PHY_ID_AS21XXX;
@@ -1563,17 +1528,8 @@ static int aeon_gen2_match_phy_device(struct phy_device *phydev,
 	int ret;
 
 	ret = aeon_gen2_read_pid(phydev, &phy_id);
-	if (ret < 0) {
-		aeon_dbg(phydev, "gen2 match: failed to read PHY ID (%d)\n", ret);
+	if (ret < 0)
 		return 0;
-	}
-
-	aeon_dbg(phydev, "gen2 match: read PHY ID=0x%08x, trying driver=%s (0x%08x)\n",
-		 phy_id, phydrv->name, phydrv->phy_id);
-	if (phy_id == phydrv->phy_id)
-		aeon_dbg(phydev,
-			 "gen2 match: PHY ID 0x%08x matched %s\n",
-			 phy_id, phydrv->name);
 
 	return phy_id == phydrv->phy_id;
 }
@@ -1943,8 +1899,6 @@ static struct phy_driver aeon_drivers[] = {
 
 static int __init aeon_init(void)
 {
-	pr_err("as21xxx: driver init (%zu PHY IDs)\n", ARRAY_SIZE(aeon_drivers));
-
 	return phy_drivers_register(aeon_drivers, ARRAY_SIZE(aeon_drivers),
 				    THIS_MODULE);
 }
@@ -1952,7 +1906,6 @@ module_init(aeon_init);
 
 static void __exit aeon_exit(void)
 {
-	pr_err("as21xxx: driver exit\n");
 	phy_drivers_unregister(aeon_drivers, ARRAY_SIZE(aeon_drivers));
 }
 module_exit(aeon_exit);

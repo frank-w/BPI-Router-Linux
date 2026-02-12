@@ -115,279 +115,279 @@ static int parse_cmd_args(const char *input, struct parsed_cmd *result, int max_
 
 static inline void printk_force_speed_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set 10G FD: echo 10Gbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
-	pr_info("Set 5G FD: echo 5Gbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
-	pr_info("Set 2.5G FD: echo 2.5Gbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
-	pr_info("Set 1G FD: echo 1Gbps   > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
-	pr_info("Set 100M FD: echo 100Mbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set 10G FD: echo 10Gbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
+	pr_debug("Set 5G FD: echo 5Gbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
+	pr_debug("Set 2.5G FD: echo 2.5Gbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
+	pr_debug("Set 1G FD: echo 1Gbps   > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n");
+	pr_debug("Set 100M FD: echo 100Mbps > /sys/kernel/debug/{MDIOBUS}/aeon_set_speed_mode\n\n");
 }
 
 static inline void printk_restart_an_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Restart AN: echo RestartAN > /sys/kernel/debug/{MDIOBUS}/aeon_restart_an\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Restart AN: echo RestartAN > /sys/kernel/debug/{MDIOBUS}/aeon_restart_an\n");
 }
 
 static inline void printk_mdi_cfg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set FastRetrain: echo FastRetrain [speed] [thp_bypass]> /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set EEE: echo EEE [speed] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set AeonOUI: echo AeonOUI [pbo_option]> /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set Manual M/S enable: echo ManualMS [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set M/S: echo SetMS [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set Port Type: echo PortType [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set SmartSpd: echo Smartspd [en] [retry_limit] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set Trd Swap: echo TrdSwap [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
-	pr_info("Set CFR: echo CFR [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set FastRetrain: echo FastRetrain [speed] [thp_bypass]> /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set EEE: echo EEE [speed] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set AeonOUI: echo AeonOUI [pbo_option]> /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set Manual M/S enable: echo ManualMS [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set M/S: echo SetMS [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set Port Type: echo PortType [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set SmartSpd: echo Smartspd [en] [retry_limit] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set Trd Swap: echo TrdSwap [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n");
+	pr_debug("Set CFR: echo CFR [value] > /sys/kernel/debug/{MDIOBUS}/aeon_set_mdi_cfg\n\n");
 }
 
 static inline void printk_sds_pcs_cfg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set sds pcs cfg: echo SdsPcs [pcsMode] [sdsSpd] > /sys/kernel/debug/{MDIOBUS}/aeon_set_sds_pcs_cfg\n");
-	pr_info("Set sds ra enable: echo SdsRA > /sys/kernel/debug/{MDIOBUS}/aeon_set_sds_pcs_cfg\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set sds pcs cfg: echo SdsPcs [pcsMode] [sdsSpd] > /sys/kernel/debug/{MDIOBUS}/aeon_set_sds_pcs_cfg\n");
+	pr_debug("Set sds ra enable: echo SdsRA > /sys/kernel/debug/{MDIOBUS}/aeon_set_sds_pcs_cfg\n\n");
 }
 
 #ifndef AEON_SEI2
 static inline void printk_pkt_chk_cfg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set pkt chk: echo PktChk [mode] > /sys/kernel/debug/{MDIOBUS}/aeon_pkt_chk_cfg\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set pkt chk: echo PktChk [mode] > /sys/kernel/debug/{MDIOBUS}/aeon_pkt_chk_cfg\n\n");
 }
 
 static inline void printk_mdc_timing_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo MdcTiming [mode] > /sys/kernel/debug/{MDIOBUS}/aeon_mdc_timing\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo MdcTiming [mode] > /sys/kernel/debug/{MDIOBUS}/aeon_mdc_timing\n\n");
 }
 
 static inline void printk_auto_eee_cfg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set auto-eee: echo AutoEEE [enable] [idle_th] > /sys/kernel/debug/{MDIOBUS}/aeon_auto_eee_cfg\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set auto-eee: echo AutoEEE [enable] [idle_th] > /sys/kernel/debug/{MDIOBUS}/aeon_auto_eee_cfg\n\n");
 }
 
 static inline void printk_sds_wait_eth_cfg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo SdsWaitEth [sds_waith_eth] > /sys/kernel/debug/{MDIOBUS}/aeon_sds_wait_eth\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo SdsWaitEth [sds_waith_eth] > /sys/kernel/debug/{MDIOBUS}/aeon_sds_wait_eth\n\n");
 }
 
 static inline void printk_sds_restart_an_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo sdsan > /sys/kernel/debug/{MDIOBUS}/aeon_sds_restart_an\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo sdsan > /sys/kernel/debug/{MDIOBUS}/aeon_sds_restart_an\n\n");
 }
 
 static inline void printk_tx_power_lvl_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo txgain [val] > /sys/kernel/debug/{MDIOBUS}/aeon_tx_power_lvl\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo txgain [val] > /sys/kernel/debug/{MDIOBUS}/aeon_tx_power_lvl\n\n");
 }
 
 static inline void printk_sds2nd_cfg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Enable Second Serdes: echo Sds2ndEn [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_enable\n");
-	pr_info("Config Second Serdes Equlization: echo Sds2ndEq [vga] [slc] [ctle] [dfe] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_eq_cfg\n");
-	pr_info("Config Second Serdes PCS Mode and Datarate: echo Sds2ndMode [pcsMode] [sdsSpd] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_mode_cfg\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Enable Second Serdes: echo Sds2ndEn [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_enable\n");
+	pr_debug("Config Second Serdes Equlization: echo Sds2ndEq [vga] [slc] [ctle] [dfe] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_eq_cfg\n");
+	pr_debug("Config Second Serdes PCS Mode and Datarate: echo Sds2ndMode [pcsMode] [sdsSpd] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_mode_cfg\n");
 
 }
 
 static inline void printk_sds2nd_eye_diagram_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo eyescan [part] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_eye_diagram_data\n");
-	pr_info("echo eyeshow > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_eye_diagram_data\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo eyescan [part] > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_eye_diagram_data\n");
+	pr_debug("echo eyeshow > /sys/kernel/debug/{MDIOBUS}/aeon_sds2nd_eye_diagram_data\n");
 }
 
 static inline void printk_normal_retrain_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo nr [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_normal_retrain\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo nr [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_normal_retrain\n\n");
 }
 
 static inline void printk_auto_link_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo AutoLinkEna [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_auto_link\n");
-	pr_info("echo AutoLinkCfg [linktype] > /sys/kernel/debug/{MDIOBUS}/aeon_auto_link\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo AutoLinkEna [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_auto_link\n");
+	pr_debug("echo AutoLinkCfg [linktype] > /sys/kernel/debug/{MDIOBUS}/aeon_auto_link\n\n");
 }
 
 static inline void printk_sds_txfir_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo SdsTxFir [pre] [main] [post] > /sys/kernel/debug/{MDIOBUS}/aeon_sds_txfir\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo SdsTxFir [pre] [main] [post] > /sys/kernel/debug/{MDIOBUS}/aeon_sds_txfir\n\n");
 }
 #endif
 
 static inline void printk_sds_pma_cfg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set sds pma: echo SdsPma [vga_adapt] [ctle_adapt] [dfe_adapt] [slc_adapt]> /sys/kernel/debug/{MDIOBUS}/aeon_set_sds_pma_cfg\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set sds pma: echo SdsPma [vga_adapt] [ctle_adapt] [dfe_adapt] [slc_adapt]> /sys/kernel/debug/{MDIOBUS}/aeon_set_sds_pma_cfg\n\n");
 }
 
 static inline void printk_get_fw_version_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Get fw version: echo ver > /sys/kernel/debug/{MDIOBUS}/aeon_fw_version\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Get fw version: echo ver > /sys/kernel/debug/{MDIOBUS}/aeon_fw_version\n\n");
 }
 
 static inline void printk_temp_monitor_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set temperature monitor: echo temp [subcommand] [param] > /sys/kernel/debug/{MDIOBUS}/aeon_temp_monitor\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set temperature monitor: echo temp [subcommand] [param] > /sys/kernel/debug/{MDIOBUS}/aeon_temp_monitor\n\n");
 }
 
 static inline void printk_set_led_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set led: echo led [led0] [led1] [led2] [led3] [led4] [polarity] [blink] > /sys/kernel/debug/{MDIOBUS}/aeon_set_led\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set led: echo led [led0] [led1] [led2] [led3] [led4] [polarity] [blink] > /sys/kernel/debug/{MDIOBUS}/aeon_set_led\n\n");
 }
 
 static inline void printk_sys_reboot_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Reboot: echo reboot > /sys/kernel/debug/{MDIOBUS}/aeon_set_sys_reboot\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Reboot: echo reboot > /sys/kernel/debug/{MDIOBUS}/aeon_set_sys_reboot\n\n");
 }
 
 static inline void printk_read_reg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo ReadReg [dev_addr] [phy_reg] > /sys/kernel/debug/{MDIOBUS}/aeon_read_reg\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo ReadReg [dev_addr] [phy_reg] > /sys/kernel/debug/{MDIOBUS}/aeon_read_reg\n\n");
 }
 
 static inline void printk_write_reg_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo WriteReg [dev_addr] [phy_reg] [value] > /sys/kernel/debug/{MDIOBUS}/aeon_write_reg\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo WriteReg [dev_addr] [phy_reg] [value] > /sys/kernel/debug/{MDIOBUS}/aeon_write_reg\n\n");
 }
 
 static inline void printk_eth_status_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo ethstatus > /sys/kernel/debug/{MDIOBUS}/aeon_get_eth_status\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo ethstatus > /sys/kernel/debug/{MDIOBUS}/aeon_get_eth_status\n\n");
 }
 
 static inline void printk_phy_enable_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo phyenable [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_phy_enable\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo phyenable [enable] > /sys/kernel/debug/{MDIOBUS}/aeon_phy_enable\n\n");
 }
 
 #ifdef DUAL_FLASH
 static inline void printk_sys_dual_flash(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo flash [include_bootloader] > /sys/kernel/debug/{MDIOBUS}/aeon_burn_flash_image\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo flash [include_bootloader] > /sys/kernel/debug/{MDIOBUS}/aeon_burn_flash_image\n\n");
 }
 
 static inline void printk_erase_flash(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo erase [flash_addr] [size] > /sys/kernel/debug/{MDIOBUS}/aeon_erase_flash\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo erase [flash_addr] [size] > /sys/kernel/debug/{MDIOBUS}/aeon_erase_flash\n\n");
 }
 #endif
 
 static inline void printk_test_mode_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("Set NG testmode: echo ngtest [speed] [test_mode] [test_tone(if test_mode == 4)] > /sys/kernel/debug/{MDIOBUS}/aeon_test_mode\n");
-	pr_info("Set 1G testmode: echo 1gtest [test_mode] > /sys/kernel/debug/{MDIOBUS}/aeon_test_mode\n");
-	pr_info("Set 100M testmode: echo 100mtest > /sys/kernel/debug/{MDIOBUS}/aeon_test_mode\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("Set NG testmode: echo ngtest [speed] [test_mode] [test_tone(if test_mode == 4)] > /sys/kernel/debug/{MDIOBUS}/aeon_test_mode\n");
+	pr_debug("Set 1G testmode: echo 1gtest [test_mode] > /sys/kernel/debug/{MDIOBUS}/aeon_test_mode\n");
+	pr_debug("Set 100M testmode: echo 100mtest > /sys/kernel/debug/{MDIOBUS}/aeon_test_mode\n\n");
 }
 
 static inline void printk_tx_fullscale_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo txfullscale [speed] [val0 val1 val2 val3] > /sys/kernel/debug/{MDIOBUS}/aeon_tx_fullscale\n");
-	pr_info("echo get [speed] > /sys/kernel/debug/{MDIOBUS}/aeon_tx_fullscale\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo txfullscale [speed] [val0 val1 val2 val3] > /sys/kernel/debug/{MDIOBUS}/aeon_tx_fullscale\n");
+	pr_debug("echo get [speed] > /sys/kernel/debug/{MDIOBUS}/aeon_tx_fullscale\n\n");
 }
 
 static inline void printk_wol_ctrl_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo wolctrl [value0] [value1] [value2] [value3]> /sys/kernel/debug/{MDIOBUS}/aeon_wol_ctrl\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo wolctrl [value0] [value1] [value2] [value3]> /sys/kernel/debug/{MDIOBUS}/aeon_wol_ctrl\n\n");
 }
 
 static inline void printk_smi_ctrl_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo smicommand [value0] [value1]> /sys/kernel/debug/{MDIOBUS}/aeon_smi_command\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo smicommand [value0] [value1]> /sys/kernel/debug/{MDIOBUS}/aeon_smi_command\n\n");
 }
 
 static inline void printk_set_irq_en_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo setirqen [value0] [value1] [value2] [value3] > /sys/kernel/debug/{MDIOBUS}/aeon_setirq_en\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo setirqen [value0] [value1] [value2] [value3] > /sys/kernel/debug/{MDIOBUS}/aeon_setirq_en\n\n");
 }
 
 static inline void printk_set_irq_clr_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo setirqclr [value0] > /sys/kernel/debug/{MDIOBUS}/aeon_setirq_clr\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo setirqclr [value0] > /sys/kernel/debug/{MDIOBUS}/aeon_setirq_clr\n\n");
 }
 
 static inline void printk_query_irq_status_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo queryirq > /sys/kernel/debug/{MDIOBUS}/aeon_query_irq\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo queryirq > /sys/kernel/debug/{MDIOBUS}/aeon_query_irq\n\n");
 }
 
 static inline void printk_cable_diag_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo chanlen > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
-	pr_info("echo ppmofst > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
-	pr_info("echo snrmargin > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
-	pr_info("echo chanskew > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
-	pr_info("echo set [mode] > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
-	pr_info("echo get > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo chanlen > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
+	pr_debug("echo ppmofst > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
+	pr_debug("echo snrmargin > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
+	pr_debug("echo chanskew > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
+	pr_debug("echo set [mode] > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n");
+	pr_debug("echo get > /sys/kernel/debug/{MDIOBUS}/aeon_cable_diag\n\n");
 }
 
 static inline void printk_sds_eye_diagram_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo eyescan [part] > /sys/kernel/debug/{MDIOBUS}/aeon_eye_diagram_data\n");
-	pr_info("echo eyeshow > /sys/kernel/debug/{MDIOBUS}/aeon_eye_diagram_data\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo eyescan [part] > /sys/kernel/debug/{MDIOBUS}/aeon_eye_diagram_data\n");
+	pr_debug("echo eyeshow > /sys/kernel/debug/{MDIOBUS}/aeon_eye_diagram_data\n");
 }
 
 static inline void printk_force_mode_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo force100M [duplex] > /sys/kernel/debug/{MDIOBUS}/aeon_force_mode\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo force100M [duplex] > /sys/kernel/debug/{MDIOBUS}/aeon_force_mode\n\n");
 }
 
 static inline void printk_parallel_det_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo paradet [enable] > /proc/tc3162/aeon_parallel_det\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo paradet [enable] > /proc/tc3162/aeon_parallel_det\n\n");
 }
 
 static inline void printk_force_mdi_mode_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo mdi [val] > /sys/kernel/debug/{MDIOBUS}/aeon_force_mdi_mode\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo mdi [val] > /sys/kernel/debug/{MDIOBUS}/aeon_force_mdi_mode\n\n");
 }
 
 static inline void printk_synce_master_mode_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo synce_master [enable] [bw] > /sys/kernel/debug/{MDIOBUS}/aeon_synce_master_mode\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo synce_master [enable] [bw] > /sys/kernel/debug/{MDIOBUS}/aeon_synce_master_mode\n\n");
 }
 
 static inline void printk_synce_slave_mode1_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo synce_slave_mode1 [enable] [oc] > /sys/kernel/debug/{MDIOBUS}/aeon_synce_slave_mode1\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo synce_slave_mode1 [enable] [oc] > /sys/kernel/debug/{MDIOBUS}/aeon_synce_slave_mode1\n\n");
 }
 
 static inline void printk_synce_slave_mode2_usage(void)
 {
-	pr_info("================Please input:===================\n");
-	pr_info("echo synce_slave_mode2 [enable] [bw] [oc] > /sys/kernel/debug/{MDIOBUS}/aeon_synce_slave_mode2\n\n");
+	pr_debug("================Please input:===================\n");
+	pr_debug("echo synce_slave_mode2 [enable] [bw] [oc] > /sys/kernel/debug/{MDIOBUS}/aeon_synce_slave_mode2\n\n");
 }
 
 #ifndef AEON_SEI2
@@ -423,7 +423,7 @@ static ssize_t aeon_pkt_chk_cfg_write_proc(struct file *file,
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_pkt_chk_cfg(cmdinfo.args[0], phydev);
-		pr_info("Set Pkt Checker successfully!\n");
+		pr_debug("Set Pkt Checker successfully!\n");
 	} else
 		printk_pkt_chk_cfg_usage();
 
@@ -468,7 +468,7 @@ static ssize_t aeon_mdc_timing_write_proc(struct file *file, const char __user *
 			phy_write_mmd(phydev, 0x1E, 0x54, 0x0);
 			phy_write_mmd(phydev, 0x1E, 0x55, 0x0);
 		}
-		pr_info("Set MDC timing successfully!\n");
+		pr_debug("Set MDC timing successfully!\n");
 	} else
 		printk_mdc_timing_usage();
 
@@ -507,7 +507,7 @@ static ssize_t aeon_auto_eee_cfg_write_proc(struct file *file,
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_auto_eee_cfg(cmdinfo.args[0], cmdinfo.args[1], phydev);
-		pr_info("Set Auto EEE successfully!\n");
+		pr_debug("Set Auto EEE successfully!\n");
 	} else
 		printk_auto_eee_cfg_usage();
 
@@ -546,7 +546,7 @@ static ssize_t aeon_sds_wait_eth_cfg_write_proc(struct file *file,
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_sds_wait_eth_cfg(cmdinfo.args[0], phydev);
-		pr_info("Set Sds wait Eth cfg successfully!\n");
+		pr_debug("Set Sds wait Eth cfg successfully!\n");
 	} else
 		printk_sds_wait_eth_cfg_usage();
 
@@ -586,7 +586,7 @@ static ssize_t aeon_sds_restart_an_write_proc(struct file *file,
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_sds_restart_an(phydev);
-		pr_info("Restart sds AN successfully!\n");
+		pr_debug("Restart sds AN successfully!\n");
 	} else
 		printk_sds_restart_an_usage();
 
@@ -625,7 +625,7 @@ static ssize_t aeon_tx_power_lvl_write_proc(struct file *file, const char __user
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_set_tx_power_lvl(cmdinfo.args[0], phydev);
-		pr_info("Set TX power level successfully!\n");
+		pr_debug("Set TX power level successfully!\n");
 	} else
 		printk_tx_power_lvl_usage();
 
@@ -789,13 +789,13 @@ static ssize_t aeon_sds2nd_eye_diagram_write_proc(struct file *file, const char 
 			return -EINVAL;
 		}
 	} else if (!strcmp(cmdinfo.cmd, "eyeshow")) {
-		pr_info("RAW EYE data:\n");
+		pr_debug("RAW EYE data:\n");
 		for (ii = 0; ii < EYE_TOTAL_BYTES; ++ii) {
 			if (ii % 16 == 0)
-				pr_info("\n");
-			pr_info("0x%02x ", raw_eye_data[ii]);
+				pr_debug("\n");
+			pr_debug("0x%02x ", raw_eye_data[ii]);
 		}
-		pr_info("\n");
+		pr_debug("\n");
 
 		memset(raw_eye_data, 0, EYE_TOTAL_BYTES);
 	} else
@@ -835,7 +835,7 @@ static ssize_t aeon_normal_retrain_write_proc(struct file *file, const char __us
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_normal_retrain_cfg(cmdinfo.args[0], phydev);
-		pr_info("Set normal retrain successfully!\n");
+		pr_debug("Set normal retrain successfully!\n");
 	} else
 		printk_normal_retrain_usage();
 
@@ -959,7 +959,7 @@ static ssize_t aeon_read_reg_write_proc(struct file *file, const char __user *bu
 			return -EINVAL;
 
 		value = aeon_cl45_read(phydev, cmdinfo.args[0], cmdinfo.args[1]);
-		pr_info("Read register value: 0x%x\n", value);
+		pr_debug("Read register value: 0x%x\n", value);
 	} else
 		printk_read_reg_usage();
 
@@ -996,7 +996,7 @@ static ssize_t aeon_write_reg_write_proc(struct file *file, const char __user *b
 			return -EINVAL;
 
 		phy_write_mmd(phydev, cmdinfo.args[0], cmdinfo.args[1], cmdinfo.args[2]);
-		pr_info("Write register successfully!\n");
+		pr_debug("Write register successfully!\n");
 	} else
 		printk_write_reg_usage();
 
@@ -1035,20 +1035,20 @@ static ssize_t aeon_eth_status_write_proc(struct file *file, const char __user *
 
 		value = aeon_cl45_read(phydev, 0x7, 0x8005);
 		link_status = ((value & 0xF000) >> 12) == 9;
-		pr_info("Link Status : %d\n", link_status);
+		pr_debug("Link Status : %d\n", link_status);
 		if (link_status) {
 			value = aeon_cl45_read(phydev, 0x1E, 0x4002);
 			speed = value & 0xFF;
 			if (speed == 0x3)
-				pr_info("Link up at 10G\n");
+				pr_debug("Link up at 10G\n");
 			else if (speed == 0x5)
-				pr_info("Link up at 5G\n");
+				pr_debug("Link up at 5G\n");
 			else if (speed == 0x9)
-				pr_info("Link up at 2.5G\n");
+				pr_debug("Link up at 2.5G\n");
 			else if (speed == 0x10)
-				pr_info("Link up at 1G\n");
+				pr_debug("Link up at 1G\n");
 			else if (speed == 0x20)
-				pr_info("Link up at 100M\n");
+				pr_debug("Link up at 100M\n");
 		}
 	} else
 		printk_eth_status_usage();
@@ -1123,7 +1123,7 @@ static ssize_t aeon_restart_an_write_proc(struct file *file, const char __user *
 			aeon_cu_an_set_cfr(__priv_data->cfr, phydev);
 		aeon_ipc_sync_parity(phydev);
 		aeon_cu_an_restart(phydev);
-		pr_info("AN-related CFG finish, restart AN successfully!\n");
+		pr_debug("AN-related CFG finish, restart AN successfully!\n");
 	} else
 		printk_restart_an_usage();
 
@@ -1162,19 +1162,19 @@ static ssize_t aeon_speed_mode_write_proc(struct file *file, const char __user *
 
 	if (!strcmp(cmdinfo.cmd, "10Gbps")) {
 		__priv_data->top_spd = MDI_CFG_SPD_T10G;
-		pr_info("Set 10Gbps successfully!\n");
+		pr_debug("Set 10Gbps successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "5Gbps")) {
 		__priv_data->top_spd = MDI_CFG_SPD_T5G;
-		pr_info("Set 5Gbps successfully!\n");
+		pr_debug("Set 5Gbps successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "2.5Gbps")) {
 		__priv_data->top_spd = MDI_CFG_SPD_T2P5G;
-		pr_info("Set 2.5Gbps successfully!\n");
+		pr_debug("Set 2.5Gbps successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "1Gbps")) {
 		__priv_data->top_spd = MDI_CFG_SPD_T1G;
-		pr_info("Set 1Gbps successfully!\n");
+		pr_debug("Set 1Gbps successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "100Mbps")) {
 		__priv_data->top_spd = MDI_CFG_SPD_T100;
-		pr_info("Set 100Mbps successfully!\n");
+		pr_debug("Set 100Mbps successfully!\n");
 	} else
 		printk_force_speed_usage();
 
@@ -1214,49 +1214,49 @@ static ssize_t aeon_mdi_cfg_write_proc(struct file *file, const char __user *buf
 		__priv_data->fr_spd = cmdinfo.args[0];
 		__priv_data->thp_byp = cmdinfo.args[1];
 		aeon_cu_an_set_fast_retrain(__priv_data->fr_spd, __priv_data->thp_byp, phydev);
-		pr_info("CFG Fast Retrain successfully!\n");
+		pr_debug("CFG Fast Retrain successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "EEE")) {
 		if (cmdinfo.argc != 1)
 			return -EINVAL;
 		__priv_data->eee_spd = cmdinfo.args[0];
-		pr_info("CFG EEE successfully!\n");
+		pr_debug("CFG EEE successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "ManualMS")) {
 		if (cmdinfo.argc != 1)
 			return -EINVAL;
 		__priv_data->ms_en = cmdinfo.args[0];
-		pr_info("CFG Manual M/S enable successfully!\n");
+		pr_debug("CFG Manual M/S enable successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "SetMS")) {
 		if (cmdinfo.argc != 1)
 			return -EINVAL;
 		__priv_data->ms_config = cmdinfo.args[0];
-		pr_info("CFG M/S successfully!\n");
+		pr_debug("CFG M/S successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "PortType")) {
 		if (cmdinfo.argc != 1)
 			return -EINVAL;
 		__priv_data->port_type = cmdinfo.args[0];
-		pr_info("CFG Port Type successfully!\n");
+		pr_debug("CFG Port Type successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "Smartspd")) {
 		if (cmdinfo.argc != 2)
 			return -EINVAL;
 		__priv_data->smt_spd.enable = cmdinfo.args[0];
 		__priv_data->smt_spd.retry_limit = cmdinfo.args[1];
-		pr_info("CFG Smartspd successfully!\n");
+		pr_debug("CFG Smartspd successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "AeonOUI")) {
 		if (cmdinfo.argc != 1)
 			return -EINVAL;
 		__priv_data->nstd_pbo = cmdinfo.args[0];
-		pr_info("CFG aeon oui successfully!\n");
+		pr_debug("CFG aeon oui successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "TrdSwap")) {
 		if (cmdinfo.argc != 2)
 			return -EINVAL;
 		__priv_data->trd_ovrd = cmdinfo.args[0];
 		__priv_data->trd_swap = cmdinfo.args[1];
-		pr_info("CFG Trd Swap successfully!\n");
+		pr_debug("CFG Trd Swap successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "CFR")) {
 		if (cmdinfo.argc != 1)
 			return -EINVAL;
 		__priv_data->cfr = cmdinfo.args[0];
-		pr_info("CFG CFR successfully!\n");
+		pr_debug("CFG CFR successfully!\n");
 	} else
 		printk_mdi_cfg_usage();
 
@@ -1295,14 +1295,14 @@ static ssize_t aeon_sds_pcs_cfg_write_proc(struct file *file,
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_dpc_ra_enable(phydev);
-		pr_info("Set Sds Rate Adaptation successfully!\n");
+		pr_debug("Set Sds Rate Adaptation successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "SdsPcs")) {
 		if (cmdinfo.argc != 2)
 			return -EINVAL;
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_sds_pcs_set_cfg(cmdinfo.args[0], cmdinfo.args[1], phydev);
-		pr_info("Set Sds Pcs successfully!\n");
+		pr_debug("Set Sds Pcs successfully!\n");
 	} else
 		printk_sds_pcs_cfg_usage();
 
@@ -1340,7 +1340,7 @@ static ssize_t aeon_phy_enable_write_proc(struct file *file, const char __user *
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_phy_enable_mode(cmdinfo.args[0], phydev);
-		pr_info("Set phy successfully!\n");
+		pr_debug("Set phy successfully!\n");
 	} else
 		printk_phy_enable_usage();
 
@@ -1380,7 +1380,7 @@ static ssize_t aeon_set_led_write_proc(struct file *file, const char __user *buf
 		aeon_ipc_set_led_cfg(cmdinfo.args[0], cmdinfo.args[1], cmdinfo.args[2],
 				     cmdinfo.args[3], cmdinfo.args[4], cmdinfo.args[5],
 				     cmdinfo.args[6], phydev);
-		pr_info("Set LED successfully!\n");
+		pr_debug("Set LED successfully!\n");
 	} else
 		printk_set_led_usage();
 
@@ -1420,7 +1420,7 @@ static ssize_t aeon_sds_pma_cfg_write_proc(struct file *file,
 		aeon_ipc_sync_parity(phydev);
 		aeon_sds_pma_set_cfg(cmdinfo.args[0], cmdinfo.args[1], cmdinfo.args[2],
 				     cmdinfo.args[3], phydev);
-		pr_info("Set Sds PMA successfully!\n");
+		pr_debug("Set Sds PMA successfully!\n");
 	} else
 		printk_sds_pma_cfg_usage();
 
@@ -1458,7 +1458,7 @@ static ssize_t aeon_fw_version_write_proc(struct file *file, const char __user *
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_get_fw_version(version1, phydev);
-		pr_info("Get FW version : %32s\n", version1);
+		pr_debug("Get FW version : %32s\n", version1);
 	} else
 		printk_get_fw_version_usage();
 
@@ -1496,13 +1496,13 @@ static ssize_t aeon_temp_monitor_write_proc(struct file *file,
 	if (!strcmp(cmdinfo.cmd, "temp")) {
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_temp_monitor(cmdinfo.args[0], cmdinfo.args[1], tempnow, phydev);
-		pr_info("Set temperature monitor successfully!\n");
+		pr_debug("Set temperature monitor successfully!\n");
 		if (cmdinfo.args[0] == 0x4) {
 			params = (unsigned long)(tempnow[1] | (tempnow[2] << 16));
 			temperature = params / 65536;
 			if (temperature > 32768)
 				temperature = temperature - 1 - 0xFFFF;
-			pr_info("Get temperature : %u celsius\n", temperature);
+			pr_debug("Get temperature : %u celsius\n", temperature);
 		}
 	} else
 		printk_temp_monitor_usage();
@@ -1541,7 +1541,7 @@ static ssize_t aeon_sys_reboot_write_proc(struct file *file, const char __user *
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_set_sys_reboot(phydev);
-		pr_info("Reboot successfully!\n");
+		pr_debug("Reboot successfully!\n");
 	} else
 		printk_sys_reboot_usage();
 
@@ -1580,7 +1580,7 @@ static ssize_t aeon_burn_flash_write_proc(struct file *file, const char __user *
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_burn_image(cmdinfo.args[0], phydev);
-		pr_info("Set flash_burning successfully!\n");
+		pr_debug("Set flash_burning successfully!\n");
 	} else
 		printk_sys_dual_flash();
 
@@ -1619,7 +1619,7 @@ static ssize_t aeon_erase_flash_write_proc(struct file *file,
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_erase_flash(cmdinfo.args[0], cmdinfo.args[1], 2, phydev);
-		pr_info("Erase flash successfully!\n");
+		pr_debug("Erase flash successfully!\n");
 	} else
 		printk_erase_flash();
 
@@ -1658,13 +1658,13 @@ static ssize_t aeon_test_mode_write_proc(struct file *file, const char __user *b
 			return -EINVAL;
 		aeon_ipc_sync_parity(phydev);
 		aeon_100m_test_mode(phydev);
-		pr_info("Set 100M test mode successfully!\n");
+		pr_debug("Set 100M test mode successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "1gtest")) {
 		if (cmdinfo.argc != 1)
 			return -EINVAL;
 		aeon_ipc_sync_parity(phydev);
 		aeon_1g_test_mode(cmdinfo.args[0], phydev);
-		pr_info("Set 1G test mode successfully!\n");
+		pr_debug("Set 1G test mode successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "ngtest")) {
 		// Get top_speed
 		if (cmdinfo.args[0] == 1)
@@ -1674,18 +1674,18 @@ static ssize_t aeon_test_mode_write_proc(struct file *file, const char __user *b
 		else if (cmdinfo.args[0] == 3)
 			input1 = MDI_CFG_SPD_T10G;
 		if ((cmdinfo.args[1] == 4) && (cmdinfo.argc == 2)) {
-			pr_info("Please input test tone!\n");
+			pr_debug("Please input test tone!\n");
 			printk_test_mode_usage();
 			return -EINVAL;
 		}
 		if ((cmdinfo.argc == 3) && (cmdinfo.args[1] != 4)) {
-			pr_info("Test tone is useless here!\n");
+			pr_debug("Test tone is useless here!\n");
 			printk_test_mode_usage();
 			return -EINVAL;
 		}
 		aeon_ipc_sync_parity(phydev);
 		aeon_ng_test_mode(input1, cmdinfo.args[1], cmdinfo.args[2], phydev);
-		pr_info("Set NG test mode successfully!\n");
+		pr_debug("Set NG test mode successfully!\n");
 	} else
 		printk_test_mode_usage();
 
@@ -1728,7 +1728,7 @@ static ssize_t aeon_tx_fullscale_write_proc(struct file *file,
 			short_delta[i] = (unsigned short)(cmdinfo.args[i+1] + 32678);
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_set_tx_fullscale_delta(cmdinfo.args[0], short_delta, phydev);
-		pr_info("Set TX full scale successfully!\n");
+		pr_debug("Set TX full scale successfully!\n");
 	} else if (!strcmp(cmdinfo.cmd, "get")) {
 		if (cmdinfo.argc != 0)
 			return -EINVAL;
@@ -1736,11 +1736,11 @@ static ssize_t aeon_tx_fullscale_write_proc(struct file *file,
 		for (i = 0; i < 5; i++) {
 			aeon_ipc_sync_parity(phydev);
 			aeon_ipc_get_tx_fullscale_delta(speed_all[i], short_delta, phydev);
-			pr_info("speed : %u, tx_fullscale : %d %d %d %d\n", speed_all[i],
+			pr_debug("speed : %u, tx_fullscale : %d %d %d %d\n", speed_all[i],
 					(short)short_delta[0], (short)short_delta[1],
 					(short)short_delta[2], (short)short_delta[3]);
 		}
-		pr_info("Get TX full scale successfully!\n");
+		pr_debug("Get TX full scale successfully!\n");
 	} else
 		printk_tx_fullscale_usage();
 
@@ -1781,7 +1781,7 @@ static ssize_t aeon_wol_ctrl_write_proc(struct file *file, const char __user *bu
 			short_delta[i] = (unsigned short)cmdinfo.args[i+1];
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_set_wol(cmdinfo.args[0], short_delta, phydev);
-		pr_info("Set wol successfully!\n");
+		pr_debug("Set wol successfully!\n");
 	} else
 		printk_wol_ctrl_usage();
 
@@ -1823,7 +1823,7 @@ static ssize_t aeon_smi_command_write_proc(struct file *file,
 			short_delta[i] = (unsigned short)cmdinfo.args[i];
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_smi_command(short_delta, phydev);
-		pr_info("Set SMI Command successfully!\n");
+		pr_debug("Set SMI Command successfully!\n");
 	} else
 		printk_smi_ctrl_usage();
 
@@ -1864,7 +1864,7 @@ static ssize_t aeon_set_irq_en_write_proc(struct file *file, const char __user *
 			short_delta[i] = (unsigned short)cmdinfo.args[i];
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_irq_en(short_delta, phydev);
-		pr_info("Set irq en successfully!\n");
+		pr_debug("Set irq en successfully!\n");
 	} else
 		printk_set_irq_en_usage();
 
@@ -1903,7 +1903,7 @@ static ssize_t aeon_set_irq_clr_write_proc(struct file *file,
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_irq_clr(cmdinfo.args[0], phydev);
-		pr_info("Set irq clr successfully!\n");
+		pr_debug("Set irq clr successfully!\n");
 	} else
 		printk_set_irq_clr_usage();
 
@@ -1944,9 +1944,9 @@ static ssize_t aeon_query_irq_write_proc(struct file *file, const char __user *b
 
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_irq_query(&param, phydev);
-		pr_info("query irq status is 0x%x!\n", param);
+		pr_debug("query irq status is 0x%x!\n", param);
 		*(unsigned char *)&stats = (unsigned char)param;
-		pr_info("wol_sts: %u, link_sts: %u\n", stats.wol_sts, stats.link_sts);
+		pr_debug("wol_sts: %u, link_sts: %u\n", stats.wol_sts, stats.link_sts);
 	} else
 		printk_query_irq_status_usage();
 
@@ -1986,37 +1986,37 @@ static ssize_t aeon_cable_diag_write_proc(struct file *file, const char __user *
 	if (!strcmp(cmdinfo.cmd, "chanlen")) {
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_cable_diag(IPC_CMD_CABLE_DIAG_CHAN_LEN, temp, mode, phydev);
-		pr_info("channel length(m) : ");
+		pr_debug("channel length(m) : ");
 		for (ii = 0; ii < CHAN_NUM/2; ii++)
-			pr_info("%u  %u  ", temp[ii] & 0xff, (temp[ii] >> 8));
-		pr_info("\n");
+			pr_debug("%u  %u  ", temp[ii] & 0xff, (temp[ii] >> 8));
+		pr_debug("\n");
 	} else if (!strcmp(cmdinfo.cmd, "ppmofst")) {
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_cable_diag(IPC_CMD_CABLE_DIAG_PPM_OFST, temp, mode, phydev);
 		output = temp[0] | (temp[1] << 16);
-		pr_info("frequency offset : %d\n", output);
+		pr_debug("frequency offset : %d\n", output);
 	} else if (!strcmp(cmdinfo.cmd, "snrmargin")) {
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_cable_diag(IPC_CMD_CABLE_DIAG_SNR_MARG, temp, mode, phydev);
-		pr_info("SNR margin : ");
+		pr_debug("SNR margin : ");
 		for (ii = 0; ii < 2 * CHAN_NUM; ii++) {
 			output = temp[ii];
 			++ii;
 			output |= (temp[ii] << 16);
-			pr_info("%d  ", output);
+			pr_debug("%d  ", output);
 		}
-		pr_info("\n");
+		pr_debug("\n");
 	} else if (!strcmp(cmdinfo.cmd, "chanskew")) {
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_cable_diag(IPC_CMD_CABLE_DIAG_CHAN_SKW, temp, mode, phydev);
-		pr_info("channel skew : ");
+		pr_debug("channel skew : ");
 		for (ii = 0; ii < 2 * CHAN_NUM; ii++) {
 			output = temp[ii];
 			++ii;
 			output |= (temp[ii] << 16);
-			pr_info("%d  ", output);
+			pr_debug("%d  ", output);
 		}
-		pr_info("\n");
+		pr_debug("\n");
 	} else if (!strcmp(cmdinfo.cmd, "set")) {
 		mode = cmdinfo.args[0];
 		aeon_ipc_sync_parity(phydev);
@@ -2024,16 +2024,16 @@ static ssize_t aeon_cable_diag_write_proc(struct file *file, const char __user *
 	} else if (!strcmp(cmdinfo.cmd, "get")) {
 		aeon_ipc_sync_parity(phydev);
 		aeon_ipc_cable_diag(IPC_CMD_CABLE_DIAG_GET, temp, mode, phydev);
-		pr_info("channel length(m) : ");
+		pr_debug("channel length(m) : ");
 		for (ii = 0; ii < CHAN_NUM/2; ii++)
-			pr_info("%u  %u  ", temp[ii] & 0xff, (temp[ii] >> 8));
-		pr_info("\nimp_type : ");
+			pr_debug("%u  %u  ", temp[ii] & 0xff, (temp[ii] >> 8));
+		pr_debug("\nimp_type : ");
 		for (ii = 0; ii < CHAN_NUM/2; ii++) {
-			pr_info("%s  %s  ", IMP_TYPE_STR[temp[ii+CHAN_NUM/2] & 0xff],
+			pr_debug("%s  %s  ", IMP_TYPE_STR[temp[ii+CHAN_NUM/2] & 0xff],
 				IMP_TYPE_STR[(temp[ii+CHAN_NUM/2] >> 8)]);
 		}
-		pr_info("\nres_conf : ");
-		pr_info("0x%x\n", temp[CHAN_NUM] & 0xff);
+		pr_debug("\nres_conf : ");
+		pr_debug("0x%x\n", temp[CHAN_NUM] & 0xff);
 	} else {
 		printk_cable_diag_usage();
 	}
@@ -2086,14 +2086,14 @@ static ssize_t aeon_eye_diagram_write_proc(struct file *file, const char __user 
 			return -EINVAL;
 		}
 	} else if (!strcmp(cmdinfo.cmd, "eyeshow")) {
-		pr_info("RAW EYE data:\n");
+		pr_debug("RAW EYE data:\n");
 		for (ii = 0; ii < EYE_TOTAL_BYTES; ++ii) {
 			if (ii % 16 == 0)
-				pr_info("\n");
+				pr_debug("\n");
 
-			pr_info("0x%02x ", raw_eye_data[ii]);
+			pr_debug("0x%02x ", raw_eye_data[ii]);
 		}
-		pr_info("\n");
+		pr_debug("\n");
 
 		memset(raw_eye_data, 0, EYE_TOTAL_BYTES);
 	} else {
@@ -2138,7 +2138,7 @@ static ssize_t aeon_force_mode_write_proc(struct file *file, const char __user *
 		aeon_cu_an_set_top_spd(MDI_CFG_SPD_T100, phydev);
 		// enable AN
 		aeon_cu_an_enable(0, phydev);
-		pr_info("Force 100M successfully!\n");
+		pr_debug("Force 100M successfully!\n");
 	} else
 		printk_force_mode_usage();
 
@@ -2175,7 +2175,7 @@ static ssize_t aeon_parallel_det_write_proc(struct file *file, const char __user
 			return -EINVAL;
 
 		aeon_parallel_det(cmdinfo.args[0], phydev);
-		pr_info("Set parallel detection successfully!\n");
+		pr_debug("Set parallel detection successfully!\n");
 	} else
 		printk_parallel_det_usage();
 
@@ -2220,7 +2220,7 @@ static ssize_t aeon_force_mdi_mode_write_proc(struct file *file, const char __us
 		else
 			return -EINVAL;
 
-		pr_info("Force mdi/mdix mode successfully!\n");
+		pr_debug("Force mdi/mdix mode successfully!\n");
 	} else
 		printk_force_mdi_mode_usage();
 
@@ -2259,12 +2259,12 @@ static ssize_t aeon_synce_master_mode_write_proc(struct file *file, const char _
 			return -EINVAL;
 
 		if ((cmdinfo.args[0] < 0) || (cmdinfo.args[0] > 1)) {
-			pr_info("Set synce enable fail, enable value is from 0 to 1!\n");
+			pr_debug("Set synce enable fail, enable value is from 0 to 1!\n");
 			return -EFAULT;
 		}
 
 		if ((cmdinfo.args[1] < 1) || (cmdinfo.args[1] > 4)) {
-			pr_info("Set user bw fail, enable value is from 1 to 4!\n");
+			pr_debug("Set user bw fail, enable value is from 1 to 4!\n");
 			return -EFAULT;
 		}
 
@@ -2272,7 +2272,7 @@ static ssize_t aeon_synce_master_mode_write_proc(struct file *file, const char _
 		aeon_synce_mode_cfg(1, phydev);
 		aeon_synce_user_bw(cmdinfo.args[1], phydev);
 		aeon_synce_enable_cfg(cmdinfo.args[0], phydev);
-		pr_info("Set synce master mode successfully!\n");
+		pr_debug("Set synce master mode successfully!\n");
 	} else
 		printk_synce_master_mode_usage();
 
@@ -2310,12 +2310,12 @@ static ssize_t aeon_synce_slave_mode1_write_proc(struct file *file, const char _
 			return -EINVAL;
 
 		if ((cmdinfo.args[0] < 0) || (cmdinfo.args[0] > 1)) {
-			pr_info("Set synce enable fail, enable value is from 0 to 1!\n");
+			pr_debug("Set synce enable fail, enable value is from 0 to 1!\n");
 			return -EFAULT;
 		}
 
 		if ((cmdinfo.args[1] < 0) || (cmdinfo.args[1] > 4)) {
-			pr_info("Set synce output pin fail, enable value is from 0 to 4!\n");
+			pr_debug("Set synce output pin fail, enable value is from 0 to 4!\n");
 			return -EFAULT;
 		}
 
@@ -2324,7 +2324,7 @@ static ssize_t aeon_synce_slave_mode1_write_proc(struct file *file, const char _
 		aeon_synce_user_bw(0, phydev);
 		aeon_synce_slave_output_ctrl_cfg(cmdinfo.args[1], phydev);
 		aeon_synce_enable_cfg(cmdinfo.args[0], phydev);
-		pr_info("Set synce slave mode1 successfully!\n");
+		pr_debug("Set synce slave mode1 successfully!\n");
 	} else
 		printk_synce_slave_mode1_usage();
 
@@ -2363,17 +2363,17 @@ static ssize_t aeon_synce_slave_mode2_write_proc(struct file *file, const char _
 			return -EINVAL;
 
 		if ((cmdinfo.args[0] < 0) || (cmdinfo.args[0] > 1)) {
-			pr_info("Set synce enable fail, enable value is from 0 to 1!\n");
+			pr_debug("Set synce enable fail, enable value is from 0 to 1!\n");
 			return -EFAULT;
 		}
 
 		if ((cmdinfo.args[1] < 0) || ((cmdinfo.args[1] > 6) && (cmdinfo.args[1] != 10))) {
-			pr_info("Set synce bw fail, enable value is from 0 to 6 and 10!\n");
+			pr_debug("Set synce bw fail, enable value is from 0 to 6 and 10!\n");
 			return -EFAULT;
 		}
 
 		if ((cmdinfo.args[2] < 0) || (cmdinfo.args[2] > 1)) {
-			pr_info("Set synce output pin fail, enable value is from 0 to 1!\n");
+			pr_debug("Set synce output pin fail, enable value is from 0 to 1!\n");
 			return -EFAULT;
 		}
 
@@ -2382,7 +2382,7 @@ static ssize_t aeon_synce_slave_mode2_write_proc(struct file *file, const char _
 		aeon_synce_user_bw(cmdinfo.args[1], phydev);
 		aeon_synce_slave_output_ctrl_cfg(cmdinfo.args[2], phydev);
 		aeon_synce_enable_cfg(cmdinfo.args[0], phydev);
-		pr_info("Set synce slave mode2 successfully!\n");
+		pr_debug("Set synce slave mode2 successfully!\n");
 	} else
 		printk_synce_slave_mode2_usage();
 

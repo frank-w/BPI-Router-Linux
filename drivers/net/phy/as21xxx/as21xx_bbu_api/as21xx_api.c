@@ -1109,7 +1109,7 @@ void aeon_update_flash(const char *firmware, unsigned int flash_start,
 		return;
 	}
 	crc = ~crc32(~0, fw->data, fw->size);
-	dev_info(dev, "%s: crc32=0x%x\n", firmware, crc);
+	dev_dbg(dev, "%s: crc32=0x%x\n", firmware, crc);
 	// pad length so that fsm won't stuck at read back
 	image_size = (fw->size + 3) & 0xFFFFFFFC;
 
@@ -1127,11 +1127,11 @@ void aeon_update_flash(const char *firmware, unsigned int flash_start,
 		if (total > (FLASH_SECTOR_SIZE >> 1))
 			total = (FLASH_SECTOR_SIZE >> 1);
 
-		dev_info(dev, "sector_ofst : %u", sector_ofst);
-		dev_info(dev, "  data_ofst : 0x%x\n", data_ofst);
-		dev_info(dev, "flash_addr : 0x%x\n", flash_addr);
+		dev_dbg(dev, "sector_ofst : %u", sector_ofst);
+		dev_dbg(dev, "  data_ofst : 0x%x\n", data_ofst);
+		dev_dbg(dev, "flash_addr : 0x%x\n", flash_addr);
 
-		dev_info(dev, "Origin params : %u  %u  %u  %u  %u  %u  %u  %u\n",
+		dev_dbg(dev, "Origin params : %u  %u  %u  %u  %u  %u  %u  %u\n",
 		       *(wdata), *(wdata + 1), *(wdata + 2), *(wdata + 3),
 		       *(wdata + 4), *(wdata + 5), *(wdata + 6), *(wdata + 7));
 
@@ -1176,7 +1176,7 @@ void aeon_burn_image(unsigned char include_bootloader,
 			new_addr = IMAGE2_HDR_OFST;
 			old_addr = IMAGE1_HDR_OFST;
 		}
-		dev_info(dev, "new_addr: %u, old_addr : %u\n", new_addr, old_addr);
+		dev_dbg(dev, "new_addr: %u, old_addr : %u\n", new_addr, old_addr);
 		aeon_update_flash(FLASH_BIN, new_addr, phydev);
 		ofst = aeon_ipc_sys_cpu_info(IPC_CMD_SYS_CPU_IMAGE_CHECK,
 					     new_addr, 0x33d000, phydev);
