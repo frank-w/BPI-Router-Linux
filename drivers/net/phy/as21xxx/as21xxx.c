@@ -1041,9 +1041,13 @@ static int aeon_get_features(struct phy_device *phydev)
 	return 0;
 }
 
+static int aeon_gen1_read_pid(struct phy_device *phydev, u32 *phy_id);
+static int aeon_gen2_read_pid(struct phy_device *phydev, u32 *phy_id);
+
 static int aeon_gen1_probe(struct phy_device *phydev)
 {
 	struct as21xxx_priv *priv;
+	u32 phy_id;
 	int ret;
 
 	aeon_dbg(phydev, "gen1 probe start (mdio addr=%d)\n",
@@ -1079,6 +1083,14 @@ static int aeon_gen1_probe(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
+	/*
+	 * Keep sysfs phy_id aligned with the post-firmware C45 ID.
+	 * Matching is done against C45 IDs, so failure here is non-fatal.
+	 */
+	ret = aeon_gen1_read_pid(phydev, &phy_id);
+	if (!ret && phy_id)
+		phydev->phy_id = phy_id;
+
 	aeon_dbg(phydev, "gen1 probe complete\n");
 
 	return 0;
@@ -1087,6 +1099,7 @@ static int aeon_gen1_probe(struct phy_device *phydev)
 static int aeon_gen2_probe(struct phy_device *phydev)
 {
 	struct as21xxx_priv *priv;
+	u32 phy_id;
 	int ret = 0;
 
 	aeon_dbg(phydev, "gen2 probe start (mdio addr=%d)\n",
@@ -1112,6 +1125,14 @@ static int aeon_gen2_probe(struct phy_device *phydev)
 	ret = aeon_ipc_get_fw_version(phydev);
 	if (ret)
 		return ret;
+
+	/*
+	 * Keep sysfs phy_id aligned with the post-firmware C45 ID.
+	 * Matching is done against C45 IDs, so failure here is non-fatal.
+	 */
+	ret = aeon_gen2_read_pid(phydev, &phy_id);
+	if (!ret && phy_id)
+		phydev->phy_id = phy_id;
 
 	aeon_dbg(phydev, "gen2 probe complete\n");
 
@@ -1510,9 +1531,8 @@ static int aeon_gen1_match_phy_device(struct phy_device *phydev,
 
 	ret = aeon_gen1_read_pid(phydev, &phy_id);
 	if (ret < 0) {
-		phydev_err(phydev, "gen1 match: failed to read PHY ID (%d)\n",
-			   ret);
-		return ret;
+		aeon_dbg(phydev, "gen1 match: failed to read PHY ID (%d)\n", ret);
+		return 0;
 	}
 
 	aeon_dbg(phydev, "gen1 match: read PHY ID=0x%08x, trying driver=%s (0x%08x)\n",
@@ -1527,8 +1547,6 @@ static int aeon_gen1_match_phy_device(struct phy_device *phydev,
 		return phy_id == phydrv->phy_id;
 	}
 
-	phydev->phy_id = phy_id;
-	aeon_cl45_write(phydev, MDIO_MMD_VEND1, VEND1_PTP_CLK, 0x48);
 	if (phydrv->phy_id == PHY_ID_AS21XXX)
 		aeon_dbg(phydev,
 			 "gen1 match: pre-fw generic PHY ID 0x%08x matched %s\n",
@@ -1546,12 +1564,10 @@ static int aeon_gen2_match_phy_device(struct phy_device *phydev,
 
 	ret = aeon_gen2_read_pid(phydev, &phy_id);
 	if (ret < 0) {
-		phydev_err(phydev, "gen2 match: failed to read PHY ID (%d)\n",
-			   ret);
-		return ret;
+		aeon_dbg(phydev, "gen2 match: failed to read PHY ID (%d)\n", ret);
+		return 0;
 	}
 
-	phydev->phy_id = phy_id;
 	aeon_dbg(phydev, "gen2 match: read PHY ID=0x%08x, trying driver=%s (0x%08x)\n",
 		 phy_id, phydrv->name, phydrv->phy_id);
 	if (phy_id == phydrv->phy_id)
