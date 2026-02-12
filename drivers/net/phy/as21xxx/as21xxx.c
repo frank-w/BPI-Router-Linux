@@ -1527,7 +1527,9 @@ static int aeon_gen1_match_phy_device(struct phy_device *phydev,
 		return phy_id == phydrv->phy_id;
 	}
 
-	phydev->phy_id = phy_id;
+	if (phy_id)
+		phydev->phy_id = phy_id;
+
 	aeon_cl45_write(phydev, MDIO_MMD_VEND1, VEND1_PTP_CLK, 0x48);
 	if (phydrv->phy_id == PHY_ID_AS21XXX)
 		aeon_dbg(phydev,
@@ -1551,7 +1553,9 @@ static int aeon_gen2_match_phy_device(struct phy_device *phydev,
 		return ret;
 	}
 
-	phydev->phy_id = phy_id;
+	if (phy_id)
+		phydev->phy_id = phy_id;
+
 	aeon_dbg(phydev, "gen2 match: read PHY ID=0x%08x, trying driver=%s (0x%08x)\n",
 		 phy_id, phydrv->name, phydrv->phy_id);
 	if (phy_id == phydrv->phy_id)
