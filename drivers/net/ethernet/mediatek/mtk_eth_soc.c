@@ -5185,8 +5185,6 @@ static int mtk_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
 	switch (cmd->cmd) {
 	case ETHTOOL_GRXCLSRLCNT:
 		if (dev->hw_features & NETIF_F_LRO) {
-			struct mtk_mac *mac = netdev_priv(dev);
-
 			cmd->rule_cnt = mac->hwlro_ip_cnt;
 			ret = 0;
 		}
