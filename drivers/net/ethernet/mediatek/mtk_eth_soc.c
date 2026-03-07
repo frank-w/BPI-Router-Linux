@@ -5108,7 +5108,6 @@ static int mtk_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
 			 u32 *rule_locs)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
-	struct mtk_eth *eth = mac->hw;
 	int ret = -EOPNOTSUPP;
 
 	switch (cmd->cmd) {
