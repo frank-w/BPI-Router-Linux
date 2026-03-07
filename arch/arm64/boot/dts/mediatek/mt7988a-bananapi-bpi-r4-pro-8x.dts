@@ -114,7 +114,7 @@
 	};
 };
 
-&switch16 {
+&switch {
 	ds_mux: ds-mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
