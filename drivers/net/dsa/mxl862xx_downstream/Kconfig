@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config NET_DSA_MXL862_DS
+	tristate "MaxLinear MxL862xx downstream driver"
+	depends on NET_DSA
+	#select NET_DSA_TAG_MXL862
+	select NET_DSA_TAG_MXL_862XX
+	help
+	  This enables support for the MaxLinear MxL862xx switch family (downstream).
