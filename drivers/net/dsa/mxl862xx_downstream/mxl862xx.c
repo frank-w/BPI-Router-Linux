@@ -34,7 +34,7 @@
 	mxl862xx_api_wrap(dev, cmd, &(data), sizeof((data)), true)
 
 /* DSA port index is 0 based, the MXL FW has 1 as the base index */
-#define DSA_MXL_PORT(port) ((port) + 1)
+#define DSA_MXL_PORT(port) ((port))
 
 #define MXL862XX_SDMA_PCTRLP(p) (0xBC0 + ((p) * 0x6))
 #define MXL862XX_SDMA_PCTRL_EN BIT(0) /* SDMA Port Enable */
