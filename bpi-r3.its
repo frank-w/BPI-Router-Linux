@@ -60,6 +60,11 @@
 			type = "flat_dt";
 			arch = "arm64";
 		};
+		fdt-ov-sata{
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-sata.dtbo");
+			type = "flat_dt";
+			arch = "arm64";
+		};
 /*		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");

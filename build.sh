@@ -1120,15 +1120,34 @@ if [ -n "$kernver" ]; then
 		"dts")
 			edit $DTS
 			;;
+
 		"dtbs_check")
+			export ARCH=arm64
+			export CROSS_COMPILE='aarch64-linux-gnu-'
+			if [[ "$2" == "disable_unrelated" ]];then
+				sed -i.bak '/mediatek\|rockchip/! s/^/#/' arch/arm64/boot/dts/Makefile
+				sed -i.bak '/bpi/! s/^/#/' arch/arm64/boot/dts/{mediatek,rockchip}/Makefile
+			fi
+			if [[ ! -e .venv ]];then
+				python3 -m venv .venv
+			fi
+			source .venv/bin/activate
+			if [[ $? -ne 0 ]];then exit 1;fi
+			pip3 install dtschema --upgrade
+			pip3 show dtschema
+			make dt_binding_check 2>&1 | tee dtbs_check.log
+			make defconfig
 			make dtbs_check 2>&1 | tee -a dtbs_check.log
-		;;
+			deactivate
+			mv arch/arm64/boot/dts/Makefile{.bak,}
+			mv arch/arm64/boot/dts/mediatek/Makefile{.bak,}
+			mv arch/arm64/boot/dts/rockchip/Makefile{.bak,}
+			;;
 
 		"importmylconfig")
 			echo "import myl config"
 			make mt7623n_myl_defconfig
 			;;
-
 
 		"importconfig")
 			echo "import a defconfig file"
