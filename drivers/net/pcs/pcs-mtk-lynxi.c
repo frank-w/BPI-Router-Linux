@@ -202,11 +202,13 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
 	bool mode_changed = false, changed;
 	unsigned int rgc3, sgm_mode, bmcr = 0, trxbuf_thr = 0x3112;
-	int advertise, link_timer;
+	int advertise = -ENODEV, link_timer;
 	int ret;
 
-	advertise = phylink_mii_c22_pcs_encode_advertisement(interface,
-							     advertising);
+	if (advertising != NULL)
+		advertise = phylink_mii_c22_pcs_encode_advertisement(interface,
+								     advertising);
+	else dev_err(mpcs->dev,"ERROR: advertising is NULL!!");
 	if (advertise < 0)
 		return advertise;
 
