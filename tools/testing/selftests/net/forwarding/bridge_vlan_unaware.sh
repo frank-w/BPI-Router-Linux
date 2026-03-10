@@ -1,7 +1,8 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0
 
-ALL_TESTS="ping_ipv4 ping_ipv6 learning flooding pvid_change"
+ALL_TESTS="ping_ipv4 ping_ipv6 learning flooding pvid_change
+	   link_local"
 NUM_NETIFS=4
 source lib.sh
 
@@ -112,6 +113,43 @@ pvid_change()
 
 	ping_ipv4 " with bridge port $swp1 PVID deleted"
 	ping_ipv6 " with bridge port $swp1 PVID deleted"
+}
+
+link_local()
+{
+	# IEEE 802.1D reserves the MAC range 01:80:c2:00:00:00-0f for
+	# link-local protocols (STP, LACP, LLDP, etc.). A bridge must not
+	# forward frames to these addresses across its ports. When a switch
+	# offloads the bridge and sets the fwd_offload mark on received
+	# frames, it must not set this mark for link-local frames, because
+	# the mark tells the software bridge that the hardware already
+	# forwarded the frame, suppressing any further forwarding — including
+	# delivery to local upper-layer listeners (STP, LACP daemons, etc.).
+
+	# Test that link-local frames are not hardware-forwarded between
+	# bridge ports, regardless of whether the offload mark is set.
+	local mac=01:80:c2:00:00:02
+
+	RET=0
+
+	tc qdisc add dev $h2 clsact
+	tc filter add dev $h2 ingress protocol all pref 1 handle 101 \
+		flower dst_mac $mac action drop
+	ip link set $h2 promisc on
+
+	$MZ $h1 -q -c 1 -a own -b $mac -p 64
+
+	sleep 1
+
+	tc -j -s filter show dev $h2 ingress \
+		| jq -e ".[] | select(.options.handle == 101) \
+		| select(.options.actions[0].stats.packets == 1)" &> /dev/null
+	check_fail $? "Link-local frame flooded to other bridge port"
+
+	ip link set $h2 promisc off
+	tc qdisc del dev $h2 clsact
+
+	log_test "Link-local frame not forwarded"
 }
 
 trap cleanup EXIT
