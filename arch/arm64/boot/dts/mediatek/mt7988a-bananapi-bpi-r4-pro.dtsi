@@ -189,7 +189,7 @@
 
 &mdio_bus {
 	clock-frequency = <20000000>;
-	switch@10 {
+	switch16: switch@10 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "maxlinear,mxl86252";

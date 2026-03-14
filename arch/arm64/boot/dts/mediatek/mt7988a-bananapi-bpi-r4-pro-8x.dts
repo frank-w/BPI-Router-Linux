@@ -114,7 +114,7 @@
 	};
 };
 
-&switch {
+/*&switch16 {
 	ds_mux: ds-mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -147,7 +147,7 @@
 	ports {
 		port6: port@6 {
 			reg = <13>;
-			label = "mxl_lan6";
+			label = "lan6";
 			phy-mode = "usxgmii";
 			phy-handle = <&phy24>;
 			status = "okay";
@@ -159,4 +159,4 @@
 		};
 
 	};
-};
+};*/
