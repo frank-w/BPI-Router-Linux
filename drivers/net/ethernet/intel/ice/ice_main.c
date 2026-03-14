@@ -3323,18 +3323,20 @@ static irqreturn_t ice_misc_intr_thread_fn(int __always_unused irq, void *data)
 	if (ice_is_reset_in_progress(pf->state))
 		goto skip_irq;
 
-	if (test_and_clear_bit(ICE_MISC_THREAD_TX_TSTAMP, pf->misc_thread)) {
-		/* Process outstanding Tx timestamps. If there is more work,
-		 * re-arm the interrupt to trigger again.
-		 */
-		if (ice_ptp_process_ts(pf) == ICE_TX_TSTAMP_WORK_PENDING) {
-			wr32(hw, PFINT_OICR, PFINT_OICR_TSYN_TX_M);
-			ice_flush(hw);
-		}
-	}
+	if (test_and_clear_bit(ICE_MISC_THREAD_TX_TSTAMP, pf->misc_thread))
+		ice_ptp_process_ts(pf);
 
 skip_irq:
 	ice_irq_dynamic_ena(hw, NULL, NULL);
+	ice_flush(hw);
+
+	if (ice_ptp_tx_tstamps_pending(pf)) {
+		/* If any new Tx timestamps happened while in interrupt,
+		 * re-arm the interrupt to trigger it again.
+		 */
+		wr32(hw, PFINT_OICR, PFINT_OICR_TSYN_TX_M);
+		ice_flush(hw);
+	}
 
 	return IRQ_HANDLED;
 }
@@ -5661,7 +5663,6 @@ static int ice_resume(struct device *dev)
 
 	pci_set_power_state(pdev, PCI_D0);
 	pci_restore_state(pdev);
-	pci_save_state(pdev);
 
 	if (!pci_device_is_present(pdev))
 		return -ENODEV;
@@ -5761,7 +5762,6 @@ static pci_ers_result_t ice_pci_err_slot_reset(struct pci_dev *pdev)
 	} else {
 		pci_set_master(pdev);
 		pci_restore_state(pdev);
-		pci_save_state(pdev);
 		pci_wake_from_d3(pdev, false);
 
 		/* Check for life */
@@ -7815,6 +7815,9 @@ static void ice_rebuild(struct ice_pf *pf, enum ice_reset_req reset_type)
 
 	/* Restore timestamp mode settings after VSI rebuild */
 	ice_ptp_restore_timestamp_mode(pf);
+
+	/* Start PTP periodic work after VSI is fully rebuilt */
+	ice_ptp_queue_work(pf);
 	return;
 
 err_vsi_rebuild:
@@ -9674,9 +9677,6 @@ int ice_open_internal(struct net_device *netdev)
 	if (err)
 		netdev_err(netdev, "Failed to open VSI 0x%04X on switch 0x%04X\n",
 			   vsi->vsi_num, vsi->vsw->sw_id);
-
-	/* Update existing tunnels information */
-	udp_tunnel_get_rx_info(netdev);
 
 	return err;
 }
