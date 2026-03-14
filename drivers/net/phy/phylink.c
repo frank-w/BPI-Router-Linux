@@ -64,7 +64,6 @@ struct phylink {
 	/* List of available PCS */
 	struct list_head pcs_list;
 	struct notifier_block fwnode_pcs_nb;
-	bool fwnode_pcs_nb_registered;
 
 	/* What interface are supported by the current link.
 	 * Can change on removal or addition of new PCS.
@@ -2073,12 +2072,7 @@ struct phylink *phylink_create(struct phylink_config *config,
 
 	if (!phy_interface_empty(config->pcs_interfaces)) {
 		pl->fwnode_pcs_nb.notifier_call = pcs_provider_notify;
-		ret = register_fwnode_pcs_notifier(&pl->fwnode_pcs_nb);
-		if (ret && ret != -EOPNOTSUPP) {
-			kfree(pl);
-			return ERR_PTR(ret);
-		}
-		pl->fwnode_pcs_nb_registered = !ret;
+		register_fwnode_pcs_notifier(&pl->fwnode_pcs_nb);
 	}
 
 	pl->config = config;
@@ -2088,8 +2082,8 @@ struct phylink *phylink_create(struct phylink_config *config,
 	} else if (config->type == PHYLINK_DEV) {
 		pl->dev = config->dev;
 	} else {
-		ret = -EINVAL;
-		goto err_unregister_fwnode_pcs_notifier;
+		kfree(pl);
+		return ERR_PTR(-EINVAL);
 	}
 
 	pl->mac_supports_eee_ops = phylink_mac_implements_lpi(mac_ops);
@@ -2122,28 +2116,28 @@ struct phylink *phylink_create(struct phylink_config *config,
 	phylink_validate(pl, pl->supported, &pl->link_config);
 
 	ret = phylink_parse_mode(pl, fwnode);
-	if (ret < 0)
-		goto err_unregister_fwnode_pcs_notifier;
+	if (ret < 0) {
+		kfree(pl);
+		return ERR_PTR(ret);
+	}
 
 	if (pl->cfg_link_an_mode == MLO_AN_FIXED) {
 		ret = phylink_parse_fixedlink(pl, fwnode);
-		if (ret < 0)
-			goto err_unregister_fwnode_pcs_notifier;
+		if (ret < 0) {
+			kfree(pl);
+			return ERR_PTR(ret);
+		}
 	}
 
 	pl->req_link_an_mode = pl->cfg_link_an_mode;
 
 	ret = phylink_register_sfp(pl, fwnode);
-	if (ret < 0)
-		goto err_unregister_fwnode_pcs_notifier;
+	if (ret < 0) {
+		kfree(pl);
+		return ERR_PTR(ret);
+	}
 
 	return pl;
-
-err_unregister_fwnode_pcs_notifier:
-	if (pl->fwnode_pcs_nb_registered)
-		unregister_fwnode_pcs_notifier(&pl->fwnode_pcs_nb);
-	kfree(pl);
-	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL_GPL(phylink_create);
 
@@ -2167,9 +2161,6 @@ void phylink_destroy(struct phylink *pl)
 	/* Remove every PCS from phylink PCS list */
 	list_for_each_entry_safe(pcs, tmp, &pl->pcs_list, list)
 		list_del(&pcs->list);
-
-	if (pl->fwnode_pcs_nb_registered)
-		unregister_fwnode_pcs_notifier(&pl->fwnode_pcs_nb);
 
 	cancel_work_sync(&pl->resolve);
 	kfree(pl);

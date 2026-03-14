@@ -2672,31 +2672,19 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 		dp->pl_config.poll_fixed_state = true;
 	}
 
-	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink create begin\n",
-		 dp->index, user_dev->name);
 	ret = dsa_port_phylink_create(dp);
-	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink create err=%d\n",
-		 dp->index, user_dev->name, ret);
 	if (ret)
 		return ret;
 
 	if (ds->ops->get_phy_flags)
 		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
 
-	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink_of_phy_connect begin\n",
-		 dp->index, user_dev->name);
 	ret = phylink_of_phy_connect(dp->pl, port_dn, phy_flags);
-	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink_of_phy_connect err=%d\n",
-		 dp->index, user_dev->name, ret);
 	if (ret == -ENODEV && ds->user_mii_bus) {
 		/* We could not connect to a designated PHY or SFP, so try to
 		 * use the switch internal MDIO bus instead
 		 */
-		dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) fallback user_mii_bus addr=%d begin\n",
-			 dp->index, user_dev->name, dp->index);
 		ret = dsa_user_phy_connect(user_dev, dp->index, phy_flags);
-		dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) fallback user_mii_bus err=%d\n",
-			 dp->index, user_dev->name, ret);
 	}
 	if (ret) {
 		netdev_err(user_dev, "failed to connect to PHY: %pe\n",
@@ -2774,7 +2762,6 @@ int dsa_user_create(struct dsa_port *port)
 	struct dsa_switch *ds = port->ds;
 	struct net_device *user_dev;
 	struct dsa_user_priv *p;
-	bool have_rtnl;
 	const char *name;
 	int assign_type;
 	int ret;
@@ -2840,13 +2827,7 @@ int dsa_user_create(struct dsa_port *port)
 		goto out_gcells;
 	}
 
-	have_rtnl = rtnl_is_locked();
-	dev_info(ds->dev, "dsa_user_create: %s before rtnl_lock (have_rtnl=%d)\n",
-		 user_dev->name, have_rtnl);
-	if (!have_rtnl)
-		rtnl_lock();
-	dev_info(ds->dev, "dsa_user_create: %s entered critical section\n",
-		 user_dev->name);
+	rtnl_lock();
 
 	ret = dsa_user_change_mtu(user_dev, ETH_DATA_LEN);
 	if (ret && ret != -EOPNOTSUPP)
@@ -2857,8 +2838,7 @@ int dsa_user_create(struct dsa_port *port)
 	if (ret) {
 		netdev_err(conduit, "error %d registering interface %s\n",
 			   ret, user_dev->name);
-		if (!have_rtnl)
-			rtnl_unlock();
+		rtnl_unlock();
 		goto out_phy;
 	}
 
@@ -2868,18 +2848,14 @@ int dsa_user_create(struct dsa_port *port)
 			netdev_err(user_dev,
 				   "failed to initialize DCB: %pe\n",
 				   ERR_PTR(ret));
-			if (!have_rtnl)
-				rtnl_unlock();
+			rtnl_unlock();
 			goto out_unregister;
 		}
 	}
 
 	ret = netdev_upper_dev_link(conduit, user_dev, NULL);
 
-	if (!have_rtnl)
-		rtnl_unlock();
-	dev_info(ds->dev, "dsa_user_create: %s exit critical section ret=%d\n",
-		 user_dev->name, ret);
+	rtnl_unlock();
 
 	if (ret)
 		goto out_unregister;
@@ -2887,16 +2863,11 @@ int dsa_user_create(struct dsa_port *port)
 	return 0;
 
 out_unregister:
-	if (have_rtnl)
-		unregister_netdevice(user_dev);
-	else
-		unregister_netdev(user_dev);
+	unregister_netdev(user_dev);
 out_phy:
-	if (!have_rtnl)
-		rtnl_lock();
+	rtnl_lock();
 	phylink_disconnect_phy(p->dp->pl);
-	if (!have_rtnl)
-		rtnl_unlock();
+	rtnl_unlock();
 	dsa_port_phylink_destroy(p->dp);
 out_gcells:
 	gro_cells_destroy(&p->gcells);
@@ -2911,16 +2882,13 @@ void dsa_user_destroy(struct net_device *user_dev)
 	struct net_device *conduit = dsa_user_to_conduit(user_dev);
 	struct dsa_port *dp = dsa_user_to_port(user_dev);
 	struct dsa_user_priv *p = netdev_priv(user_dev);
-	bool have_rtnl = rtnl_is_locked();
 
 	netif_carrier_off(user_dev);
-	if (!have_rtnl)
-		rtnl_lock();
+	rtnl_lock();
 	netdev_upper_dev_unlink(conduit, user_dev);
 	unregister_netdevice(user_dev);
 	phylink_disconnect_phy(dp->pl);
-	if (!have_rtnl)
-		rtnl_unlock();
+	rtnl_unlock();
 
 	dsa_port_phylink_destroy(dp);
 	gro_cells_destroy(&p->gcells);

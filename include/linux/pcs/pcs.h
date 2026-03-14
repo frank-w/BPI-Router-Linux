@@ -23,18 +23,6 @@ enum fwnode_pcs_notify_event {
 int register_fwnode_pcs_notifier(struct notifier_block *nb);
 
 /**
- * unregister_fwnode_pcs_notifier - Unregister a notifier block for fwnode
- *				    PCS events
- * @nb: pointer to the notifier block
- *
- * Unregisters a notifier block previously registered with
- * register_fwnode_pcs_notifier().
- *
- * Returns 0 or a negative error.
- */
-int unregister_fwnode_pcs_notifier(struct notifier_block *nb);
-
-/**
  * fwnode_pcs_get - Retrieves a PCS from a firmware node
  * @fwnode: firmware node
  * @index: index fwnode PCS handle in firmware node
@@ -88,11 +76,6 @@ int fwnode_phylink_pcs_parse(struct fwnode_handle *fwnode,
 			     unsigned int *num_pcs);
 #else
 static int register_fwnode_pcs_notifier(struct notifier_block *nb)
-{
-	return -EOPNOTSUPP;
-}
-
-static int unregister_fwnode_pcs_notifier(struct notifier_block *nb)
 {
 	return -EOPNOTSUPP;
 }
