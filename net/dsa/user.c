@@ -2672,19 +2672,31 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 		dp->pl_config.poll_fixed_state = true;
 	}
 
+	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink create begin\n",
+		 dp->index, user_dev->name);
 	ret = dsa_port_phylink_create(dp);
+	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink create err=%d\n",
+		 dp->index, user_dev->name, ret);
 	if (ret)
 		return ret;
 
 	if (ds->ops->get_phy_flags)
 		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
 
+	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink_of_phy_connect begin\n",
+		 dp->index, user_dev->name);
 	ret = phylink_of_phy_connect(dp->pl, port_dn, phy_flags);
+	dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) phylink_of_phy_connect err=%d\n",
+		 dp->index, user_dev->name, ret);
 	if (ret == -ENODEV && ds->user_mii_bus) {
 		/* We could not connect to a designated PHY or SFP, so try to
 		 * use the switch internal MDIO bus instead
 		 */
+		dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) fallback user_mii_bus addr=%d begin\n",
+			 dp->index, user_dev->name, dp->index);
 		ret = dsa_user_phy_connect(user_dev, dp->index, phy_flags);
+		dev_info(ds->dev, "dsa_user_phy_setup: port %d (%s) fallback user_mii_bus err=%d\n",
+			 dp->index, user_dev->name, ret);
 	}
 	if (ret) {
 		netdev_err(user_dev, "failed to connect to PHY: %pe\n",
@@ -2829,8 +2841,12 @@ int dsa_user_create(struct dsa_port *port)
 	}
 
 	have_rtnl = rtnl_is_locked();
+	dev_info(ds->dev, "dsa_user_create: %s before rtnl_lock (have_rtnl=%d)\n",
+		 user_dev->name, have_rtnl);
 	if (!have_rtnl)
 		rtnl_lock();
+	dev_info(ds->dev, "dsa_user_create: %s entered critical section\n",
+		 user_dev->name);
 
 	ret = dsa_user_change_mtu(user_dev, ETH_DATA_LEN);
 	if (ret && ret != -EOPNOTSUPP)
@@ -2862,6 +2878,8 @@ int dsa_user_create(struct dsa_port *port)
 
 	if (!have_rtnl)
 		rtnl_unlock();
+	dev_info(ds->dev, "dsa_user_create: %s exit critical section ret=%d\n",
+		 user_dev->name, ret);
 
 	if (ret)
 		goto out_unregister;

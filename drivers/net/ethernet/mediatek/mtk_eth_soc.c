@@ -5475,6 +5475,7 @@ static void mux_poll(struct work_struct *work)
 	}
 
 	rtnl_lock();
+	dev_info(eth->dev, "ethernet mux: switch to channel%d\n", new_channel);
 	mac->of_node = mux->data[new_channel]->of_node;
 	mac->phylink = mux->data[new_channel]->phylink;
 
