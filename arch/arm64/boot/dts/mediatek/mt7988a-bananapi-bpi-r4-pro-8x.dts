@@ -49,7 +49,7 @@
 &gmac1 {
 	phy-mode = "usxgmii";
 	phy-connection-type = "usxgmii";
-	phy-handle = <&phy28>;
+	//phy-handle = <&phy28>;
 	status = "okay";
 };
 
