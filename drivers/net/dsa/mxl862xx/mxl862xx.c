@@ -16,6 +16,7 @@
 #include <linux/of_mdio.h>
 #include <linux/phy.h>
 #include <linux/phylink.h>
+#include <linux/dsa/8021q.h>
 #include <net/dsa.h>
 
 #include "mxl862xx.h"
@@ -153,6 +154,9 @@ enum mxl862xx_evlan_action {
 	EVLAN_PVID_OR_DISCARD,		/* insert PVID tag or discard if no PVID */
 	EVLAN_PVID_OR_PASS,		/* insert PVID tag or pass-through */
 	EVLAN_STRIP1_AND_PVID_OR_DISCARD,/* strip 1 tag + insert PVID, or discard */
+	EVLAN_INSERT_OUTER,		/* insert outer tag with mgmt_vid */
+	EVLAN_STRIP1,			/* strip 1 tag unconditionally */
+	EVLAN_REASSIGN,			/* reassign bridge port (keep tags) */
 };
 
 struct mxl862xx_evlan_rule_desc {
@@ -162,6 +166,7 @@ struct mxl862xx_evlan_rule_desc {
 	u8 inner_tpid;		/* enum mxl862xx_extended_vlan_filter_tpid */
 	bool match_vid;		/* true: match on VID from the vid parameter */
 	u8 action;		/* enum mxl862xx_evlan_action */
+	u16 bridge_port_id;	/* for EVLAN_REASSIGN */
 };
 
 /* Shorthand constants for readability */
@@ -228,11 +233,69 @@ static const struct mxl862xx_evlan_rule_desc vid_accept_egress_unaware[] = {
 	{ FT_NO_FILTER, FT_NO_TAG, TP_NONE, TP_NONE,  true, EVLAN_STRIP_IF_UNTAGGED },
 };
 
+/*
+ * tag_8021q: virtual bridge port egress rules.
+ *
+ * Inserts the management VID as an outer 802.1Q tag on all frames
+ * exiting toward the CPU via a virtual bridge port. Covers every
+ * possible frame type (untagged, single-tagged, double-tagged).
+ *
+ * 802.1Q ACCEPT rules must precede NO_FILTER catchalls to prevent
+ * NO_FILTER from matching standard 802.1Q frames first.
+ */
+static const struct mxl862xx_evlan_rule_desc cpu_egress_tag_8021q[] = {
+	/* 802.1Q outer + inner present */
+	{ FT_NORMAL,    FT_NORMAL,    TP_8021Q, TP_8021Q, false, EVLAN_INSERT_OUTER },
+	/* 802.1Q outer, no inner */
+	{ FT_NORMAL,    FT_NO_TAG,    TP_8021Q, TP_NONE,  false, EVLAN_INSERT_OUTER },
+	/* Non-8021Q outer + inner present */
+	{ FT_NO_FILTER, FT_NO_FILTER, TP_NONE,  TP_NONE,  false, EVLAN_INSERT_OUTER },
+	/* Non-8021Q outer only */
+	{ FT_NO_FILTER, FT_NO_TAG,    TP_NONE,  TP_NONE,  false, EVLAN_INSERT_OUTER },
+	/* Untagged */
+	{ FT_NO_TAG,    FT_NO_TAG,    TP_NONE,  TP_NONE,  false, EVLAN_INSERT_OUTER },
+};
+
+/*
+ * tag_8021q: CPU port ingress reassignment rules.
+ *
+ * Each user port with a management VID gets these rules on the CPU port's
+ * ingress EVLAN block.  They match the management VID as outer 802.1Q tag
+ * and reassign the frame to the user port's virtual bridge port.
+ *
+ * NO_FILTER is used for the inner position so that frames with any inner
+ * TPID (including non-802.1Q TPIDs like 802.1ad 0x88A8) are routed
+ * correctly.  The management VID tag is kept and stripped later by the
+ * user port's egress EVLAN catchall rules.
+ *
+ * The bridge_port_id is overridden per-port at programming time.
+ */
+static const struct mxl862xx_evlan_rule_desc cpu_ingress_reassign[] = {
+	/* Mgmt VID outer + any inner tag present */
+	{ FT_NORMAL,    FT_NO_FILTER, TP_8021Q, TP_NONE,  true, EVLAN_REASSIGN },
+	/* Mgmt VID outer, no inner */
+	{ FT_NORMAL,    FT_NO_TAG,    TP_8021Q, TP_NONE,  true, EVLAN_REASSIGN },
+};
+
+/* User port egress catchall rules for tag_8021q mode.
+ * Strip the outer management VID tag from CPU→user frames that were
+ * not matched by any per-VID egress rule. Appended to the user port
+ * egress EVLAN block when tag_8021q is active.
+ */
+static const struct mxl862xx_evlan_rule_desc tag_8021q_egress_strip[] = {
+	/* Any outer tag + inner present: strip outer (mgmt VID) */
+	{ FT_NO_FILTER, FT_NO_FILTER, TP_NONE,  TP_NONE,  false, EVLAN_STRIP1 },
+	/* Any outer tag, no inner: strip it */
+	{ FT_NO_FILTER, FT_NO_TAG,    TP_NONE,  TP_NONE,  false, EVLAN_STRIP1 },
+};
+
 static enum dsa_tag_protocol mxl862xx_get_tag_protocol(struct dsa_switch *ds,
 						       int port,
 						       enum dsa_tag_protocol m)
 {
-	return DSA_TAG_PROTO_MXL862;
+	struct mxl862xx_priv *priv = ds->priv;
+
+	return priv->tag_proto;
 }
 
 /* PHY access via firmware relay */
@@ -459,6 +522,78 @@ static int mxl862xx_setup_drop_meter(struct dsa_switch *ds)
  */
 #define MXL862XX_LINK_LOCAL_CTP_OFFSET		1
 
+/**
+ * mxl862xx_cpu_bridge_port_id - Get the bridge port ID for CPU-side forwarding
+ * @ds: DSA switch
+ * @port: user port number
+ *
+ * In tag_8021q mode, returns the virtual bridge port ID so that frames
+ * destined for the CPU pass through the virtual bridge port's egress
+ * EVLAN (which inserts the management VID). In native SpTag mode,
+ * returns the physical CPU port index.
+ */
+static int mxl862xx_cpu_bridge_port_id(struct dsa_switch *ds, int port)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_port *p = &priv->ports[port];
+
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && p->bridge_port_cpu)
+		return p->bridge_port_cpu;
+
+	return dsa_to_port(ds, port)->cpu_dp->index;
+}
+
+/**
+ * mxl862xx_tag_8021q_disable_cpu_egress - Disable virtual bridge port egress EVLAN
+ * @ds: DSA switch
+ * @port: user port whose virtual bridge port egress EVLAN to disable
+ */
+static void mxl862xx_tag_8021q_disable_cpu_egress(struct dsa_switch *ds,
+						   int port)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_port *p = &priv->ports[port];
+	struct mxl862xx_bridge_port_config bp_cfg = {};
+
+	if (!p->bridge_port_cpu || !p->cpu_egress_evlan.allocated)
+		return;
+
+	/* Disable egress EVLAN on the virtual bridge port */
+	bp_cfg.bridge_port_id = cpu_to_le16(p->bridge_port_cpu);
+	bp_cfg.mask = cpu_to_le32(MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_VLAN);
+	bp_cfg.egress_extended_vlan_enable = 0;
+	MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, bp_cfg);
+
+	p->cpu_egress_evlan.in_use = false;
+}
+
+/**
+ * mxl862xx_set_cpu_ctp_ingress_evlan - Assign ingress EVLAN to the CPU
+ *                                      port's CTP
+ * @ds: DSA switch
+ * @cpu: CPU port index
+ *
+ * Both the reference and legacy drivers assign the CPU port's ingress
+ * EVLAN at the CTP level (via CTP_PORTCONFIGSET) rather than the
+ * bridge port level (BRIDGEPORT_CONFIGSET).  The GSWIP ingress
+ * pipeline evaluates Bridge Port EVLAN first, then CTP EVLAN; the
+ * bridge port reassignment treatment used by tag_8021q only works
+ * reliably from the CTP level.
+ */
+static int mxl862xx_set_cpu_ctp_ingress_evlan(struct dsa_switch *ds, int cpu)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_evlan_block *blk = &priv->ports[cpu].ingress_evlan;
+	struct mxl862xx_ctp_port_config ctp = {};
+
+	ctp.logical_port_id = cpu;
+	ctp.mask = cpu_to_le32(MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN);
+	ctp.ingress_extended_vlan_enable = blk->in_use;
+	ctp.ingress_extended_vlan_block_id = cpu_to_le16(blk->block_id);
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_CTP_PORTCONFIGSET, ctp);
+}
+
 /* Install a PCE rule that traps IEEE 802.1D link-local frames
  * (01:80:c2:00:00:0x) to the CPU port for a single user port,
  * preventing the hardware bridge from flooding them to other ports.
@@ -479,9 +614,13 @@ static int mxl862xx_setup_link_local_trap(struct dsa_switch *ds, int port)
 {
 	DECLARE_BITMAP(portmap, MXL862XX_MAX_BRIDGE_PORTS);
 	struct dsa_port *dp = dsa_to_port(ds, port);
+	struct mxl862xx_priv *priv = ds->priv;
 	struct mxl862xx_pce_rule rule = {};
 	int cpu_port = dp->cpu_dp->index;
+	struct mxl862xx_port *p;
 	int i;
+
+	p = &priv->ports[port];
 
 	/* Address this port's CTP flow-table block */
 	rule.logicalportid = port;
@@ -505,11 +644,18 @@ static int mxl862xx_setup_link_local_trap(struct dsa_switch *ds, int port)
 		rule.action.forward_port_map[i] =
 			cpu_to_le16(bitmap_read(portmap, i * 16, 16));
 
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q &&
+	    p->cpu_egress_evlan.in_use) {
+		rule.action.extended_vlan_enable = 1;
+		rule.action.extended_vlan_block_id =
+			cpu_to_le16(p->cpu_egress_evlan.block_id);
+	}
+
 	/* Bypass STP port state */
 	rule.action.cross_state_action =
 		cpu_to_le32(MXL862XX_PCE_ACTION_CROSS_STATE_CROSS);
 
-	return MXL862XX_API_WRITE(ds->priv, MXL862XX_TFLOW_PCERULEWRITE,
+	return MXL862XX_API_WRITE(priv, MXL862XX_TFLOW_PCERULEWRITE,
 				  rule);
 }
 
@@ -626,7 +772,8 @@ static int mxl862xx_sync_bridge_members(struct dsa_switch *ds,
 				__set_bit(member_dp->index,
 					  priv->ports[port].portmap);
 		}
-		__set_bit(dp->cpu_dp->index, priv->ports[port].portmap);
+		__set_bit(mxl862xx_cpu_bridge_port_id(ds, port),
+			  priv->ports[port].portmap);
 
 		err = mxl862xx_set_bridge_port(ds, port);
 		if (err)
@@ -801,7 +948,6 @@ static void mxl862xx_free_bridge(struct dsa_switch *ds,
 
 static int mxl862xx_add_single_port_bridge(struct dsa_switch *ds, int port)
 {
-	struct dsa_port *dp = dsa_to_port(ds, port);
 	struct mxl862xx_priv *priv = ds->priv;
 	int ret;
 
@@ -813,15 +959,27 @@ static int mxl862xx_add_single_port_bridge(struct dsa_switch *ds, int port)
 
 	priv->ports[port].learning = false;
 	bitmap_zero(priv->ports[port].portmap, MXL862XX_MAX_BRIDGE_PORTS);
-	__set_bit(dp->cpu_dp->index, priv->ports[port].portmap);
+	__set_bit(mxl862xx_cpu_bridge_port_id(ds, port),
+		  priv->ports[port].portmap);
 
 	ret = mxl862xx_set_bridge_port(ds, port);
 	if (ret)
 		return ret;
 
-	/* Standalone ports should not flood unknown unicast or multicast
-	 * towards the CPU by default; only broadcast is needed initially.
+	/* In tag_8021q mode the TX path goes through the bridge engine
+	 * (CTP ingress EVLAN reassigns to a virtual bridge port which
+	 * then forwards via the bridge).  With learning disabled on
+	 * standalone ports, unknown unicast must be flooded so that
+	 * frames from the host can reach the user port.
+	 *
+	 * In native SpTag mode, TX bypasses the bridge engine entirely
+	 * (the special tag selects the egress port directly), so flood
+	 * control only affects CPU-bound traffic and can be restrictive.
 	 */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q)
+		return mxl862xx_bridge_config_fwd(ds, priv->ports[port].fid,
+						  true, true, true);
+
 	return mxl862xx_bridge_config_fwd(ds, priv->ports[port].fid,
 					 false, false, true);
 }
@@ -829,7 +987,7 @@ static int mxl862xx_add_single_port_bridge(struct dsa_switch *ds, int port)
 static int mxl862xx_setup(struct dsa_switch *ds)
 {
 	struct mxl862xx_priv *priv = ds->priv;
-	int n_user_ports = 0, max_vlans;
+	int n_user_ports = 0, n_cpu_ports = 0, max_vlans;
 	struct dsa_port *dp;
 	int ret;
 
@@ -841,7 +999,7 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	if (ret)
 		return ret;
 
-	/* Calculate Extended VLAN block sizes.
+	/* Calculate Extended VLAN and VLAN Filter block sizes.
 	 * With VLAN Filter handling VID membership checks:
 	 *   Ingress: only final catchall rules (PVID insertion, 802.1Q
 	 *            accept, non-8021Q TPID handling, discard).
@@ -849,40 +1007,68 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	 *            ingress EVLAN rules are needed. (7 entries.)
 	 *   Egress:  2 rules per VID that needs tag stripping (untagged VIDs).
 	 *            No egress final catchalls -- VLAN Filter does the discard.
-	 *   CPU:     EVLAN is left disabled on CPU ports -- frames pass
-	 *            through without EVLAN processing.
+	 *
+	 * tag_8021q mode reserves additional resources from the global
+	 * pools for management VID handling:
+	 *   EVLAN: 5 egress rules per user port (on virtual bridge ports)
+	 *          + dynamically-sized CPU ingress EVLAN (2 per user port,
+	 *            budgeted here to guarantee space).
+	 *   VF:    CPU port needs its own VF block for management VIDs.
 	 *
 	 * Total EVLAN budget:
-	 *   n_user_ports * (ingress + egress) ≤ 1024.
-	 * Ingress blocks are small (7 entries), so almost all capacity
-	 * goes to egress VID rules.
+	 *   n_user_ports * (ingress + egress + cpu_egress + cpu_ingress_share)
+	 *   ≤ 1024.
+	 * Total VF budget:
+	 *   (n_user_ports + n_cpu_ports) * vf_block_size ≤ 1024.
 	 */
 	dsa_switch_for_each_user_port(dp, ds)
 		n_user_ports++;
+	dsa_switch_for_each_cpu_port(dp, ds)
+		n_cpu_ports++;
 
 	if (n_user_ports) {
 		int ingress_finals = ARRAY_SIZE(ingress_aware_final);
 		int vid_rules = ARRAY_SIZE(vid_accept_standard);
+		int cpu_egress_rules = ARRAY_SIZE(cpu_egress_tag_8021q);
+		int cpu_ingress_per_port = ARRAY_SIZE(cpu_ingress_reassign);
+		int egress_catchalls = ARRAY_SIZE(tag_8021q_egress_strip);
+		int evlan_reserved;
 
 		/* Ingress block: fixed at finals count (7 entries) */
 		priv->evlan_ingress_size = ingress_finals;
 
+		/* CPU port ingress EVLAN: reassign rules per user port */
+		priv->cpu_evlan_ingress_size =
+			cpu_ingress_per_port * n_user_ports;
+
+		/* Reserve EVLAN entries for tag_8021q:
+		 *  - virtual bridge port egress blocks (cpu_egress_rules each)
+		 *  - CPU port ingress EVLAN (cpu_ingress_per_port each)
+		 *  - user port egress catchalls for mgmt VID stripping
+		 */
+		evlan_reserved = n_user_ports * (ingress_finals +
+						 cpu_egress_rules +
+						 cpu_ingress_per_port +
+						 egress_catchalls);
+
 		/* Egress block: remaining budget divided equally among
 		 * user ports. Each untagged VID needs vid_rules (2)
 		 * EVLAN entries for tag stripping. Tagged-only VIDs
-		 * need no EVLAN rules at all.
+		 * need no EVLAN rules at all. The block also includes
+		 * space for the tag_8021q egress catchall rules.
 		 */
-		max_vlans = (MXL862XX_TOTAL_EVLAN_ENTRIES -
-			     n_user_ports * ingress_finals) /
+		max_vlans = (MXL862XX_TOTAL_EVLAN_ENTRIES - evlan_reserved) /
 			    (n_user_ports * vid_rules);
-		priv->evlan_egress_size = vid_rules * max_vlans;
+		priv->evlan_egress_size = vid_rules * max_vlans +
+					  egress_catchalls;
 
-		/* VLAN Filter block: one per user port. The 1024-entry
-		 * table is divided equally among user ports. Each port
-		 * gets its own VF block for per-port VID membership --
-		 * discard_unmatched_tagged handles the rest.
+		/* VLAN Filter block: one per user port plus one per CPU
+		 * port (used in tag_8021q mode for management VIDs).
+		 * The 1024-entry table is divided equally among all
+		 * consumers.
 		 */
-		priv->vf_block_size = MXL862XX_TOTAL_VF_ENTRIES / n_user_ports;
+		priv->vf_block_size = MXL862XX_TOTAL_VF_ENTRIES /
+				      (n_user_ports + n_cpu_ports);
 	}
 
 	ret = mxl862xx_setup_drop_meter(ds);
@@ -892,6 +1078,68 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
 		dev_warn(ds->dev, "firmware < 1.0.80 installs global PCE rules "
 			 "that interfere with DSA operation, please update\n");
+
+	/* Pre-allocate firmware resources for all ports.  The DSA core
+	 * calls change_tag_protocol() between setup() and port_setup(),
+	 * and in tag_8021q mode that triggers dsa_tag_8021q_register()
+	 * which fires tag_8021q_vlan_add callbacks that need EVLAN and
+	 * VF blocks.  complete_tag_8021q_setup() also needs per-port
+	 * FIDs from add_single_port_bridge().
+	 *
+	 * Per-port configuration (SpTag, CTP, portmaps, link-local
+	 * traps) is deferred to port_setup().
+	 */
+	dsa_switch_for_each_cpu_port(dp, ds) {
+		int port = dp->index;
+
+		mxl862xx_vf_init(&priv->ports[port].vf,
+				 priv->vf_block_size);
+		mxl862xx_evlan_block_init(&priv->ports[port].ingress_evlan,
+					  priv->cpu_evlan_ingress_size);
+		ret = mxl862xx_evlan_block_alloc(priv,
+						 &priv->ports[port].ingress_evlan);
+		if (ret)
+			return ret;
+
+		ret = mxl862xx_vf_alloc(priv, &priv->ports[port].vf);
+		if (ret)
+			return ret;
+	}
+
+	dsa_switch_for_each_user_port(dp, ds) {
+		int port = dp->index;
+
+		mxl862xx_evlan_block_init(&priv->ports[port].ingress_evlan,
+					  priv->evlan_ingress_size);
+		ret = mxl862xx_evlan_block_alloc(priv,
+						 &priv->ports[port].ingress_evlan);
+		if (ret)
+			return ret;
+
+		mxl862xx_evlan_block_init(&priv->ports[port].egress_evlan,
+					  priv->evlan_egress_size);
+		ret = mxl862xx_evlan_block_alloc(priv,
+						 &priv->ports[port].egress_evlan);
+		if (ret)
+			return ret;
+
+		mxl862xx_vf_init(&priv->ports[port].vf,
+				 priv->vf_block_size);
+		ret = mxl862xx_vf_alloc(priv, &priv->ports[port].vf);
+		if (ret)
+			return ret;
+
+		mxl862xx_evlan_block_init(&priv->ports[port].cpu_egress_evlan,
+					  ARRAY_SIZE(cpu_egress_tag_8021q));
+		ret = mxl862xx_evlan_block_alloc(priv,
+						 &priv->ports[port].cpu_egress_evlan);
+		if (ret)
+			return ret;
+
+		ret = mxl862xx_add_single_port_bridge(ds, port);
+		if (ret)
+			return ret;
+	}
 
 	schedule_delayed_work(&priv->stats_work,
 			      MXL862XX_STATS_POLL_INTERVAL);
@@ -974,6 +1222,52 @@ static int mxl862xx_configure_sp_tag_proto(struct dsa_switch *ds, int port,
 }
 
 /**
+ * mxl862xx_set_cpu_vbp - Push CPU-side virtual bridge port config to firmware
+ * @ds: DSA switch
+ * @port: user port index whose VBP to configure
+ *
+ * Each user port in tag_8021q mode has a virtual bridge port (VBP) that
+ * sits on the CPU RX path.  The VBP lives in the user port's permanent
+ * per-port FID so host FDB/MDB entries in that FID can target it directly.
+ * Per-port host flood control is implemented via egress sub-meters on
+ * the VBP.
+ *
+ * This is intentionally separate from mxl862xx_set_bridge_port() because
+ * the VBP and the physical bridge port are independent firmware entities:
+ * host flood changes (deferred from atomic context) only need the VBP
+ * update, and VLAN/STP changes only need the physical bridge port update.
+ */
+static int mxl862xx_set_cpu_vbp(struct dsa_switch *ds, int port)
+{
+	struct mxl862xx_bridge_port_config vbp_cfg = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_port *p = &priv->ports[port];
+	bool enable;
+	int i, idx;
+
+	if (!p->bridge_port_cpu)
+		return 0;
+
+	vbp_cfg.bridge_port_id = cpu_to_le16(p->bridge_port_cpu);
+	vbp_cfg.mask = cpu_to_le32(
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_ID |
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_SUB_METER);
+	vbp_cfg.bridge_id = cpu_to_le16(p->fid);
+
+	for (i = 0; i < ARRAY_SIZE(mxl862xx_flood_meters); i++) {
+		idx = mxl862xx_flood_meters[i];
+		enable = !!(p->host_flood_block & BIT(idx));
+
+		vbp_cfg.egress_traffic_sub_meter_id[idx] =
+			enable ? cpu_to_le16(priv->drop_meter) : 0;
+		vbp_cfg.egress_sub_metering_enable[idx] = enable;
+	}
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET,
+				  vbp_cfg);
+}
+
+/**
  * mxl862xx_evlan_write_rule - Write a single Extended VLAN rule to hardware
  * @priv: driver private data
  * @block_id: HW Extended VLAN block ID
@@ -982,6 +1276,7 @@ static int mxl862xx_configure_sp_tag_proto(struct dsa_switch *ds, int port,
  * @vid: VLAN ID for VID-specific rules (ignored when !desc->match_vid)
  * @untagged: strip tag on egress for EVLAN_STRIP_IF_UNTAGGED action
  * @pvid: port VLAN ID for PVID insertion rules (0 = no PVID)
+ * @mgmt_vid: tag_8021q management VID for outer tag insertion (0 = unused)
  *
  * Translates a compact rule descriptor into a full firmware
  * mxl862xx_extendedvlan_config struct and writes it via the API.
@@ -989,7 +1284,8 @@ static int mxl862xx_configure_sp_tag_proto(struct dsa_switch *ds, int port,
 static int mxl862xx_evlan_write_rule(struct mxl862xx_priv *priv,
 				     u16 block_id, u16 entry_index,
 				     const struct mxl862xx_evlan_rule_desc *desc,
-				     u16 vid, bool untagged, u16 pvid)
+				     u16 vid, bool untagged, u16 pvid,
+				     u16 mgmt_vid)
 {
 	struct mxl862xx_extendedvlan_config cfg = {};
 	struct mxl862xx_extendedvlan_filter_vlan *fv;
@@ -1079,6 +1375,31 @@ static int mxl862xx_evlan_write_rule(struct mxl862xx_priv *priv,
 				cpu_to_le32(MXL862XX_EXTENDEDVLAN_TREATMENT_DISCARD_UPSTREAM);
 		}
 		break;
+
+	case EVLAN_INSERT_OUTER:
+		cfg.treatment.remove_tag =
+			cpu_to_le32(MXL862XX_EXTENDEDVLAN_TREATMENT_NOT_REMOVE_TAG);
+		cfg.treatment.add_outer_vlan = 1;
+		cfg.treatment.outer_vlan.vid_mode =
+			cpu_to_le32(MXL862XX_EXTENDEDVLAN_TREATMENT_VID_VAL);
+		cfg.treatment.outer_vlan.vid_val = cpu_to_le32(mgmt_vid);
+		cfg.treatment.outer_vlan.tpid =
+			cpu_to_le32(MXL862XX_EXTENDEDVLAN_TREATMENT_8021Q);
+		break;
+
+	case EVLAN_STRIP1:
+		cfg.treatment.remove_tag =
+			cpu_to_le32(MXL862XX_EXTENDEDVLAN_TREATMENT_REMOVE_1_TAG);
+		break;
+
+	case EVLAN_REASSIGN:
+		cfg.treatment.remove_tag =
+			cpu_to_le32(MXL862XX_EXTENDEDVLAN_TREATMENT_NOT_REMOVE_TAG);
+		cfg.treatment.reassign_bridge_port = 1;
+		cfg.treatment.new_bridge_port_id =
+			cpu_to_le16(desc->bridge_port_id);
+		break;
+
 	}
 
 	return MXL862XX_API_WRITE(priv, MXL862XX_EXTENDEDVLAN_SET, cfg);
@@ -1139,7 +1460,7 @@ static int mxl862xx_evlan_write_final_rules(struct mxl862xx_priv *priv,
 	for (i = 0; i < n_rules; i++) {
 		ret = mxl862xx_evlan_write_rule(priv, blk->block_id,
 						start_idx + i, &rules[i],
-						0, false, pvid);
+						0, false, pvid, 0);
 		if (ret)
 			return ret;
 	}
@@ -1308,6 +1629,27 @@ static int mxl862xx_vf_del_vid(struct mxl862xx_priv *priv,
 }
 
 /**
+ * mxl862xx_vf_clear_vids - Remove all VID entries without freeing the HW block
+ * @priv: driver private data
+ * @vf: VLAN Filter block
+ *
+ * Frees the software VID list and resets active_count, but keeps the
+ * HW block allocated to avoid firmware table fragmentation.
+ */
+static void mxl862xx_vf_clear_vids(struct mxl862xx_priv *priv,
+				   struct mxl862xx_vf_block *vf)
+{
+	struct mxl862xx_vf_vid *ve, *tmp;
+
+	list_for_each_entry_safe(ve, tmp, &vf->vids, list) {
+		list_del(&ve->list);
+		kfree(ve);
+	}
+
+	vf->active_count = 0;
+}
+
+/**
  * mxl862xx_evlan_program_ingress - Write the fixed ingress catchall rules
  * @priv: driver private data
  * @port: port number
@@ -1376,13 +1718,23 @@ static int mxl862xx_evlan_program_egress(struct mxl862xx_priv *priv, int port)
 		if (p->vlan_filtering && !vfv->untagged)
 			continue;
 
+		/* Skip the tag_8021q management VID -- it must NOT get
+		 * per-VID egress rules.  The management VID arrives as
+		 * the outer tag on CPU→user frames and is stripped by
+		 * the catchall rules appended below.  A per-VID rule
+		 * here would match first (NO_FILTER outer) and prevent
+		 * the catchall from stripping the tag.
+		 */
+		if (p->tag_8021q_vid && vfv->vid == p->tag_8021q_vid)
+			continue;
+
 		if (idx + n_vid > blk->block_size)
 			return -ENOSPC;
 
 		ret = mxl862xx_evlan_write_rule(priv, blk->block_id,
 						idx++, &vid_rules[0],
 						vfv->vid, vfv->untagged,
-						p->pvid);
+						p->pvid, 0);
 		if (ret)
 			return ret;
 
@@ -1391,7 +1743,29 @@ static int mxl862xx_evlan_program_egress(struct mxl862xx_priv *priv, int port)
 							idx++, &vid_rules[1],
 							vfv->vid,
 							vfv->untagged,
-							p->pvid);
+							p->pvid, 0);
+			if (ret)
+				return ret;
+		}
+	}
+
+	/* In tag_8021q mode, append catchall rules that strip the outer
+	 * management VID tag from CPU→user frames.  The management VID
+	 * is kept through the forwarding pipeline (CPU ingress EVLAN
+	 * only reassigns the bridge port, without stripping) and must
+	 * be removed here before the frame exits the user port.
+	 */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q) {
+		int n_catch = ARRAY_SIZE(tag_8021q_egress_strip);
+
+		if (idx + n_catch > blk->block_size)
+			return -ENOSPC;
+
+		for (i = 0; i < n_catch; i++) {
+			ret = mxl862xx_evlan_write_rule(priv, blk->block_id,
+							idx++,
+							&tag_8021q_egress_strip[i],
+							0, false, 0, 0);
 			if (ret)
 				return ret;
 		}
@@ -1403,8 +1777,7 @@ static int mxl862xx_evlan_program_egress(struct mxl862xx_priv *priv, int port)
 	 */
 	for (i = idx; i < old_active; i++) {
 		ret = mxl862xx_evlan_deactivate_entry(priv,
-						      blk->block_id,
-						      i);
+						      blk->block_id, i);
 		if (ret)
 			return ret;
 	}
@@ -1428,13 +1801,16 @@ static int mxl862xx_port_vlan_filtering(struct dsa_switch *ds, int port,
 
 	/* Reprogram Extended VLAN rules if filtering mode changed */
 	if (changed) {
-		/* When leaving VLAN-aware mode, release the ingress HW
-		 * block. The firmware passes frames through unchanged
-		 * when no ingress EVLAN block is assigned, so the block
-		 * is unnecessary in unaware mode.
+		/* When leaving VLAN-aware mode, disable the ingress
+		 * EVLAN engine. The block stays allocated to avoid
+		 * firmware EVLAN table fragmentation.
 		 */
-		if (!vlan_filtering)
+		if (!vlan_filtering) {
 			p->ingress_evlan.in_use = false;
+			ret = mxl862xx_set_bridge_port(ds, port);
+			if (ret)
+				return ret;
+		}
 
 		ret = mxl862xx_evlan_program_ingress(priv, port);
 		if (ret)
@@ -1571,17 +1947,18 @@ static int mxl862xx_setup_cpu_bridge(struct dsa_switch *ds, int port)
 
 	/* include all assigned user ports in the CPU portmap */
 	bitmap_zero(p->portmap, MXL862XX_MAX_BRIDGE_PORTS);
-	dsa_switch_for_each_user_port(dp, ds) {
-		/* it's safe to rely on cpu_dp being valid for user ports */
-		if (dp->cpu_dp->index != port)
-			continue;
+	if (priv->tag_proto != DSA_TAG_PROTO_MXL862_8021Q) {
+		dsa_switch_for_each_user_port(dp, ds) {
+			/* it's safe to rely on cpu_dp being valid for user ports */
+			if (dp->cpu_dp->index != port)
+				continue;
 
-		__set_bit(dp->index, p->portmap);
+			__set_bit(dp->index, p->portmap);
+		}
 	}
 
 	return mxl862xx_set_bridge_port(ds, port);
 }
-
 
 static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port,
 				     struct dsa_bridge bridge,
@@ -1606,7 +1983,6 @@ static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port,
 static void mxl862xx_port_bridge_leave(struct dsa_switch *ds, int port,
 				       struct dsa_bridge bridge)
 {
-	struct dsa_port *dp = dsa_to_port(ds, port);
 	struct mxl862xx_priv *priv = ds->priv;
 	struct mxl862xx_port *p = &priv->ports[port];
 	int err;
@@ -1621,32 +1997,584 @@ static void mxl862xx_port_bridge_leave(struct dsa_switch *ds, int port,
 	 * single-port bridge
 	 */
 	bitmap_zero(p->portmap, MXL862XX_MAX_BRIDGE_PORTS);
-	__set_bit(dp->cpu_dp->index, p->portmap);
+	__set_bit(mxl862xx_cpu_bridge_port_id(ds, port), p->portmap);
 	p->flood_block = 0;
+	p->host_flood_block = 0;
 
-	/* Detach EVLAN and VF blocks from the bridge port BEFORE freeing
-	 * them. The firmware tracks a usage count per block and rejects
-	 * FREE while the count is non-zero.
+	/* Reset VLAN state for standalone mode.  Ingress EVLAN is not
+	 * needed outside a VLAN-aware bridge.  Egress EVLAN is
+	 * reprogrammed below -- in tag_8021q mode it gets the
+	 * management VID strip catchalls, in SpTag mode it is cleared.
 	 *
-	 * For EVLAN: setting in_use=false makes set_bridge_port send
-	 * enable=false, which decrements the firmware refcount.
-	 *
-	 * For VF: set_bridge_port sees dp->bridge == NULL (DSA already
-	 * cleared it) and sends vlan_filter_enable=0, which decrements
-	 * the firmware VF refcount.
+	 * Do NOT clear the VF VID list here.  Bridge VLANs are already
+	 * removed by port_vlan_del during the switchdev replay in
+	 * dsa_port_pre_bridge_leave.  The remaining VIDs (e.g. the
+	 * tag_8021q management VID) must survive bridge leave.
 	 */
 	p->pvid = 0;
 	p->ingress_evlan.in_use = false;
-	p->egress_evlan.in_use = false;
 
+	err = mxl862xx_evlan_program_egress(priv, port);
+	if (err)
+		dev_err(ds->dev,
+			"failed to restore egress EVLAN on port %d: %pe\n",
+			port, ERR_PTR(err));
+
+	/* Push the complete standalone port state to firmware.  The
+	 * firmware compares old vs new EVLAN/VF enable flags and adjusts
+	 * block refcounts accordingly, so a single call suffices.
+	 */
 	err = mxl862xx_set_bridge_port(ds, port);
 	if (err)
 		dev_err(ds->dev,
 			"failed to update bridge port %d state: %pe\n", port,
 			ERR_PTR(err));
 
+	err = mxl862xx_set_cpu_vbp(ds, port);
+	if (err)
+		dev_err(ds->dev,
+			"failed to update CPU VBP for port %d: %pe\n", port,
+			ERR_PTR(err));
+
 	if (!dsa_bridge_ports(ds, bridge.dev))
 		mxl862xx_free_bridge(ds, &bridge);
+}
+
+static int mxl862xx_setup_virtual_bridge_port(struct dsa_switch *ds, int port)
+{
+	struct mxl862xx_bridge_port_alloc bp_alloc = {};
+	struct mxl862xx_bridge_port_config bp_cfg = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	struct dsa_port *cpu_dp;
+	int ret;
+
+	cpu_dp = dsa_to_port(ds, port)->cpu_dp;
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_BRIDGEPORT_ALLOC, bp_alloc);
+	if (ret) {
+		dev_err(ds->dev,
+			"failed to allocate virtual bridge port for port %d: %pe\n",
+			port, ERR_PTR(ret));
+		return ret;
+	}
+
+	priv->ports[port].bridge_port_cpu = le16_to_cpu(bp_alloc.bridge_port_id);
+
+	bp_cfg.bridge_port_id = bp_alloc.bridge_port_id;
+	bp_cfg.mask = cpu_to_le32(
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_ID |
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_PORT_MAP |
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING |
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_CTP_MAPPING);
+	bp_cfg.bridge_id = cpu_to_le16(priv->ports[port].fid);
+	bp_cfg.src_mac_learning_disable = 1;
+	bp_cfg.dest_logical_port_id = cpu_dp->index;
+	mxl862xx_fw_portmap_set_bit(bp_cfg.bridge_port_map, port);
+
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, bp_cfg);
+	if (ret)
+		dev_err(ds->dev,
+			"failed to configure virtual bridge port %u for port %d: %pe\n",
+			priv->ports[port].bridge_port_cpu, port, ERR_PTR(ret));
+
+	return ret;
+}
+
+static void mxl862xx_free_virtual_bridge_port(struct dsa_switch *ds, int port)
+{
+	struct mxl862xx_bridge_port_alloc bp_alloc = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	int ret;
+
+	if (!priv->ports[port].bridge_port_cpu)
+		return;
+
+	mxl862xx_tag_8021q_disable_cpu_egress(ds, port);
+
+	bp_alloc.bridge_port_id = cpu_to_le16(priv->ports[port].bridge_port_cpu);
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_FREE, bp_alloc);
+	if (ret)
+		dev_err(ds->dev,
+			"failed to free virtual bridge port %u for port %d: %pe\n",
+			priv->ports[port].bridge_port_cpu, port, ERR_PTR(ret));
+	else
+		priv->ports[port].bridge_port_cpu = 0;
+}
+
+static int mxl862xx_setup_tag_8021q(struct dsa_switch *ds)
+{
+	struct dsa_port *dp;
+	int ret;
+
+	dsa_switch_for_each_user_port(dp, ds) {
+		ret = mxl862xx_setup_virtual_bridge_port(ds, dp->index);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+static void mxl862xx_teardown_tag_8021q(struct dsa_switch *ds)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct dsa_port *dp;
+
+	dsa_switch_for_each_user_port(dp, ds) {
+		mxl862xx_free_virtual_bridge_port(ds, dp->index);
+		priv->ports[dp->index].tag_8021q_vid = 0;
+	}
+
+	/* Disable CPU port EVLAN engine and clear VF VID entries.
+	 * The HW blocks stay allocated (freed in port_teardown).
+	 */
+	dsa_switch_for_each_cpu_port(dp, ds) {
+		int cpu = dp->index;
+
+		priv->ports[cpu].ingress_evlan.in_use = false;
+		mxl862xx_set_cpu_ctp_ingress_evlan(ds, cpu);
+		mxl862xx_vf_clear_vids(priv, &priv->ports[cpu].vf);
+	}
+
+}
+
+/**
+ * mxl862xx_tag_8021q_program_cpu_egress - Program virtual bridge port egress EVLAN
+ * @ds: DSA switch
+ * @port: user port whose virtual bridge port needs programming
+ *
+ * Programs the egress EVLAN block on the virtual bridge port associated
+ * with @port.  The block is pre-allocated in port_setup.  The rules insert the
+ * port's tag_8021q management VID as an outer 802.1Q tag on all
+ * frames exiting toward the CPU through this virtual bridge port.
+ */
+static int mxl862xx_tag_8021q_program_cpu_egress(struct dsa_switch *ds,
+						  int port)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_port *p = &priv->ports[port];
+	struct mxl862xx_evlan_block *blk = &p->cpu_egress_evlan;
+	struct mxl862xx_bridge_port_config bp_cfg = {};
+	int n_rules = ARRAY_SIZE(cpu_egress_tag_8021q);
+	int i, ret;
+
+	if (!p->bridge_port_cpu || !p->tag_8021q_vid)
+		return 0;
+
+	for (i = 0; i < n_rules; i++) {
+		ret = mxl862xx_evlan_write_rule(priv, blk->block_id,
+						i, &cpu_egress_tag_8021q[i],
+						0, false, 0,
+						p->tag_8021q_vid);
+		if (ret)
+			return ret;
+	}
+
+	blk->n_active = n_rules;
+	blk->in_use = true;
+
+	/* Enable egress EVLAN on the virtual bridge port */
+	bp_cfg.bridge_port_id = cpu_to_le16(p->bridge_port_cpu);
+	bp_cfg.mask = cpu_to_le32(MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_VLAN);
+	bp_cfg.egress_extended_vlan_enable = 1;
+	bp_cfg.egress_extended_vlan_block_id = cpu_to_le16(blk->block_id);
+	bp_cfg.egress_extended_vlan_block_size = cpu_to_le16(n_rules);
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, bp_cfg);
+}
+
+/**
+ * mxl862xx_tag_8021q_cpu_vlan_program - Reprogram CPU port ingress EVLAN
+ * @ds: DSA switch
+ *
+ * Rebuilds the CPU port ingress EVLAN block with reassign rules for
+ * every tag_8021q VID currently in use.  Called whenever a tag_8021q
+ * VID is added or removed.
+ *
+ * Each user port with a non-zero tag_8021q_vid gets 2 rules:
+ *   - outer VID match + inner present: reassign to virtual bridge port
+ *   - outer VID match + no inner:      reassign to virtual bridge port
+ *
+ * The EVLAN block is assigned to the CPU port's CTP (not its bridge
+ * port) via CTP_PORTCONFIGSET, matching the reference and legacy
+ * driver architecture.
+ */
+static int mxl862xx_tag_8021q_cpu_vlan_program(struct dsa_switch *ds)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_evlan_block *blk;
+	struct dsa_port *cpu_dp, *dp;
+	u16 idx, old_active;
+	int cpu, ret;
+
+	dsa_switch_for_each_cpu_port(cpu_dp, ds)
+		break;
+
+	cpu = cpu_dp->index;
+	blk = &priv->ports[cpu].ingress_evlan;
+
+	old_active = blk->n_active;
+	idx = 0;
+
+	dsa_switch_for_each_user_port(dp, ds) {
+		struct mxl862xx_port *p = &priv->ports[dp->index];
+		u16 vid = p->tag_8021q_vid;
+		int i;
+
+		if (!vid)
+			continue;
+
+		for (i = 0; i < ARRAY_SIZE(cpu_ingress_reassign); i++) {
+			struct mxl862xx_evlan_rule_desc rule =
+				cpu_ingress_reassign[i];
+
+			rule.bridge_port_id = p->bridge_port_cpu;
+			ret = mxl862xx_evlan_write_rule(priv, blk->block_id,
+							idx++, &rule, vid,
+							false, 0, 0);
+			if (ret)
+				return ret;
+		}
+	}
+
+	blk->n_active = idx;
+
+	/* Deactivate stale entries beyond the new active range */
+	for (; idx < old_active; idx++) {
+		ret = mxl862xx_evlan_deactivate_entry(priv, blk->block_id,
+						      idx);
+		if (ret)
+			return ret;
+	}
+	blk->in_use = blk->n_active > 0;
+
+	return mxl862xx_set_cpu_ctp_ingress_evlan(ds, cpu);
+}
+
+static int mxl862xx_tag_8021q_cpu_vlan_add(struct dsa_switch *ds, int port,
+					   u16 vid)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	int ret;
+
+	/* Add VID to CPU port's VF block so firmware accepts frames
+	 * tagged with this VID on CPU port ingress.
+	 */
+	ret = mxl862xx_vf_add_vid(priv, &priv->ports[port].vf, vid, false);
+	if (ret)
+		return ret;
+
+	return mxl862xx_tag_8021q_cpu_vlan_program(ds);
+}
+
+static int mxl862xx_tag_8021q_cpu_vlan_del(struct dsa_switch *ds, int port,
+					   u16 vid)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	int ret;
+
+	ret = mxl862xx_vf_del_vid(priv, &priv->ports[port].vf, vid);
+	if (ret)
+		return ret;
+
+	return mxl862xx_tag_8021q_cpu_vlan_program(ds);
+}
+
+static int mxl862xx_tag_8021q_vlan_add(struct dsa_switch *ds, int port,
+				       u16 vid, u16 flags)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	int ret;
+
+	if (dsa_is_cpu_port(ds, port))
+		return mxl862xx_tag_8021q_cpu_vlan_add(ds, port, vid);
+
+	/* User port: store the tag_8021q VID and add to VF block */
+	priv->ports[port].tag_8021q_vid = vid;
+
+	ret = mxl862xx_vf_add_vid(priv, &priv->ports[port].vf, vid, false);
+	if (ret)
+		return ret;
+
+	ret = mxl862xx_tag_8021q_program_cpu_egress(ds, port);
+	if (ret)
+		return ret;
+
+	/* Rebuild CPU ingress EVLAN to include this port's management VID.
+	 * The DSA framework may call the CPU port's tag_8021q_vlan_add
+	 * before this user port's callback (ports iterate in index order),
+	 * so the CPU ingress EVLAN rebuild triggered by the CPU callback
+	 * might have run before tag_8021q_vid was set. Rebuild now to
+	 * ensure this port's reassignment rule is present.
+	 */
+	return mxl862xx_tag_8021q_cpu_vlan_program(ds);
+}
+
+static int mxl862xx_tag_8021q_vlan_del(struct dsa_switch *ds, int port,
+				       u16 vid)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+
+	if (dsa_is_cpu_port(ds, port))
+		return mxl862xx_tag_8021q_cpu_vlan_del(ds, port, vid);
+
+	if (priv->ports[port].tag_8021q_vid == vid) {
+		priv->ports[port].tag_8021q_vid = 0;
+		mxl862xx_tag_8021q_disable_cpu_egress(ds, port);
+	}
+
+	return mxl862xx_vf_del_vid(priv, &priv->ports[port].vf, vid);
+}
+
+/**
+ * mxl862xx_refresh_cpu_targets - Update portmaps and traps for new CPU target
+ * @ds: DSA switch
+ *
+ * After switching between SpTag and tag_8021q, the CPU-side target in
+ * each user port's portmap changes (physical CPU port vs. virtual
+ * bridge port).  This rebuilds every user port's portmap with the
+ * correct CPU target and reinstalls the link-local PCE trap.
+ */
+static int mxl862xx_refresh_cpu_targets(struct dsa_switch *ds)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct dsa_port *dp;
+	int ret;
+
+	dsa_switch_for_each_user_port(dp, ds) {
+		int port = dp->index;
+		struct mxl862xx_port *p = &priv->ports[port];
+
+		bitmap_zero(p->portmap, MXL862XX_MAX_BRIDGE_PORTS);
+		if (dp->bridge) {
+			struct dsa_port *member_dp;
+
+			dsa_bridge_for_each_member(member_dp, ds, dp->bridge) {
+				if (member_dp->index != port)
+					__set_bit(member_dp->index, p->portmap);
+			}
+		}
+		__set_bit(mxl862xx_cpu_bridge_port_id(ds, port), p->portmap);
+
+		/* Reprogram user port egress EVLAN to add or remove the
+		 * tag_8021q management VID strip catchalls.
+		 */
+		ret = mxl862xx_evlan_program_egress(priv, port);
+		if (ret)
+			return ret;
+
+		ret = mxl862xx_set_bridge_port(ds, port);
+		if (ret)
+			return ret;
+
+		ret = mxl862xx_setup_link_local_trap(ds, port);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+/**
+ * mxl862xx_complete_tag_8021q_setup - Finish deferred tag_8021q initialization
+ * @ds: DSA switch
+ *
+ * Called from change_tag_protocol() to configure the firmware for
+ * tag_8021q mode. Requires each user port to already have an FID
+ * (from add_single_port_bridge in setup()). Reconfigures CPU ports,
+ * allocates virtual bridge ports and enables flooding on standalone
+ * bridges. Link-local traps are refreshed separately after
+ * dsa_tag_8021q_register() has set cpu_egress_evlan.in_use.
+ */
+static int mxl862xx_complete_tag_8021q_setup(struct dsa_switch *ds)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct dsa_port *dp;
+	int ret;
+
+	/* Disable SpTag and reduce to a single CTP on CPU ports for
+	 * 8021q mode.  Without a special tag the PMAC cannot select a
+	 * sub-CTP, so only CTP 0 must exist.
+	 */
+	dsa_switch_for_each_cpu_port(dp, ds) {
+		ret = mxl862xx_configure_sp_tag_proto(ds, dp->index, false);
+		if (ret)
+			return ret;
+
+		ret = mxl862xx_configure_ctp_port(ds, dp->index,
+						  dp->index, 1);
+		if (ret)
+			return ret;
+
+		ret = mxl862xx_setup_cpu_bridge(ds, dp->index);
+		if (ret)
+			return ret;
+	}
+
+	ret = mxl862xx_setup_tag_8021q(ds);
+	if (ret)
+		return ret;
+
+	/* In tag_8021q mode TX goes through the bridge engine (CTP
+	 * ingress EVLAN reassigns to a virtual bridge port), so
+	 * unknown unicast and multicast must be flooded at the bridge
+	 * level for frames from the CPU to reach user ports.  The
+	 * per-port bridges may have been created with flooding
+	 * disabled (SpTag mode default), so update them now.
+	 *
+	 * Block unknown UC and MC on the VBP egress meters so frames
+	 * to unknown destinations are not flooded to the host.  DSA
+	 * core will selectively enable host flooding via
+	 * port_set_host_flood when needed (e.g. promisc mode).
+	 */
+	dsa_switch_for_each_user_port(dp, ds) {
+		int port = dp->index;
+
+		if (dp->bridge)
+			continue;
+
+		ret = mxl862xx_bridge_config_fwd(ds,
+						 priv->ports[port].fid,
+						 true, true, true);
+		if (ret)
+			return ret;
+
+		priv->ports[port].host_flood_block =
+			BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_UC) |
+			BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_IP) |
+			BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_NON_IP);
+
+		ret = mxl862xx_set_cpu_vbp(ds, port);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+static int mxl862xx_change_tag_protocol(struct dsa_switch *ds,
+					enum dsa_tag_protocol proto)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	enum dsa_tag_protocol old_proto = priv->tag_proto;
+	struct dsa_port *dp;
+	int ret;
+
+	/* Flush all MAC entries on tag protocol change.  Host entries
+	 * installed via portmap (tag_8021q VBP-based) vs single port_id
+	 * (SpTag) are not compatible across modes.
+	 */
+	if (ds->setup)
+		mxl862xx_api_wrap(priv, MXL862XX_MAC_TABLECLEAR,
+				  NULL, 0, false, false);
+
+	/* Set tag_proto early so that helpers called below (e.g.
+	 * mxl862xx_setup_cpu_bridge) see the target protocol.
+	 * Restored on failure.
+	 */
+	priv->tag_proto = proto;
+
+	switch (proto) {
+	case DSA_TAG_PROTO_MXL862:
+		if (ds->tag_8021q_ctx) {
+			dsa_tag_8021q_unregister(ds);
+			mxl862xx_teardown_tag_8021q(ds);
+
+			/* Virtual bridge ports are gone; revert portmaps
+			 * and traps to target the physical CPU port.
+			 */
+			ret = mxl862xx_refresh_cpu_targets(ds);
+			if (ret)
+				goto err_restore;
+
+			/* Revert standalone bridges to SpTag mode
+			 * defaults: discard unknown UC/MC (SpTag TX
+			 * bypasses bridge engine) while keeping
+			 * broadcast flooding.
+			 */
+			dsa_switch_for_each_user_port(dp, ds) {
+				int port = dp->index;
+
+				if (dp->bridge)
+					continue;
+
+				mxl862xx_bridge_config_fwd(ds,
+							  priv->ports[port].fid,
+							  false, false, true);
+			}
+		}
+		dsa_switch_for_each_cpu_port(dp, ds) {
+			ret = mxl862xx_configure_sp_tag_proto(ds, dp->index,
+							      true);
+			if (ret)
+				goto err_restore;
+
+			/* Restore multiple CTPs so the special tag's
+			 * sub_if_id can select per-port sub-CTPs.
+			 */
+			ret = mxl862xx_configure_ctp_port(ds, dp->index,
+							  dp->index,
+							  32 - dp->index);
+			if (ret)
+				goto err_restore;
+
+			/* Restore CPU portmap: SpTag mode needs all user
+			 * ports in the CPU's bridge_port_map.  tag_8021q
+			 * mode clears it to prevent FID 0 flooding.
+			 */
+			ret = mxl862xx_setup_cpu_bridge(ds, dp->index);
+			if (ret)
+				goto err_restore;
+		}
+		break;
+
+	case DSA_TAG_PROTO_MXL862_8021Q:
+		ret = mxl862xx_complete_tag_8021q_setup(ds);
+		if (ret)
+			goto err_restore;
+
+		/* RTNL is held by the DSA core when calling
+		 * change_tag_protocol(), both during initial setup
+		 * and at runtime.
+		 */
+		ret = dsa_tag_8021q_register(ds, htons(ETH_P_8021Q));
+		if (ret) {
+			mxl862xx_teardown_tag_8021q(ds);
+			goto err_restore;
+		}
+
+		/* Refresh link-local traps now that tag_8021q_vlan_add
+		 * callbacks have set cpu_egress_evlan.in_use, so the
+		 * PCE rules get the correct EVLAN treatment.
+		 */
+		ret = mxl862xx_refresh_cpu_targets(ds);
+		if (ret) {
+			dsa_tag_8021q_unregister(ds);
+			mxl862xx_teardown_tag_8021q(ds);
+			goto err_restore;
+		}
+		break;
+
+	default:
+		ret = -EPROTONOSUPPORT;
+		goto err_restore;
+	}
+
+	return 0;
+
+err_restore:
+	priv->tag_proto = old_proto;
+	return ret;
+}
+
+static void mxl862xx_teardown(struct dsa_switch *ds)
+{
+	/* tag_8021q teardown is handled in mxl862xx_remove() under
+	 * RTNL, before dsa_unregister_switch() takes dsa2_mutex.
+	 * dsa_tag_8021q_unregister() needs RTNL for vlan_vid_del(),
+	 * and acquiring RTNL inside teardown() (which runs under
+	 * dsa2_mutex) would invert the RTNL → dsa2_mutex lock order.
+	 */
 }
 
 static int mxl862xx_port_setup(struct dsa_switch *ds, int port)
@@ -1668,55 +2596,30 @@ static int mxl862xx_port_setup(struct dsa_switch *ds, int port)
 	    dsa_port_is_dsa(dp))
 		return 0;
 
-	/* configure tag protocol */
-	ret = mxl862xx_configure_sp_tag_proto(ds, port, is_cpu_port);
+	/* configure tag protocol: SpTag for native, disable for 8021q */
+	ret = mxl862xx_configure_sp_tag_proto(ds, port,
+					      is_cpu_port &&
+					      priv->tag_proto == DSA_TAG_PROTO_MXL862);
 	if (ret)
 		return ret;
 
 	/* assign CTP port IDs */
 	ret = mxl862xx_configure_ctp_port(ds, port, port,
-					  is_cpu_port ? 32 - port : 1);
+					  (is_cpu_port &&
+					   priv->tag_proto == DSA_TAG_PROTO_MXL862) ?
+					  32 - port : 1);
 	if (ret)
 		return ret;
 
 	if (is_cpu_port)
-		/* assign user ports to CPU port bridge */
 		return mxl862xx_setup_cpu_bridge(ds, port);
-
-	/* setup single-port bridge for user ports */
-	ret = mxl862xx_add_single_port_bridge(ds, port);
-	if (ret)
-		return ret;
 
 	/* install link-local trap for this user port */
 	ret = mxl862xx_setup_link_local_trap(ds, port);
 	if (ret)
 		return ret;
 
-	/* Initialize and pre-allocate per-port EVLAN and VF blocks for
-	 * user ports. CPU ports do not use EVLAN or VF -- frames pass
-	 * through without processing. Pre-allocation avoids firmware
-	 * EVLAN table fragmentation and simplifies control flow.
-	 */
-	mxl862xx_evlan_block_init(&priv->ports[port].ingress_evlan,
-				  priv->evlan_ingress_size);
-	ret = mxl862xx_evlan_block_alloc(priv, &priv->ports[port].ingress_evlan);
-	if (ret)
-		return ret;
-
-	mxl862xx_evlan_block_init(&priv->ports[port].egress_evlan,
-				  priv->evlan_egress_size);
-	ret = mxl862xx_evlan_block_alloc(priv, &priv->ports[port].egress_evlan);
-	if (ret)
-		return ret;
-
-	mxl862xx_vf_init(&priv->ports[port].vf, priv->vf_block_size);
-	ret = mxl862xx_vf_alloc(priv, &priv->ports[port].vf);
-	if (ret)
-		return ret;
-
 	priv->ports[port].setup_done = true;
-
 	return 0;
 }
 
@@ -1732,7 +2635,7 @@ static void mxl862xx_port_teardown(struct dsa_switch *ds, int port)
 	 * The flag is checked under rtnl_lock() by the worker; since
 	 * teardown also runs under RTNL, this is race-free.
 	 *
-	 * HW EVLAN/VF blocks are not freed here -- the firmware receives
+	 * HW EVLAN/VF blocks are not freed here — the firmware receives
 	 * a full reset on the next probe, which reclaims all resources.
 	 */
 	priv->ports[port].setup_done = false;
@@ -1785,23 +2688,242 @@ static int mxl862xx_get_fid(struct dsa_switch *ds, struct dsa_db db)
 	}
 }
 
-static int mxl862xx_port_fdb_add(struct dsa_switch *ds, int port,
-				 const unsigned char *addr, u16 vid, struct dsa_db db)
+/**
+ * mxl862xx_fdb_bridge_port - Translate port for MAC table in tag_8021q mode
+ * @ds: DSA switch
+ * @port: port number passed by DSA (usually the CPU port for host entries)
+ * @db: database context identifying the user port or bridge
+ *
+ * In tag_8021q mode, host FDB/MDB entries for standalone ports must use
+ * the virtual bridge port (bridge_port_cpu) as the MAC table destination
+ * so that known-unicast and known-multicast frames exit through the
+ * virtual bridge port's egress EVLAN, which inserts the management VID.
+ * Without this, the firmware forwards known traffic directly to the
+ * physical CPU bridge port, bypassing management VID insertion, and DSA
+ * drops the untagged frame.
+ */
+static int mxl862xx_fdb_bridge_port(struct dsa_switch *ds, int port,
+				    struct dsa_db db)
 {
-	struct mxl862xx_mac_table_add param = {};
-	int fid = mxl862xx_get_fid(ds, db), ret;
 	struct mxl862xx_priv *priv = ds->priv;
 
-	if (fid < 0)
-		return fid;
+	if (dsa_is_cpu_port(ds, port) && priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q &&
+	    db.type == DSA_DB_PORT) {
+		u16 bp_cpu = priv->ports[db.dp->index].bridge_port_cpu;
 
-	param.port_id = cpu_to_le32(port);
+		if (bp_cpu)
+			return bp_cpu;
+	}
+
+	return port;
+}
+
+/**
+ * mxl862xx_fdb_add_per_fid - Install a unicast FDB entry in one FID
+ */
+static int mxl862xx_fdb_add_per_fid(struct dsa_switch *ds,
+				     const unsigned char *addr, u16 vid,
+				     u16 fid, int port_id)
+{
+	struct mxl862xx_mac_table_add param = {};
+	struct mxl862xx_priv *priv = ds->priv;
+
+	param.port_id = cpu_to_le32(port_id);
 	param.static_entry = true;
 	param.fid = cpu_to_le16(fid);
 	param.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, vid));
 	ether_addr_copy(param.mac, addr);
 
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYADD, param);
+	return MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYADD, param);
+}
+
+/**
+ * mxl862xx_fdb_del_per_fid - Remove a unicast FDB entry from one FID
+ */
+static int mxl862xx_fdb_del_per_fid(struct dsa_switch *ds,
+				     const unsigned char *addr, u16 vid,
+				     u16 fid)
+{
+	struct mxl862xx_mac_table_remove param = {};
+	struct mxl862xx_priv *priv = ds->priv;
+
+	param.fid = cpu_to_le16(fid);
+	param.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, vid));
+	ether_addr_copy(param.mac, addr);
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYREMOVE, param);
+}
+
+/**
+ * mxl862xx_mac_portmap_add - Set port bits in a MAC table entry's portmap
+ * @priv: driver private data
+ * @addr: MAC address
+ * @fid: firmware FID
+ * @vid: VLAN ID
+ * @add_map: firmware-format portmap of bits to set
+ *
+ * Queries the existing MAC table entry by {addr, fid, vid}.  If found,
+ * the existing portmap is preserved and @add_map bits are OR'd in.
+ * The entry is then written back as a static portmap-mode entry.
+ */
+static int mxl862xx_mac_portmap_add(struct mxl862xx_priv *priv,
+				    const unsigned char *addr,
+				    u16 fid, u16 vid,
+				    const __le16 *add_map)
+{
+	struct mxl862xx_mac_table_query qparam = {};
+	struct mxl862xx_mac_table_add aparam = {};
+	int i, ret;
+
+	ether_addr_copy(qparam.mac, addr);
+	qparam.fid = cpu_to_le16(fid);
+	qparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, vid));
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_MAC_TABLEENTRYQUERY, qparam);
+	if (ret)
+		return ret;
+
+	ether_addr_copy(aparam.mac, addr);
+	aparam.fid = cpu_to_le16(fid);
+	aparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, vid));
+	aparam.static_entry = true;
+	aparam.port_id = cpu_to_le32(MXL862XX_PORTMAP_FLAG);
+
+	if (qparam.found)
+		memcpy(aparam.port_map, qparam.port_map,
+		       sizeof(aparam.port_map));
+
+	for (i = 0; i < ARRAY_SIZE(aparam.port_map); i++)
+		aparam.port_map[i] |= add_map[i];
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYADD, aparam);
+}
+
+/**
+ * mxl862xx_mac_portmap_del - Clear port bits from a MAC table entry's portmap
+ * @priv: driver private data
+ * @addr: MAC address
+ * @fid: firmware FID
+ * @vid: VLAN ID
+ * @del_map: firmware-format portmap of bits to clear
+ *
+ * Queries the existing MAC table entry.  If not found, returns 0.
+ * Clears all @del_map bits from the portmap.  If the portmap becomes
+ * empty, the entry is removed entirely; otherwise it is updated.
+ */
+static int mxl862xx_mac_portmap_del(struct mxl862xx_priv *priv,
+				    const unsigned char *addr,
+				    u16 fid, u16 vid,
+				    const __le16 *del_map)
+{
+	struct mxl862xx_mac_table_remove rparam = {};
+	struct mxl862xx_mac_table_query qparam = {};
+	struct mxl862xx_mac_table_add aparam = {};
+	int i, ret;
+
+	ether_addr_copy(qparam.mac, addr);
+	qparam.fid = cpu_to_le16(fid);
+	qparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, vid));
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_MAC_TABLEENTRYQUERY, qparam);
+	if (ret)
+		return ret;
+
+	if (!qparam.found)
+		return 0;
+
+	for (i = 0; i < ARRAY_SIZE(qparam.port_map); i++)
+		qparam.port_map[i] &= ~del_map[i];
+
+	if (mxl862xx_fw_portmap_is_empty(qparam.port_map)) {
+		ether_addr_copy(rparam.mac, addr);
+		rparam.fid = cpu_to_le16(fid);
+		rparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID,
+						     vid));
+		return MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYREMOVE,
+					  rparam);
+	}
+
+	ether_addr_copy(aparam.mac, addr);
+	aparam.fid = cpu_to_le16(fid);
+	aparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, vid));
+	aparam.static_entry = true;
+	aparam.port_id = cpu_to_le32(MXL862XX_PORTMAP_FLAG);
+	memcpy(aparam.port_map, qparam.port_map, sizeof(aparam.port_map));
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYADD, aparam);
+}
+
+/**
+ * mxl862xx_mac_add_host_bridge - Install a host FDB/MDB entry with VBP portmap
+ * @ds: DSA switch
+ * @addr: MAC address
+ * @vid: VLAN ID
+ * @bridge: bridge whose members' VBPs to include
+ *
+ * In tag_8021q mode, host FDB/MDB entries in a shared bridge FID must use
+ * portmap mode targeting ALL bridge members' virtual bridge ports (VBPs).
+ * The firmware ANDs the entry's portmap with each ingress port's
+ * bridge_port_map, which contains only that port's own VBP.  This
+ * selects the correct VBP per ingress port, ensuring frames exit
+ * through the right egress EVLAN (which inserts the per-port management
+ * VID that identifies the source port to DSA on the CPU side).
+ */
+static int mxl862xx_mac_add_host_bridge(struct dsa_switch *ds,
+					const unsigned char *addr, u16 vid,
+					const struct dsa_bridge *bridge)
+{
+	__le16 add_map[MXL862XX_FW_PORTMAP_WORDS] = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	u16 fid = priv->bridges[bridge->num];
+	struct dsa_port *member_dp;
+
+	dsa_bridge_for_each_member(member_dp, ds, bridge)
+		mxl862xx_fw_portmap_set_bit(add_map,
+					    priv->ports[member_dp->index].bridge_port_cpu);
+
+	return mxl862xx_mac_portmap_add(priv, addr, fid, vid, add_map);
+}
+
+static int mxl862xx_port_fdb_add(struct dsa_switch *ds, int port,
+				 const unsigned char *addr, u16 vid, struct dsa_db db)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	int fid, ret;
+
+	/* tag_8021q host FDB for bridged ports: portmap with all VBPs */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && dsa_is_cpu_port(ds, port) &&
+	    db.type == DSA_DB_BRIDGE) {
+		if (!priv->bridges[db.bridge.num])
+			return -ENOENT;
+
+		return mxl862xx_mac_add_host_bridge(ds, addr, vid, &db.bridge);
+	}
+
+	/* tag_8021q standalone host FDB for bridged ports: also mirror
+	 * into the bridge FID.  DSA installs VID-specific host entries
+	 * via the standalone path (DSA_DB_PORT), but with IVL enabled
+	 * the firmware needs matching entries in the bridge FID for
+	 * VID-keyed lookups to succeed.
+	 */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && dsa_is_cpu_port(ds, port) &&
+	    db.type == DSA_DB_PORT && vid > 0) {
+		struct dsa_port *target_dp = dsa_to_port(ds, db.dp->index);
+
+		if (target_dp->bridge) {
+			ret = mxl862xx_mac_add_host_bridge(ds, addr, vid,
+							   target_dp->bridge);
+			if (ret)
+				return ret;
+		}
+	}
+
+	fid = mxl862xx_get_fid(ds, db);
+	if (fid < 0)
+		return fid;
+
+	ret = mxl862xx_fdb_add_per_fid(ds, addr, vid, fid,
+				       mxl862xx_fdb_bridge_port(ds, port, db));
 	if (ret)
 		dev_err(ds->dev, "failed to add FDB entry on port %d\n", port);
 
@@ -1811,18 +2933,24 @@ static int mxl862xx_port_fdb_add(struct dsa_switch *ds, int port,
 static int mxl862xx_port_fdb_del(struct dsa_switch *ds, int port,
 				 const unsigned char *addr, u16 vid, struct dsa_db db)
 {
-	struct mxl862xx_mac_table_remove param = {};
-	int fid = mxl862xx_get_fid(ds, db), ret;
 	struct mxl862xx_priv *priv = ds->priv;
+	int fid, ret;
 
+	/* Mirror of the standalone→bridge FID path in fdb_add */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && dsa_is_cpu_port(ds, port) &&
+	    db.type == DSA_DB_PORT && vid > 0) {
+		struct dsa_port *target_dp = dsa_to_port(ds, db.dp->index);
+
+		if (target_dp->bridge && priv->bridges[target_dp->bridge->num])
+			mxl862xx_fdb_del_per_fid(ds, addr, vid,
+						 priv->bridges[target_dp->bridge->num]);
+	}
+
+	fid = mxl862xx_get_fid(ds, db);
 	if (fid < 0)
 		return fid;
 
-	param.fid = cpu_to_le16(fid);
-	param.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, vid));
-	ether_addr_copy(param.mac, addr);
-
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYREMOVE, param);
+	ret = mxl862xx_fdb_del_per_fid(ds, addr, vid, fid);
 	if (ret)
 		dev_err(ds->dev, "failed to remove FDB entry on port %d\n", port);
 
@@ -1861,88 +2989,147 @@ static int mxl862xx_port_fdb_dump(struct dsa_switch *ds, int port,
 	return 0;
 }
 
+/**
+ * mxl862xx_mdb_add_to_fid - Add a port bit to an MDB entry in one FID
+ * @ds: DSA switch
+ * @mdb: multicast group address and VID
+ * @fid: firmware FID to operate on
+ * @port_bit: port index to set in the portmap
+ * @vid: VLAN ID for the MAC table entry
+ */
+static int mxl862xx_mdb_add_to_fid(struct dsa_switch *ds,
+				    const struct switchdev_obj_port_mdb *mdb,
+				    u16 fid, int port_bit, u16 vid)
+{
+	__le16 add_map[MXL862XX_FW_PORTMAP_WORDS] = {};
+
+	mxl862xx_fw_portmap_set_bit(add_map, port_bit);
+
+	return mxl862xx_mac_portmap_add(ds->priv, mdb->addr, fid, vid,
+					add_map);
+}
+
+/**
+ * mxl862xx_mdb_del_from_fid - Remove a port bit from an MDB entry in one FID
+ * @ds: DSA switch
+ * @mdb: multicast group address
+ * @fid: firmware FID to operate on
+ * @port_bit: port index to clear from the portmap
+ * @vid: VLAN ID for the MAC table entry (0 for SVL/tag_8021q mode)
+ */
+static int mxl862xx_mdb_del_from_fid(struct dsa_switch *ds,
+				      const struct switchdev_obj_port_mdb *mdb,
+				      u16 fid, int port_bit, u16 vid)
+{
+	__le16 del_map[MXL862XX_FW_PORTMAP_WORDS] = {};
+
+	mxl862xx_fw_portmap_set_bit(del_map, port_bit);
+
+	return mxl862xx_mac_portmap_del(ds->priv, mdb->addr, fid, vid,
+					del_map);
+}
+
 static int mxl862xx_port_mdb_add(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_mdb *mdb,
 				 struct dsa_db db)
 {
-	struct mxl862xx_mac_table_query qparam = {};
-	struct mxl862xx_mac_table_add aparam = {};
 	struct mxl862xx_priv *priv = ds->priv;
 	int fid, ret;
+
+	/* tag_8021q host MDB for bridged ports: portmap with all VBPs */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && dsa_is_cpu_port(ds, port) &&
+	    db.type == DSA_DB_BRIDGE) {
+		if (!priv->bridges[db.bridge.num])
+			return -ENOENT;
+
+		return mxl862xx_mac_add_host_bridge(ds, mdb->addr,
+						    mdb->vid, &db.bridge);
+	}
 
 	fid = mxl862xx_get_fid(ds, db);
 	if (fid < 0)
 		return fid;
 
-	/* Look up existing entry by {MAC, FID, TCI} */
-	ether_addr_copy(qparam.mac, mdb->addr);
-	qparam.fid = cpu_to_le16(fid);
-	qparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, mdb->vid));
-
-	ret = MXL862XX_API_READ(priv, MXL862XX_MAC_TABLEENTRYQUERY, qparam);
+	ret = mxl862xx_mdb_add_to_fid(ds, mdb, fid,
+				       mxl862xx_fdb_bridge_port(ds, port, db),
+				       mdb->vid);
 	if (ret)
 		return ret;
 
-	/* Build the ADD command using portmap mode */
-	ether_addr_copy(aparam.mac, mdb->addr);
-	aparam.fid = cpu_to_le16(fid);
-	aparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, mdb->vid));
-	aparam.static_entry = true;
-	aparam.port_id = cpu_to_le32(MXL862XX_PORTMAP_FLAG);
+	/* In tag_8021q mode, standalone host MDB entries need both the VBP
+	 * and the physical port in the portmap.  The TX path goes through
+	 * the bridge engine (CPU -> VBP -> MAC lookup), so source-port
+	 * filtering would remove the sole VBP entry, dropping the frame.
+	 * With both bits set:
+	 *   TX: VBP source-filtered -> physical port remains -> frame exits
+	 *   RX: physical port source-filtered -> VBP remains -> CPU receives
+	 */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && db.type == DSA_DB_PORT)
+		ret = mxl862xx_mdb_add_to_fid(ds, mdb, fid, db.dp->index,
+					       mdb->vid);
 
-	/* Merge with existing portmap if entry already exists */
-	if (qparam.found)
-		memcpy(aparam.port_map, qparam.port_map,
-		       sizeof(aparam.port_map));
+	return ret;
+}
 
-	mxl862xx_fw_portmap_set_bit(aparam.port_map, port);
+/**
+ * mxl862xx_mac_del_host_bridge - Remove VBP bits from a host FDB/MDB entry
+ * @ds: DSA switch
+ * @addr: MAC address
+ * @vid: VLAN ID
+ * @bridge: bridge whose members' VBPs to clear
+ *
+ * Clears all bridge member VBP bits from the portmap.  If the portmap
+ * becomes empty (no user-port bits remain), removes the entry entirely.
+ */
+static int mxl862xx_mac_del_host_bridge(struct dsa_switch *ds,
+					const unsigned char *addr, u16 vid,
+					const struct dsa_bridge *bridge)
+{
+	__le16 del_map[MXL862XX_FW_PORTMAP_WORDS] = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	u16 fid = priv->bridges[bridge->num];
+	struct dsa_port *member_dp;
 
-	return MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYADD, aparam);
+	dsa_bridge_for_each_member(member_dp, ds, bridge)
+		mxl862xx_fw_portmap_set_bit(del_map,
+					    priv->ports[member_dp->index].bridge_port_cpu);
+
+	return mxl862xx_mac_portmap_del(priv, addr, fid, vid, del_map);
 }
 
 static int mxl862xx_port_mdb_del(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_mdb *mdb,
 				 struct dsa_db db)
 {
-	struct mxl862xx_mac_table_remove rparam = {};
-	struct mxl862xx_mac_table_query qparam = {};
-	struct mxl862xx_mac_table_add aparam = {};
-	int fid = mxl862xx_get_fid(ds, db), ret;
 	struct mxl862xx_priv *priv = ds->priv;
+	int fid, ret;
 
+	/* tag_8021q host MDB for bridged ports: clear all VBP bits */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && dsa_is_cpu_port(ds, port) &&
+	    db.type == DSA_DB_BRIDGE) {
+		if (!priv->bridges[db.bridge.num])
+			return -ENOENT;
+
+		return mxl862xx_mac_del_host_bridge(ds, mdb->addr,
+						    mdb->vid, &db.bridge);
+	}
+
+	fid = mxl862xx_get_fid(ds, db);
 	if (fid < 0)
 		return fid;
 
-	/* Look up existing entry */
-	qparam.fid = cpu_to_le16(fid);
-	qparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, mdb->vid));
-	ether_addr_copy(qparam.mac, mdb->addr);
-
-	ret = MXL862XX_API_READ(priv, MXL862XX_MAC_TABLEENTRYQUERY, qparam);
+	ret = mxl862xx_mdb_del_from_fid(ds, mdb, fid,
+					 mxl862xx_fdb_bridge_port(ds, port, db),
+					 mdb->vid);
 	if (ret)
 		return ret;
 
-	if (!qparam.found)
-		return 0;
-
-	mxl862xx_fw_portmap_clear_bit(qparam.port_map, port);
-
-	if (mxl862xx_fw_portmap_is_empty(qparam.port_map)) {
-		/* No ports left — remove the entry entirely */
-		rparam.fid = cpu_to_le16(fid);
-		rparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, mdb->vid));
-		ether_addr_copy(rparam.mac, mdb->addr);
-		ret = MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYREMOVE, rparam);
-	} else {
-		/* Write back with reduced portmap */
-		aparam.fid = cpu_to_le16(fid);
-		aparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, mdb->vid));
-		ether_addr_copy(aparam.mac, mdb->addr);
-		aparam.static_entry = true;
-		aparam.port_id = cpu_to_le32(MXL862XX_PORTMAP_FLAG);
-		memcpy(aparam.port_map, qparam.port_map, sizeof(aparam.port_map));
-		ret = MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYADD, aparam);
-	}
+	/* In tag_8021q mode, standalone host MDB entries have both the VBP
+	 * and the physical port in the portmap -- remove both bits.
+	 */
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q && db.type == DSA_DB_PORT)
+		ret = mxl862xx_mdb_del_from_fid(ds, mdb, fid, db.dp->index,
+						 mdb->vid);
 
 	return ret;
 }
@@ -2043,14 +3230,33 @@ static void mxl862xx_host_flood_work_fn(struct work_struct *work)
 	uc = p->host_flood_uc;
 	mc = p->host_flood_mc;
 
-	/* The hardware controls unknown-unicast/multicast forwarding per FID
-	 * (bridge), not per source port.  For bridged ports all members share
-	 * one FID, so we cannot selectively suppress flooding to the CPU for
-	 * one source port while allowing it for another.  Silently ignore the
-	 * request -- the excess flooding towards the CPU is harmless.
-	 */
-	if (!dsa_port_bridge_dev_get(dsa_to_port(ds, port)))
-		mxl862xx_bridge_config_fwd(ds, p->fid, uc, mc, true);
+	if (priv->tag_proto == DSA_TAG_PROTO_MXL862_8021Q) {
+		unsigned long block = 0;
+
+		if (!uc)
+			block |= BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_UC);
+		if (!mc) {
+			block |= BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_IP);
+			block |= BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_NON_IP);
+		}
+
+		if (block != p->host_flood_block) {
+			int ret;
+
+			p->host_flood_block = block;
+			ret = mxl862xx_set_cpu_vbp(ds, port);
+			if (ret)
+				dev_err(ds->dev,
+					"failed to set host flood on port %d: %pe\n",
+					port, ERR_PTR(ret));
+		}
+	} else {
+		/* SpTag mode: per-FID forwarding, only works for
+		 * standalone ports (each has its own FID).
+		 */
+		if (!dsa_port_bridge_dev_get(dsa_to_port(ds, port)))
+			mxl862xx_bridge_config_fwd(ds, p->fid, uc, mc, true);
+	}
 
 	rtnl_unlock();
 }
@@ -2526,7 +3732,9 @@ done:
 
 static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_tag_protocol = mxl862xx_get_tag_protocol,
+	.change_tag_protocol = mxl862xx_change_tag_protocol,
 	.setup = mxl862xx_setup,
+	.teardown = mxl862xx_teardown,
 	.port_setup = mxl862xx_port_setup,
 	.port_teardown = mxl862xx_port_teardown,
 	.phylink_get_caps = mxl862xx_phylink_get_caps,
@@ -2548,6 +3756,8 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.port_vlan_filtering = mxl862xx_port_vlan_filtering,
 	.port_vlan_add = mxl862xx_port_vlan_add,
 	.port_vlan_del = mxl862xx_port_vlan_del,
+	.tag_8021q_vlan_add = mxl862xx_tag_8021q_vlan_add,
+	.tag_8021q_vlan_del = mxl862xx_tag_8021q_vlan_del,
 	.get_strings = mxl862xx_get_strings,
 	.get_sset_count = mxl862xx_get_sset_count,
 	.get_ethtool_stats = mxl862xx_get_ethtool_stats,
@@ -2933,6 +4143,8 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 
 	INIT_DELAYED_WORK(&priv->stats_work, mxl862xx_stats_work_fn);
 
+	priv->tag_proto = DSA_TAG_PROTO_MXL862;
+
 	dev_set_drvdata(dev, ds);
 
 	return dsa_register_switch(ds);
@@ -2949,16 +4161,29 @@ static void mxl862xx_remove(struct mdio_device *mdiodev)
 
 	priv = ds->priv;
 
+	/* Tear down tag_8021q under RTNL before dsa_unregister_switch().
+	 * dsa_tag_8021q_unregister() calls vlan_vid_del() which needs
+	 * RTNL.  dsa_unregister_switch() takes dsa2_mutex, and other
+	 * paths take RTNL → dsa2_mutex, so RTNL must be acquired
+	 * before dsa2_mutex to avoid lock inversion.
+	 */
+	if (ds->tag_8021q_ctx) {
+		rtnl_lock();
+		dsa_tag_8021q_unregister(ds);
+		mxl862xx_teardown_tag_8021q(ds);
+		rtnl_unlock();
+	}
+
 	dsa_unregister_switch(ds);
 
 	cancel_delayed_work_sync(&priv->stats_work);
 
 	mxl862xx_host_shutdown(priv);
 
-	/* Cancel any pending host flood work.  dsa_unregister_switch()
+	/* Cancel any pending host flood work. dsa_unregister_switch()
 	 * has already called port_teardown (which sets setup_done=false),
 	 * but a worker could still be blocked on rtnl_lock().  Since we
-	 * are now outside RTNL, cancel_work_sync() will not deadlock.
+	 * are now outside RTNL, cancel_work_sync() won't deadlock.
 	 */
 	for (i = 0; i < MXL862XX_MAX_PORTS; i++)
 		cancel_work_sync(&priv->ports[i].host_flood_work);

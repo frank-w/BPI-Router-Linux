@@ -8,8 +8,6 @@
 #include <linux/workqueue.h>
 #include <net/dsa.h>
 
-struct mxl862xx_priv;
-
 #define MXL862XX_MAX_PORTS		17
 #define MXL862XX_DEFAULT_BRIDGE		0
 #define MXL862XX_MAX_BRIDGES		48
@@ -19,6 +17,8 @@ struct mxl862xx_priv;
 
 /* Number of __le16 words in a firmware portmap (128-bit bitmap). */
 #define MXL862XX_FW_PORTMAP_WORDS	(MXL862XX_MAX_BRIDGE_PORTS / 16)
+
+struct mxl862xx_priv;
 
 /**
  * mxl862xx_fw_portmap_from_bitmap - convert a kernel bitmap to a firmware
@@ -210,6 +210,9 @@ struct mxl862xx_port_stats {
  * @vf:                  per-port VLAN Filter block state
  * @ingress_evlan:       ingress extended VLAN block state
  * @egress_evlan:        egress extended VLAN block state
+ * @bridge_port_cpu:     virtual bridge port ID for tag_8021q CPU-side CTP
+ * @host_flood_block:    bitmask of firmware meter indices used to block
+ *                       host flooding on the virtual bridge port (tag_8021q)
  * @host_flood_uc:       desired host unicast flood state (true = flood);
  *                       updated atomically by port_set_host_flood, consumed
  *                       by the deferred host_flood_work
@@ -224,6 +227,7 @@ struct mxl862xx_port_stats {
  *                       periodically by the stats polling work
  * @stats_lock:          protects accumulator reads in .get_stats64 against
  *                       concurrent updates from the polling work
+ * @tag_8021q_vid:       currently assigned tag_8021q management VID
  */
 struct mxl862xx_port {
 	struct mxl862xx_priv *priv;
@@ -238,9 +242,14 @@ struct mxl862xx_port {
 	struct mxl862xx_vf_block vf;
 	struct mxl862xx_evlan_block ingress_evlan;
 	struct mxl862xx_evlan_block egress_evlan;
+	/* tag_8021q state */
+	u16 bridge_port_cpu;
+	unsigned long host_flood_block;
 	bool host_flood_uc;
 	bool host_flood_mc;
 	struct work_struct host_flood_work;
+	u16 tag_8021q_vid;
+	struct mxl862xx_evlan_block cpu_egress_evlan;
 	/* Hardware stats accumulation */
 	struct mxl862xx_port_stats stats;
 	spinlock_t stats_lock;
@@ -297,6 +306,7 @@ union mxl862xx_fw_version {
  * @crc_err_work:       deferred work for taking down all ports on CRC errors
  * @crc_err:            set atomically before CRC-triggerd takedown,
  *                      cleared after
+ * @tag_proto:          active DSA tag protocol (native or 8021q)
  * @drop_meter:         index of the single shared zero-rate firmware meter
  *                      used to unconditionally drop traffic (used to block
  *                      flooding)
@@ -305,12 +315,13 @@ union mxl862xx_fw_version {
  * @serdes_ports:       SerDes interfaces incl. sub-interfaces in case of
  *                      10G_QXGMII
  * @ports:              per-port state, indexed by switch port number
+ * @evlan_ingress_size: per-port ingress Extended VLAN block size
+ * @evlan_egress_size:  per-port egress Extended VLAN block size
+ * @cpu_evlan_ingress_size: CPU port ingress EVLAN block size (tag_8021q)
  * @bridges:            maps DSA bridge number to firmware bridge ID;
  *                      zero means no firmware bridge allocated for that
  *                      DSA bridge number.  Indexed by dsa_bridge.num
  *                      (0 .. ds->max_num_bridges).
- * @evlan_ingress_size: per-port ingress Extended VLAN block size
- * @evlan_egress_size:  per-port egress Extended VLAN block size
  * @vf_block_size:      per-port VLAN Filter block size
  * @stats_work:         periodic work item that polls RMON hardware counters
  *                      and accumulates them into 64-bit per-port stats
@@ -320,6 +331,7 @@ struct mxl862xx_priv {
 	struct mdio_device *mdiodev;
 	struct work_struct crc_err_work;
 	unsigned long crc_err;
+	enum dsa_tag_protocol tag_proto;
 	u16 drop_meter;
 	union mxl862xx_fw_version fw_version;
 	struct mxl862xx_pcs serdes_ports[8];
@@ -327,6 +339,7 @@ struct mxl862xx_priv {
 	u16 bridges[MXL862XX_MAX_BRIDGES + 1];
 	u16 evlan_ingress_size;
 	u16 evlan_egress_size;
+	u16 cpu_evlan_ingress_size;
 	u16 vf_block_size;
 	struct delayed_work stats_work;
 };

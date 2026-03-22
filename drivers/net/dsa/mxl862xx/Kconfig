@@ -4,6 +4,7 @@ config NET_DSA_MXL862
 	depends on NET_DSA
 	select CRC16
 	select NET_DSA_TAG_MXL_862XX
+	select NET_DSA_TAG_MXL_862XX_8021Q
 	help
 	  This enables support for the MaxLinear MxL862xx switch family.
 	  These switches have two 10GE SerDes interfaces, one typically
