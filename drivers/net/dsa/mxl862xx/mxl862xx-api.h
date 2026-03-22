@@ -1185,6 +1185,227 @@ struct mxl862xx_ctp_port_assignment {
 } __packed;
 
 /**
+ * enum mxl862xx_ctp_port_config_mask - CTP Port Configuration Mask
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_BRIDGE_PORT_ID:
+ *     Mask for bridge_port_id.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_FORCE_TRAFFIC_CLASS:
+ *     Mask for forced_traffic_class and default_traffic_class.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN:
+ *     Mask for ingress_extended_vlan_enable and
+ *     ingress_extended_vlan_block_id.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN_IGMP:
+ *     Mask for ingress_extended_vlan_igmp_enable and
+ *     ingress_extended_vlan_block_id_igmp.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_VLAN:
+ *     Mask for egress_extended_vlan_enable and
+ *     egress_extended_vlan_block_id.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_VLAN_IGMP:
+ *     Mask for egress_extended_vlan_igmp_enable and
+ *     egress_extended_vlan_block_id_igmp.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_NTO1_VLAN:
+ *     Mask for ingress_nto1vlan_enable.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_NTO1_VLAN:
+ *     Mask for egress_nto1vlan_enable.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_MARKING:
+ *     Mask for ingress_marking_mode.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_MARKING:
+ *     Mask for egress_marking_mode.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_MARKING_OVERRIDE:
+ *     Mask for egress_marking_override_enable and
+ *     egress_marking_mode_override.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_REMARKING:
+ *     Mask for egress_remarking_mode.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_METER:
+ *     Mask for ingress_metering_enable and ingress_traffic_meter_id.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_METER:
+ *     Mask for egress_metering_enable and egress_traffic_meter_id.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_BRIDGING_BYPASS:
+ *     Mask for bridging_bypass, dest_logical_port_id, pmapper_enable,
+ *     dest_sub_if_id_group, pmapper_mapping_mode, pmapper_id_valid and
+ *     pmapper_dest_sub_if_id_group.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_FLOW_ENTRY:
+ *     Mask for first_flow_entry_index and number_of_flow_entries.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_LOOPBACK_AND_MIRROR:
+ *     Mask for ingress_loopback_enable, ingress_da_sa_swap_enable,
+ *     egress_loopback_enable, egress_da_sa_swap_enable,
+ *     ingress_mirror_enable and egress_mirror_enable.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_ALL: Enable all fields.
+ * @MXL862XX_CTP_PORT_CONFIG_MASK_FORCE: Bypass any check for debug purpose.
+ */
+enum mxl862xx_ctp_port_config_mask {
+	MXL862XX_CTP_PORT_CONFIG_MASK_BRIDGE_PORT_ID = BIT(0),
+	MXL862XX_CTP_PORT_CONFIG_MASK_FORCE_TRAFFIC_CLASS = BIT(1),
+	MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN = BIT(2),
+	MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_VLAN_IGMP = BIT(3),
+	MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_VLAN = BIT(4),
+	MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_VLAN_IGMP = BIT(5),
+	MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_NTO1_VLAN = BIT(6),
+	MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_NTO1_VLAN = BIT(7),
+	MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_MARKING = BIT(8),
+	MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_MARKING = BIT(9),
+	MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_MARKING_OVERRIDE = BIT(10),
+	MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_REMARKING = BIT(11),
+	MXL862XX_CTP_PORT_CONFIG_MASK_INGRESS_METER = BIT(12),
+	MXL862XX_CTP_PORT_CONFIG_MASK_EGRESS_METER = BIT(13),
+	MXL862XX_CTP_PORT_CONFIG_MASK_BRIDGING_BYPASS = BIT(14),
+	MXL862XX_CTP_PORT_CONFIG_MASK_FLOW_ENTRY = BIT(15),
+	MXL862XX_CTP_PORT_CONFIG_MASK_LOOPBACK_AND_MIRROR = BIT(16),
+	MXL862XX_CTP_PORT_CONFIG_MASK_ALL = 0x7FFFFFFF,
+	MXL862XX_CTP_PORT_CONFIG_MASK_FORCE = BIT(31),
+};
+
+/**
+ * struct mxl862xx_ctp_port_config - CTP Port Configuration
+ * @logical_port_id: Logical Port Id. The valid range is hardware dependent.
+ *                   Ignored when mask has
+ *                   %MXL862XX_CTP_PORT_CONFIG_MASK_FORCE.
+ * @n_sub_if_id_group: Sub interface ID group. The valid range is
+ *                     hardware/protocol dependent. When mask has
+ *                     %MXL862XX_CTP_PORT_CONFIG_MASK_FORCE, this is the
+ *                     absolute CTP index in hardware (debug only).
+ * @mask: See &enum mxl862xx_ctp_port_config_mask
+ * @bridge_port_id: Ingress Bridge Port ID to which this CTP port is
+ *                  associated for ingress traffic
+ * @forced_traffic_class: Default traffic class cannot be overridden by other
+ *                        rules (except traffic flow table and special tag)
+ * @default_traffic_class: Default traffic class for all ingress traffic from
+ *                         this CTP port
+ * @ingress_extended_vlan_enable: Enable extended VLAN processing for ingress
+ *                                non-IGMP traffic
+ * @ingress_extended_vlan_block_id: Extended VLAN block allocated for ingress
+ *                                  non-IGMP traffic. Valid when
+ *                                  ingress_extended_vlan_enable is set.
+ * @ingress_extended_vlan_block_size: Extended VLAN block size for ingress
+ *                                    non-IGMP traffic. If 0, the block size of
+ *                                    ingress_extended_vlan_block_id is used.
+ * @ingress_extended_vlan_igmp_enable: Enable extended VLAN processing for
+ *                                     ingress IGMP traffic
+ * @ingress_extended_vlan_block_id_igmp: Extended VLAN block allocated for
+ *                                       ingress IGMP traffic. Valid when
+ *                                       ingress_extended_vlan_igmp_enable is
+ *                                       set.
+ * @ingress_extended_vlan_block_size_igmp: Extended VLAN block size for ingress
+ *                                         IGMP traffic. If 0, the block size of
+ *                                         ingress_extended_vlan_block_id_igmp
+ *                                         is used.
+ * @egress_extended_vlan_enable: Enable extended VLAN processing for egress
+ *                               non-IGMP traffic
+ * @egress_extended_vlan_block_id: Extended VLAN block allocated for egress
+ *                                 non-IGMP traffic. Valid when
+ *                                 egress_extended_vlan_enable is set.
+ * @egress_extended_vlan_block_size: Extended VLAN block size for egress
+ *                                   non-IGMP traffic. If 0, the block size of
+ *                                   egress_extended_vlan_block_id is used.
+ * @egress_extended_vlan_igmp_enable: Enable extended VLAN processing for
+ *                                    egress IGMP traffic
+ * @egress_extended_vlan_block_id_igmp: Extended VLAN block allocated for
+ *                                      egress IGMP traffic. Valid when
+ *                                      egress_extended_vlan_igmp_enable is set.
+ * @egress_extended_vlan_block_size_igmp: Extended VLAN block size for egress
+ *                                        IGMP traffic. If 0, the block size of
+ *                                        egress_extended_vlan_block_id_igmp is
+ *                                        used.
+ * @ingress_nto1vlan_enable: If enabled and ingress packet is VLAN tagged,
+ *                           outer VLAN ID is used for nSubIfId field in MAC
+ *                           table; otherwise 0 is used
+ * @egress_nto1vlan_enable: If enabled and egress packet is known unicast,
+ *                          outer VLAN ID is from nSubIfId field in MAC table
+ * @ingress_marking_mode: Ingress color marking mode for ingress traffic
+ * @egress_marking_mode: Egress color marking mode for ingress traffic at
+ *                       egress priority queue color marking stage
+ * @egress_marking_override_enable: Override color marking mode from last stage
+ * @egress_marking_mode_override: Egress color marking mode for egress traffic.
+ *                                Valid only when
+ *                                egress_marking_override_enable is set.
+ * @egress_remarking_mode: Color remarking for egress traffic
+ * @ingress_metering_enable: Traffic metering on ingress traffic applies
+ * @ingress_traffic_meter_id: Meter for ingress CTP process
+ * @egress_metering_enable: Traffic metering on egress traffic applies
+ * @egress_traffic_meter_id: Meter for egress CTP process
+ * @bridging_bypass: Ingress traffic bypasses bridging/multicast processing.
+ *                   Traffic flow table is not bypassed.
+ * @dest_logical_port_id: Destination logical port when bridging_bypass is set
+ * @pmapper_enable: When bridging_bypass is set, selects whether to use
+ *                  dest_sub_if_id_group or P-mapper for sub interface
+ * @dest_sub_if_id_group: Destination sub interface ID group when
+ *                        bridging_bypass is set and pmapper_enable is false
+ * @pmapper_mapping_mode: When bridging_bypass and pmapper_enable are set,
+ *                        selects DSCP or PCP to derive sub interface ID
+ * @pmapper_id_valid: When set, P-mapper is re-used and no new allocation or
+ *                    value change occurs. When false, allocation is handled
+ *                    by the API.
+ * @pmapper_id: P-mapper ID. Valid when pmapper_id_valid is set.
+ * @pmapper_dest_sub_if_id_group: P-mapper destination sub interface ID group
+ *                                entries (73 bytes, firmware layout)
+ * @first_flow_entry_index: First traffic flow table entry associated to this
+ *                          CTP port. Should be a multiple of 4.
+ * @number_of_flow_entries: Number of traffic flow table entries associated to
+ *                          this CTP port. Should be a multiple of 4.
+ * @ingress_loopback_enable: Ingress traffic is redirected to ingress logical
+ *                           port of this CTP with source sub interface ID as
+ *                           destination. Bypasses processing except flow table.
+ * @ingress_da_sa_swap_enable: Destination/Source MAC address of ingress traffic
+ *                             is swapped before transmitted
+ * @egress_loopback_enable: Egress traffic to this CTP port is redirected to
+ *                          ingress logical port with same sub interface ID
+ * @egress_da_sa_swap_enable: Destination/Source MAC address of egress traffic
+ *                            is swapped before transmitted
+ * @ingress_mirror_enable: If enabled, ingress traffic is mirrored to the
+ *                         monitoring port. Mutually exclusive with
+ *                         ingress_loopback_enable.
+ * @egress_mirror_enable: If enabled, egress traffic is mirrored to the
+ *                        monitoring port. Mutually exclusive with
+ *                        egress_loopback_enable.
+ */
+struct mxl862xx_ctp_port_config {
+	u8 logical_port_id;
+	__le16 n_sub_if_id_group;
+	__le32 mask;
+	__le16 bridge_port_id;
+	u8 forced_traffic_class;
+	u8 default_traffic_class;
+	u8 ingress_extended_vlan_enable;
+	__le16 ingress_extended_vlan_block_id;
+	__le16 ingress_extended_vlan_block_size;
+	u8 ingress_extended_vlan_igmp_enable;
+	__le16 ingress_extended_vlan_block_id_igmp;
+	__le16 ingress_extended_vlan_block_size_igmp;
+	u8 egress_extended_vlan_enable;
+	__le16 egress_extended_vlan_block_id;
+	__le16 egress_extended_vlan_block_size;
+	u8 egress_extended_vlan_igmp_enable;
+	__le16 egress_extended_vlan_block_id_igmp;
+	__le16 egress_extended_vlan_block_size_igmp;
+	u8 ingress_nto1vlan_enable;
+	u8 egress_nto1vlan_enable;
+	__le32 ingress_marking_mode;
+	__le32 egress_marking_mode;
+	u8 egress_marking_override_enable;
+	__le32 egress_marking_mode_override;
+	__le32 egress_remarking_mode;
+	u8 ingress_metering_enable;
+	__le16 ingress_traffic_meter_id;
+	u8 egress_metering_enable;
+	__le16 egress_traffic_meter_id;
+	u8 bridging_bypass;
+	u8 dest_logical_port_id;
+	u8 pmapper_enable;
+	__le16 dest_sub_if_id_group;
+	__le32 pmapper_mapping_mode;
+	u8 pmapper_id_valid;
+	__le16 pmapper_id;
+	u8 pmapper_dest_sub_if_id_group[73];
+	__le16 first_flow_entry_index;
+	__le16 number_of_flow_entries;
+	u8 ingress_loopback_enable;
+	u8 ingress_da_sa_swap_enable;
+	u8 egress_loopback_enable;
+	u8 egress_da_sa_swap_enable;
+	u8 ingress_mirror_enable;
+	u8 egress_mirror_enable;
+} __packed;
+
+/**
  * enum mxl862xx_port_duplex - Ethernet port duplex status
  * @MXL862XX_DUPLEX_FULL: Port operates in full-duplex mode
  * @MXL862XX_DUPLEX_HALF: Port operates in half-duplex mode

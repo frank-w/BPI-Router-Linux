@@ -111,6 +111,13 @@ config NET_DSA_TAG_MXL_862XX
 	  MaxLinear MxL86252 and MxL86282 switches using their native 8-byte
 	  tagging protocol.
 
+config NET_DSA_TAG_MXL_862XX_8021Q
+	tristate "Tag driver for MaxLinear MxL862xx switches, using VLAN"
+	help
+	  Say Y or M if you want to enable support for tagging frames for the
+	  MaxLinear MxL86252 and MxL86282 switches using 802.1Q VLAN-based
+	  tagging instead of their native 8-byte tagging protocol.
+
 config NET_DSA_TAG_MXL_GSW1XX
 	tristate "Tag driver for MaxLinear GSW1xx switches"
 	help
