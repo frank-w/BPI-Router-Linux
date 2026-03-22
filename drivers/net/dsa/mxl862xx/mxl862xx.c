@@ -2361,15 +2361,24 @@ static int mxl862xx_mac_portmap_del(struct mxl862xx_priv *priv,
  * @ds: DSA switch
  * @addr: MAC address
  * @vid: VLAN ID
- * @bridge: bridge whose members' VBPs to include
+ * @bridge: bridge the entry is scoped to (used to pick the FID)
  *
  * In tag_8021q mode, host FDB/MDB entries in a shared bridge FID must use
- * portmap mode targeting ALL bridge members' virtual bridge ports (VBPs).
- * The firmware ANDs the entry's portmap with each ingress port's
- * bridge_port_map, which contains only that port's own VBP. This
- * selects the correct VBP per ingress port, ensuring frames exit
- * through the right egress EVLAN (which inserts the per-port management
- * VID that identifies the source port to DSA on the CPU side).
+ * portmap mode targeting virtual bridge ports (VBPs).  The firmware ANDs
+ * the entry's portmap with the ingress port's bridge_port_map, which
+ * contains only that port's own VBP, so listing every user port's VBP
+ * unconditionally still leaves exactly the ingress port's VBP after the
+ * intersection.  That selects the correct egress EVLAN, which inserts the
+ * per-port management VID identifying the source port to DSA on the CPU
+ * side.
+ *
+ * Listing all user ports rather than the current bridge members keeps the
+ * entry correct without tracking membership changes, and avoids depending
+ * on every member's VBP having been allocated by the time the entry is
+ * installed.  A port whose VBP is not yet allocated reads back as 0, and
+ * mxl862xx_fw_portmap_set_bit() would then set bit 0 -- a valid portmap
+ * bit belonging to another port, not a no-op -- corrupting the portmap of
+ * an entry the host depends on.  Skip unallocated VBPs explicitly.
  */
 static int mxl862xx_mac_add_host_bridge(struct dsa_switch *ds,
 					const unsigned char *addr, u16 vid,
@@ -2378,11 +2387,14 @@ static int mxl862xx_mac_add_host_bridge(struct dsa_switch *ds,
 	__le16 add_map[MXL862XX_FW_PORTMAP_WORDS] = {};
 	struct mxl862xx_priv *priv = ds->priv;
 	u16 fid = priv->bridges[bridge->num];
-	struct dsa_port *member_dp;
+	struct dsa_port *dp;
+	u16 vbp;
 
-	dsa_switch_for_each_bridge_member(member_dp, ds, bridge->dev)
-		mxl862xx_fw_portmap_set_bit(add_map,
-					    priv->ports[member_dp->index].bridge_port_cpu);
+	dsa_switch_for_each_user_port(dp, ds) {
+		vbp = priv->ports[dp->index].bridge_port_cpu;
+		if (vbp)
+			mxl862xx_fw_portmap_set_bit(add_map, vbp);
+	}
 
 	return mxl862xx_mac_portmap_add(priv, addr, fid, vid, add_map);
 }
