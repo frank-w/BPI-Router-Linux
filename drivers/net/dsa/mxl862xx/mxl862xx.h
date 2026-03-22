@@ -218,6 +218,9 @@ struct mxl862xx_port_stats {
  * @vf:                  per-port VLAN Filter block state
  * @ingress_evlan:       ingress extended VLAN block state
  * @egress_evlan:        egress extended VLAN block state
+ * @bridge_port_cpu:     virtual bridge port ID for tag_8021q CPU-side CTP
+ * @host_flood_block:    bitmask of firmware meter indices used to block
+ *                       host flooding on the virtual bridge port (tag_8021q)
  * @host_flood_uc:       desired host unicast flood state (true = flood);
  *                       updated atomically by port_set_host_flood, consumed
  *                       by the deferred host_flood_work
@@ -232,6 +235,7 @@ struct mxl862xx_port_stats {
  *                       periodically by the stats polling work
  * @stats_lock:          protects accumulator reads in .get_stats64 against
  *                       concurrent updates from the polling work
+ * @tag_8021q_vid:       currently assigned tag_8021q management VID
  */
 struct mxl862xx_port {
 	struct mxl862xx_priv *priv;
@@ -244,9 +248,13 @@ struct mxl862xx_port {
 	struct mxl862xx_vf_block vf;
 	struct mxl862xx_evlan_block ingress_evlan;
 	struct mxl862xx_evlan_block egress_evlan;
+	u16 bridge_port_cpu;
+	unsigned long host_flood_block;
 	bool host_flood_uc;
 	bool host_flood_mc;
 	struct work_struct host_flood_work;
+	u16 tag_8021q_vid;
+	struct mxl862xx_evlan_block cpu_egress_evlan;
 	struct mxl862xx_port_stats stats;
 	spinlock_t stats_lock; /* protects stats accumulators */
 };
@@ -304,6 +312,7 @@ struct mxl862xx_fw_version {
  *                      before CRC-triggered shutdown and cleared after;
  *                      %MXL862XX_FLAG_WORK_STOPPED is set before cancelling
  *                      stats_work to prevent rescheduling during teardown
+ * @tag_proto:          active DSA tag protocol (native or 8021q)
  * @drop_meter:         index of the single shared zero-rate firmware meter
  *                      used to unconditionally drop traffic (used to block
  *                      flooding)
@@ -328,6 +337,7 @@ struct mxl862xx_fw_version {
  *                      (0 .. ds->max_num_bridges).
  * @evlan_ingress_size: per-port ingress Extended VLAN block size
  * @evlan_egress_size:  per-port egress Extended VLAN block size
+ * @cpu_evlan_ingress_size: CPU port ingress EVLAN block size (tag_8021q)
  * @vf_block_size:      per-port VLAN Filter block size
  * @block_host:         reject firmware API commands (except FW_UPDATE)
  *                      during a firmware flash
@@ -361,6 +371,7 @@ struct mxl862xx_priv {
 	struct work_struct crc_err_work;
 	struct work_struct rescue_heal_work;
 	unsigned long flags;
+	enum dsa_tag_protocol tag_proto;
 	u16 drop_meter;
 	struct mxl862xx_fw_version fw_version;
 	u16 asic_id;
@@ -372,6 +383,7 @@ struct mxl862xx_priv {
 	u16 bridges[MXL862XX_MAX_BRIDGES + 1];
 	u16 evlan_ingress_size;
 	u16 evlan_egress_size;
+	u16 cpu_evlan_ingress_size;
 	u16 vf_block_size;
 	bool block_host;
 	bool skip_teardown;
