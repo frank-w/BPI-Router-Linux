@@ -247,6 +247,18 @@ struct mxl862xx_port {
 };
 
 /**
+ * struct mxl862xx_pcs - link SerDes interfaces to bridge ports
+ * @pcs:  &struct phylink_pcs instance
+ * @priv: pointer to &struct mxl862xx_priv
+ * @port: bridge port index
+ */
+struct mxl862xx_pcs {
+	struct phylink_pcs pcs;
+	struct mxl862xx_priv *priv;
+	int port;
+};
+
+/**
  * union mxl862xx_fw_version - firmware version for comparison and display
  * @major: firmware major version
  * @minor: firmware minor version
@@ -290,6 +302,8 @@ union mxl862xx_fw_version {
  *                      flooding)
  * @fw_version:         cached firmware version, populated at probe and
  *                      compared with MXL862XX_FW_VER_MIN()
+ * @serdes_ports:       SerDes interfaces incl. sub-interfaces in case of
+ *                      10G_QXGMII
  * @ports:              per-port state, indexed by switch port number
  * @bridges:            maps DSA bridge number to firmware bridge ID;
  *                      zero means no firmware bridge allocated for that
@@ -308,6 +322,7 @@ struct mxl862xx_priv {
 	unsigned long crc_err;
 	u16 drop_meter;
 	union mxl862xx_fw_version fw_version;
+	struct mxl862xx_pcs serdes_ports[8];
 	struct mxl862xx_port ports[MXL862XX_MAX_PORTS];
 	u16 bridges[MXL862XX_MAX_BRIDGES + 1];
 	u16 evlan_ingress_size;

@@ -1639,8 +1639,27 @@ static void mxl862xx_phylink_get_caps(struct dsa_switch *ds, int port,
 	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE | MAC_10 |
 				   MAC_100 | MAC_1000 | MAC_2500FD;
 
-	__set_bit(PHY_INTERFACE_MODE_INTERNAL,
-		  config->supported_interfaces);
+	switch (port) {
+	case 1 ... 8:
+		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+			  config->supported_interfaces);
+		break;
+	case 9:
+	case 13:
+		__set_bit(PHY_INTERFACE_MODE_SGMII, config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_1000BASEX, config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_2500BASEX, config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_10GBASER, config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_USXGMII, config->supported_interfaces);
+		config->mac_capabilities |= MAC_10000FD | MAC_5000FD;
+		fallthrough;
+	case 10 ... 12:
+	case 14 ... 16:
+		__set_bit(PHY_INTERFACE_MODE_10G_QXGMII, config->supported_interfaces);
+		break;
+	default:
+		break;
+	}
 }
 
 static int mxl862xx_get_fid(struct dsa_switch *ds, struct dsa_db db)
@@ -2286,6 +2305,293 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_stats64 = mxl862xx_get_stats64,
 };
 
+static struct mxl862xx_pcs *pcs_to_mxl862xx_pcs(struct phylink_pcs *pcs)
+{
+	return container_of(pcs, struct mxl862xx_pcs, pcs);
+}
+
+static int mxl862xx_xpcs_port_id(int port)
+{
+	if (port == 9 || (port >= 10 && port <= 12))
+		return 0;
+	return 1;
+}
+
+static int mxl862xx_xpcs_if_mode(phy_interface_t interface)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+		return MXL862XX_XPCS_IF_SGMII;
+	case PHY_INTERFACE_MODE_1000BASEX:
+		return MXL862XX_XPCS_IF_1000BASEX;
+	case PHY_INTERFACE_MODE_2500BASEX:
+		return MXL862XX_XPCS_IF_2500BASEX;
+	case PHY_INTERFACE_MODE_USXGMII:
+		return MXL862XX_XPCS_IF_USXGMII;
+	case PHY_INTERFACE_MODE_10GBASER:
+		return MXL862XX_XPCS_IF_10GBASER;
+	case PHY_INTERFACE_MODE_10G_QXGMII:
+		return MXL862XX_XPCS_IF_QSGMII;
+	default:
+		return -EINVAL;
+	}
+}
+
+static int mxl862xx_xpcs_neg_mode(unsigned int neg_mode)
+{
+	if (neg_mode == PHYLINK_PCS_NEG_NONE)
+		return MXL862XX_XPCS_NEG_NONE;
+	if (neg_mode == PHYLINK_PCS_NEG_INBAND_DISABLED)
+		return MXL862XX_XPCS_NEG_INBAND_AN_OFF;
+	return MXL862XX_XPCS_NEG_INBAND_AN_ON;
+}
+
+static int mxl862xx_pcs_enable(struct phylink_pcs *pcs)
+{
+	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
+	int port = pcs_to_mxl862xx_pcs(pcs)->port;
+	struct mxl862xx_xpcs_pcs_power pwr = {};
+
+	if (port != 9 && port != 13)
+		return 0;
+
+	pwr.port_id = mxl862xx_xpcs_port_id(port);
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PCS_ENABLE, pwr);
+}
+
+static void mxl862xx_pcs_disable(struct phylink_pcs *pcs)
+{
+	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
+	int port = pcs_to_mxl862xx_pcs(pcs)->port;
+	struct mxl862xx_xpcs_pcs_power pwr = {};
+
+	if (port != 9 && port != 13)
+		return;
+
+	pwr.port_id = mxl862xx_xpcs_port_id(port);
+
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PCS_DISABLE, pwr);
+}
+
+static void mxl862xx_pcs_pre_config(struct phylink_pcs *pcs,
+				    phy_interface_t interface)
+{
+	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
+	int port = pcs_to_mxl862xx_pcs(pcs)->port;
+	struct mxl862xx_xpcs_reset_cfg rst = {};
+
+	if (port != 9 && port != 13)
+		return;
+
+	rst.port_id = mxl862xx_xpcs_port_id(port);
+	rst.reset_type = MXL862XX_XPCS_RESET_VR;
+
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_RESET, rst);
+}
+
+static int mxl862xx_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+			       phy_interface_t interface,
+			       const unsigned long *advertising,
+			       bool permit_pause_to_mac)
+{
+	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
+	int port = pcs_to_mxl862xx_pcs(pcs)->port;
+	struct mxl862xx_xpcs_pcs_cfg cfg = {};
+	int if_mode, ret;
+
+	/* Sub-interfaces are set up implicitly by the main interface */
+	if (port != 9 && port != 13)
+		return 0;
+
+	if_mode = mxl862xx_xpcs_if_mode(interface);
+	if (if_mode < 0) {
+		dev_err(priv->ds->dev, "unsupported interface: %s\n",
+			phy_modes(interface));
+		return if_mode;
+	}
+
+	/* For fixed-link modes, disable AN first */
+	if (neg_mode == PHYLINK_PCS_NEG_NONE ||
+	    neg_mode == PHYLINK_PCS_NEG_INBAND_DISABLED) {
+		struct mxl862xx_xpcs_an_disable an = {
+			.port_id = mxl862xx_xpcs_port_id(port),
+		};
+
+		MXL862XX_API_WRITE(priv, MXL862XX_XPCS_AN_DISABLE, an);
+	}
+
+	cfg.port_id = mxl862xx_xpcs_port_id(port);
+	cfg.interface = if_mode;
+	cfg.neg_mode = mxl862xx_xpcs_neg_mode(neg_mode);
+	cfg.permit_pause = permit_pause_to_mac ? 1 : 0;
+
+	if (interface == PHY_INTERFACE_MODE_10G_QXGMII ||
+	    interface == PHY_INTERFACE_MODE_USXGMII)
+		cfg.usx_lane_mode = 1; /* quad */
+
+	if (interface == PHY_INTERFACE_MODE_1000BASEX)
+		cfg.advertising = cpu_to_le16(linkmode_adv_to_mii_adv_x(advertising,
+								ETHTOOL_LINK_MODE_1000baseX_Full_BIT));
+
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PCS_CONFIG, cfg);
+	if (ret)
+		return ret;
+
+	/* result > 0 means AN restart is needed */
+	return le16_to_cpu(cfg.result) > 0 ? 1 : 0;
+}
+
+static void mxl862xx_pcs_get_state(struct phylink_pcs *pcs,
+				   unsigned int neg_mode,
+				   struct phylink_link_state *state)
+{
+	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
+	int port = pcs_to_mxl862xx_pcs(pcs)->port;
+	struct mxl862xx_xpcs_pcs_state st = {};
+	int if_mode, ret;
+
+	if_mode = mxl862xx_xpcs_if_mode(state->interface);
+	if (if_mode < 0)
+		return;
+
+	st.port_id = mxl862xx_xpcs_port_id(port);
+	st.interface = if_mode;
+
+	if (state->interface == PHY_INTERFACE_MODE_10G_QXGMII ||
+	    state->interface == PHY_INTERFACE_MODE_USXGMII) {
+		st.usx_lane_mode = 1; /* quad */
+		/* Sub-ports: 10=0, 11=1, 12=2, 14=0, 15=1, 16=2 */
+		if (port >= 10 && port <= 12)
+			st.usx_subport = port - 10;
+		else if (port >= 14 && port <= 16)
+			st.usx_subport = port - 14;
+	}
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_XPCS_PCS_GET_STATE, st);
+	if (ret)
+		return;
+
+	state->link = st.link && !st.pcs_fault;
+	state->an_complete = st.an_complete;
+	state->duplex = st.duplex ? DUPLEX_FULL : DUPLEX_HALF;
+
+	switch (le16_to_cpu(st.speed)) {
+	case MXL862XX_XPCS_SPEED_10:
+		state->speed = SPEED_10;
+		break;
+	case MXL862XX_XPCS_SPEED_100:
+		state->speed = SPEED_100;
+		break;
+	case MXL862XX_XPCS_SPEED_1000:
+		state->speed = SPEED_1000;
+		break;
+	case MXL862XX_XPCS_SPEED_2500:
+		state->speed = SPEED_2500;
+		break;
+	case MXL862XX_XPCS_SPEED_5000:
+		state->speed = SPEED_5000;
+		break;
+	case MXL862XX_XPCS_SPEED_10000:
+		state->speed = SPEED_10000;
+		break;
+	default:
+		state->speed = SPEED_UNKNOWN;
+		break;
+	}
+
+	state->pause = 0;
+	if (st.pause & BIT(0))
+		state->pause |= MLO_PAUSE_TX | MLO_PAUSE_RX;
+	if (st.pause & BIT(1))
+		state->pause |= MLO_PAUSE_TX;
+}
+
+static void mxl862xx_pcs_an_restart(struct phylink_pcs *pcs)
+{
+	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
+	int port = pcs_to_mxl862xx_pcs(pcs)->port;
+	struct mxl862xx_xpcs_an_restart an = {};
+
+	if (port != 9 && port != 13)
+		return;
+
+	an.port_id = mxl862xx_xpcs_port_id(port);
+
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_AN_RESTART, an);
+}
+
+static void mxl862xx_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
+				 phy_interface_t interface, int speed,
+				 int duplex)
+{
+	struct mxl862xx_priv *priv = pcs_to_mxl862xx_pcs(pcs)->priv;
+	int port = pcs_to_mxl862xx_pcs(pcs)->port;
+	struct mxl862xx_xpcs_force_speed fs = {};
+
+	/* Only SGMII needs explicit speed forcing */
+	if (interface != PHY_INTERFACE_MODE_SGMII)
+		return;
+
+	if (port != 9 && port != 13)
+		return;
+
+	fs.port_id = mxl862xx_xpcs_port_id(port);
+	fs.duplex = (duplex == DUPLEX_FULL) ? MXL862XX_XPCS_DUPLEX_FULL :
+					       MXL862XX_XPCS_DUPLEX_HALF;
+	fs.speed = cpu_to_le16(speed);
+
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_FORCE_SPEED, fs);
+}
+
+static unsigned int mxl862xx_pcs_inband_caps(struct phylink_pcs *pcs,
+					     phy_interface_t interface)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_10G_QXGMII:
+	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_USXGMII:
+		return LINK_INBAND_ENABLE;
+	case PHY_INTERFACE_MODE_1000BASEX:
+		return LINK_INBAND_DISABLE | LINK_INBAND_ENABLE;
+	case PHY_INTERFACE_MODE_10GBASER:
+	case PHY_INTERFACE_MODE_2500BASEX:
+		return LINK_INBAND_DISABLE;
+	default:
+		return 0;
+	}
+}
+
+static const struct phylink_pcs_ops mxl862xx_pcs_ops = {
+	.pcs_enable = mxl862xx_pcs_enable,
+	.pcs_disable = mxl862xx_pcs_disable,
+	.pcs_pre_config = mxl862xx_pcs_pre_config,
+	.pcs_config = mxl862xx_pcs_config,
+	.pcs_get_state = mxl862xx_pcs_get_state,
+	.pcs_an_restart = mxl862xx_pcs_an_restart,
+	.pcs_link_up = mxl862xx_pcs_link_up,
+	.pcs_inband_caps = mxl862xx_pcs_inband_caps,
+};
+
+static struct phylink_pcs *
+mxl862xx_phylink_mac_select_pcs(struct phylink_config *config,
+			        phy_interface_t interface)
+{
+	struct dsa_port *dp = dsa_phylink_to_port(config);
+	struct mxl862xx_priv *priv = dp->ds->priv;
+	int port = dp->index;
+
+	if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
+		return NULL;
+
+	switch (port) {
+	case 9 ... 16:
+		return &priv->serdes_ports[port - 9].pcs;
+	default:
+		return NULL;
+	}
+}
+
 static void mxl862xx_phylink_mac_config(struct phylink_config *config,
 					unsigned int mode,
 					const struct phylink_link_state *state)
@@ -2311,7 +2617,28 @@ static const struct phylink_mac_ops mxl862xx_phylink_mac_ops = {
 	.mac_config = mxl862xx_phylink_mac_config,
 	.mac_link_down = mxl862xx_phylink_mac_link_down,
 	.mac_link_up = mxl862xx_phylink_mac_link_up,
+	.mac_select_pcs = mxl862xx_phylink_mac_select_pcs,
 };
+
+static void mxl862xx_setup_pcs(struct mxl862xx_priv *priv, struct mxl862xx_pcs *pcs,
+			       int port)
+{
+	pcs->priv = priv;
+	pcs->port = port;
+
+	pcs->pcs.ops = &mxl862xx_pcs_ops;
+	pcs->pcs.poll = true; /* poll link changes */
+
+	__set_bit(PHY_INTERFACE_MODE_10G_QXGMII, pcs->pcs.supported_interfaces);
+	if (port != 9 && port != 13)
+		return;
+
+	__set_bit(PHY_INTERFACE_MODE_SGMII, pcs->pcs.supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_1000BASEX, pcs->pcs.supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_2500BASEX, pcs->pcs.supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_10GBASER, pcs->pcs.supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_USXGMII, pcs->pcs.supported_interfaces);
+}
 
 static int mxl862xx_probe(struct mdio_device *mdiodev)
 {
@@ -2340,6 +2667,9 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	ds->max_num_bridges = MXL862XX_MAX_BRIDGES;
 
 	mxl862xx_host_init(priv);
+
+	for (i = 0; i < 8; i++)
+		mxl862xx_setup_pcs(priv, &priv->serdes_ports[i], i + 9);
 
 	for (i = 0; i < MXL862XX_MAX_PORTS; i++) {
 		priv->ports[i].priv = priv;
