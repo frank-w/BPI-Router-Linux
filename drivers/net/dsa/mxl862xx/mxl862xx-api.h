@@ -1185,6 +1185,242 @@ struct mxl862xx_ctp_port_assignment {
 } __packed;
 
 /**
+ * enum mxl862xx_port_duplex - Ethernet port duplex status
+ * @MXL862XX_DUPLEX_FULL: Port operates in full-duplex mode
+ * @MXL862XX_DUPLEX_HALF: Port operates in half-duplex mode
+ * @MXL862XX_DUPLEX_AUTO: Port operates in Auto mode
+ */
+enum mxl862xx_port_duplex {
+	MXL862XX_DUPLEX_FULL = 0,
+	MXL862XX_DUPLEX_HALF,
+	MXL862XX_DUPLEX_AUTO,
+};
+
+/**
+ * enum mxl862xx_port_type - Port Type
+ * @MXL862XX_LOGICAL_PORT: Logical Port
+ * @MXL862XX_PHYSICAL_PORT: Physical Port
+ * @MXL862XX_CTP_PORT: Connectivity Termination Port (CTP)
+ * @MXL862XX_BRIDGE_PORT: Bridge Port
+ */
+enum mxl862xx_port_type {
+	MXL862XX_LOGICAL_PORT = 0,
+	MXL862XX_PHYSICAL_PORT,
+	MXL862XX_CTP_PORT,
+	MXL862XX_BRIDGE_PORT,
+};
+
+/**
+ * enum mxl862xx_port_enable - port enable type selection.
+ * @MXL862XX_PORT_DISABLE: the port is disabled in both directions
+ * @MXL862XX_PORT_ENABLE_RXTX: the port is enabled in both directions
+ * @MXL862XX_PORT_ENABLE_RX: the port is enabled in the receive direction
+ * @MXL862XX_PORT_ENABLE_TX: the port is enabled in the transmit direction
+ */
+enum mxl862xx_port_enable{
+	MXL862XX_PORT_DISABLE = 0,
+	MXL862XX_PORT_ENABLE_RXTX,
+	MXL862XX_PORT_ENABLE_RX,
+	MXL862XX_PORT_ENABLE_TX,
+};
+
+/**
+ * enum mxl862xx_port_flow - ethernet flow control status
+ * @MXL862XX_FLOW_AUTO: automatic flow control
+ * @MXL862XX_FLOW_RX: receive flow control only
+ * @MXL862XX_FLOW_TX: transmit flow control only
+ * @MXL862XX_FLOW_RXTX: receive and transmit flow control
+ * @MXL862XX_FLOW_OFF: no flow control
+ */
+enum mxl862xx_port_flow {
+	MXL862XX_FLOW_AUTO = 0,
+	MXL862XX_FLOW_RX,
+	MXL862XX_FLOW_TX,
+	MXL862XX_FLOW_RXTX,
+	MXL862XX_FLOW_OFF,
+};
+
+/**
+ * enum mxl862xx_port_monitor - port mirror options
+ * @MXL862XX_PORT_MONITOR_NONE: mirroring is disabled
+ * @MXL862XX_PORT_MONITOR_RX: ingress packets are mirrored
+ * @MXL862XX_PORT_MONITOR_TX: egress packets are mirrored
+ * @MXL862XX_PORT_MONITOR_RXTX: ingress and egress packets are mirrored
+ * @MXL862XX_PORT_MONITOR_VLAN_UNKNOWN: mirroring of 'unknown VLAN violation' frames
+ * @MXL862XX_PORT_MONITOR_VLAN_MEMBERSHIP: mirroring of 'VLAN ingress or egress membership
+	violation' frames
+ * @MXL862XX_PORT_MONITOR_PORT_STATE: mirroring of 'port state violation' frames
+ * @MXL862XX_PORT_MONITOR_LEARNING_LIMIT: mirroring of 'MAC learning limit violation' frames
+ * @MXL862XX_PORT_MONITOR_PORT_LOCK: mirroring of 'port lock violation' frames
+ */
+enum mxl862xx_port_monitor {
+	MXL862XX_PORT_MONITOR_NONE = 0,
+	MXL862XX_PORT_MONITOR_RX,
+	MXL862XX_PORT_MONITOR_TX,
+	MXL862XX_PORT_MONITOR_RXTX,
+	MXL862XX_PORT_MONITOR_VLAN_UNKNOWN,
+	MXL862XX_PORT_MONITOR_VLAN_MEMBERSHIP = 16,
+	MXL862XX_PORT_MONITOR_PORT_STATE = 32,
+	MXL862XX_PORT_MONITOR_LEARNING_LIMIT = 64,
+	MXL862XX_PORT_MONITOR_PORT_LOCK = 128,
+};
+
+/**
+ * enum mxl862xx_if_rmon_mode - interface RMON counter mode
+ * @MXL862XX_IF_RMON_FID: FID based RMON counters
+ * @MXL862XX_IF_RMON_SUBID: sub-interface ID based
+ * @MXL862XX_IF_RMON_FLOWID_LSB: flow ID based (bits 3:0)
+ * @MXL862XX_IF_RMON_FLOWID_MSB: flow ID based (bits 7:4)
+ */
+enum mxl862xx_if_rmon_mode {
+	MXL862XX_IF_RMON_FID = 0,
+	MXL862XX_IF_RMON_SUBID,
+	MXL862XX_IF_RMON_FLOWID_LSB,
+	MXL862XX_IF_RMON_FLOWID_MSB,
+};
+
+/**
+ * struct mxl862xx_port_cfg - Port Configuration Parameters
+ * @port_type: See &enum mxl862xx_port_type
+ * @port_id: Ethernet Port number (zero-based counting)
+ * @enable: See &enum mxl862xx_port_enable
+ * @unicast_unknown_drop: Drop unknown unicast packets
+ * @multicast_unknown_drop: Drop unknown multicast packets
+ * @reserved_packet_drop: Drop reserved packet types
+ * @broadcast_drop: Drop broadcast packets
+ * @aging: Enables MAC address table aging.
+ * @learning: MAC address table learning
+ * @learning_mac_port_lock: Automatic MAC address table learning locking on the port
+ * @learning_limit: Automatic MAC address table learning limitation on this port
+ * @mac_spoofing_detection: MAC spoofing detection. Identifies ingress packets that carry
+ *      a MAC source address which was previously learned on a different ingress port
+ * @flow_ctrl: See &enum mxl862xx_port_flow
+ * @port_monitor: See &enum mxl862xx_port_monitor
+ * @if_counters: Assign Interface RMON Counters for this Port
+ * @if_count_start_idx: Interface RMON Counters Start Index
+ * @if_rmonmode: See &enum mxl862xx_if_rmon_mode
+ */
+struct mxl862xx_port_cfg {
+	__le32 port_type; /* enum mxl862xx_port_type */
+	__le16 port_id;
+	__le32 enable; /* enum mxl862xx_port_enable */
+	u8 unicast_unknown_drop;
+	u8 multicast_unknown_drop;
+	u8 reserved_packet_drop;
+	u8 broadcast_drop;
+	u8 aging;
+	u8 learning;
+	u8 learning_mac_port_lock;
+	__le16 learning_limit;
+	u8 mac_spoofing_detection;
+	__le32 flow_ctrl; /* enum mxl862xx_port_flow */
+	__le32 port_monitor; /* enum mxl862xx_port_monitor */
+	u8 if_counters;
+	__le32 if_count_start_idx;
+	__le32 if_rmonmode; /* enum mxl862xx_if_rmon_mode */
+} __packed;
+
+/**
+ * enum mxl862xx_port_speed -  Ethernet port speed mode
+ * @MXL862XX_PORT_SPEED_10: 10 Mbit/s
+ * @MXL862XX_PORT_SPEED_100: 100 Mbit/s
+ * @MXL862XX_PORT_SPEED_200: 200 Mbit/s
+ * @MXL862XX_PORT_SPEED_1000: 1000 Mbit/s
+ * @MXL862XX_PORT_SPEED_2500: 2.5 Gbit/s
+ * @MXL862XX_PORT_SPEED_5000: 5 Gbit/s
+ * @MXL862XX_PORT_SPEED_10000: 10 Gbit/s
+ * @MXL862XX_PORT_SPEED_AUTO: Auto speed for XGMAC
+ */
+enum mxl862xx_port_speed {
+	MXL862XX_PORT_SPEED_10 = 0,
+	MXL862XX_PORT_SPEED_100,
+	MXL862XX_PORT_SPEED_200,
+	MXL862XX_PORT_SPEED_1000,
+	MXL862XX_PORT_SPEED_2500,
+	MXL862XX_PORT_SPEED_5000,
+	MXL862XX_PORT_SPEED_10000,
+	MXL862XX_PORT_SPEED_AUTO,
+};
+
+/**
+ * enum mxl862xx_port_link - Force the MAC and PHY link modus
+ * @MXL862XX_PORT_LINK_UP: Link up
+ * @MXL862XX_PORT_LINK_DOWN: Link down
+ * @MXL862XX_PORT_LINK_AUTO: Link Auto
+ */
+enum mxl862xx_port_link {
+	MXL862XX_PORT_LINK_UP = 0,
+	MXL862XX_PORT_LINK_DOWN,
+	MXL862XX_PORT_LINK_AUTO,
+};
+
+/**
+ * enum mxl862xx_mii_mode - Ethernet port interface mode
+ * @MXL862XX_PORT_HW_MII: Normal PHY interface
+ * @MXL862XX_PORT_HW_RMII: Reduced MII interface in normal mode
+ * @MXL862XX_PORT_HW_GMII: GMII or MII, depending upon the speed
+ * @MXL862XX_PORT_HW_RGMII: RGMII mode
+ * @MXL862XX_PORT_HW_XGMII: XGMII mode
+ */
+enum mxl862xx_mii_mode {
+	MXL862XX_PORT_HW_MII = 0,
+	MXL862XX_PORT_HW_RMII,
+	MXL862XX_PORT_HW_GMII,
+	MXL862XX_PORT_HW_RGMII,
+	MXL862XX_PORT_HW_XGMII,
+};
+
+/**
+ * enum mxl862xx_mii_type - Ethernet port configuration for PHY or MAC mode
+ * @MXL862XX_PORT_MAC: The Ethernet port is configured to work in MAC mode
+ * @MXL862XX_PORT_PHY: The Ethernet port is configured to work in PHY mode
+ */
+enum mxl862xx_mii_type {
+	MXL862XX_PORT_MAC = 0,
+	MXL862XX_PORT_PHY,
+};
+
+/**
+ * enum mxl862xx_clk_mode - Ethernet port clock source configuration
+ * @MXL862XX_PORT_CLK_NA: Clock Mode not applicable
+ * @MXL862XX_PORT_CLK_MASTER: Clock Master Mode. The port is configured to provide the clock as output signal
+ * @MXL862XX_PORT_CLK_SLAVE: Clock Slave Mode. The port is configured to use the input clock signal
+ */
+enum mxl862xx_clk_mode {
+	MXL862XX_PORT_CLK_NA = 0,
+	MXL862XX_PORT_CLK_MASTER,
+	MXL862XX_PORT_CLK_SLAVE,
+};
+
+/**
+ * struct mxl862xx_port_link_cfg - Ethernet port link, speed status and flow control status
+ * @port_id: Ethernet Port number
+ * @duplex_force: Force Port Duplex Mode
+ * @duplex: See &enum mxl862xx_port_duplex
+ * @speed_force: Force Link Speed
+ * @speed: See &enum mxl862xx_port_speed
+ * @link_force: Force Link
+ * @link: See &enum mxl862xx_port_link
+ * @mii_mode: See &enum mxl862xx_mii_mode
+ * @mii_type: See &enum mxl862xx_mii_type
+ * @clk_mode: See &enum mxl862xx_clk_mode
+ * @lpi: 'Low Power Idle' Support for 'Energy Efficient Ethernet'
+ */
+struct mxl862xx_port_link_cfg {
+	__le16 port_id;
+	u8 duplex_force;
+	__le32  duplex; /* enum mxl862xx_port_duplex */
+	u8 speed_force;
+	__le32 speed; /* enum mxl862xx_port_speed */
+	u8 link_force;
+	__le32 link; /* enum mxl862xx_port_link */
+	__le32 mii_mode; /* enum mxl862xx_mii_mode */
+	__le32 mii_type; /* enum mxl862xx_mii_type */
+	__le32 clk_mode; /* enum mxl862xx_clk_mode */
+	u8 lpi;
+} __packed;
+
+/**
  * enum mxl862xx_stp_port_state - Spanning Tree Protocol port states
  * @MXL862XX_STP_PORT_STATE_FORWARD: Forwarding state
  * @MXL862XX_STP_PORT_STATE_DISABLE: Disabled/Discarding state
@@ -1223,20 +1459,6 @@ struct mxl862xx_sys_fw_image_version {
 	__le16 iv_revision;
 	__le32 iv_build_num;
 } __packed;
-
-/**
- * enum mxl862xx_port_type - Port Type
- * @MXL862XX_LOGICAL_PORT: Logical Port
- * @MXL862XX_PHYSICAL_PORT: Physical Port
- * @MXL862XX_CTP_PORT: Connectivity Termination Port (CTP)
- * @MXL862XX_BRIDGE_PORT: Bridge Port
- */
-enum mxl862xx_port_type {
-	MXL862XX_LOGICAL_PORT = 0,
-	MXL862XX_PHYSICAL_PORT,
-	MXL862XX_CTP_PORT,
-	MXL862XX_BRIDGE_PORT,
-};
 
 /**
  * enum mxl862xx_rmon_port_type - RMON counter table type
@@ -1364,6 +1586,230 @@ struct mxl862xx_rmon_port_cnt {
 	__le64 rx_good_bytes;
 	__le64 rx_bad_bytes;
 	__le64 tx_good_bytes;
+} __packed;
+
+/**
+ * enum mxl862xx_xpcs_if_mode - XPCS interface mode
+ * @MXL862XX_XPCS_IF_SGMII: SGMII
+ * @MXL862XX_XPCS_IF_1000BASEX: 1000BASE-X
+ * @MXL862XX_XPCS_IF_2500BASEX: 2500BASE-X
+ * @MXL862XX_XPCS_IF_USXGMII: USXGMII
+ * @MXL862XX_XPCS_IF_10GBASER: 10GBASE-R
+ * @MXL862XX_XPCS_IF_10GKR: 10GBASE-KR
+ * @MXL862XX_XPCS_IF_5GBASER: 5GBASE-R
+ * @MXL862XX_XPCS_IF_QSGMII: QSGMII
+ */
+enum mxl862xx_xpcs_if_mode {
+	MXL862XX_XPCS_IF_SGMII = 0,
+	MXL862XX_XPCS_IF_1000BASEX = 1,
+	MXL862XX_XPCS_IF_2500BASEX = 2,
+	MXL862XX_XPCS_IF_USXGMII = 3,
+	MXL862XX_XPCS_IF_10GBASER = 4,
+	MXL862XX_XPCS_IF_10GKR = 5,
+	MXL862XX_XPCS_IF_5GBASER = 6,
+	MXL862XX_XPCS_IF_QSGMII = 7,
+};
+
+/**
+ * enum mxl862xx_xpcs_neg_mode - PCS negotiation mode
+ * @MXL862XX_XPCS_NEG_NONE: no inband negotiation
+ * @MXL862XX_XPCS_NEG_INBAND_AN_OFF: inband selected but AN disabled
+ * @MXL862XX_XPCS_NEG_INBAND_AN_ON: inband with AN enabled
+ */
+enum mxl862xx_xpcs_neg_mode {
+	MXL862XX_XPCS_NEG_NONE = 0,
+	MXL862XX_XPCS_NEG_INBAND_AN_OFF = 1,
+	MXL862XX_XPCS_NEG_INBAND_AN_ON = 2,
+};
+
+/**
+ * enum mxl862xx_xpcs_speed - PCS speed values
+ * @MXL862XX_XPCS_SPEED_UNKNOWN: unknown speed
+ * @MXL862XX_XPCS_SPEED_10: 10 Mbps
+ * @MXL862XX_XPCS_SPEED_100: 100 Mbps
+ * @MXL862XX_XPCS_SPEED_1000: 1000 Mbps
+ * @MXL862XX_XPCS_SPEED_2500: 2500 Mbps
+ * @MXL862XX_XPCS_SPEED_5000: 5000 Mbps
+ * @MXL862XX_XPCS_SPEED_10000: 10000 Mbps
+ */
+enum mxl862xx_xpcs_speed {
+	MXL862XX_XPCS_SPEED_UNKNOWN = 0,
+	MXL862XX_XPCS_SPEED_10 = 10,
+	MXL862XX_XPCS_SPEED_100 = 100,
+	MXL862XX_XPCS_SPEED_1000 = 1000,
+	MXL862XX_XPCS_SPEED_2500 = 2500,
+	MXL862XX_XPCS_SPEED_5000 = 5000,
+	MXL862XX_XPCS_SPEED_10000 = 10000,
+};
+
+/**
+ * enum mxl862xx_xpcs_duplex - PCS duplex mode
+ * @MXL862XX_XPCS_DUPLEX_HALF: half duplex
+ * @MXL862XX_XPCS_DUPLEX_FULL: full duplex
+ */
+enum mxl862xx_xpcs_duplex {
+	MXL862XX_XPCS_DUPLEX_HALF = 0,
+	MXL862XX_XPCS_DUPLEX_FULL = 1,
+};
+
+/**
+ * enum mxl862xx_xpcs_loopback_mode - XPCS loopback mode
+ * @MXL862XX_XPCS_LB_DISABLE: disable all loopback
+ * @MXL862XX_XPCS_LB_PCS_SERIAL: PCS TX-to-RX serial loopback
+ * @MXL862XX_XPCS_LB_PCS_PARALLEL: PCS RX-to-TX parallel loopback
+ * @MXL862XX_XPCS_LB_PMA_SERIAL: PMA TX-to-RX serial loopback
+ * @MXL862XX_XPCS_LB_PMA_PARALLEL: PMA RX-to-TX parallel loopback
+ */
+enum mxl862xx_xpcs_loopback_mode {
+	MXL862XX_XPCS_LB_DISABLE = 0,
+	MXL862XX_XPCS_LB_PCS_SERIAL = 1,
+	MXL862XX_XPCS_LB_PCS_PARALLEL = 2,
+	MXL862XX_XPCS_LB_PMA_SERIAL = 3,
+	MXL862XX_XPCS_LB_PMA_PARALLEL = 4,
+};
+
+/**
+ * enum mxl862xx_xpcs_reset_type - XPCS reset type
+ * @MXL862XX_XPCS_RESET_VR: vendor-specific reset (fast)
+ * @MXL862XX_XPCS_RESET_SOFT: PCS soft reset
+ * @MXL862XX_XPCS_RESET_HARD: full hardware reset
+ */
+enum mxl862xx_xpcs_reset_type {
+	MXL862XX_XPCS_RESET_VR = 0,
+	MXL862XX_XPCS_RESET_SOFT = 1,
+	MXL862XX_XPCS_RESET_HARD = 2,
+};
+
+/**
+ * struct mxl862xx_xpcs_pcs_cfg - PCS configuration
+ * @port_id: XPCS port index (0 or 1)
+ * @interface: interface mode (enum mxl862xx_xpcs_if_mode)
+ * @neg_mode: negotiation mode (enum mxl862xx_xpcs_neg_mode)
+ * @permit_pause: allow pause to MAC
+ * @usx_lane_mode: USXGMII lane mode (0=single, 1=quad)
+ * @phy_side: PHY side (1) or MAC side (0)
+ * @advertising: CL37 advertisement word
+ * @result: firmware result (>0 AN restart needed, 0 no change, <0 error)
+ */
+struct mxl862xx_xpcs_pcs_cfg {
+	u8 port_id:2;
+	u8 interface:6;
+	u8 neg_mode:2;
+	u8 permit_pause:1;
+	u8 usx_lane_mode:2;
+	u8 phy_side:1;
+	u8 __rsv:2;
+	__le16 advertising;
+	__le16 result;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_pcs_state - PCS link state
+ * @port_id: XPCS port index (0 or 1)
+ * @interface: interface mode (enum mxl862xx_xpcs_if_mode)
+ * @usx_lane_mode: USXGMII lane mode
+ * @usx_subport: USXGMII sub-port index (0-3)
+ * @link: link up
+ * @an_complete: auto-negotiation complete
+ * @duplex: duplex mode (enum mxl862xx_xpcs_duplex)
+ * @pcs_fault: PCS fault detected
+ * @pause: pause flags (bit 0 = symmetric, bit 1 = asymmetric)
+ * @speed: link speed in Mbps (enum mxl862xx_xpcs_speed)
+ * @lpa: raw link partner advertisement word
+ */
+struct mxl862xx_xpcs_pcs_state {
+	u8 port_id:2;
+	u8 interface:6;
+	u8 usx_lane_mode:2;
+	u8 usx_subport:2;
+	u8 link:1;
+	u8 an_complete:1;
+	u8 duplex:1;
+	u8 pcs_fault:1;
+	u8 pause:2;
+	u8 __rsv:6;
+	u8 __pad;
+	__le16 speed;
+	__le16 lpa;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_pcs_power - PCS enable/disable
+ * @port_id: XPCS port index (0 or 1)
+ * @interface: interface mode (enum mxl862xx_xpcs_if_mode)
+ * @phy_side: PHY side (1) or MAC side (0)
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_pcs_power {
+	u8 port_id:2;
+	u8 interface:6;
+	u8 phy_side:1;
+	u8 __rsv:7;
+	__le16 result;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_an_restart - AN restart parameters
+ * @port_id: XPCS port index (0 or 1)
+ * @interface: interface mode (enum mxl862xx_xpcs_if_mode)
+ * @usx_lane_mode: USXGMII lane mode
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_an_restart {
+	u8 port_id:2;
+	u8 interface:6;
+	u8 usx_lane_mode:2;
+	u8 __rsv:6;
+	__le16 result;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_an_disable - AN disable parameters
+ * @port_id: XPCS port index
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_an_disable {
+	u8 port_id;
+	u8 __pad;
+	__le16 result;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_force_speed - force PCS speed and duplex
+ * @port_id: XPCS port index
+ * @duplex: duplex mode (enum mxl862xx_xpcs_duplex)
+ * @speed: speed in Mbps (enum mxl862xx_xpcs_speed)
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_force_speed {
+	u8 port_id;
+	u8 duplex;
+	__le16 speed;
+	__le16 result;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_loopback_cfg - loopback control
+ * @port_id: XPCS port index
+ * @mode: loopback mode (enum mxl862xx_xpcs_loopback_mode)
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_loopback_cfg {
+	u8 port_id;
+	u8 mode;
+	__le16 result;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_reset_cfg - XPCS reset
+ * @port_id: XPCS port index
+ * @reset_type: reset type (enum mxl862xx_xpcs_reset_type)
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_reset_cfg {
+	u8 port_id;
+	u8 reset_type;
+	__le16 result;
 } __packed;
 
 #endif /* __MXL862XX_API_H */
