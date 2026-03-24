@@ -2088,6 +2088,7 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_pause_stats = mxl862xx_get_pause_stats,
 	.get_rmon_stats = mxl862xx_get_rmon_stats,
 	.get_stats64 = mxl862xx_get_stats64,
+	.self_test = mxl862xx_serdes_self_test,
 };
 
 static int mxl862xx_probe(struct mdio_device *mdiodev)
