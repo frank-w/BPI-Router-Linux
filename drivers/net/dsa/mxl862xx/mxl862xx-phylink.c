@@ -66,6 +66,153 @@ static struct mxl862xx_pcs *pcs_to_mxl862xx_pcs(struct phylink_pcs *pcs)
 	return container_of(pcs, struct mxl862xx_pcs, pcs);
 }
 
+/* Legacy SFP-based PCS implementation for firmware < 1.0.84 */
+static int mxl862xx_legacy_pcs_config(struct phylink_pcs *pcs,
+				      unsigned int neg_mode,
+				      phy_interface_t interface,
+				      const unsigned long *advertising,
+				      bool permit_pause_to_mac)
+{
+	struct mxl862xx_pcs *mpcs = pcs_to_mxl862xx_pcs(pcs);
+	struct mxl862xx_priv *priv = mpcs->priv;
+	struct mxl862xx_sys_sfp_cfg ser_intf = {
+		.option = 0,
+		.mode = 1,
+	};
+
+	if (mpcs->slot != 0)
+		return 0;
+
+	ser_intf.port_id = mpcs->serdes_id;
+
+	switch (interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+		ser_intf.speed = 8;
+		break;
+	case PHY_INTERFACE_MODE_1000BASEX:
+		ser_intf.speed = (neg_mode & PHYLINK_PCS_NEG_INBAND) ? 1 : 7;
+		break;
+	case PHY_INTERFACE_MODE_2500BASEX:
+		ser_intf.speed = 4;
+		break;
+	case PHY_INTERFACE_MODE_10GBASER:
+		ser_intf.speed = 2;
+		break;
+	case PHY_INTERFACE_MODE_USXGMII:
+		ser_intf.speed = 3;
+		break;
+	default:
+		dev_err(priv->ds->dev, "unsupported interface: %s\n",
+			phy_modes(interface));
+		return -EINVAL;
+	}
+
+	return MXL862XX_API_WRITE(priv, SYS_MISC_SFP_SET, ser_intf);
+}
+
+static void mxl862xx_legacy_pcs_get_state(struct phylink_pcs *pcs,
+					  unsigned int neg_mode,
+					  struct phylink_link_state *state)
+{
+	struct mxl862xx_pcs *mpcs = pcs_to_mxl862xx_pcs(pcs);
+	struct mxl862xx_priv *priv = mpcs->priv;
+	struct mxl862xx_port_link_cfg port_link_cfg = {
+		.port_id = cpu_to_le16(MXL862XX_PCS_PORT(mpcs)),
+	};
+	struct mxl862xx_port_cfg port_cfg = {
+		.port_id = cpu_to_le16(MXL862XX_PCS_PORT(mpcs)),
+	};
+	int ret;
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_COMMON_PORTLINKCFGGET,
+				port_link_cfg);
+	if (ret)
+		return;
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_COMMON_PORTCFGGET, port_cfg);
+	if (ret)
+		return;
+
+	state->link = (le32_to_cpu(port_link_cfg.link) == MXL862XX_PORT_LINK_UP);
+	state->an_complete = state->link;
+
+	switch (le32_to_cpu(port_link_cfg.speed)) {
+	case MXL862XX_PORT_SPEED_10:
+		state->speed = SPEED_10;
+		break;
+	case MXL862XX_PORT_SPEED_100:
+		state->speed = SPEED_100;
+		break;
+	case MXL862XX_PORT_SPEED_1000:
+		state->speed = SPEED_1000;
+		break;
+	case MXL862XX_PORT_SPEED_2500:
+		state->speed = SPEED_2500;
+		break;
+	case MXL862XX_PORT_SPEED_5000:
+		state->speed = SPEED_5000;
+		break;
+	case MXL862XX_PORT_SPEED_10000:
+		state->speed = SPEED_10000;
+		break;
+	default:
+		state->speed = SPEED_UNKNOWN;
+		break;
+	}
+
+	switch (le32_to_cpu(port_link_cfg.duplex)) {
+	case MXL862XX_DUPLEX_HALF:
+		state->duplex = DUPLEX_HALF;
+		break;
+	case MXL862XX_DUPLEX_FULL:
+		state->duplex = DUPLEX_FULL;
+		break;
+	default:
+		state->duplex = DUPLEX_UNKNOWN;
+		break;
+	}
+
+	state->pause &= ~(MLO_PAUSE_RX | MLO_PAUSE_TX);
+	switch (le32_to_cpu(port_cfg.flow_ctrl)) {
+	case MXL862XX_FLOW_RXTX:
+		state->pause |= MLO_PAUSE_TXRX_MASK;
+		break;
+	case MXL862XX_FLOW_TX:
+		state->pause |= MLO_PAUSE_TX;
+		break;
+	case MXL862XX_FLOW_RX:
+		state->pause |= MLO_PAUSE_RX;
+		break;
+	case MXL862XX_FLOW_OFF:
+	default:
+		break;
+	}
+}
+
+static unsigned int
+mxl862xx_legacy_pcs_inband_caps(struct phylink_pcs *pcs,
+				phy_interface_t interface)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_USXGMII:
+		return LINK_INBAND_ENABLE;
+	case PHY_INTERFACE_MODE_1000BASEX:
+		return LINK_INBAND_DISABLE | LINK_INBAND_ENABLE;
+	case PHY_INTERFACE_MODE_10GBASER:
+	case PHY_INTERFACE_MODE_2500BASEX:
+		return LINK_INBAND_DISABLE;
+	default:
+		return 0;
+	}
+}
+
+static const struct phylink_pcs_ops mxl862xx_legacy_pcs_ops = {
+	.pcs_get_state = mxl862xx_legacy_pcs_get_state,
+	.pcs_config = mxl862xx_legacy_pcs_config,
+	.pcs_inband_caps = mxl862xx_legacy_pcs_inband_caps,
+};
+
 static int mxl862xx_xpcs_if_mode(phy_interface_t interface)
 {
 	switch (interface) {
@@ -380,7 +527,10 @@ void mxl862xx_setup_pcs(struct mxl862xx_priv *priv, struct mxl862xx_pcs *pcs,
 	pcs->slot = MXL862XX_SERDES_SLOT(port);
 	pcs->interface = PHY_INTERFACE_MODE_NA;
 
-	pcs->pcs.ops = &mxl862xx_pcs_ops;
+	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 84))
+		pcs->pcs.ops = &mxl862xx_pcs_ops;
+	else
+		pcs->pcs.ops = &mxl862xx_legacy_pcs_ops;
 	pcs->pcs.poll = true;
 
 	__set_bit(PHY_INTERFACE_MODE_QSGMII, pcs->pcs.supported_interfaces);
