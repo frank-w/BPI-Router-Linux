@@ -2132,6 +2132,26 @@ enum mxl862xx_pce_action_cross_state {
 };
 
 /**
+ * enum mxl862xx_pce_action_learning - MAC learning action selector
+ *
+ * Controls source address learning for packets matching the rule.
+ *
+ * @MXL862XX_PCE_ACTION_LEARNING_DISABLE: Learning action is disabled
+ * @MXL862XX_PCE_ACTION_LEARNING_REGULAR: Enabled; learning follows the
+ *     regular port and bridge configuration
+ * @MXL862XX_PCE_ACTION_LEARNING_FORCE_NOT: Enabled; the source address
+ *     of matching packets is never learned
+ * @MXL862XX_PCE_ACTION_LEARNING_FORCE: Enabled; the source address of
+ *     matching packets is always learned
+ */
+enum mxl862xx_pce_action_learning {
+	MXL862XX_PCE_ACTION_LEARNING_DISABLE		= 0,
+	MXL862XX_PCE_ACTION_LEARNING_REGULAR		= 1,
+	MXL862XX_PCE_ACTION_LEARNING_FORCE_NOT		= 2,
+	MXL862XX_PCE_ACTION_LEARNING_FORCE		= 3,
+};
+
+/**
  * struct mxl862xx_pce_action - PCE rule action configuration
  *
  * Defines the actions applied to packets matching a PCE rule pattern.
@@ -2161,9 +2181,8 @@ enum mxl862xx_pce_action_cross_state {
  * @traffic_class_action: Traffic class action selector
  *                        (0 = disable, 1 = regular CoS, 2 = alternative)
  * @snooping_type_action: IGMP snooping control selector
- * @learning_action: MAC learning action selector
- *                   (0 = disable, 1 = regular, 2 = force no learn,
- *                   3 = force learn)
+ * @learning_action: MAC learning action selector.
+ *     See &enum mxl862xx_pce_action_learning
  * @irq_action: Interrupt action selector
  *              (0 = disable, 1 = regular, 2 = generate interrupt)
  * @cross_state_action: Cross state action selector.

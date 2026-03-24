@@ -721,6 +721,9 @@ static void mxl862xx_fill_cpu_trap_action(struct dsa_switch *ds, int port,
 	rule->action.cross_state_action =
 		cpu_to_le32(MXL862XX_PCE_ACTION_CROSS_STATE_CROSS);
 
+	rule->action.learning_action =
+		cpu_to_le32(MXL862XX_PCE_ACTION_LEARNING_FORCE_NOT);
+
 	rule->action.fid_enable = 1;
 	rule->action.fid = priv->cpu_trap_fid;
 }
