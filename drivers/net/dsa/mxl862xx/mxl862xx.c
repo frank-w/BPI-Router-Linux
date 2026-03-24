@@ -2350,6 +2350,107 @@ static void mxl862xx_get_stats64(struct dsa_switch *ds, int port,
 	schedule_delayed_work(&priv->stats_work, 0);
 }
 
+static void mxl862xx_self_test(struct dsa_switch *ds, int port,
+			       struct ethtool_test *etest, u64 *data)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	int xpcs_id = mxl862xx_xpcs_port_id(port);
+	int i = 0;
+
+	if (!mxl862xx_port_has_serdes_stats(ds, port))
+		return;
+
+	/* Test 1: PCS PRBS31 */
+	{
+		struct mxl862xx_xpcs_prbs_cfg prbs = {};
+		int ret;
+
+		prbs.port_id = xpcs_id;
+		prbs.tx_en = 1;
+		prbs.rx_en = 1;
+		ret = MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PRBS_CFG, prbs);
+		if (ret) {
+			data[i++] = 1;
+			goto skip_prbs;
+		}
+
+		msleep(100);
+
+		memset(&prbs, 0, sizeof(prbs));
+		prbs.port_id = xpcs_id;
+		prbs.read_err = 1;
+		ret = MXL862XX_API_READ(priv, MXL862XX_XPCS_PRBS_CFG, prbs);
+
+		/* Disable PRBS */
+		{
+			struct mxl862xx_xpcs_prbs_cfg off = {};
+
+			off.port_id = xpcs_id;
+			MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PRBS_CFG, off);
+		}
+
+		if (ret) {
+			data[i++] = 1;
+		} else {
+			data[i] = le16_to_cpu(prbs.rx_err_cnt) ? 1 : 0;
+			if (data[i])
+				etest->flags |= ETH_TEST_FL_FAILED;
+			i++;
+		}
+	}
+skip_prbs:
+
+	/* Test 2: SerDes BERT PRBS31 */
+	{
+		struct mxl862xx_xpcs_bert_cfg bert = {};
+		int ret;
+
+		/* Clear error counter first */
+		bert.port_id = xpcs_id;
+		bert.clear_err = 1;
+		MXL862XX_API_WRITE(priv, MXL862XX_XPCS_BERT_CFG, bert);
+
+		/* Enable BERT with PRBS31 pattern (6) */
+		memset(&bert, 0, sizeof(bert));
+		bert.port_id = xpcs_id;
+		bert.tx_en = 1;
+		bert.rx_en = 1;
+		bert.pattern = 6; /* PRBS31 */
+		ret = MXL862XX_API_WRITE(priv, MXL862XX_XPCS_BERT_CFG, bert);
+		if (ret) {
+			data[i++] = 1;
+			goto done;
+		}
+
+		msleep(100);
+
+		/* Read error count */
+		memset(&bert, 0, sizeof(bert));
+		bert.port_id = xpcs_id;
+		bert.read_err = 1;
+		ret = MXL862XX_API_READ(priv, MXL862XX_XPCS_BERT_CFG, bert);
+
+		/* Disable BERT */
+		{
+			struct mxl862xx_xpcs_bert_cfg off = {};
+
+			off.port_id = xpcs_id;
+			MXL862XX_API_WRITE(priv, MXL862XX_XPCS_BERT_CFG, off);
+		}
+
+		if (ret) {
+			data[i++] = 1;
+		} else {
+			data[i] = le16_to_cpu(bert.rx_err_cnt) ? 1 : 0;
+			if (data[i])
+				etest->flags |= ETH_TEST_FL_FAILED;
+			i++;
+		}
+	}
+done:
+	return;
+}
+
 static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_tag_protocol = mxl862xx_get_tag_protocol,
 	.setup = mxl862xx_setup,
@@ -2381,6 +2482,7 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_eth_ctrl_stats = mxl862xx_get_eth_ctrl_stats,
 	.get_pause_stats = mxl862xx_get_pause_stats,
 	.get_stats64 = mxl862xx_get_stats64,
+	.self_test = mxl862xx_self_test,
 };
 
 static struct mxl862xx_pcs *pcs_to_mxl862xx_pcs(struct phylink_pcs *pcs)
