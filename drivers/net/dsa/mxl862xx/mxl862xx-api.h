@@ -2400,6 +2400,28 @@ struct mxl862xx_sys_fw_image_version {
 } __packed;
 
 /**
+ * struct mxl862xx_sys_sfp_cfg - legacy SFP/SerDes port configuration
+ * @port_id: port id (0 or 1)
+ * @option: config options (0 - SFP mode/speed/link-status, 1 - flow control)
+ * @mode: SFP mode (0 - auto, 1 - fix, 2 - disable)
+ * @speed: select speed when mode is 1
+ * @link: get link state
+ * @fc_en: flow control (0 - disable, 1 - enable)
+ */
+struct mxl862xx_sys_sfp_cfg {
+	u8 port_id:4;
+	u8 option:4;
+	union {
+		struct {
+			u8 mode;
+			u8 speed;
+			u8 link;
+		};
+		u8 fc_en;
+	};
+} __packed;
+
+/**
  * enum mxl862xx_rmon_port_type - RMON counter table type
  * @MXL862XX_RMON_CTP_PORT_RX: CTP RX counters
  * @MXL862XX_RMON_CTP_PORT_TX: CTP TX counters
