@@ -1162,6 +1162,8 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 				      (n_user_ports + n_cpu_ports);
 	}
 
+	priv->mirror_dest = -1;
+
 	ret = mxl862xx_setup_drop_meter(ds);
 	if (ret)
 		return ret;
@@ -2049,6 +2051,120 @@ static int mxl862xx_setup_cpu_bridge(struct dsa_switch *ds, int port)
 	}
 
 	return mxl862xx_set_bridge_port(ds, port);
+}
+
+static int mxl862xx_port_mirror_add(struct dsa_switch *ds, int port,
+				    struct dsa_mall_mirror_tc_entry *mirror,
+				    bool ingress,
+				    struct netlink_ext_ack *extack)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_port *p = &priv->ports[port];
+	struct mxl862xx_monitor_port_cfg mon = {
+		.port_id = mirror->to_local_port,
+	};
+	struct mxl862xx_ctp_port_config ctp = {
+		.logical_port_id = port,
+		.mask = cpu_to_le32(
+			MXL862XX_CTP_PORT_CONFIG_MASK_LOOPBACK_AND_MIRROR),
+		.ingress_mirror_enable = p->ingress_mirror,
+		.egress_mirror_enable = p->egress_mirror,
+	};
+	int ret;
+
+	/* The hardware has a single global monitor port.  Reject if an
+	 * existing mirror session targets a different destination.
+	 */
+	if (priv->mirror_dest >= 0 &&
+	    priv->mirror_dest != mirror->to_local_port) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Only one mirror destination port is supported");
+		return -EBUSY;
+	}
+
+	if (ingress)
+		ctp.ingress_mirror_enable = 1;
+	else
+		ctp.egress_mirror_enable = 1;
+
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_CTP_PORTCONFIGSET, ctp);
+	if (ret) {
+		dev_err(ds->dev, "mirror: CTP write failed for port %d: %pe\n",
+			port, ERR_PTR(ret));
+		return ret;
+	}
+
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_COMMON_MONITORPORTCFGSET, mon);
+	if (ret) {
+		dev_err(ds->dev,
+			"mirror: failed to set monitor port %d: %pe\n",
+			mirror->to_local_port, ERR_PTR(ret));
+		/* Roll back CTP change */
+		ctp.ingress_mirror_enable = p->ingress_mirror;
+		ctp.egress_mirror_enable = p->egress_mirror;
+		MXL862XX_API_WRITE(priv, MXL862XX_CTP_PORTCONFIGSET, ctp);
+		return ret;
+	}
+
+	if (ingress)
+		p->ingress_mirror = true;
+	else
+		p->egress_mirror = true;
+
+	priv->mirror_dest = mirror->to_local_port;
+
+	return 0;
+}
+
+static void mxl862xx_port_mirror_del(struct dsa_switch *ds, int port,
+				     struct dsa_mall_mirror_tc_entry *mirror)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_port *p = &priv->ports[port];
+	struct mxl862xx_ctp_port_config ctp = {
+		.logical_port_id = port,
+		.mask = cpu_to_le32(
+			MXL862XX_CTP_PORT_CONFIG_MASK_LOOPBACK_AND_MIRROR),
+		.ingress_mirror_enable = p->ingress_mirror,
+		.egress_mirror_enable = p->egress_mirror,
+	};
+	struct mxl862xx_monitor_port_cfg mon = {};
+	bool active = false;
+	int i, ret;
+
+	if (mirror->ingress)
+		ctp.ingress_mirror_enable = 0;
+	else
+		ctp.egress_mirror_enable = 0;
+
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_CTP_PORTCONFIGSET, ctp);
+	if (ret)
+		dev_err(ds->dev, "mirror: CTP write failed for port %d: %pe\n",
+			port, ERR_PTR(ret));
+
+	if (mirror->ingress)
+		p->ingress_mirror = false;
+	else
+		p->egress_mirror = false;
+
+	/* If no ports have any mirrors active, clear the monitor port */
+	for (i = 0; i < ds->num_ports; i++) {
+		if (priv->ports[i].ingress_mirror ||
+		    priv->ports[i].egress_mirror) {
+			active = true;
+			break;
+		}
+	}
+
+	if (active)
+		return;
+
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_COMMON_MONITORPORTCFGSET, mon);
+	if (ret)
+		dev_err(ds->dev, "mirror: failed to clear monitor port: %pe\n",
+			ERR_PTR(ret));
+
+	priv->mirror_dest = -1;
 }
 
 /**
@@ -4299,6 +4415,8 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.port_fdb_dump = mxl862xx_port_fdb_dump,
 	.port_mdb_add = mxl862xx_port_mdb_add,
 	.port_mdb_del = mxl862xx_port_mdb_del,
+	.port_mirror_add = mxl862xx_port_mirror_add,
+	.port_mirror_del = mxl862xx_port_mirror_del,
 	.port_lag_join = mxl862xx_port_lag_join,
 	.port_lag_leave = mxl862xx_port_lag_leave,
 	.port_lag_change = mxl862xx_port_lag_change,

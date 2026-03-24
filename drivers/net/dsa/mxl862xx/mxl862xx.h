@@ -241,6 +241,8 @@ struct mxl862xx_port_stats {
  * @stats_lock:          protects accumulator reads in .get_stats64 against
  *                       concurrent updates from the polling work
  * @tag_8021q_vid:       currently assigned tag_8021q management VID
+ * @ingress_mirror:      true when ingress mirroring is active on this port
+ * @egress_mirror:       true when egress mirroring is active on this port
  * @lag:                 non-NULL when port is member of a LAG group;
  *                       points to the DSA LAG structure
  * @lag_tx_enabled:      true when this port is active for TX in its LAG
@@ -269,6 +271,9 @@ struct mxl862xx_port {
 	struct work_struct host_flood_work;
 	u16 tag_8021q_vid;
 	struct mxl862xx_evlan_block cpu_egress_evlan;
+	/* Mirror state */
+	bool ingress_mirror;
+	bool egress_mirror;
 	/* LAG state */
 	struct dsa_lag *lag;
 	bool lag_tx_enabled;
@@ -355,6 +360,8 @@ union mxl862xx_fw_version {
  * @trunk_hash:         current global hash field bitmask (6 bits,
  *                      MXL862XX_TRUNK_HASH_*); union of all active LAGs'
  *                      hash requirements
+ * @mirror_dest:        current mirror destination port, or -1 if no mirror
+ *                      session is active; used to detect monitor port conflicts
  * @stats_work:         periodic work item that polls RMON hardware counters
  *                      and accumulates them into 64-bit per-port stats
  */
@@ -375,6 +382,7 @@ struct mxl862xx_priv {
 	u16 vf_block_size;
 	u16 lag_bridge_ports[MXL862XX_MAX_LAG_IDS + 1];
 	u8 trunk_hash;
+	int mirror_dest;
 	struct delayed_work stats_work;
 };
 
