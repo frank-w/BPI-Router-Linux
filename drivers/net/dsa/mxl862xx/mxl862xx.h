@@ -319,6 +319,13 @@ union mxl862xx_fw_version {
  * @evlan_ingress_size: per-port ingress Extended VLAN block size
  * @evlan_egress_size:  per-port egress Extended VLAN block size
  * @vf_block_size:      per-port VLAN Filter block size
+ * @cpu_trap_fid:       firmware bridge FID allocated for PCE-trapped frames;
+ *                      configured with uc/mc/bc flood all enabled so that
+ *                      IGMP, MLD, and link-local frames always reach the CPU
+ *                      regardless of the ingress port's private FID flood
+ *                      policy. Set once in setup() and referenced by
+ *                      fill_cpu_trap_action() via bFidEnable. The PCE FID
+ *                      action field is 6 bits, so this value must be <= 63.
  * @stats_work:         periodic work item that polls RMON hardware counters
  *                      and accumulates them into 64-bit per-port stats
  */
@@ -335,6 +342,7 @@ struct mxl862xx_priv {
 	u16 evlan_ingress_size;
 	u16 evlan_egress_size;
 	u16 vf_block_size;
+	u16 cpu_trap_fid;
 	struct delayed_work stats_work;
 };
 
