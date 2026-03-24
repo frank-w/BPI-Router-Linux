@@ -148,6 +148,47 @@ struct mxl862xx_evlan_block {
 };
 
 /**
+ * struct mxl862xx_port_stats - 64-bit accumulated hardware port statistics
+ *
+ * The firmware RMON counters are 32-bit free-running (64-bit for byte
+ * counters).  This structure holds 64-bit accumulators alongside the
+ * previous raw snapshot so that deltas can be computed across polls,
+ * handling 32-bit wrap correctly via unsigned subtraction.
+ */
+struct mxl862xx_port_stats {
+	/* 64-bit accumulators */
+	u64 rx_packets;
+	u64 tx_packets;
+	u64 rx_bytes;
+	u64 tx_bytes;
+	u64 rx_errors;
+	u64 tx_errors;
+	u64 rx_dropped;
+	u64 tx_dropped;
+	u64 multicast;
+	u64 collisions;
+	u64 rx_length_errors;
+	u64 rx_crc_errors;
+	u64 rx_frame_errors;
+	/* Previous raw RMON values for delta computation */
+	u32 prev_rx_good_pkts;
+	u32 prev_tx_good_pkts;
+	u64 prev_rx_good_bytes;
+	u64 prev_tx_good_bytes;
+	u32 prev_rx_fcserror_pkts;
+	u32 prev_rx_under_size_error_pkts;
+	u32 prev_rx_oversize_error_pkts;
+	u32 prev_rx_align_error_pkts;
+	u32 prev_tx_dropped_pkts;
+	u32 prev_rx_dropped_pkts;
+	u32 prev_rx_evlan_discard_pkts;
+	u32 prev_mtu_exceed_discard_pkts;
+	u32 prev_tx_acm_dropped_pkts;
+	u32 prev_rx_multicast_pkts;
+	u32 prev_tx_coll_count;
+};
+
+/**
  * struct mxl862xx_port - per-port state tracked by the driver
  * @priv:                back-pointer to switch private data; needed by
  *                       deferred work handlers to access ds and priv
@@ -178,6 +219,10 @@ struct mxl862xx_evlan_block {
  *                       The worker acquires rtnl_lock() to serialize with
  *                       DSA callbacks and checks @setup_done to avoid
  *                       acting on torn-down ports.
+ * @stats:               64-bit accumulated hardware statistics; updated
+ *                       periodically by the stats polling work
+ * @stats_lock:          protects accumulator reads in .get_stats64 against
+ *                       concurrent updates from the polling work
  */
 struct mxl862xx_port {
 	struct mxl862xx_priv *priv;
@@ -195,6 +240,9 @@ struct mxl862xx_port {
 	bool host_flood_uc;
 	bool host_flood_mc;
 	struct work_struct host_flood_work;
+	/* Hardware stats accumulation */
+	struct mxl862xx_port_stats stats;
+	spinlock_t stats_lock;
 };
 
 /**
@@ -215,6 +263,8 @@ struct mxl862xx_port {
  * @evlan_ingress_size: per-port ingress Extended VLAN block size
  * @evlan_egress_size:  per-port egress Extended VLAN block size
  * @vf_block_size:      per-port VLAN Filter block size
+ * @stats_work:         periodic work item that polls RMON hardware counters
+ *                      and accumulates them into 64-bit per-port stats
  */
 struct mxl862xx_priv {
 	struct dsa_switch *ds;
@@ -227,6 +277,7 @@ struct mxl862xx_priv {
 	u16 evlan_ingress_size;
 	u16 evlan_egress_size;
 	u16 vf_block_size;
+	struct delayed_work stats_work;
 };
 
 #endif /* __MXL862XX_H */
