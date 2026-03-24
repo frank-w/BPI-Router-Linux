@@ -395,6 +395,8 @@ struct mxl862xx_priv {
 	u16 lag_bridge_ports[MXL862XX_MAX_LAG_IDS + 1];
 	u8 trunk_hash;
 	int mirror_dest;
+	bool block_host;
+	bool skip_teardown;
 	struct delayed_work stats_work;
 };
 
