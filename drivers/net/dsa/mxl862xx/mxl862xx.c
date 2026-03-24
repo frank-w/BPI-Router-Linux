@@ -498,6 +498,44 @@ static int mxl862xx_setup_drop_meter(struct dsa_switch *ds)
 	return MXL862XX_API_WRITE(priv, MXL862XX_COMMON_REGISTERMOD, reg);
 }
 
+/* Disable firmware global PCE rules that trap various protocols to the
+ * on-die microcontroller (port 0) via PORTMAP_CPU. Under DSA, these
+ * frames must either reach the host CPU via per-port rules (link-local)
+ * or through the normal bridge forwarding path (ARP broadcast), so the
+ * global firmware rules are not needed. With the microcontroller port
+ * disabled they would silently drop matching traffic.
+ *
+ * Global rules have lower indices than CTP rules, hence higher priority
+ * in the PCE pipeline -- they must be explicitly disabled or they will
+ * shadow the per-CTP traps.
+ *
+ * Indices from gsw_flow_index.h:
+ *   1 -- BPDU (STP/RSTP, dst 01:80:c2:00:00:00)
+ *   3 -- LLDP         (EtherType 0x88cc)
+ *   4 -- OAM/LACP     (EtherType 0x8809)
+ *   6 -- System MAC   (dst 02:e0:92:00:00:01, vendor management MAC)
+ *   7 -- ARP Request  (broadcast + EtherType 0x0806 + TPA 192.0.2.1)
+ */
+static int mxl862xx_disable_fw_global_rules(struct dsa_switch *ds)
+{
+	static const u16 indices[] = { 1, 3, 4, 6, 7 };
+	struct mxl862xx_pce_rule rule;
+	int i, ret;
+
+	for (i = 0; i < ARRAY_SIZE(indices); i++) {
+		memset(&rule, 0, sizeof(rule));
+		rule.pattern.index = cpu_to_le16(indices[i]);
+		/* pattern.enable == 0 -> rule is disabled */
+
+		ret = MXL862XX_API_WRITE(ds->priv,
+					 MXL862XX_TFLOW_PCERULEWRITE, rule);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 /* Per-CTP logical indices for protocol trap rules.
  *
  * The firmware pre-allocates a per-CTP PCE block for every port during
@@ -511,16 +549,20 @@ static int mxl862xx_setup_drop_meter(struct dsa_switch *ds)
 #define MXL862XX_MLDV1_CTP_INDEX		3
 #define MXL862XX_MLDV2_CTP_INDEX		4
 
-/* Install (or overwrite) a PCE rule via the firmware's logical-index
- * API. The firmware translates the logical index in @rule->pattern.index
- * to a physical position within the block selected by @rule->region and
- * @rule->logicalportid, and expands the hardware block size as needed.
+/* Install (or overwrite) a PCE rule.  On firmware >= 1.0.83 use the
+ * logical-index API (PCERULELOGICWRITE), which grows the per-CTP block
+ * on demand.  On older firmware that API does not exist, so fall back
+ * to the legacy PCERULEWRITE call which uses the rule index as a
+ * direct offset into a fixed-size pre-allocated CTP block.
  */
 static int mxl862xx_pce_rule_write(struct mxl862xx_priv *priv,
 				   struct mxl862xx_pce_rule *rule)
 {
-	return MXL862XX_API_WRITE(priv, MXL862XX_TFLOW_PCERULELOGICWRITE,
-				  *rule);
+	u16 cmd = MXL862XX_FW_VER_MIN(priv, 1, 0, 83) ?
+			MXL862XX_TFLOW_PCERULELOGICWRITE :
+			MXL862XX_TFLOW_PCERULEWRITE;
+
+	return MXL862XX_API_WRITE(priv, cmd, *rule);
 }
 
 /**
@@ -1234,9 +1276,11 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	if (ret)
 		return ret;
 
-	if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
-		dev_warn(ds->dev, "firmware < 1.0.80 installs global PCE rules "
-			 "that interfere with DSA operation, please update\n");
+	if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 80)) {
+		ret = mxl862xx_disable_fw_global_rules(ds);
+		if (ret)
+			return ret;
+	}
 
 	/* Pre-allocate firmware resources for all ports. The DSA core
 	 * calls change_tag_protocol() between setup() and port_setup(),
