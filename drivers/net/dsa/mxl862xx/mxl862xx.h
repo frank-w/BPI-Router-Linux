@@ -345,6 +345,13 @@ struct mxl862xx_fw_version {
  * @rescue_failed:      (rescue_mode) the self-heal gave up; the loader needs a
  *                      power cycle and no flash can be accepted
  * @rescue_heal_work:   background self-heal draining a wedged download to READY
+ * @cpu_trap_fid:       firmware bridge FID allocated for PCE-trapped frames;
+ *                      configured with uc/mc/bc flood all enabled so that
+ *                      IGMP, MLD, and link-local frames always reach the CPU
+ *                      regardless of the ingress port's private FID flood
+ *                      policy. Set once in setup() and referenced by
+ *                      fill_cpu_trap_action() via bFidEnable. The PCE FID
+ *                      action field is 6 bits, so this value must be <= 63.
  * @stats_work:         periodic work item that polls RMON hardware counters
  *                      and accumulates them into 64-bit per-port stats
  */
@@ -372,6 +379,7 @@ struct mxl862xx_priv {
 	bool rescue_mode;
 	bool rescue_ready;
 	bool rescue_failed;
+	u16 cpu_trap_fid;
 	struct delayed_work stats_work;
 };
 
