@@ -1900,4 +1900,49 @@ struct mxl862xx_xpcs_signal_detect {
 	__le16 result;
 } __packed;
 
+/**
+ * struct mxl862xx_xpcs_prbs_cfg - PCS-level PRBS31 test pattern
+ * @port_id: XPCS port index (0 or 1)
+ * @tx_en: TX PRBS31 enable
+ * @rx_en: RX PRBS31 enable
+ * @read_err: read error count
+ * @rx_err_cnt: RX PRBS31 error count (valid when read_err=1)
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_prbs_cfg {
+	u8 port_id:2;
+	u8 tx_en:1;
+	u8 rx_en:1;
+	u8 read_err:1;
+	u8 __rsv:3;
+	u8 __pad;
+	__le16 rx_err_cnt;
+	__le16 result;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_bert_cfg - SerDes-level BERT test pattern
+ * @port_id: XPCS port index (0 or 1)
+ * @tx_en: TX BERT enable
+ * @rx_en: RX BERT enable
+ * @read_err: read RX error count
+ * @clear_err: clear RX error counter
+ * @insert_err: insert one TX error
+ * @pattern: PRBS pattern type (1-7; 0 = disable)
+ * @rx_err_cnt: RX BERT error count (valid when read_err=1)
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_bert_cfg {
+	u8 port_id:2;
+	u8 tx_en:1;
+	u8 rx_en:1;
+	u8 read_err:1;
+	u8 clear_err:1;
+	u8 insert_err:1;
+	u8 __rsv:1;
+	u8 pattern;
+	__le16 rx_err_cnt;
+	__le16 result;
+} __packed;
+
 #endif /* __MXL862XX_API_H */
