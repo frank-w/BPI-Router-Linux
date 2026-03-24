@@ -456,3 +456,96 @@ const struct phylink_mac_ops mxl862xx_phylink_mac_ops = {
 	.mac_link_up = mxl862xx_phylink_mac_link_up,
 	.mac_select_pcs = mxl862xx_phylink_mac_select_pcs,
 };
+
+/* --- SerDes ethtool statistics --- */
+
+static const char mxl862xx_serdes_stats[][ETH_GSTRING_LEN] = {
+	"serdes_tx_main",
+	"serdes_tx_pre",
+	"serdes_tx_post",
+	"serdes_tx_iboost",
+	"serdes_tx_vboost",
+	"serdes_tx_vboost_en",
+	"serdes_rx_att",
+	"serdes_rx_vga1",
+	"serdes_rx_vga2",
+	"serdes_rx_ctle_boost",
+	"serdes_rx_ctle_pole",
+	"serdes_rx_dfe_tap1",
+	"serdes_rx_dfe_bypass",
+	"serdes_rx_adapt_mode",
+	"serdes_rx_adapt_sel",
+	"serdes_rx_signal",
+	"serdes_pma_link",
+	"serdes_link_fault",
+	"serdes_in_reset",
+};
+
+static bool mxl862xx_port_has_serdes_stats(struct dsa_switch *ds, int port)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+
+	return port >= 9 && port <= 16 &&
+	       MXL862XX_FW_VER_MIN(priv, 1, 0, 80);
+}
+
+int mxl862xx_serdes_stats_count(struct dsa_switch *ds, int port)
+{
+	if (mxl862xx_port_has_serdes_stats(ds, port))
+		return ARRAY_SIZE(mxl862xx_serdes_stats);
+
+	return 0;
+}
+
+void mxl862xx_serdes_get_strings(struct dsa_switch *ds, int port, u8 *data)
+{
+	int i;
+
+	if (!mxl862xx_port_has_serdes_stats(ds, port))
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(mxl862xx_serdes_stats); i++)
+		ethtool_puts(&data, mxl862xx_serdes_stats[i]);
+}
+
+void mxl862xx_serdes_get_stats(struct dsa_switch *ds, int port, u64 *data)
+{
+	struct mxl862xx_xpcs_eq_get eq = {
+		.port_id = mxl862xx_xpcs_port_id(port),
+	};
+	struct mxl862xx_xpcs_signal_detect sig = {};
+
+	if (!mxl862xx_port_has_serdes_stats(ds, port))
+		return;
+
+	sig.port_id = mxl862xx_xpcs_port_id(port);
+
+	if (!MXL862XX_API_READ(ds->priv, MXL862XX_XPCS_EQ_GET, eq)) {
+		*data++ = eq.tx.main.value;
+		*data++ = eq.tx.pre.value;
+		*data++ = eq.tx.post.value;
+		*data++ = eq.tx.iboost_lvl.value;
+		*data++ = eq.tx.vboost_lvl.value;
+		*data++ = eq.tx.vboost_en.value;
+		*data++ = eq.rx.att_lvl.value;
+		*data++ = eq.rx.vga1_gain.value;
+		*data++ = eq.rx.vga2_gain.value;
+		*data++ = eq.rx.ctle_boost.value;
+		*data++ = eq.rx.ctle_pole.value;
+		*data++ = eq.rx.dfe_tap1.value;
+		*data++ = eq.rx.dfe_bypass.value;
+		*data++ = eq.rx.adapt_mode.value;
+		*data++ = eq.rx.adapt_sel.value;
+	} else {
+		data += 15;
+	}
+
+	if (!MXL862XX_API_READ(ds->priv, MXL862XX_XPCS_SIGNAL_DETECT, sig)) {
+		*data++ = sig.rx_signal;
+		*data++ = sig.pma_link;
+		*data++ = sig.link_fault;
+		*data++ = sig.in_reset;
+	} else {
+		data += 4;
+	}
+}
