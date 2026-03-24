@@ -729,6 +729,18 @@ struct mxl862xx_bridge_port_config {
 } __packed;
 
 /**
+ * struct mxl862xx_monitor_port_cfg - Monitor port configuration
+ * @port_id: Destination port for mirrored traffic (zero-based)
+ * @sub_if_id: Monitoring sub-interface ID
+ * @monitor_port: Reserved
+ */
+struct mxl862xx_monitor_port_cfg {
+	u8 port_id;
+	__le16 sub_if_id;
+	u8 monitor_port;
+} __packed;
+
+/**
  * struct mxl862xx_cfg -  Global Switch configuration Attributes
  * @mac_table_age_timer: See &enum mxl862xx_age_timer
  * @age_timer: Custom MAC table aging timer in seconds
