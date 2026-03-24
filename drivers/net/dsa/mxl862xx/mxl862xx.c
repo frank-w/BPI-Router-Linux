@@ -659,7 +659,42 @@ static int mxl862xx_setup_link_local_trap(struct dsa_switch *ds, int port)
 				  rule);
 }
 
-static int mxl862xx_set_bridge_port(struct dsa_switch *ds, int port)
+static bool mxl862xx_is_lag_master(struct mxl862xx_priv *priv, int port)
+{
+	struct dsa_lag *lag = priv->ports[port].lag;
+	int i;
+
+	if (!lag)
+		return true;
+
+	for (i = 0; i < port; i++) {
+		if (priv->ports[i].lag == lag)
+			return false;
+	}
+
+	return true;
+}
+
+/**
+ * mxl862xx_lag_bridge_port - Get the effective bridge port ID for a port
+ * @priv: driver private data
+ * @port: port index
+ *
+ * If @port is a member of a LAG, returns the LAG's dedicated firmware
+ * bridge port ID.  Otherwise returns @port itself.
+ */
+static u16 mxl862xx_lag_bridge_port(struct mxl862xx_priv *priv, int port)
+{
+	struct dsa_lag *lag = priv->ports[port].lag;
+
+	if (lag && priv->lag_bridge_ports[lag->id])
+		return priv->lag_bridge_ports[lag->id];
+
+	return port;
+}
+
+static int __mxl862xx_set_bridge_port(struct dsa_switch *ds, int port,
+				      u16 bp_id)
 {
 	struct mxl862xx_bridge_port_config br_port_cfg = {};
 	struct dsa_port *dp = dsa_to_port(ds, port);
@@ -670,7 +705,7 @@ static int mxl862xx_set_bridge_port(struct dsa_switch *ds, int port)
 	bool enable;
 	int i, idx;
 
-	br_port_cfg.bridge_port_id = cpu_to_le16(port);
+	br_port_cfg.bridge_port_id = cpu_to_le16(bp_id);
 	br_port_cfg.bridge_id = cpu_to_le16(bridge_id);
 	br_port_cfg.mask = cpu_to_le32(MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_ID |
 				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_PORT_MAP |
@@ -754,6 +789,30 @@ static int mxl862xx_set_bridge_port(struct dsa_switch *ds, int port)
 				  br_port_cfg);
 }
 
+static int mxl862xx_set_bridge_port(struct dsa_switch *ds, int port)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_port *p = &priv->ports[port];
+	int ret;
+
+	ret = __mxl862xx_set_bridge_port(ds, port, port);
+	if (ret)
+		return ret;
+
+	/* If this port is a LAG master, also push its config to the
+	 * LAG's dedicated bridge port (which is the actual target of
+	 * all member CTP redirections).
+	 */
+	if (p->lag && mxl862xx_is_lag_master(priv, port)) {
+		u16 lag_bp = priv->lag_bridge_ports[p->lag->id];
+
+		if (lag_bp)
+			ret = __mxl862xx_set_bridge_port(ds, port, lag_bp);
+	}
+
+	return ret;
+}
+
 static int mxl862xx_sync_bridge_members(struct dsa_switch *ds,
 					const struct dsa_bridge *bridge)
 {
@@ -768,14 +827,46 @@ static int mxl862xx_sync_bridge_members(struct dsa_switch *ds,
 			    MXL862XX_MAX_BRIDGE_PORTS);
 
 		dsa_bridge_for_each_member(member_dp, ds, bridge) {
-			if (member_dp->index != port)
-				__set_bit(member_dp->index,
-					  priv->ports[port].portmap);
+			int member = member_dp->index;
+
+			/* For LAG members, only include the LAG's
+			 * dedicated bridge port in the portmap.
+			 * Non-master members are skipped to avoid
+			 * duplicates (they share the same LAG bridge
+			 * port).
+			 */
+			if (!mxl862xx_is_lag_master(priv, member))
+				continue;
+			if (member != port) {
+				u16 bp = mxl862xx_lag_bridge_port(priv,
+								  member);
+				__set_bit(bp, priv->ports[port].portmap);
+			}
 		}
 		__set_bit(mxl862xx_cpu_bridge_port_id(ds, port),
 			  priv->ports[port].portmap);
 
 		err = mxl862xx_set_bridge_port(ds, port);
+		if (err)
+			ret = err;
+	}
+
+	/* Push updated portmaps to LAG bridge ports.  Each LAG master's
+	 * portmap (which excludes itself) is used for the LAG bridge
+	 * port -- this naturally avoids self-forwarding.
+	 */
+	dsa_bridge_for_each_member(dp, ds, bridge) {
+		struct mxl862xx_port *p = &priv->ports[dp->index];
+		u16 lag_bp;
+
+		if (!p->lag || !mxl862xx_is_lag_master(priv, dp->index))
+			continue;
+
+		lag_bp = priv->lag_bridge_ports[p->lag->id];
+		if (!lag_bp)
+			continue;
+
+		err = __mxl862xx_set_bridge_port(ds, dp->index, lag_bp);
 		if (err)
 			ret = err;
 	}
@@ -1960,6 +2051,408 @@ static int mxl862xx_setup_cpu_bridge(struct dsa_switch *ds, int port)
 	return mxl862xx_set_bridge_port(ds, port);
 }
 
+/**
+ * mxl862xx_lag_master_port - Find the LAG master (lowest-numbered member)
+ * @ds: DSA switch
+ * @lag: LAG to search
+ *
+ * The master's bridge port hosts the P-mapper and receives all ingress
+ * traffic via CTP redirection from other members.
+ *
+ * Return: port index of the master, or -ENOENT if no members.
+ */
+static int mxl862xx_lag_master_port(struct dsa_switch *ds,
+				    const struct dsa_lag *lag)
+{
+	struct dsa_port *dp;
+	int master = -ENOENT;
+
+	dsa_lag_foreach_port(dp, ds->dst, lag) {
+		if (dp->ds != ds)
+			continue;
+		if (master < 0 || dp->index < master)
+			master = dp->index;
+	}
+
+	return master;
+}
+
+/**
+ * mxl862xx_lag_hash_bits - Translate Linux hash mode to firmware hash bitmask
+ * @info: bonding upper info (tx_type + hash_type)
+ *
+ * Return: 6-bit hash field bitmask (MXL862XX_TRUNK_HASH_*), or negative
+ *         errno if the mode is unsupported.
+ */
+static int mxl862xx_lag_hash_bits(const struct netdev_lag_upper_info *info)
+{
+	if (info->tx_type != NETDEV_LAG_TX_TYPE_HASH)
+		return 0;
+
+	switch (info->hash_type) {
+	case NETDEV_LAG_HASH_L2:
+		return MXL862XX_TRUNK_HASH_SA | MXL862XX_TRUNK_HASH_DA;
+	case NETDEV_LAG_HASH_L34:
+		return MXL862XX_TRUNK_HASH_SIP | MXL862XX_TRUNK_HASH_DIP |
+		       MXL862XX_TRUNK_HASH_SPORT | MXL862XX_TRUNK_HASH_DPORT;
+	case NETDEV_LAG_HASH_L23:
+	case NETDEV_LAG_HASH_E23:
+		return MXL862XX_TRUNK_HASH_SA | MXL862XX_TRUNK_HASH_DA |
+		       MXL862XX_TRUNK_HASH_SIP | MXL862XX_TRUNK_HASH_DIP;
+	case NETDEV_LAG_HASH_E34:
+		return MXL862XX_TRUNK_HASH_SA | MXL862XX_TRUNK_HASH_DA |
+		       MXL862XX_TRUNK_HASH_SIP | MXL862XX_TRUNK_HASH_DIP |
+		       MXL862XX_TRUNK_HASH_SPORT | MXL862XX_TRUNK_HASH_DPORT;
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
+/**
+ * mxl862xx_lag_set_hash - Push trunk hash configuration to firmware
+ * @priv: driver private data
+ * @hash_bits: 6-bit hash field bitmask (MXL862XX_TRUNK_HASH_*)
+ *
+ * Only issues a firmware command when @hash_bits differs from the
+ * currently active configuration.
+ */
+static int mxl862xx_lag_set_hash(struct mxl862xx_priv *priv, u8 hash_bits)
+{
+	struct mxl862xx_trunking_cfg cfg = {};
+
+	if (priv->trunk_hash == hash_bits)
+		return 0;
+
+	cfg.mac_src  = !!(hash_bits & MXL862XX_TRUNK_HASH_SA);
+	cfg.mac_dst  = !!(hash_bits & MXL862XX_TRUNK_HASH_DA);
+	cfg.ip_src   = !!(hash_bits & MXL862XX_TRUNK_HASH_SIP);
+	cfg.ip_dst   = !!(hash_bits & MXL862XX_TRUNK_HASH_DIP);
+	cfg.src_port = !!(hash_bits & MXL862XX_TRUNK_HASH_SPORT);
+	cfg.dst_port = !!(hash_bits & MXL862XX_TRUNK_HASH_DPORT);
+
+	priv->trunk_hash = hash_bits;
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_TRUNKING_CFGSET, cfg);
+}
+
+/**
+ * mxl862xx_lag_recompute_hash - Recompute global hash from all active LAGs
+ * @ds: DSA switch
+ *
+ * Scans all ports and ORs together the stored hash requirements of every
+ * active LAG member.  Used after a LAG is destroyed to potentially narrow
+ * the global hash configuration.
+ *
+ * Return: union of all active LAGs' hash field bitmasks.
+ */
+static u8 mxl862xx_lag_recompute_hash(struct dsa_switch *ds)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	u8 hash = 0;
+	int port;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		if (priv->ports[port].lag)
+			hash |= priv->ports[port].lag_hash_bits;
+	}
+
+	return hash;
+}
+
+/**
+ * mxl862xx_lag_build_pmapper - Fill P-mapper with round-robin LAG distribution
+ * @ds: DSA switch
+ * @lag: LAG group
+ * @pm: P-mapper struct to fill (entries 9..72)
+ *
+ * Only ports with lag_tx_enabled are included.  Falls back to the
+ * master port if no members are active.
+ */
+static void mxl862xx_lag_build_pmapper(struct dsa_switch *ds,
+				       const struct dsa_lag *lag,
+				       struct mxl862xx_pmapper *pm)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	int active_ports[MXL862XX_MAX_PORTS];
+	int n_active = 0;
+	struct dsa_port *dp;
+	int i;
+
+	dsa_lag_foreach_port(dp, ds->dst, lag) {
+		if (dp->ds != ds)
+			continue;
+		if (priv->ports[dp->index].lag_tx_enabled)
+			active_ports[n_active++] = dp->index;
+	}
+
+	/* Fallback: if no members are active, use the master port */
+	if (!n_active) {
+		int master = mxl862xx_lag_master_port(ds, lag);
+
+		if (master >= 0) {
+			active_ports[0] = master;
+			n_active = 1;
+		}
+	}
+
+	if (!n_active)
+		return;
+
+	for (i = 0; i < MXL862XX_PMAPPER_LAG_COUNT; i++) {
+		int port = active_ports[i % n_active];
+
+		pm->dest_sub_if_id_group[MXL862XX_PMAPPER_LAG_FIRST + i] =
+			(port << 4) & 0xff;
+	}
+}
+
+/**
+ * mxl862xx_lag_redirect_ctp - Redirect a port's CTP to the LAG master
+ * @priv: driver private data
+ * @port: port whose CTP to redirect
+ * @master_port: LAG master port index
+ */
+static int mxl862xx_lag_redirect_ctp(struct mxl862xx_priv *priv,
+				     int port, int master_port)
+{
+	struct mxl862xx_ctp_port_config ctp = {};
+
+	ctp.logical_port_id = port;
+	ctp.mask = cpu_to_le32(MXL862XX_CTP_PORT_CONFIG_MASK_BRIDGE_PORT_ID);
+	ctp.bridge_port_id = cpu_to_le16(master_port);
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_CTP_PORTCONFIGSET, ctp);
+}
+
+/**
+ * mxl862xx_lag_restore_ctp - Restore a port's CTP to point to itself
+ * @priv: driver private data
+ * @port: port whose CTP to restore
+ */
+static int mxl862xx_lag_restore_ctp(struct mxl862xx_priv *priv, int port)
+{
+	return mxl862xx_lag_redirect_ctp(priv, port, port);
+}
+
+/**
+ * mxl862xx_lag_disable_pmapper - Disable P-mapper on a bridge port
+ * @ds: DSA switch
+ * @bp_id: firmware bridge port ID to reconfigure
+ */
+static int mxl862xx_lag_disable_pmapper(struct dsa_switch *ds, u16 bp_id)
+{
+	struct mxl862xx_bridge_port_config bp_cfg = {};
+	struct mxl862xx_priv *priv = ds->priv;
+
+	bp_cfg.bridge_port_id = cpu_to_le16(bp_id);
+	bp_cfg.mask = cpu_to_le32(
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_CTP_MAPPING);
+	bp_cfg.dest_logical_port_id = bp_id;
+	bp_cfg.pmapper_enable = 0;
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, bp_cfg);
+}
+
+/**
+ * mxl862xx_lag_sync - Synchronize LAG hardware state for a LAG group
+ * @ds: DSA switch
+ * @lag: LAG group to synchronize
+ *
+ * Finds the master (lowest-numbered member), redirects all member CTPs
+ * to the LAG's dedicated firmware bridge port, configures the P-mapper
+ * for hash distribution, and pushes the master's full bridge port
+ * configuration (EVLAN, VF, portmap, learning) to the LAG bridge port.
+ */
+static int mxl862xx_lag_sync(struct dsa_switch *ds, const struct dsa_lag *lag)
+{
+	struct mxl862xx_bridge_port_config bp_cfg = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_pmapper pm = {};
+	struct dsa_port *dp;
+	int master, ret;
+	u16 lag_bp;
+
+	lag_bp = priv->lag_bridge_ports[lag->id];
+	if (!lag_bp)
+		return -ENOENT;
+
+	master = mxl862xx_lag_master_port(ds, lag);
+	if (master < 0)
+		return master;
+
+	/* Redirect all member CTPs to the LAG bridge port */
+	dsa_lag_foreach_port(dp, ds->dst, lag) {
+		if (dp->ds != ds)
+			continue;
+		ret = mxl862xx_lag_redirect_ctp(priv, dp->index, lag_bp);
+		if (ret)
+			return ret;
+	}
+
+	/* Push the master's full config to the LAG bridge port so it
+	 * inherits the current bridge_id, EVLAN/VF blocks, portmap,
+	 * learning and flood settings.
+	 */
+	ret = __mxl862xx_set_bridge_port(ds, master, lag_bp);
+	if (ret)
+		return ret;
+
+	/* Build P-mapper with active members */
+	mxl862xx_lag_build_pmapper(ds, lag, &pm);
+
+	/* Enable P-mapper in LAG mode on the LAG bridge port */
+	bp_cfg.bridge_port_id = cpu_to_le16(lag_bp);
+	bp_cfg.mask = cpu_to_le32(
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_CTP_MAPPING);
+	bp_cfg.dest_logical_port_id = master;
+	bp_cfg.pmapper_enable = 1;
+	bp_cfg.pmapper_mapping_mode =
+		cpu_to_le32(MXL862XX_PMAPPER_MAPPING_LAG);
+	bp_cfg.pmapper = pm;
+
+	return MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, bp_cfg);
+}
+
+static int mxl862xx_port_lag_join(struct dsa_switch *ds, int port,
+				  struct dsa_lag lag,
+				  struct netdev_lag_upper_info *info,
+				  struct netlink_ext_ack *extack)
+{
+	struct mxl862xx_bridge_port_alloc bp_alloc = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	int hash_bits;
+	u8 new_hash;
+	int ret;
+
+	if (dsa_is_cpu_port(ds, port)) {
+		NL_SET_ERR_MSG_MOD(extack, "CPU port LAG not supported");
+		return -EOPNOTSUPP;
+	}
+
+	if (info->tx_type != NETDEV_LAG_TX_TYPE_HASH &&
+	    info->tx_type != NETDEV_LAG_TX_TYPE_ACTIVEBACKUP) {
+		NL_SET_ERR_MSG_MOD(extack, "Only hash and active-backup LAG modes supported");
+		return -EOPNOTSUPP;
+	}
+
+	hash_bits = mxl862xx_lag_hash_bits(info);
+	if (hash_bits < 0) {
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported LAG hash mode");
+		return hash_bits;
+	}
+
+	/* Allocate a dedicated firmware bridge port for this LAG on
+	 * first member join.  This bridge port is stable for the
+	 * LAG's lifetime -- all CTP redirections, FDB and MDB entries
+	 * target it, so no migration is needed on membership changes.
+	 */
+	if (!priv->lag_bridge_ports[lag.id]) {
+		ret = MXL862XX_API_READ(priv, MXL862XX_BRIDGEPORT_ALLOC,
+					bp_alloc);
+		if (ret) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Failed to allocate LAG bridge port");
+			return ret;
+		}
+		priv->lag_bridge_ports[lag.id] =
+			le16_to_cpu(bp_alloc.bridge_port_id);
+	}
+
+	priv->ports[port].lag = dp->lag;
+	priv->ports[port].lag_tx_enabled = dp->lag_tx_enabled;
+	priv->ports[port].lag_hash_bits = hash_bits;
+
+	/* Widen global hash to include this LAG's requirements */
+	new_hash = priv->trunk_hash | hash_bits;
+	ret = mxl862xx_lag_set_hash(priv, new_hash);
+	if (ret)
+		goto err_undo;
+
+	ret = mxl862xx_lag_sync(ds, dp->lag);
+	if (ret)
+		goto err_undo;
+
+	return 0;
+
+err_undo:
+	priv->ports[port].lag = NULL;
+	priv->ports[port].lag_tx_enabled = false;
+	priv->ports[port].lag_hash_bits = 0;
+	return ret;
+}
+
+static int mxl862xx_port_lag_leave(struct dsa_switch *ds, int port,
+				   struct dsa_lag lag)
+{
+	struct mxl862xx_bridge_port_alloc bp_alloc = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	u8 new_hash;
+	int ret;
+
+	/* Restore this port's CTP to point to itself */
+	ret = mxl862xx_lag_restore_ctp(priv, port);
+	if (ret)
+		dev_err(ds->dev, "failed to restore CTP for port %d: %pe\n",
+			port, ERR_PTR(ret));
+
+	priv->ports[port].lag = NULL;
+	priv->ports[port].lag_tx_enabled = false;
+	priv->ports[port].lag_hash_bits = 0;
+
+	/* If other members remain, re-sync the LAG */
+	if (mxl862xx_lag_master_port(ds, &lag) >= 0) {
+		ret = mxl862xx_lag_sync(ds, &lag);
+		if (ret)
+			dev_err(ds->dev,
+				"failed to re-sync LAG after port %d left: %pe\n",
+				port, ERR_PTR(ret));
+	} else if (priv->lag_bridge_ports[lag.id]) {
+		/* Last member left -- disable P-mapper and free the
+		 * LAG's dedicated bridge port.
+		 */
+		ret = mxl862xx_lag_disable_pmapper(ds,
+						   priv->lag_bridge_ports[lag.id]);
+		if (ret)
+			dev_err(ds->dev,
+				"failed to disable P-mapper on LAG bridge port %u: %pe\n",
+				priv->lag_bridge_ports[lag.id], ERR_PTR(ret));
+
+		bp_alloc.bridge_port_id =
+			cpu_to_le16(priv->lag_bridge_ports[lag.id]);
+		ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_FREE,
+					 bp_alloc);
+		if (ret)
+			dev_err(ds->dev,
+				"failed to free LAG bridge port %u: %pe\n",
+				priv->lag_bridge_ports[lag.id], ERR_PTR(ret));
+
+		priv->lag_bridge_ports[lag.id] = 0;
+	}
+
+	/* Recompute global hash from remaining LAGs */
+	new_hash = mxl862xx_lag_recompute_hash(ds);
+	ret = mxl862xx_lag_set_hash(priv, new_hash);
+	if (ret)
+		dev_err(ds->dev, "failed to update trunk hash: %pe\n",
+			ERR_PTR(ret));
+
+	return 0;
+}
+
+static int mxl862xx_port_lag_change(struct dsa_switch *ds, int port)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct dsa_port *dp = dsa_to_port(ds, port);
+
+	if (!priv->ports[port].lag)
+		return 0;
+
+	priv->ports[port].lag_tx_enabled = dp->lag_tx_enabled;
+
+	return mxl862xx_lag_sync(ds, priv->ports[port].lag);
+}
+
 static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port,
 				     struct dsa_bridge bridge,
 				     bool *tx_fwd_offload,
@@ -1977,7 +2470,18 @@ static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port,
 		priv->bridges[bridge.num] = fw_id;
 	}
 
-	return mxl862xx_sync_bridge_members(ds, &bridge);
+	ret = mxl862xx_sync_bridge_members(ds, &bridge);
+	if (ret)
+		return ret;
+
+	/* If this port is in a LAG, re-sync the LAG bridge port so it
+	 * picks up the new bridge_id (switching from standalone FID to
+	 * the shared bridge FID).
+	 */
+	if (priv->ports[port].lag)
+		ret = mxl862xx_lag_sync(ds, priv->ports[port].lag);
+
+	return ret;
 }
 
 static void mxl862xx_port_bridge_leave(struct dsa_switch *ds, int port,
@@ -2035,6 +2539,17 @@ static void mxl862xx_port_bridge_leave(struct dsa_switch *ds, int port,
 		dev_err(ds->dev,
 			"failed to update CPU VBP for port %d: %pe\n", port,
 			ERR_PTR(err));
+
+	/* If this port is in a LAG, re-sync the LAG bridge port so it
+	 * reverts to the standalone FID.
+	 */
+	if (p->lag) {
+		err = mxl862xx_lag_sync(ds, p->lag);
+		if (err)
+			dev_err(ds->dev,
+				"failed to re-sync LAG after port %d left bridge: %pe\n",
+				port, ERR_PTR(err));
+	}
 
 	if (!dsa_bridge_ports(ds, bridge.dev))
 		mxl862xx_free_bridge(ds, &bridge);
@@ -2689,18 +3204,17 @@ static int mxl862xx_get_fid(struct dsa_switch *ds, struct dsa_db db)
 }
 
 /**
- * mxl862xx_fdb_bridge_port - Translate port for MAC table in tag_8021q mode
+ * mxl862xx_fdb_bridge_port - Translate port to effective bridge port ID
  * @ds: DSA switch
  * @port: port number passed by DSA (usually the CPU port for host entries)
  * @db: database context identifying the user port or bridge
  *
- * In tag_8021q mode, host FDB/MDB entries for standalone ports must use
- * the virtual bridge port (bridge_port_cpu) as the MAC table destination
- * so that known-unicast and known-multicast frames exit through the
- * virtual bridge port's egress EVLAN, which inserts the management VID.
- * Without this, the firmware forwards known traffic directly to the
- * physical CPU bridge port, bypassing management VID insertion, and DSA
- * drops the untagged frame.
+ * Returns the firmware bridge port ID that should be used for MAC table
+ * entries targeting @port:
+ *  - CPU port in tag_8021q standalone mode: the virtual bridge port
+ *    (bridge_port_cpu) so known traffic exits through egress EVLAN
+ *  - User port in a LAG: the LAG's dedicated firmware bridge port
+ *  - Otherwise: the port index itself
  */
 static int mxl862xx_fdb_bridge_port(struct dsa_switch *ds, int port,
 				    struct dsa_db db)
@@ -2715,7 +3229,7 @@ static int mxl862xx_fdb_bridge_port(struct dsa_switch *ds, int port,
 			return bp_cpu;
 	}
 
-	return port;
+	return mxl862xx_lag_bridge_port(priv, port);
 }
 
 /**
@@ -2957,11 +3471,43 @@ static int mxl862xx_port_fdb_del(struct dsa_switch *ds, int port,
 	return ret;
 }
 
+static int mxl862xx_lag_fdb_add(struct dsa_switch *ds, struct dsa_lag lag,
+				const unsigned char *addr, u16 vid,
+				struct dsa_db db)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	u16 lag_bp = priv->lag_bridge_ports[lag.id];
+	int fid;
+
+	if (!lag_bp)
+		return -ENOENT;
+
+	fid = mxl862xx_get_fid(ds, db);
+	if (fid < 0)
+		return fid;
+
+	return mxl862xx_fdb_add_per_fid(ds, addr, vid, fid, lag_bp);
+}
+
+static int mxl862xx_lag_fdb_del(struct dsa_switch *ds, struct dsa_lag lag,
+				const unsigned char *addr, u16 vid,
+				struct dsa_db db)
+{
+	int fid;
+
+	fid = mxl862xx_get_fid(ds, db);
+	if (fid < 0)
+		return fid;
+
+	return mxl862xx_fdb_del_per_fid(ds, addr, vid, fid);
+}
+
 static int mxl862xx_port_fdb_dump(struct dsa_switch *ds, int port,
 				  dsa_fdb_dump_cb_t *cb, void *data)
 {
 	struct mxl862xx_mac_table_read param = {};
 	struct mxl862xx_priv *priv = ds->priv;
+	u16 lag_bp = mxl862xx_lag_bridge_port(priv, port);
 	u32 entry_port_id;
 	int ret;
 
@@ -2975,7 +3521,7 @@ static int mxl862xx_port_fdb_dump(struct dsa_switch *ds, int port,
 
 		entry_port_id = le32_to_cpu(param.port_id);
 
-		if (entry_port_id == port) {
+		if (entry_port_id == port || entry_port_id == lag_bp) {
 			ret = cb(param.mac, FIELD_GET(MXL862XX_TCI_VLAN_ID,
 						      le16_to_cpu(param.tci)),
 				 param.static_entry, data);
@@ -3753,6 +4299,11 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.port_fdb_dump = mxl862xx_port_fdb_dump,
 	.port_mdb_add = mxl862xx_port_mdb_add,
 	.port_mdb_del = mxl862xx_port_mdb_del,
+	.port_lag_join = mxl862xx_port_lag_join,
+	.port_lag_leave = mxl862xx_port_lag_leave,
+	.port_lag_change = mxl862xx_port_lag_change,
+	.lag_fdb_add = mxl862xx_lag_fdb_add,
+	.lag_fdb_del = mxl862xx_lag_fdb_del,
 	.port_vlan_filtering = mxl862xx_port_vlan_filtering,
 	.port_vlan_add = mxl862xx_port_vlan_add,
 	.port_vlan_del = mxl862xx_port_vlan_del,
@@ -4128,6 +4679,7 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	ds->num_ports = MXL862XX_MAX_PORTS;
 	ds->fdb_isolation = true;
 	ds->max_num_bridges = MXL862XX_MAX_BRIDGES;
+	ds->num_lag_ids = MXL862XX_MAX_LAG_IDS;
 
 	mxl862xx_host_init(priv);
 

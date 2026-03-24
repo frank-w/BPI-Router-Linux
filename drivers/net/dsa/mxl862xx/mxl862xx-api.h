@@ -564,6 +564,28 @@ struct mxl862xx_pmapper {
 } __packed;
 
 /**
+ * struct mxl862xx_trunking_cfg - LAG hash algorithm configuration
+ * @ip_src:   Include source IP address in trunk hash (1 = include)
+ * @ip_dst:   Include destination IP address in trunk hash
+ * @mac_src:  Include source MAC address in trunk hash
+ * @mac_dst:  Include destination MAC address in trunk hash
+ * @src_port: Include TCP/UDP source port in trunk hash
+ * @dst_port: Include TCP/UDP destination port in trunk hash
+ *
+ * The firmware inverts the boolean sense when writing the hardware
+ * register (PCE_TRUNK_CONF): bit=0 means include, bit=1 means exclude.
+ * This struct uses the logical sense (1 = include).
+ */
+struct mxl862xx_trunking_cfg {
+	u8 ip_src;
+	u8 ip_dst;
+	u8 mac_src;
+	u8 mac_dst;
+	u8 src_port;
+	u8 dst_port;
+} __packed;
+
+/**
  * struct mxl862xx_bridge_port_config - Bridge Port Configuration
  * @bridge_port_id: Bridge Port ID allocated by bridge port allocation
  * @mask: See &enum mxl862xx_bridge_port_config_mask
