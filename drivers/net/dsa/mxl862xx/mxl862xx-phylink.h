@@ -11,6 +11,9 @@
 	(((port) - MXL862XX_FIRST_SERDES_PORT) % MXL862XX_SERDES_SLOTS)
 #define MXL862XX_SERDES_PORT_ID(port) \
 	(((port) - MXL862XX_FIRST_SERDES_PORT) / MXL862XX_SERDES_SLOTS)
+#define MXL862XX_PCS_PORT(mpcs) \
+	(MXL862XX_FIRST_SERDES_PORT + \
+	(mpcs)->serdes_id * MXL862XX_SERDES_SLOTS + (mpcs)->slot)
 
 extern const struct phylink_mac_ops mxl862xx_phylink_mac_ops;
 void mxl862xx_phylink_get_caps(struct dsa_switch *ds, int port,
