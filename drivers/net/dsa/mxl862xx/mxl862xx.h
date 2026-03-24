@@ -3,6 +3,7 @@
 #ifndef __MXL862XX_H
 #define __MXL862XX_H
 
+#include <asm/byteorder.h>
 #include <linux/mdio.h>
 #include <linux/workqueue.h>
 #include <net/dsa.h>
@@ -241,6 +242,38 @@ struct mxl862xx_port {
 	spinlock_t stats_lock; /* protects stats accumulators */
 };
 
+/**
+ * union mxl862xx_fw_version - firmware version for comparison and display
+ * @major: firmware major version
+ * @minor: firmware minor version
+ * @revision: firmware revision number
+ * @raw: combined u32 for direct >= comparison (major most significant)
+ *
+ * The struct layout places major in the most-significant byte of the
+ * u32 on both big- and little-endian machines, so raw values compare
+ * with the natural major > minor > revision ordering.
+ */
+union mxl862xx_fw_version {
+	struct {
+#if defined(__BIG_ENDIAN)
+		u8 major;
+		u8 minor;
+		u16 revision;
+#elif defined(__LITTLE_ENDIAN)
+		u16 revision;
+		u8 minor;
+		u8 major;
+#endif
+	};
+	u32 raw;
+};
+
+#define MXL862XX_FW_VER(maj, min, rev) \
+	((union mxl862xx_fw_version){ .major = (maj), .minor = (min), \
+				      .revision = (rev) }).raw
+#define MXL862XX_FW_VER_MIN(priv, maj, min, rev) \
+	((priv)->fw_version.raw >= MXL862XX_FW_VER(maj, min, rev))
+
 /* Bit indices for struct mxl862xx_priv::flags */
 #define MXL862XX_FLAG_CRC_ERR		0
 #define MXL862XX_FLAG_WORK_STOPPED	1
@@ -258,6 +291,8 @@ struct mxl862xx_port {
  * @drop_meter:         index of the single shared zero-rate firmware meter
  *                      used to unconditionally drop traffic (used to block
  *                      flooding)
+ * @fw_version:         cached firmware version, populated at probe and
+ *                      compared with MXL862XX_FW_VER_MIN()
  * @ports:              per-port state, indexed by switch port number
  * @bridges:            maps DSA bridge number to firmware bridge ID;
  *                      zero means no firmware bridge allocated for that
@@ -275,6 +310,7 @@ struct mxl862xx_priv {
 	struct work_struct crc_err_work;
 	unsigned long flags;
 	u16 drop_meter;
+	union mxl862xx_fw_version fw_version;
 	struct mxl862xx_port ports[MXL862XX_MAX_PORTS];
 	u16 bridges[MXL862XX_MAX_BRIDGES + 1];
 	u16 evlan_ingress_size;
