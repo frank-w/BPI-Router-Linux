@@ -25,6 +25,19 @@ struct mxl862xx_priv;
 #define MXL862XX_MAX_BRIDGE_PORTS	128
 #define MXL862XX_TOTAL_EVLAN_ENTRIES	1024
 #define MXL862XX_TOTAL_VF_ENTRIES	1024
+#define MXL862XX_MAX_LAG_IDS		16
+
+/* Trunk hash field bitmask (matches PCE_TRUNK_CONF layout) */
+#define MXL862XX_TRUNK_HASH_SA		BIT(0)
+#define MXL862XX_TRUNK_HASH_DA		BIT(1)
+#define MXL862XX_TRUNK_HASH_SIP	BIT(2)
+#define MXL862XX_TRUNK_HASH_DIP	BIT(3)
+#define MXL862XX_TRUNK_HASH_SPORT	BIT(4)
+#define MXL862XX_TRUNK_HASH_DPORT	BIT(5)
+
+/* P-mapper LAG entries occupy indices 9..72 (64 entries) */
+#define MXL862XX_PMAPPER_LAG_FIRST	9
+#define MXL862XX_PMAPPER_LAG_COUNT	64
 
 /* Number of __le16 words in a firmware portmap (128-bit bitmap). */
 #define MXL862XX_FW_PORTMAP_WORDS	(MXL862XX_MAX_BRIDGE_PORTS / 16)
@@ -236,6 +249,12 @@ struct mxl862xx_port_stats {
  * @stats_lock:          protects accumulator reads in .get_stats64 against
  *                       concurrent updates from the polling work
  * @tag_8021q_vid:       currently assigned tag_8021q management VID
+ * @lag:                 non-NULL when port is member of a LAG group;
+ *                       points to the DSA LAG structure
+ * @lag_tx_enabled:      true when this port is active for TX in its LAG
+ * @lag_hash_bits:       hash field bitmask (MXL862XX_TRUNK_HASH_*) requested
+ *                       when this port joined its LAG; used to recompute the
+ *                       global trunk_hash when a LAG is destroyed
  */
 struct mxl862xx_port {
 	struct mxl862xx_priv *priv;
@@ -255,6 +274,9 @@ struct mxl862xx_port {
 	struct work_struct host_flood_work;
 	u16 tag_8021q_vid;
 	struct mxl862xx_evlan_block cpu_egress_evlan;
+	struct dsa_lag *lag;
+	bool lag_tx_enabled;
+	u8 lag_hash_bits;
 	struct mxl862xx_port_stats stats;
 	spinlock_t stats_lock; /* protects stats accumulators */
 };
@@ -362,6 +384,15 @@ struct mxl862xx_fw_version {
  *                      policy. Set once in setup() and referenced by
  *                      fill_cpu_trap_action() via bFidEnable. The PCE FID
  *                      action field is 6 bits, so this value must be <= 63.
+ * @lag_bridge_ports:   maps DSA LAG ID to firmware bridge port ID;
+ *                      zero means no bridge port allocated for that LAG.
+ *                      Indexed by lag->id (entry 0 is unused).
+ *                      The bridge port is stable for the LAG's lifetime
+ *                      so FDB/MDB entries never need migration on
+ *                      membership changes.
+ * @trunk_hash:         current global hash field bitmask (6 bits,
+ *                      MXL862XX_TRUNK_HASH_*); union of all active LAGs'
+ *                      hash requirements
  * @stats_work:         periodic work item that polls RMON hardware counters
  *                      and accumulates them into 64-bit per-port stats
  */
@@ -392,6 +423,8 @@ struct mxl862xx_priv {
 	bool rescue_failed;
 	struct mutex heal_lock;
 	u16 cpu_trap_fid;
+	u16 lag_bridge_ports[MXL862XX_MAX_LAG_IDS + 1];
+	u8 trunk_hash;
 	struct delayed_work stats_work;
 };
 
