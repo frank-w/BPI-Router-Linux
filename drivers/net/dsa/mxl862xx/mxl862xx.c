@@ -23,6 +23,7 @@
 #include "mxl862xx.h"
 #include "mxl862xx-api.h"
 #include "mxl862xx-cmd.h"
+#include "mxl862xx-fw.h"
 #include "mxl862xx-host.h"
 #include "mxl862xx-phylink.h"
 
@@ -4280,6 +4281,9 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_rmon_stats = mxl862xx_get_rmon_stats,
 	.get_stats64 = mxl862xx_get_stats64,
 	.self_test = mxl862xx_serdes_self_test,
+	.devlink_info_get = mxl862xx_devlink_info_get,
+	.devlink_flash_update = mxl862xx_devlink_flash_update,
+
 };
 
 static int mxl862xx_probe(struct mdio_device *mdiodev)
