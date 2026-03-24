@@ -318,9 +318,11 @@ static int mxl862xx_wait_ready(struct dsa_switch *ds)
 			 ver.iv_major, ver.iv_minor,
 			 le16_to_cpu(ver.iv_revision),
 			 le32_to_cpu(ver.iv_build_num));
+
 		priv->fw_version.major = ver.iv_major;
 		priv->fw_version.minor = ver.iv_minor;
 		priv->fw_version.revision = le16_to_cpu(ver.iv_revision);
+
 		return 0;
 
 not_ready_yet:
@@ -447,6 +449,68 @@ static int mxl862xx_setup_drop_meter(struct dsa_switch *ds)
 	/* Zero EBS so the excess bucket starts empty (exceeded). */
 	reg.addr = cpu_to_le16(MXL862XX_TCM_EBS);
 	return MXL862XX_API_WRITE(priv, MXL862XX_COMMON_REGISTERMOD, reg);
+}
+
+
+/* Per-CTP offset used for the link-local trap rule.  Each port's CTP
+ * flow-table block is pre-allocated by the firmware during init (44
+ * entries per port on a 10-port SKU, of which offset 0 is reserved
+ * for flow-control marking).  Offset 1 is the first unused slot.
+ */
+#define MXL862XX_LINK_LOCAL_CTP_OFFSET		1
+
+/* Install a PCE rule that traps IEEE 802.1D link-local frames
+ * (01:80:c2:00:00:0x) to the CPU port for a single user port,
+ * preventing the hardware bridge from flooding them to other ports.
+ * The firmware does not install this rule by default because its own
+ * STP module is not used when DSA manages STP.
+ *
+ * The rule is written into the port's per-CTP flow table at offset 1.
+ * The firmware already allocates a 44-entry block for every CTP during
+ * init (8 entries exposed initially, expandable), so no dynamic
+ * allocation via PCERULEALLOC is needed.  Using region=CTP causes the
+ * firmware to translate the CTP-relative offset into an absolute
+ * hardware index.
+ *
+ * Cross-state is enabled so that link-local frames reach the CPU even
+ * when the bridge port is in BLOCKING or LEARNING state.
+ */
+static int mxl862xx_setup_link_local_trap(struct dsa_switch *ds, int port)
+{
+	DECLARE_BITMAP(portmap, MXL862XX_MAX_BRIDGE_PORTS);
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	struct mxl862xx_pce_rule rule = {};
+	int cpu_port = dp->cpu_dp->index;
+	int i;
+
+	/* Address this port's CTP flow-table block */
+	rule.logicalportid = port;
+	rule.subifidgroup = 0;
+	rule.region = cpu_to_le32(MXL862XX_PCE_RULE_CTP);
+
+	/* Pattern: link-local MAC on this specific ingress port */
+	rule.pattern.index = cpu_to_le16(MXL862XX_LINK_LOCAL_CTP_OFFSET);
+	rule.pattern.enable = 1;
+	rule.pattern.mac_dst_enable = 1;
+	memcpy(rule.pattern.mac_dst, eth_reserved_addr_base, ETH_ALEN);
+	rule.pattern.mac_dst_mask = cpu_to_le16(0x0001);
+
+	/* Action: forward to the CPU port via explicit portmap */
+	rule.action.port_map_action =
+		cpu_to_le32(MXL862XX_PCE_ACTION_PORTMAP_ALTERNATIVE);
+
+	bitmap_zero(portmap, MXL862XX_MAX_BRIDGE_PORTS);
+	__set_bit(cpu_port, portmap);
+	for (i = 0; i < ARRAY_SIZE(rule.action.forward_port_map); i++)
+		rule.action.forward_port_map[i] =
+			cpu_to_le16(bitmap_read(portmap, i * 16, 16));
+
+	/* Bypass STP port state */
+	rule.action.cross_state_action =
+		cpu_to_le32(MXL862XX_PCE_ACTION_CROSS_STATE_CROSS);
+
+	return MXL862XX_API_WRITE(ds->priv, MXL862XX_TFLOW_PCERULEWRITE,
+				  rule);
 }
 
 static int mxl862xx_set_bridge_port(struct dsa_switch *ds, int port)
@@ -1620,6 +1684,11 @@ static int mxl862xx_port_setup(struct dsa_switch *ds, int port)
 	if (ret)
 		return ret;
 
+	/* install link-local trap for this user port */
+	ret = mxl862xx_setup_link_local_trap(ds, port);
+	if (ret)
+		return ret;
+
 	/* Initialize and pre-allocate per-port EVLAN and VF blocks for
 	 * user ports. CPU ports do not use EVLAN or VF -- frames pass
 	 * through without processing. Pre-allocation avoids firmware
@@ -2612,7 +2681,7 @@ static int mxl862xx_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 
 	if (interface == PHY_INTERFACE_MODE_1000BASEX)
 		cfg.advertising = cpu_to_le16(linkmode_adv_to_mii_adv_x(advertising,
-								ETHTOOL_LINK_MODE_1000baseX_Full_BIT));
+							ETHTOOL_LINK_MODE_1000baseX_Full_BIT));
 
 	ret = MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PCS_CONFIG, cfg);
 	if (ret)
