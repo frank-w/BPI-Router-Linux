@@ -980,6 +980,10 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	if (ret)
 		goto free_trap_fid;
 
+	if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
+		dev_warn(ds->dev, "firmware < 1.0.80 installs global PCE rules "
+			 "that interfere with DSA operation, please update\n");
+
 	schedule_delayed_work(&priv->stats_work,
 			      MXL862XX_STATS_POLL_INTERVAL);
 
