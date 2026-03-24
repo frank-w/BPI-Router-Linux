@@ -1812,4 +1812,92 @@ struct mxl862xx_xpcs_reset_cfg {
 	__le16 result;
 } __packed;
 
+/**
+ * struct mxl862xx_xpcs_eq_item - single equalization parameter
+ * @value: current initial value
+ * @ovrd: override value
+ * @ovrd_en: override enable flag
+ */
+struct mxl862xx_xpcs_eq_item {
+	u8 value;
+	u8 ovrd;
+	u8 ovrd_en;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_tx_eq_info - TX equalization status
+ * @main: TX main cursor (0-63)
+ * @pre: TX pre-cursor (0-63)
+ * @post: TX post-cursor (0-63)
+ * @iboost_lvl: TX iboost level (0-15)
+ * @vboost_lvl: TX vboost level (0-7)
+ * @vboost_en: TX vboost enable (0-1)
+ */
+struct mxl862xx_xpcs_tx_eq_info {
+	struct mxl862xx_xpcs_eq_item main;
+	struct mxl862xx_xpcs_eq_item pre;
+	struct mxl862xx_xpcs_eq_item post;
+	struct mxl862xx_xpcs_eq_item iboost_lvl;
+	struct mxl862xx_xpcs_eq_item vboost_lvl;
+	struct mxl862xx_xpcs_eq_item vboost_en;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_rx_eq_info - RX equalization status
+ * @att_lvl: RX attenuation level (0-7)
+ * @vga1_gain: RX VGA1 gain (0-7)
+ * @vga2_gain: RX VGA2 gain (0-7)
+ * @ctle_boost: RX CTLE boost (0-31)
+ * @ctle_pole: RX CTLE pole (0-3)
+ * @dfe_tap1: RX DFE tap1 (0-255)
+ * @dfe_bypass: RX DFE bypass (0-1)
+ * @adapt_mode: RX adapt mode (0-3)
+ * @adapt_sel: RX adapt select (0-1)
+ */
+struct mxl862xx_xpcs_rx_eq_info {
+	struct mxl862xx_xpcs_eq_item att_lvl;
+	struct mxl862xx_xpcs_eq_item vga1_gain;
+	struct mxl862xx_xpcs_eq_item vga2_gain;
+	struct mxl862xx_xpcs_eq_item ctle_boost;
+	struct mxl862xx_xpcs_eq_item ctle_pole;
+	struct mxl862xx_xpcs_eq_item dfe_tap1;
+	struct mxl862xx_xpcs_eq_item dfe_bypass;
+	struct mxl862xx_xpcs_eq_item adapt_mode;
+	struct mxl862xx_xpcs_eq_item adapt_sel;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_eq_get - EQ get request/response
+ * @port_id: XPCS port index (0 or 1)
+ * @result: firmware result
+ * @tx: TX equalization info
+ * @rx: RX equalization info
+ */
+struct mxl862xx_xpcs_eq_get {
+	u8 port_id;
+	__le16 result;
+	struct mxl862xx_xpcs_tx_eq_info tx;
+	struct mxl862xx_xpcs_rx_eq_info rx;
+} __packed;
+
+/**
+ * struct mxl862xx_xpcs_signal_detect - signal detect status
+ * @port_id: XPCS port index (0 or 1)
+ * @rx_signal: RX signal detected
+ * @pma_link: PMA link up
+ * @link_fault: PCS link fault
+ * @in_reset: XPCS in reset
+ * @result: firmware result
+ */
+struct mxl862xx_xpcs_signal_detect {
+	u8 port_id:2;
+	u8 rx_signal:1;
+	u8 pma_link:1;
+	u8 link_fault:1;
+	u8 in_reset:1;
+	u8 __rsv:2;
+	u8 __pad;
+	__le16 result;
+} __packed;
+
 #endif /* __MXL862XX_API_H */
