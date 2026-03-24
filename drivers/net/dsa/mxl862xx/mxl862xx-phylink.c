@@ -549,3 +549,88 @@ void mxl862xx_serdes_get_stats(struct dsa_switch *ds, int port, u64 *data)
 		data += 4;
 	}
 }
+
+void mxl862xx_serdes_self_test(struct dsa_switch *ds, int port,
+			struct ethtool_test *etest, u64 *data)
+{
+	struct mxl862xx_xpcs_prbs_cfg prbs = {};
+	struct mxl862xx_xpcs_bert_cfg bert = {};
+	struct mxl862xx_priv *priv = ds->priv;
+	int xpcs_id = mxl862xx_xpcs_port_id(port);
+	int i = 0;
+	int ret;
+
+	if (!mxl862xx_port_has_serdes_stats(ds, port))
+		return;
+
+	/* Test 1: PCS PRBS31 */
+	prbs.port_id = xpcs_id;
+	prbs.tx_en = 1;
+	prbs.rx_en = 1;
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PRBS_CFG, prbs);
+	if (ret) {
+		data[i++] = 1;
+		goto skip_prbs;
+	}
+
+	msleep(100);
+
+	memset(&prbs, 0, sizeof(prbs));
+	prbs.port_id = xpcs_id;
+	prbs.read_err = 1;
+	ret = MXL862XX_API_READ(priv, MXL862XX_XPCS_PRBS_CFG, prbs);
+
+	/* Disable PRBS */
+	memset(&prbs, 0, sizeof(prbs));
+	prbs.port_id = xpcs_id;
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PRBS_CFG, prbs);
+
+	if (ret) {
+		data[i++] = 1;
+	} else {
+		data[i] = le16_to_cpu(prbs.rx_err_cnt) ? 1 : 0;
+		if (data[i])
+			etest->flags |= ETH_TEST_FL_FAILED;
+		i++;
+	}
+
+skip_prbs:
+	/* Test 2: SerDes BERT PRBS31 -- clear error counter first */
+	bert.port_id = xpcs_id;
+	bert.clear_err = 1;
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_BERT_CFG, bert);
+
+	/* Enable BERT with PRBS31 pattern */
+	memset(&bert, 0, sizeof(bert));
+	bert.port_id = xpcs_id;
+	bert.tx_en = 1;
+	bert.rx_en = 1;
+	bert.pattern = 6; /* PRBS31 */
+	ret = MXL862XX_API_WRITE(priv, MXL862XX_XPCS_BERT_CFG, bert);
+	if (ret) {
+		data[i++] = 1;
+		return;
+	}
+
+	msleep(100);
+
+	/* Read error count */
+	memset(&bert, 0, sizeof(bert));
+	bert.port_id = xpcs_id;
+	bert.read_err = 1;
+	ret = MXL862XX_API_READ(priv, MXL862XX_XPCS_BERT_CFG, bert);
+
+	/* Disable BERT */
+	memset(&bert, 0, sizeof(bert));
+	bert.port_id = xpcs_id;
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_BERT_CFG, bert);
+
+	if (ret) {
+		data[i++] = 1;
+	} else {
+		data[i] = le16_to_cpu(bert.rx_err_cnt) ? 1 : 0;
+		if (data[i])
+			etest->flags |= ETH_TEST_FL_FAILED;
+		i++;
+	}
+}
