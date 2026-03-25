@@ -819,6 +819,8 @@ static int __mxl862xx_set_bridge_port(struct dsa_switch *ds, int port,
 				continue;
 			if (!mxl862xx_is_lag_master(priv, member_dp->index))
 				continue;
+			if (p->isolated && priv->ports[member_dp->index].isolated)
+				continue;
 			mxl862xx_fw_portmap_set_bit(
 				br_port_cfg.bridge_port_map,
 				mxl862xx_lag_bridge_port(priv,
@@ -4056,7 +4058,7 @@ static int mxl862xx_port_pre_bridge_flags(struct dsa_switch *ds, int port,
 					  struct netlink_ext_ack *extack)
 {
 	if (flags.mask & ~(BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD |
-			   BR_LEARNING | BR_HAIRPIN_MODE))
+			   BR_LEARNING | BR_HAIRPIN_MODE | BR_ISOLATED))
 		return -EINVAL;
 
 	return 0;
@@ -4069,6 +4071,7 @@ static int mxl862xx_port_bridge_flags(struct dsa_switch *ds, int port,
 	struct mxl862xx_priv *priv = ds->priv;
 	unsigned long old_block = priv->ports[port].flood_block;
 	unsigned long block = old_block;
+	struct dsa_port *dp;
 	int ret;
 
 	if (flags.mask & BR_FLOOD) {
@@ -4107,6 +4110,21 @@ static int mxl862xx_port_bridge_flags(struct dsa_switch *ds, int port,
 		ret = mxl862xx_set_bridge_port(ds, port);
 		if (ret)
 			return ret;
+	}
+
+	if (flags.mask & BR_ISOLATED) {
+		dp = dsa_to_port(ds, port);
+		priv->ports[port].isolated = !!(flags.val & BR_ISOLATED);
+
+		/* Isolation affects all bridge members' portmaps:
+		 * isolated ports must be removed from each other's
+		 * portmaps. Rebuild all portmaps for this bridge.
+		 */
+		if (dp->bridge) {
+			ret = mxl862xx_sync_bridge_members(ds, dp->bridge);
+			if (ret)
+				return ret;
+		}
 	}
 
 	return 0;
