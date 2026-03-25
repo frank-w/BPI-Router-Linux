@@ -257,11 +257,11 @@
 				};
 			};
 
-			port@13 {
+			/*port@13 {
 				reg = <13>;
 				label = "sfp-lan";
 				sfp = <&sfp1>;
-			};
+			};*/
 		};
 
 		mdio {
