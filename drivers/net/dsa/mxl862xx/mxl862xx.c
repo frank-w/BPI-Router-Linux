@@ -9,7 +9,6 @@
 
 #include <linux/module.h>
 #include <linux/delay.h>
-#include <linux/if_bridge.h>
 #include <linux/of_device.h>
 #include <linux/of_mdio.h>
 #include <linux/phy.h>
@@ -36,13 +35,6 @@
 
 #define MXL862XX_READY_TIMEOUT_MS	10000
 #define MXL862XX_READY_POLL_MS		100
-
-static const int mxl862xx_flood_meters[] = {
-	MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_UC,
-	MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_IP,
-	MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_NON_IP,
-	MXL862XX_BRIDGE_PORT_EGRESS_METER_BROADCAST,
-};
 
 static enum dsa_tag_protocol mxl862xx_get_tag_protocol(struct dsa_switch *ds,
 						       int port,
@@ -176,66 +168,6 @@ static int mxl862xx_setup_mdio(struct dsa_switch *ds)
 	return ret;
 }
 
-static int mxl862xx_bridge_config_fwd(struct dsa_switch *ds, u16 bridge_id,
-				      bool ucast_flood, bool mcast_flood,
-				      bool bcast_flood)
-{
-	struct mxl862xx_bridge_config bridge_config = { };
-	struct mxl862xx_priv *priv = ds->priv;
-	int ret;
-
-	bridge_config.mask = cpu_to_le32(MXL862XX_BRIDGE_CONFIG_MASK_FORWARDING_MODE);
-	bridge_config.bridge_id = cpu_to_le16(bridge_id);
-
-	bridge_config.forward_unknown_unicast = ucast_flood ?
-		MXL862XX_BRIDGE_FORWARD_FLOOD : MXL862XX_BRIDGE_FORWARD_DISCARD;
-
-	bridge_config.forward_unknown_multicast_ip = mcast_flood ?
-		MXL862XX_BRIDGE_FORWARD_FLOOD : MXL862XX_BRIDGE_FORWARD_DISCARD;
-	bridge_config.forward_unknown_multicast_non_ip =
-		bridge_config.forward_unknown_multicast_ip;
-
-	bridge_config.forward_broadcast = bcast_flood ?
-		MXL862XX_BRIDGE_FORWARD_FLOOD : MXL862XX_BRIDGE_FORWARD_DISCARD;
-
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_BRIDGE_CONFIGSET, bridge_config);
-	if (ret)
-		dev_err(ds->dev, "failed to configure bridge %u forwarding: %d\n",
-			bridge_id, ret);
-
-	return ret;
-}
-
-/* Allocate a single zero-rate meter shared by all ports and flood types.
- * All flood-blocking egress sub-meters point to this one meter so that
- * the single CBS=64 token bucket fills as quickly as possible, minimising
- * the one-packet leak inherent with the hardware minimum CBS.
- */
-static int mxl862xx_setup_drop_meter(struct dsa_switch *ds)
-{
-	struct mxl862xx_qos_meter_cfg meter = {};
-	struct mxl862xx_priv *priv = ds->priv;
-	int ret;
-
-	/* meter_id=0 means auto-alloc */
-	ret = MXL862XX_API_READ(priv, MXL862XX_QOS_METERALLOC, meter);
-	if (ret)
-		return ret;
-
-	meter.enable = true;
-	meter.cbs = cpu_to_le32(64);
-	meter.ebs = cpu_to_le32(64);
-	snprintf(meter.meter_name, sizeof(meter.meter_name), "drop");
-
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_QOS_METERCFGSET, meter);
-	if (ret)
-		return ret;
-
-	priv->drop_meter = le16_to_cpu(meter.meter_id);
-
-	return 0;
-}
-
 static int mxl862xx_setup(struct dsa_switch *ds)
 {
 	struct mxl862xx_priv *priv = ds->priv;
@@ -246,15 +178,6 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 		return ret;
 
 	ret = mxl862xx_wait_ready(ds);
-	if (ret)
-		return ret;
-
-	ret = mxl862xx_bridge_config_fwd(ds, MXL862XX_DEFAULT_BRIDGE,
-					 false, false, true);
-	if (ret < 0)
-		return ret;
-
-	ret = mxl862xx_setup_drop_meter(ds);
 	if (ret)
 		return ret;
 
@@ -335,235 +258,64 @@ static int mxl862xx_configure_sp_tag_proto(struct dsa_switch *ds, int port,
 	return MXL862XX_API_WRITE(ds->priv, MXL862XX_SS_SPTAG_SET, tag);
 }
 
-static int mxl862xx_set_bridge_port(struct dsa_switch *ds, int port)
+static int mxl862xx_setup_cpu_bridge(struct dsa_switch *ds, int port)
 {
 	struct mxl862xx_bridge_port_config br_port_cfg = {};
 	struct mxl862xx_priv *priv = ds->priv;
-	struct mxl862xx_port *p = &priv->ports[port];
-	u16 bridge_id = p->bridge ? p->bridge->bridge_id : p->fid;
-	bool enable;
-	int i, idx;
-
-	br_port_cfg.bridge_port_id = cpu_to_le16(port);
-	br_port_cfg.bridge_id = cpu_to_le16(bridge_id);
-	br_port_cfg.mask = cpu_to_le32(MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_ID |
-				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_PORT_MAP |
-				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING |
-				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_SUB_METER);
-	br_port_cfg.src_mac_learning_disable = !p->learning;
-
-	for (i = 0; i < ARRAY_SIZE(br_port_cfg.bridge_port_map); i++)
-		br_port_cfg.bridge_port_map[i] =
-			cpu_to_le16(bitmap_read(p->portmap, i * 16, 16));
-
-	for (i = 0; i < ARRAY_SIZE(mxl862xx_flood_meters); i++) {
-		idx = mxl862xx_flood_meters[i];
-		enable = !!(p->flood_block & BIT(idx));
-
-		br_port_cfg.egress_traffic_sub_meter_id[idx] =
-			enable ? cpu_to_le16(priv->drop_meter) : 0;
-		br_port_cfg.egress_sub_metering_enable[idx] = enable;
-	}
-
-	return MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET,
-				  br_port_cfg);
-}
-
-static int mxl862xx_setup_cpu_bridge(struct dsa_switch *ds, int port)
-{
-	struct mxl862xx_priv *priv = ds->priv;
+	u16 bridge_port_map = 0;
 	struct dsa_port *dp;
 
-	priv->ports[port].fid = MXL862XX_DEFAULT_BRIDGE;
-	priv->ports[port].learning = true;
+	/* CPU port bridge setup */
+	br_port_cfg.mask = cpu_to_le32(MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_PORT_MAP |
+				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING |
+				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_VLAN_BASED_MAC_LEARNING);
+
+	br_port_cfg.bridge_port_id = cpu_to_le16(port);
+	br_port_cfg.src_mac_learning_disable = false;
+	br_port_cfg.vlan_src_mac_vid_enable = true;
+	br_port_cfg.vlan_dst_mac_vid_enable = true;
 
 	/* include all assigned user ports in the CPU portmap */
-	bitmap_zero(priv->ports[port].portmap, MXL862XX_MAX_BRIDGE_PORTS);
 	dsa_switch_for_each_user_port(dp, ds) {
 		/* it's safe to rely on cpu_dp being valid for user ports */
 		if (dp->cpu_dp->index != port)
 			continue;
 
-		__set_bit(dp->index, priv->ports[port].portmap);
+		bridge_port_map |= BIT(dp->index);
 	}
+	br_port_cfg.bridge_port_map[0] |= cpu_to_le16(bridge_port_map);
 
-	return mxl862xx_set_bridge_port(ds, port);
+	return MXL862XX_API_WRITE(priv, MXL862XX_BRIDGEPORT_CONFIGSET, br_port_cfg);
 }
 
 static int mxl862xx_add_single_port_bridge(struct dsa_switch *ds, int port)
 {
+	struct mxl862xx_bridge_port_config br_port_cfg = {};
 	struct dsa_port *dp = dsa_to_port(ds, port);
 	struct mxl862xx_bridge_alloc br_alloc = {};
-	struct mxl862xx_priv *priv = ds->priv;
 	int ret;
 
-	ret = MXL862XX_API_READ(priv, MXL862XX_BRIDGE_ALLOC, br_alloc);
+	ret = MXL862XX_API_READ(ds->priv, MXL862XX_BRIDGE_ALLOC, br_alloc);
 	if (ret) {
 		dev_err(ds->dev, "failed to allocate a bridge for port %d\n", port);
 		return ret;
 	}
 
-	priv->ports[port].fid = le16_to_cpu(br_alloc.bridge_id);
-	priv->ports[port].learning = false;
-	bitmap_zero(priv->ports[port].portmap, MXL862XX_MAX_BRIDGE_PORTS);
-	__set_bit(dp->cpu_dp->index, priv->ports[port].portmap);
-
-	ret = mxl862xx_set_bridge_port(ds, port);
-	if (ret)
-		return ret;
-
-	/* Standalone ports should not flood unknown unicast or multicast
-	 * towards the CPU by default; only broadcast is needed initially.
+	br_port_cfg.bridge_id = br_alloc.bridge_id;
+	br_port_cfg.bridge_port_id = cpu_to_le16(port);
+	br_port_cfg.mask = cpu_to_le32(MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_ID |
+				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_PORT_MAP |
+				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_MC_SRC_MAC_LEARNING |
+				       MXL862XX_BRIDGE_PORT_CONFIG_MASK_VLAN_BASED_MAC_LEARNING);
+	br_port_cfg.src_mac_learning_disable = true;
+	br_port_cfg.vlan_src_mac_vid_enable = false;
+	br_port_cfg.vlan_dst_mac_vid_enable = false;
+	/* As this function is only called for user ports it is safe to rely on
+	 * cpu_dp being valid
 	 */
-	return mxl862xx_bridge_config_fwd(ds, priv->ports[port].fid,
-					 false, false, true);
-}
+	br_port_cfg.bridge_port_map[0] = cpu_to_le16(BIT(dp->cpu_dp->index));
 
-static struct mxl862xx_bridge *mxl862xx_allocate_bridge(struct dsa_switch *ds,
-							int num)
-{
-	struct mxl862xx_bridge_alloc br_alloc = {};
-	struct mxl862xx_priv *priv = ds->priv;
-	struct mxl862xx_bridge *mxlbridge;
-	int ret;
-
-	mxlbridge = kzalloc_obj(*mxlbridge);
-	if (!mxlbridge)
-		return ERR_PTR(-ENOMEM);
-
-	ret = MXL862XX_API_READ(priv, MXL862XX_BRIDGE_ALLOC, br_alloc);
-	if (ret) {
-		kfree(mxlbridge);
-		return ERR_PTR(ret);
-	}
-
-	mxlbridge->bridge_id = le16_to_cpu(br_alloc.bridge_id);
-	mxlbridge->dsa_bridge_num = num;
-
-	ret = mxl862xx_bridge_config_fwd(ds, mxlbridge->bridge_id,
-					 true, true, true);
-	if (ret) {
-		br_alloc.bridge_id = cpu_to_le16(mxlbridge->bridge_id);
-		MXL862XX_API_WRITE(priv, MXL862XX_BRIDGE_FREE, br_alloc);
-		kfree(mxlbridge);
-		return ERR_PTR(ret);
-	}
-
-	list_add(&mxlbridge->list, &priv->bridges);
-
-	return mxlbridge;
-}
-
-static void mxl862xx_free_bridge(struct dsa_switch *ds,
-				 struct mxl862xx_bridge *mxlbridge)
-{
-	struct mxl862xx_bridge_alloc br_alloc = {
-		.bridge_id = cpu_to_le16(mxlbridge->bridge_id),
-	};
-
-	MXL862XX_API_WRITE(ds->priv, MXL862XX_BRIDGE_FREE, br_alloc);
-	list_del(&mxlbridge->list);
-	kfree(mxlbridge);
-}
-
-static struct mxl862xx_bridge *mxl862xx_find_bridge(struct dsa_switch *ds,
-						    struct dsa_bridge bridge)
-{
-	struct mxl862xx_priv *priv = ds->priv;
-	struct mxl862xx_bridge *mxlbridge;
-
-	if (!bridge.num)
-		return NULL;
-
-	list_for_each_entry(mxlbridge, &priv->bridges, list) {
-		if (mxlbridge->dsa_bridge_num == bridge.num)
-			return mxlbridge;
-	}
-
-	return NULL;
-}
-
-static int mxl862xx_update_bridge(struct dsa_switch *ds,
-				  struct mxl862xx_bridge *mxlbridge,
-				  int port, bool join)
-{
-	struct mxl862xx_priv *priv = ds->priv;
-	struct dsa_port *dp;
-	int member, ret;
-
-	if (join) {
-		__set_bit(port, mxlbridge->portmap);
-		priv->ports[port].bridge = mxlbridge;
-	} else {
-		__clear_bit(port, mxlbridge->portmap);
-		priv->ports[port].bridge = NULL;
-	}
-
-	/* Update all current bridge members' portmaps */
-	for_each_set_bit(member, mxlbridge->portmap,
-			 MXL862XX_MAX_BRIDGE_PORTS) {
-		dp = dsa_to_port(ds, member);
-
-		/* Build portmap: CPU port + all bridge members except self */
-		bitmap_copy(priv->ports[member].portmap, mxlbridge->portmap,
-			    MXL862XX_MAX_BRIDGE_PORTS);
-		__clear_bit(member, priv->ports[member].portmap);
-		__set_bit(dp->cpu_dp->index, priv->ports[member].portmap);
-
-		priv->ports[member].learning = true;
-		ret = mxl862xx_set_bridge_port(ds, member);
-		if (ret)
-			return ret;
-	}
-
-	/* Revert leaving port to its single-port bridge */
-	if (!join) {
-		dp = dsa_to_port(ds, port);
-
-		bitmap_zero(priv->ports[port].portmap, MXL862XX_MAX_BRIDGE_PORTS);
-		__set_bit(dp->cpu_dp->index, priv->ports[port].portmap);
-		priv->ports[port].flood_block = 0;
-		priv->ports[port].learning = false;
-		ret = mxl862xx_set_bridge_port(ds, port);
-		if (ret)
-			return ret;
-
-		mxl862xx_port_fast_age(ds, port);
-	}
-
-	return 0;
-}
-
-static int mxl862xx_port_bridge_join(struct dsa_switch *ds, int port,
-				     struct dsa_bridge bridge,
-				     bool *tx_fwd_offload,
-				     struct netlink_ext_ack *extack)
-{
-	struct mxl862xx_bridge *mxlbridge;
-
-	mxlbridge = mxl862xx_find_bridge(ds, bridge);
-	if (!mxlbridge) {
-		mxlbridge = mxl862xx_allocate_bridge(ds, bridge.num);
-		if (IS_ERR(mxlbridge))
-			return PTR_ERR(mxlbridge);
-	}
-
-	return mxl862xx_update_bridge(ds, mxlbridge, port, true);
-}
-
-static void mxl862xx_port_bridge_leave(struct dsa_switch *ds, int port,
-				       struct dsa_bridge bridge)
-{
-	struct mxl862xx_bridge *mxlbridge;
-
-	mxlbridge = mxl862xx_find_bridge(ds, bridge);
-	if (!mxlbridge)
-		return;
-
-	mxl862xx_update_bridge(ds, mxlbridge, port, false);
-
-	if (bitmap_empty(mxlbridge->portmap, MXL862XX_MAX_BRIDGE_PORTS))
-		mxl862xx_free_bridge(ds, mxlbridge);
+	return MXL862XX_API_WRITE(ds->priv, MXL862XX_BRIDGEPORT_CONFIGSET, br_port_cfg);
 }
 
 static int mxl862xx_port_setup(struct dsa_switch *ds, int port)
@@ -613,264 +365,6 @@ static void mxl862xx_phylink_get_caps(struct dsa_switch *ds, int port,
 		  config->supported_interfaces);
 }
 
-static int mxl862xx_port_fdb_add(struct dsa_switch *ds, int port,
-				 const unsigned char *addr, u16 vid, struct dsa_db db)
-{
-	struct mxl862xx_mac_table_add param = { };
-	struct mxl862xx_priv *priv = ds->priv;
-	struct mxl862xx_bridge *mxlbridge;
-	u16 fid;
-	int ret;
-
-	switch (db.type) {
-	case DSA_DB_PORT:
-		fid = priv->ports[db.dp->index].fid;
-		break;
-
-	case DSA_DB_BRIDGE:
-		mxlbridge = mxl862xx_find_bridge(ds, db.bridge);
-		if (!mxlbridge)
-			return -ENOENT;
-		fid = mxlbridge->bridge_id;
-		break;
-
-	default:
-		return -EOPNOTSUPP;
-	}
-
-	param.port_id = cpu_to_le32(port);
-	param.fid = cpu_to_le16(fid);
-	param.static_entry = true;
-	param.tci = cpu_to_le16(vid & 0xFFF);
-	memcpy(param.mac, addr, ETH_ALEN);
-
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYADD, param);
-	if (ret)
-		dev_err(ds->dev, "failed to add FDB entry on port %d\n", port);
-
-	return ret;
-}
-
-static int mxl862xx_port_fdb_del(struct dsa_switch *ds, int port,
-				 const unsigned char *addr, u16 vid, struct dsa_db db)
-{
-	struct mxl862xx_mac_table_remove param = { };
-	struct mxl862xx_priv *priv = ds->priv;
-	struct mxl862xx_bridge *mxlbridge;
-	u16 fid;
-	int ret;
-
-	switch (db.type) {
-	case DSA_DB_PORT:
-		fid = priv->ports[db.dp->index].fid;
-		break;
-
-	case DSA_DB_BRIDGE:
-		/* Use multi-port bridge FID */
-		mxlbridge = mxl862xx_find_bridge(ds, db.bridge);
-		if (!mxlbridge)
-			return -ENOENT;
-		fid = mxlbridge->bridge_id;
-		break;
-
-	default:
-		return -EOPNOTSUPP;
-	}
-
-	param.fid = cpu_to_le16(fid);
-	param.tci = cpu_to_le16(vid & 0xFFF);
-	memcpy(param.mac, addr, ETH_ALEN);
-
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_MAC_TABLEENTRYREMOVE, param);
-	if (ret)
-		dev_err(ds->dev, "failed to remove FDB entry on port %d\n", port);
-
-	return ret;
-}
-
-static int mxl862xx_port_fdb_dump(struct dsa_switch *ds, int port,
-				  dsa_fdb_dump_cb_t *cb, void *data)
-{
-	struct mxl862xx_mac_table_read param = { };
-	struct mxl862xx_priv *priv = ds->priv;
-	u32 entry_port_id;
-	int ret;
-
-	while (true) {
-		ret = MXL862XX_API_READ(priv, MXL862XX_MAC_TABLEENTRYREAD, param);
-		if (ret)
-			return ret;
-
-		if (param.last)
-			break;
-
-		entry_port_id = le32_to_cpu(param.port_id);
-
-		if (entry_port_id == port)
-			cb(param.mac, param.tci & 0x0FFF,
-			   param.static_entry, data);
-
-		memset(&param, 0, sizeof(param));
-	}
-
-	return 0;
-}
-
-static int mxl862xx_port_mdb_add(struct dsa_switch *ds, int port,
-				 const struct switchdev_obj_port_mdb *mdb,
-				 struct dsa_db db)
-{
-	return mxl862xx_port_fdb_add(ds, port, mdb->addr, mdb->vid, db);
-}
-
-static int mxl862xx_port_mdb_del(struct dsa_switch *ds, int port,
-				 const struct switchdev_obj_port_mdb *mdb,
-				 struct dsa_db db)
-{
-	return mxl862xx_port_fdb_del(ds, port, mdb->addr, mdb->vid, db);
-}
-
-static int mxl862xx_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
-{
-	struct mxl862xx_cfg param;
-	int ret;
-
-	ret = MXL862XX_API_READ(ds->priv, MXL862XX_COMMON_CFGGET, param);
-	if (ret) {
-		dev_err(ds->dev, "failed to read switch config\n");
-		return ret;
-	}
-
-	param.mac_table_age_timer = cpu_to_le32(MXL862XX_AGETIMER_CUSTOM);
-	param.age_timer = cpu_to_le32(msecs / 1000);
-	ret = MXL862XX_API_WRITE(ds->priv, MXL862XX_COMMON_CFGSET, param);
-	if (ret)
-		dev_err(ds->dev, "failed to set ageing\n");
-
-	return ret;
-}
-
-static void mxl862xx_port_stp_state_set(struct dsa_switch *ds, int port,
-					u8 state)
-{
-	struct mxl862xx_stp_port_cfg param = {
-		.port_id = cpu_to_le16(port),
-	};
-	struct mxl862xx_priv *priv = ds->priv;
-	int ret;
-
-	switch (state) {
-	case BR_STATE_DISABLED:
-		param.port_state = MXL862XX_STP_PORT_STATE_DISABLE;
-		break;
-	case BR_STATE_BLOCKING:
-	case BR_STATE_LISTENING:
-		param.port_state = MXL862XX_STP_PORT_STATE_BLOCKING;
-		break;
-	case BR_STATE_LEARNING:
-		param.port_state = MXL862XX_STP_PORT_STATE_LEARNING;
-		break;
-	case BR_STATE_FORWARDING:
-		param.port_state = MXL862XX_STP_PORT_STATE_FORWARD;
-		break;
-	default:
-		dev_err(ds->dev, "invalid STP state: %d\n", state);
-		return;
-	}
-
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_STP_PORTCFGSET, param);
-	if (ret) {
-		dev_err(ds->dev, "failed to set STP state on port %d\n", port);
-		return;
-	}
-
-	/* The firmware may re-enable MAC learning as a side-effect of entering
-	 * LEARNING or FORWARDING state (per 802.1D defaults).
-	 * Re-apply the driver's intended learning and metering config so that
-	 * standalone ports keep learning disabled.
-	 * This is likely to get fixed in future firmware releases, however,
-	 * the additional API call even then doesn't hurt much.
-	 */
-	ret = mxl862xx_set_bridge_port(ds, port);
-	if (ret)
-		dev_err(ds->dev, "failed to reapply brport flags on port %d\n", port);
-}
-
-static void mxl862xx_port_set_host_flood(struct dsa_switch *ds, int port,
-					 bool uc, bool mc)
-{
-	struct mxl862xx_priv *priv = ds->priv;
-
-	if (priv->ports[port].bridge)
-		return;
-
-	/* Standalone ports must always keep broadcast flooding enabled
-	 * towards the CPU so that ARP and other broadcast protocols work.
-	 * Only unknown unicast and multicast should follow the host flood
-	 * knobs driven by IFF_PROMISC / IFF_ALLMULTI.
-	 */
-	mxl862xx_bridge_config_fwd(ds, priv->ports[port].fid, uc, mc, true);
-}
-
-static int mxl862xx_port_pre_bridge_flags(struct dsa_switch *ds, int port,
-					  struct switchdev_brport_flags flags,
-					  struct netlink_ext_ack *extack)
-{
-	if (flags.mask & ~(BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD |
-			   BR_LEARNING))
-		return -EINVAL;
-
-	return 0;
-}
-
-static int mxl862xx_port_bridge_flags(struct dsa_switch *ds, int port,
-				      struct switchdev_brport_flags flags,
-				      struct netlink_ext_ack *extack)
-{
-	struct mxl862xx_priv *priv = ds->priv;
-	unsigned long old_block = priv->ports[port].flood_block;
-	unsigned long block = old_block;
-	bool need_update = false;
-	int ret;
-
-	if (flags.mask & BR_FLOOD) {
-		if (flags.val & BR_FLOOD)
-			block &= ~BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_UC);
-		else
-			block |= BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_UC);
-	}
-
-	if (flags.mask & BR_MCAST_FLOOD) {
-		if (flags.val & BR_MCAST_FLOOD) {
-			block &= ~BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_IP);
-			block &= ~BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_NON_IP);
-		} else {
-			block |= BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_IP);
-			block |= BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_UNKNOWN_MC_NON_IP);
-		}
-	}
-
-	if (flags.mask & BR_BCAST_FLOOD) {
-		if (flags.val & BR_BCAST_FLOOD)
-			block &= ~BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_BROADCAST);
-		else
-			block |= BIT(MXL862XX_BRIDGE_PORT_EGRESS_METER_BROADCAST);
-	}
-
-	if (flags.mask & BR_LEARNING)
-		priv->ports[port].learning = !!(flags.val & BR_LEARNING);
-
-	need_update = (block != old_block) || (flags.mask & BR_LEARNING);
-	if (need_update) {
-		priv->ports[port].flood_block = block;
-		ret = mxl862xx_set_bridge_port(ds, port);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
-}
-
 static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_tag_protocol = mxl862xx_get_tag_protocol,
 	.setup = mxl862xx_setup,
@@ -879,18 +373,6 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.port_enable = mxl862xx_port_enable,
 	.port_disable = mxl862xx_port_disable,
 	.port_fast_age = mxl862xx_port_fast_age,
-	.set_ageing_time = mxl862xx_set_ageing_time,
-	.port_bridge_join = mxl862xx_port_bridge_join,
-	.port_bridge_leave = mxl862xx_port_bridge_leave,
-	.port_pre_bridge_flags = mxl862xx_port_pre_bridge_flags,
-	.port_bridge_flags = mxl862xx_port_bridge_flags,
-	.port_stp_state_set = mxl862xx_port_stp_state_set,
-	.port_set_host_flood = mxl862xx_port_set_host_flood,
-	.port_fdb_add = mxl862xx_port_fdb_add,
-	.port_fdb_del = mxl862xx_port_fdb_del,
-	.port_fdb_dump = mxl862xx_port_fdb_dump,
-	.port_mdb_add = mxl862xx_port_mdb_add,
-	.port_mdb_del = mxl862xx_port_mdb_del,
 };
 
 static void mxl862xx_phylink_mac_config(struct phylink_config *config,
@@ -932,8 +414,6 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 
 	priv->mdiodev = mdiodev;
 
-	INIT_LIST_HEAD(&priv->bridges);
-
 	ds = devm_kzalloc(dev, sizeof(*ds), GFP_KERNEL);
 	if (!ds)
 		return -ENOMEM;
@@ -944,8 +424,6 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	ds->ops = &mxl862xx_switch_ops;
 	ds->phylink_mac_ops = &mxl862xx_phylink_mac_ops;
 	ds->num_ports = MXL862XX_MAX_PORTS;
-	ds->fdb_isolation = true;
-	ds->max_num_bridges = MXL862XX_MAX_BRIDGES;
 
 	dev_set_drvdata(dev, ds);
 
