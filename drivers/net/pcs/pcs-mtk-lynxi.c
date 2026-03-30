@@ -134,7 +134,6 @@ static int mtk_pcs_config_polarity(struct mtk_pcs_lynxi *mpcs,
 
 	pcs_fwnode = fwnode_get_named_child_node(fwnode, "pcs");
 
-	printk(KERN_ALERT "mtk_pcs_config_polarity get RX...\n");
 	ret = phy_get_rx_polarity(pcs_fwnode, phy_modes(interface),
 				  BIT(PHY_POL_NORMAL) | BIT(PHY_POL_INVERT),
 				  default_pol, &pol);
@@ -142,22 +141,18 @@ static int mtk_pcs_config_polarity(struct mtk_pcs_lynxi *mpcs,
 		fwnode_handle_put(pcs_fwnode);
 		return ret;
 	}
-	if (pol == PHY_POL_INVERT){
-		printk(KERN_ALERT "mtk_pcs_config_polarity RX inverted...\n");
+	if (pol == PHY_POL_INVERT)
 		val |= SGMII_PN_SWAP_RX;
-	}
-	printk(KERN_ALERT "mtk_pcs_config_polarity get TX...\n");
+
 	ret = phy_get_tx_polarity(pcs_fwnode, phy_modes(interface),
 				  BIT(PHY_POL_NORMAL) | BIT(PHY_POL_INVERT),
 				  default_pol, &pol);
 	fwnode_handle_put(pcs_fwnode);
 	if (ret)
 		return ret;
-	if (pol == PHY_POL_INVERT){
-		printk(KERN_ALERT "mtk_pcs_config_polarity TX inverted...\n");
+	if (pol == PHY_POL_INVERT)
 		val |= SGMII_PN_SWAP_TX;
-	}
-	printk(KERN_ALERT "mtk_pcs_config_polarity write 0x%x...\n",val);
+
 	return regmap_update_bits(mpcs->regmap, SGMSYS_QPHY_WRAP_CTRL,
 				  SGMII_PN_SWAP_RX | SGMII_PN_SWAP_TX, val);
 }
