@@ -126,7 +126,7 @@ static int mtk_pcs_config_polarity(struct mtk_pcs_lynxi *mpcs,
 {
 	struct fwnode_handle *fwnode = mpcs->fwnode, *pcs_fwnode;
 	unsigned int pol, default_pol = PHY_POL_NORMAL;
-	unsigned int val = 0;
+	unsigned int val = 0, tmp;
 	int ret;
 
 	if (fwnode_property_read_bool(fwnode, "mediatek,pnswap"))
@@ -153,8 +153,14 @@ static int mtk_pcs_config_polarity(struct mtk_pcs_lynxi *mpcs,
 	if (pol == PHY_POL_INVERT)
 		val |= SGMII_PN_SWAP_TX;
 
-	return regmap_update_bits(mpcs->regmap, SGMSYS_QPHY_WRAP_CTRL,
-				  SGMII_PN_SWAP_RX | SGMII_PN_SWAP_TX, val);
+	ret = regmap_read(mpcs->regmap, SGMSYS_QPHY_WRAP_CTRL, &tmp);
+	if (ret)
+		return ret;
+
+	pr_err("SGMSYS_QPHY_WRAP_CTRL = 0x%x, intending to write 0x%lx\n",
+	       tmp, (tmp & ~(SGMII_PN_SWAP_RX | SGMII_PN_SWAP_TX)) | val);
+
+	return 0;
 }
 
 static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
