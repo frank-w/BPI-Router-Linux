@@ -157,10 +157,12 @@ static int mtk_pcs_config_polarity(struct mtk_pcs_lynxi *mpcs,
 	if (ret)
 		return ret;
 
-	pr_err("SGMSYS_QPHY_WRAP_CTRL = 0x%x, intending to write 0x%lx\n",
+	pr_err("SGMSYS_QPHY_WRAP_CTRL = 0x%x, will write 0x%lx\n",
 	       tmp, (tmp & ~(SGMII_PN_SWAP_RX | SGMII_PN_SWAP_TX)) | val);
 
-	return 0;
+	return regmap_update_bits(mpcs->regmap, SGMSYS_QPHY_WRAP_CTRL,
+				  SGMII_PN_SWAP_RX | SGMII_PN_SWAP_TX, val);
+	//return 0;
 }
 
 static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,

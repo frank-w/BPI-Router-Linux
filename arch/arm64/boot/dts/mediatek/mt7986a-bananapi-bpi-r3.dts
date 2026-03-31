@@ -495,3 +495,7 @@
 	};
 };
 
+&sgmiisys0 {
+	rx-polarity = <PHY_POL_NORMAL>;
+	tx-polarity = <PHY_POL_INVERT>;
+};
