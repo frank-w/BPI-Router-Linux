@@ -249,6 +249,10 @@ struct mxl862xx_port_stats {
  * @stats_lock:          protects accumulator reads in .get_stats64 against
  *                       concurrent updates from the polling work
  * @tag_8021q_vid:       currently assigned tag_8021q management VID
+ * @hairpin:             true when hairpin mode is active (BR_HAIRPIN_MODE);
+ *                       the port's own bridge port is included in its
+ *                       portmap so bridged frames can egress the ingress
+ *                       port
  * @ingress_mirror:      true when ingress mirroring is active on this port
  * @egress_mirror:       true when egress mirroring is active on this port
  * @lag:                 non-NULL when port is member of a LAG group;
@@ -278,6 +282,7 @@ struct mxl862xx_port {
 	struct work_struct host_flood_work;
 	u16 tag_8021q_vid;
 	struct mxl862xx_evlan_block cpu_egress_evlan;
+	bool hairpin;
 	bool ingress_mirror;
 	bool egress_mirror;
 	struct dsa_lag *lag;
