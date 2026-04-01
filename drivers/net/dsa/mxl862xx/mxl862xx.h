@@ -257,6 +257,8 @@ struct mxl862xx_port_stats {
  * @lag_hash_bits:       hash field bitmask (MXL862XX_TRUNK_HASH_*) requested
  *                       when this port joined its LAG; used to recompute the
  *                       global trunk_hash when a LAG is destroyed
+ * @mtu:                 per-port requested MTU; the global switch register
+ *                       is set to the maximum across all ports
  */
 struct mxl862xx_port {
 	struct mxl862xx_priv *priv;
@@ -281,6 +283,7 @@ struct mxl862xx_port {
 	struct dsa_lag *lag;
 	bool lag_tx_enabled;
 	u8 lag_hash_bits;
+	int mtu;
 	struct mxl862xx_port_stats stats;
 	spinlock_t stats_lock; /* protects stats accumulators */
 };
