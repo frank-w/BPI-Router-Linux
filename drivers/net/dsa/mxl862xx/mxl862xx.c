@@ -826,6 +826,10 @@ static int __mxl862xx_set_bridge_port(struct dsa_switch *ds, int port,
 		}
 		mxl862xx_fw_portmap_set_bit(br_port_cfg.bridge_port_map,
 					    mxl862xx_cpu_bridge_port_id(ds, port));
+		if (p->hairpin)
+			mxl862xx_fw_portmap_set_bit(br_port_cfg.bridge_port_map,
+						    mxl862xx_lag_bridge_port(priv,
+									     port));
 	} else {
 		mxl862xx_fw_portmap_set_bit(br_port_cfg.bridge_port_map,
 					    mxl862xx_cpu_bridge_port_id(ds, port));
@@ -4052,7 +4056,7 @@ static int mxl862xx_port_pre_bridge_flags(struct dsa_switch *ds, int port,
 					  struct netlink_ext_ack *extack)
 {
 	if (flags.mask & ~(BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD |
-			   BR_LEARNING))
+			   BR_LEARNING | BR_HAIRPIN_MODE))
 		return -EINVAL;
 
 	return 0;
@@ -4094,7 +4098,11 @@ static int mxl862xx_port_bridge_flags(struct dsa_switch *ds, int port,
 	if (flags.mask & BR_LEARNING)
 		priv->ports[port].learning = !!(flags.val & BR_LEARNING);
 
-	if (block != old_block || (flags.mask & BR_LEARNING)) {
+	if (flags.mask & BR_HAIRPIN_MODE)
+		priv->ports[port].hairpin = !!(flags.val & BR_HAIRPIN_MODE);
+
+	if ((block != old_block) ||
+	    (flags.mask & (BR_LEARNING | BR_HAIRPIN_MODE))) {
 		priv->ports[port].flood_block = block;
 		ret = mxl862xx_set_bridge_port(ds, port);
 		if (ret)
