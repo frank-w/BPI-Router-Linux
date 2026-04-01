@@ -12,6 +12,7 @@
 #include <linux/etherdevice.h>
 #include <linux/icmpv6.h>
 #include <linux/if_bridge.h>
+#include <linux/if_vlan.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_mdio.h>
@@ -3881,6 +3882,53 @@ static int mxl862xx_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 	return ret;
 }
 
+static int mxl862xx_port_change_mtu(struct dsa_switch *ds, int port,
+				    int new_mtu)
+{
+	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_cfg param = {};
+	int i, old_max = 0, new_max = 0;
+	int ret;
+
+	for (i = 0; i < ds->num_ports; i++) {
+		if (priv->ports[i].mtu > old_max)
+			old_max = priv->ports[i].mtu;
+	}
+
+	priv->ports[port].mtu = new_mtu;
+
+	for (i = 0; i < ds->num_ports; i++) {
+		if (priv->ports[i].mtu > new_max)
+			new_max = priv->ports[i].mtu;
+	}
+
+	if (new_max != old_max) {
+		ret = MXL862XX_API_READ(priv, MXL862XX_COMMON_CFGGET,
+					param);
+		if (ret)
+			return ret;
+
+		param.max_packet_len = cpu_to_le16(new_max +
+						   VLAN_ETH_HLEN +
+						   ETH_FCS_LEN);
+		ret = MXL862XX_API_WRITE(priv, MXL862XX_COMMON_CFGSET,
+					 param);
+		if (ret) {
+			dev_err(ds->dev,
+				"failed to set MTU to %d: %pe\n",
+				new_mtu, ERR_PTR(ret));
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int mxl862xx_port_max_mtu(struct dsa_switch *ds, int port)
+{
+	return U16_MAX - VLAN_ETH_HLEN - ETH_FCS_LEN;
+}
+
 static void mxl862xx_port_stp_state_set(struct dsa_switch *ds, int port,
 					u8 state)
 {
@@ -4361,6 +4409,8 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.port_disable = mxl862xx_port_disable,
 	.port_fast_age = mxl862xx_port_fast_age,
 	.set_ageing_time = mxl862xx_set_ageing_time,
+	.port_change_mtu = mxl862xx_port_change_mtu,
+	.port_max_mtu = mxl862xx_port_max_mtu,
 	.port_bridge_join = mxl862xx_port_bridge_join,
 	.port_bridge_leave = mxl862xx_port_bridge_leave,
 	.port_pre_bridge_flags = mxl862xx_port_pre_bridge_flags,
