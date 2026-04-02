@@ -118,7 +118,7 @@ mt7531_create_sgmii(struct mt7530_priv *priv)
 		dev_warn(priv->dev, "add lynxi pcs for switch (%s)\n",mt7531_pcs_config[i]->name);
 		port_dp = dsa_to_port(priv->ds, i+5);
 		port_dn = port_dp->dn;
-		pcs = mtk_pcs_lynxi_create(priv->dev, of_fwnode_handle(port_dn), regmap,
+		pcs = mtk_pcs_lynxi_create(priv->dev, NULL, regmap,
 					   MT7531_PHYA_CTRL_SIGNAL3);
 		if (!pcs) {
 			ret = -ENXIO;
