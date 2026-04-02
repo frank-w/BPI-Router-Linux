@@ -439,6 +439,11 @@
 			phy-mode = "2500base-x";
 			sfp = <&sfp2>;
 			managed = "in-band-status";
+
+			pcs {
+				rx-polarity = <PHY_POL_NORMAL>;
+				tx-polarity = <PHY_POL_NORMAL>;
+			};
 		};
 
 		port@6 {
@@ -451,6 +456,11 @@
 				speed = <2500>;
 				full-duplex;
 				pause;
+			};
+
+			pcs {
+				rx-polarity = <PHY_POL_NORMAL>;
+				tx-polarity = <PHY_POL_INVERT>;
 			};
 		};
 	};
@@ -495,7 +505,9 @@
 	};
 };
 
-&sgmiisys0 {
-	rx-polarity = <PHY_POL_NORMAL>;
-	tx-polarity = <PHY_POL_INVERT>;
-};
+/*&sgmiisys0 {
+	pcs {
+		rx-polarity = <PHY_POL_NORMAL>;
+		tx-polarity = <PHY_POL_INVERT>;
+	};
+};*/
