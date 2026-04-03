@@ -5006,6 +5006,7 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
 			return PTR_ERR(regmap);
 		}
 
+		dev_warn(eth->dev, "create sgmii pcs for mac #%d\n",i);
 		eth->sgmii_pcs[i] = mtk_pcs_lynxi_create(eth->dev,
 							 of_fwnode_handle(np),
 							 regmap,
