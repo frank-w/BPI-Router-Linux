@@ -112,6 +112,12 @@ static int mxl862xx_wait_ready(struct dsa_switch *ds)
 		if (ret || !ver.iv_major)
 			goto not_ready_yet;
 
+		// store firmware-version to use later
+		priv->version.v.major = ver.iv_major;
+		priv->version.v.minor = ver.iv_minor;
+		priv->version.v.revision = le16_to_cpu(ver.iv_revision);
+		priv->version.v.build = le32_to_cpu(ver.iv_build_num);
+
 		/* being able to perform CFGGET indicates that
 		 * the firmware is ready
 		 */
@@ -181,6 +187,11 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	ret = mxl862xx_wait_ready(ds);
 	if (ret)
 		return ret;
+
+	dev_info(ds->dev,
+		"stored version: %d.%d.%d.%d\n",
+		priv->version.v.major, priv->version.v.minor,priv->version.v.revision,priv->version.v.build
+	);
 
 	return mxl862xx_setup_mdio(ds);
 }
@@ -412,6 +423,7 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
+	priv->version.raw = 0;
 
 	priv->mdiodev = mdiodev;
 
