@@ -420,7 +420,7 @@ static int gpiochip_get_direction(struct gpio_chip *gc, unsigned int offset)
 
 	lockdep_assert_held(&gc->gpiodev->srcu);
 
-	if (WARN_ON(!gc->get_direction))
+	if (!gc->get_direction)
 		return -EOPNOTSUPP;
 
 	ret = gc->get_direction(gc, offset);
