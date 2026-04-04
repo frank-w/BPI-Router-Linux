@@ -249,7 +249,7 @@
 				label = "cpu";
 				phy-mode = "10gbase-r";
 				ethernet = <&gmac2>;
-				dsa-tag-protocol = "mxl862xx-8021q";
+				//dsa-tag-protocol = "mxl862xx-8021q";
 
 				fixed-link {
 					speed = <10000>;
