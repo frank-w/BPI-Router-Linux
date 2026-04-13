@@ -4,6 +4,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/cpufreq.h>
 #include <linux/devfreq.h>
 #include <linux/minmax.h>
 #include <linux/module.h>
@@ -263,12 +264,27 @@ static void mtk_ccifreq_opp_of_remove_table(void *data)
 
 static int mtk_ccifreq_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	struct mtk_ccifreq_drv *drv;
 	struct devfreq_passive_data *passive_data;
+	struct device *dev = &pdev->dev;
+	struct cpufreq_policy *policy;
+	struct mtk_ccifreq_drv *drv;
 	struct dev_pm_opp *opp;
 	unsigned long rate, opp_volt;
 	int ret;
+
+	/*
+	 * Check if cpufreq is available before touching any regulators.
+	 * The passive devfreq governor needs cpufreq as its parent and
+	 * will return -EPROBE_DEFER if it is not yet registered. If we
+	 * enable the proc regulator (CPU core power) before this check,
+	 * the subsequent probe failure causes devres to disable that
+	 * regulator, potentially cutting CPU core voltage and hanging
+	 * the system.
+	 */
+	policy = cpufreq_cpu_get(0);
+	if (!policy)
+		return -EPROBE_DEFER;
+	cpufreq_cpu_put(policy);
 
 	drv = devm_kzalloc(dev, sizeof(*drv), GFP_KERNEL);
 	if (!drv)
