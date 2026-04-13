@@ -557,10 +557,10 @@ static int pcie_port_remove_service(struct device *dev)
 
 	pciedev = to_pcie_device(dev);
 	driver = to_service_driver(dev->driver);
-	if (driver && driver->remove) {
+	if (driver && driver->remove)
 		driver->remove(pciedev);
-		put_device(dev);
-	}
+
+	put_device(dev);
 	return 0;
 }
 
@@ -760,7 +760,6 @@ static pci_ers_result_t pcie_portdrv_slot_reset(struct pci_dev *dev)
 	device_for_each_child(&dev->dev, &off, pcie_port_device_iter);
 
 	pci_restore_state(dev);
-	pci_save_state(dev);
 	return PCI_ERS_RESULT_RECOVERED;
 }
 

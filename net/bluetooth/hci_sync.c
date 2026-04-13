@@ -4546,7 +4546,7 @@ static int hci_le_set_host_feature_sync(struct hci_dev *hdev)
 {
 	struct hci_cp_le_set_host_feature cp;
 
-	if (!iso_capable(hdev))
+	if (!cis_capable(hdev))
 		return 0;
 
 	memset(&cp, 0, sizeof(cp));
@@ -6878,8 +6878,6 @@ static int hci_acl_create_conn_sync(struct hci_dev *hdev, void *data)
 	conn->role = HCI_ROLE_MASTER;
 
 	conn->attempt++;
-
-	conn->link_policy = hdev->link_policy;
 
 	memset(&cp, 0, sizeof(cp));
 	bacpy(&cp.bdaddr, &conn->dst);
