@@ -5499,16 +5499,22 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 			mac->phylink_config.num_available_pcs = count;
 		} else {
 			if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) {
+				dev_err(eth->dev,"GMAC%d mtk_shared\n",id);
 				/* single LynxI PCS used by either GMAC */
 				if (!test_bit(phy_mode, eth->sgmii_pcs[0]->supported_interfaces))
 					goto no_pcs;
 				other_mac = netdev_priv(eth->netdev[!id]);
-				if (other_mac->phylink_config.num_available_pcs) {
-					dev_err(eth->dev,
+				dev_err(eth->dev,"GMAC%d other_mac:%p\n",id,other_mac);
+				if (other_mac)
+					dev_err(eth->dev,"GMAC%d other_mac:%p pl:%p\n",id,other_mac,&other_mac->phylink_config);
+				if (other_mac && other_mac->phylink_config.num_available_pcs) {
+					/*dev_err(eth->dev,
 						"GMAC%d can't do %s, PCS assigned to GMAC%d\n",
-						id, phy_modes(phy_mode), !id);
+						id, phy_modes(phy_mode), !id);*/
+					dev_err(eth->dev,"GMAC%d other_mac broken\n",id);
 					goto no_pcs;
 				}
+				dev_err(eth->dev,"GMAC%d other_mac check done\n",id);
 				sid = 0;
 			} else {
 				sid = id;
