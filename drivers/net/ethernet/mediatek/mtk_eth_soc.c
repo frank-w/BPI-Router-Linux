@@ -5507,7 +5507,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 				dev_err(eth->dev,"GMAC%d other_mac:%p\n",id,other_mac);
 				if (other_mac)
 					dev_err(eth->dev,"GMAC%d other_mac:%p pl:%p\n",id,other_mac,&other_mac->phylink_config);
-				if (other_mac && other_mac->phylink_config.num_available_pcs) {
+				if (id >0 && other_mac && other_mac->phylink_config.num_available_pcs) {
 					/*dev_err(eth->dev,
 						"GMAC%d can't do %s, PCS assigned to GMAC%d\n",
 						id, phy_modes(phy_mode), !id);*/
