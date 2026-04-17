@@ -115,7 +115,7 @@ if [[ ! $hostarch =~ aarch64|armv ]];then
 	fi
 
 	crosscompile=1
-	export CCACHE_DIR="$HOME/.cache/ccache_${ARCH}"
+	export CCACHE_DIR="$HOME/.cache/ccache/${ARCH}"
 	mkdir -p "${CCACHE_DIR}"
 fi;
 
