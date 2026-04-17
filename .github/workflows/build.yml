@@ -24,7 +24,6 @@ jobs:
     permissions:
       contents: write  # for softprops/action-gh-release to create GitHub release
     # The type of runner that the job will run on
-    #runs-on: ubuntu-latest
     runs-on: ubuntu-24.04
 
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -46,15 +45,6 @@ jobs:
         run: |
           echo $BRANCH $KERNELVER $DT
           echo $UBUNTU_MAJOR_VERSION
-
-      - name: update apt-repos (u22)
-        if: env.UBUNTU_MAJOR_VERSION == '22'
-        run: |
-          cat /etc/apt/sources.list
-          sudo sed -i.bak -e 's/^deb/deb [ arch=amd64,i386 ]/' /etc/apt/sources.list
-          #deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu/ jammy main universe
-          echo "deb [arch=arm64,armhf] http://ports.ubuntu.com/ubuntu-ports jammy main universe" | sudo tee -a /etc/apt/sources.list
-
 
       - name: update apt-repos (u24)
         if: env.UBUNTU_MAJOR_VERSION == '24'
@@ -131,12 +121,7 @@ jobs:
 
       - name: Upload binaries to release
         if: endsWith(github.ref,'-main')
-        #uses: marvinpinto/action-automatic-releases@latest
-        #with:
-        #  repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        #  automatic_release_tag: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
-        #  prerelease: false
-        #  title: "Build for branch ${{ env.BRANCH }} (${{ env.KERNELVER }})"
+
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
