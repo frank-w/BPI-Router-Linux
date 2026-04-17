@@ -5564,9 +5564,19 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 			mac->phylink_config.available_pcs = mac->available_pcs;
 			mac->phylink_config.num_available_pcs = count;
 		} else {
-			sid = (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) ?
-			       0 : id;
-
+			if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) {
+				/* single LynxI PCS used by either GMAC */
+				if (!test_bit(phy_mode, eth->sgmii_pcs[0]->supported_interfaces))
+					goto no_pcs;
+				if (eth->shared_sgmii_used) {
+					err = -EBUSY;
+					goto free_netdev;
+				}
+				sid = 0;
+				eth->shared_sgmii_used = true;
+			} else {
+				sid = id;
+			}
 			mac->phylink_config.available_pcs = &eth->sgmii_pcs[sid];
 			mac->phylink_config.num_available_pcs = 1;
 		}
