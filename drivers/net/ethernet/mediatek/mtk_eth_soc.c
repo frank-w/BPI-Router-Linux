@@ -564,12 +564,17 @@ static struct phylink_pcs *mtk_mac_select_pcs(struct phylink_config *config,
 
 	if (interface == PHY_INTERFACE_MODE_SGMII ||
 	    phy_interface_mode_is_8023z(interface)) {
-		sid = (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) ?
-		       0 : mac->id;
-
+		if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)){
+			if (eth->shared_sgmii_used)
+				goto no_pcs;
+			sid=0;
+			eth->shared_sgmii_used = true;
+		} else {
+			sid=mac->id;
+		}
 		return eth->sgmii_pcs[sid];
 	}
-
+no_pcs:
 	return NULL;
 }
 

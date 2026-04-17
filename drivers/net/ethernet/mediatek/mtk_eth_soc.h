@@ -1335,6 +1335,7 @@ struct mtk_eth {
 	struct regmap			*ethsys;
 	struct regmap			*infra;
 	struct phylink_pcs		*sgmii_pcs[MTK_MAX_DEVS];
+	bool				shared_sgmii_used;
 	struct regmap			*pctl;
 	bool				hwlro;
 	refcount_t			dma_refcnt;
