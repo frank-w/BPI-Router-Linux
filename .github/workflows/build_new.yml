@@ -117,7 +117,11 @@ jobs:
 
           # DEB packages
           find .. -maxdepth 1 -type f -name "*.deb" \
-            \( -name "linux-image*.deb" -o -name "linux-headers*.deb" \) \
+            \( \
+              -name "linux-image*.deb" -o \
+              -name "linux-headers*.deb" \
+            \) \
+            ! -name "*dbg*.deb" \
             -exec cp {} out/${{ matrix.board }}/ \;
 
           ls -lh out/${{ matrix.board }}/
