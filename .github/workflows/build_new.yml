@@ -16,14 +16,7 @@ jobs:
     steps:
       - name: Setup env
         run: |
-          echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
-          echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
-          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
           echo "UBUNTU_MAJOR_VERSION=$(cat /etc/issue | head -1|sed -e 's/^Ubuntu \([0-9]\+\).*$/\1/')" >> $GITHUB_ENV
-
-      - name: Print env
-        run: |
-          echo $BRANCH $KERNELVER $DT
           echo $UBUNTU_MAJOR_VERSION
 
       - name: Checkout (shallow)
@@ -134,6 +127,13 @@ jobs:
         with:
           fetch-depth: 50
 
+      - name: Setup env
+        run: |
+          echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
+          echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          echo $BRANCH $KERNELVER $DT
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -141,10 +141,19 @@ jobs:
 
       - name: Generate changelog
         run: |
-          git log --pretty=format:"* %s" > CHANGELOG.md
+          mkdir release
+          find artifacts -type f \( -name "*.itb" -o -name "*.tar.gz*" -o -name "*.img" -o -name "*.deb" \) \
+            -exec cp {} release/ \;
 
-      #- name: Create release
-      #  uses: softprops/action-gh-release@v2
-      #  with:
-      #    files: artifacts/**/*
-      #    body_path: CHANGELOG.md
+      - name: Generate changelog
+        run: |
+          echo -e "# Release\n**Commit:** ${{ github.sha }}\n**Branch:** ${{ env.BRANCH }}\n**Kernel:** ${{ env.KERNELVER }}\n\n## Changelog\n" > CHANGELOG.md
+          git log --pretty=format:"- **%s** (`%h`)" >> CHANGELOG.md
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          body_path: CHANGELOG.md
+          draft: ${{ endsWith(github.ref, '-ci') }}
+          tag_name: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
