@@ -13,6 +13,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache dt-schema
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/dtschema
+            ~/.local/lib/python*/site-packages/dtschema
+          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}-${{ hashFiles('**/*.yaml') }}
+
+      - name: Cache DTBs (arm64)
+        uses: actions/cache@v4
+        with:
+          path: arch/arm64/boot/dts/
+          key: ${{ runner.os }}-dtbs-arm64-${{ github.ref_name }}-${{ hashFiles('arch/arm64/**/*.dts', 'arch/arm64/**/*.dtsi') }}
+
       - name: Install dependencies
         run: |
           sudo apt update
@@ -64,6 +78,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Cache dt-schema
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/dtschema
+            ~/.local/lib/python*/site-packages/dtschema
+          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}-${{ hashFiles('**/*.yaml') }}
+
+      - name: Cache DTBs (arm)
+        uses: actions/cache@v4
+        with:
+          path: arch/arm/boot/dts/
+          key: ${{ runner.os }}-dtbs-arm-${{ github.ref_name }}-${{ hashFiles('arch/arm/**/*.dts', 'arch/arm/**/*.dtsi') }}
 
       - name: Install dependencies
         run: |
