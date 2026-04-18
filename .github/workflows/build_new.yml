@@ -134,7 +134,7 @@ jobs:
     needs: build
 
     steps:
-      - name: Checkout (full history)
+      - name: Checkout (longer history)
         uses: actions/checkout@v4
         with:
           fetch-depth: 50
