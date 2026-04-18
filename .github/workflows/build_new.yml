@@ -1,0 +1,148 @@
+name: Build
+
+on:
+  push:
+    branches: [ "7.0-ci" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [bpi-r2, bpi-r64, bpi-r2pro, bpi-r3, bpi-r4]
+
+    steps:
+      - name: Setup env
+        run: |
+          echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
+          echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          echo "UBUNTU_MAJOR_VERSION=$(cat /etc/issue | head -1|sed -e 's/^Ubuntu \([0-9]\+\).*$/\1/')" >> $GITHUB_ENV
+
+      - name: Print env
+        run: |
+          echo $BRANCH $KERNELVER $DT
+          echo $UBUNTU_MAJOR_VERSION
+
+      - name: Checkout (shallow)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache/${{ matrix.board }}
+          key: ccache-${{ github.ref_name }}-${{ matrix.board }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ github.ref_name }}-${{ matrix.board }}-
+
+      - name: fix apt (hard reset, u24)
+        if: env.UBUNTU_MAJOR_VERSION == '24'
+        run: |
+          set -e
+
+          # --- alles Alte weg ---
+          sudo rm -f /etc/apt/sources.list
+          sudo rm -f /etc/apt/sources.list.d/*.sources
+          sudo rm -f /etc/apt/sources.list.d/*.list
+
+          # --- Host (amd64) ---
+          sudo tee /etc/apt/sources.list.d/ubuntu.sources > /dev/null <<EOF
+          Types: deb
+          URIs: http://archive.ubuntu.com/ubuntu
+          Suites: noble noble-updates noble-security
+          Components: main universe multiverse
+          Architectures: amd64 i386
+          EOF
+          
+                    # --- ARM (ports) ---
+                    sudo tee /etc/apt/sources.list.d/ports.sources > /dev/null <<EOF
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates noble-security
+          Components: main universe multiverse
+          Architectures: armhf arm64
+          EOF
+          
+          # --- Arch aktivieren ---
+          sudo dpkg --add-architecture armhf
+          sudo dpkg --add-architecture arm64
+
+          # --- Debug ---
+          echo "==== FINAL SOURCES ===="
+          grep -R . /etc/apt/sources.list.d/
+
+          # --- Update ---
+          sudo apt-get update
+
+      - name: Install depencies
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo dpkg --add-architecture arm64
+          sudo apt update
+          sudo apt install ccache libssl-dev:armhf libssl-dev:arm64 build-essential u-boot-tools python3-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler libncurses5-dev libelf-dev libdw-dev
+
+      - name: Configure board to ${{ matrix.board }}
+        run: |
+          sed -ri 's/^#(board=${{ matrix.board }})$/\1/' build.conf #change board to ${{ matrix.board }}
+
+      - name: Run build for ${{ matrix.board }}
+        run: |
+
+          bash build.sh importconfig
+          bash build.sh build
+          bash build.sh cryptodev
+          bash build.sh pack
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out/${{ matrix.board }}
+
+          # SD Images
+          if compgen -G "../SD/*" > /dev/null; then
+            cp -r ../SD/* out/${{ matrix.board }}/
+          fi
+
+          # DEB Pakete
+          if compgen -G "../*.deb" > /dev/null; then
+            cp ../*.deb out/${{ matrix.board }}/
+          fi
+
+          # ITB Files
+          if compgen -G "*.itb" > /dev/null; then
+            cp *.itb out/${{ matrix.board }}/
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.board }}
+          path: out/${{ matrix.board }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate changelog
+        run: |
+          git log --pretty=format:"* %s" > CHANGELOG.md
+
+      #- name: Create release
+      #  uses: softprops/action-gh-release@v2
+      #  with:
+      #    files: artifacts/**/*
+      #    body_path: CHANGELOG.md
