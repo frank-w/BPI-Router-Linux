@@ -1,0 +1,104 @@
+name: DTBS Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  dtbs-arm64:
+    name: DTBS Check (arm64)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y swig yamllint python3-pip python3-venv gcc-aarch64-linux-gnu make
+
+      - name: Setup Python venv
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install dtschema
+          pip show dtschema
+
+      - name: Run DT checks (arm64)
+        shell: bash
+        run: |
+          set -o pipefail
+
+          LOGDIR=logs
+          mkdir -p $LOGDIR
+
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+
+          source .venv/bin/activate
+
+          make dt_binding_check \
+            2>&1 | tee $LOGDIR/dt_binding_check_arm64.log
+
+          make defconfig \
+            2>&1 | tee $LOGDIR/defconfig_arm64.log
+
+          make dtbs_check \
+            2>&1 | tee $LOGDIR/dtbs_check_arm64.log
+
+      - name: Upload logs (arm64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtbs-logs-arm64
+          path: logs/
+
+
+  dtbs-arm:
+    name: DTBS Check (arm)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y swig yamllint python3-pip python3-venv gcc-arm-linux-gnueabihf make
+
+      - name: Setup Python venv
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install dtschema
+          pip show dtschema
+
+      - name: Run DT checks (arm)
+        shell: bash
+        run: |
+          set -o pipefail
+
+          LOGDIR=logs
+          mkdir -p $LOGDIR
+
+          export ARCH=arm
+          export CROSS_COMPILE=arm-linux-gnueabihf-
+
+          source .venv/bin/activate
+
+          make multi_v7_defconfig \
+            2>&1 | tee $LOGDIR/defconfig_arm.log
+
+          make dtbs_check \
+            2>&1 | tee $LOGDIR/dtbs_check_arm.log
+
+      - name: Upload logs (arm)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtbs-logs-arm
+          path: logs/
