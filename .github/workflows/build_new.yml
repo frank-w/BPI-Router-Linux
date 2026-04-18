@@ -39,7 +39,7 @@ jobs:
           restore-keys: |
             ccache-${{ github.ref_name }}-${{ matrix.board }}-
 
-      - name: fix apt (hard reset, u24)
+      - name: update apt-repos (u24)
         if: env.UBUNTU_MAJOR_VERSION == '24'
         run: |
           set -e
@@ -58,8 +58,8 @@ jobs:
           Architectures: amd64 i386
           EOF
 
-                    # --- ARM (ports) ---
-                    sudo tee /etc/apt/sources.list.d/ports.sources > /dev/null <<EOF
+          # --- ARM (ports) ---
+          sudo tee /etc/apt/sources.list.d/ports.sources > /dev/null <<EOF
           Types: deb
           URIs: http://ports.ubuntu.com/ubuntu-ports
           Suites: noble noble-updates noble-security
