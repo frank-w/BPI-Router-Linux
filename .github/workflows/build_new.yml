@@ -105,8 +105,8 @@ jobs:
           fi
 
           # ITB Files
-          if compgen -G "*.itb" > /dev/null; then
-            cp *.itb out/${{ matrix.board }}/
+          if compgen -G "*-[0-9]*.itb" > /dev/null; then
+            cp *-[0-9]*.itb out/${{ matrix.board }}/
           fi
           ls -lh out/${{ matrix.board }}/
 
