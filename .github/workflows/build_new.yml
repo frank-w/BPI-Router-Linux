@@ -43,40 +43,12 @@ jobs:
       - name: update apt-repos (u24)
         if: env.UBUNTU_MAJOR_VERSION == '24'
         run: |
-          set -e
+          sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ports.sources
+          sudo sed -i.bak -e 's/^\(Suites:.*\)$/\1\nArchitectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources
+          sudo sed -i.bak -e 's/^URIs:.*$/URIs: http:\/\/ports.ubuntu.com\/ubuntu-ports\//' /etc/apt/sources.list.d/ports.sources
+          sudo sed -i -e 's/^\(Suites:.*\)$/\1\nArchitectures: armhf arm64/' /etc/apt/sources.list.d/ports.sources
+          cat /etc/apt/sources.list.d/ports.sources
 
-          # --- cleanup ---
-          sudo rm -f /etc/apt/sources.list
-          sudo rm -f /etc/apt/sources.list.d/*.sources
-          sudo rm -f /etc/apt/sources.list.d/*.list
-
-          # --- host (amd64) ---
-          sudo tee /etc/apt/sources.list.d/ubuntu.sources > /dev/null <<EOF
-          Types: deb
-          URIs: http://archive.ubuntu.com/ubuntu
-          Suites: noble noble-updates noble-security
-          Components: main universe multiverse
-          Architectures: amd64 i386
-          EOF
-
-          # --- ARM (ports) ---
-          sudo tee /etc/apt/sources.list.d/ports.sources > /dev/null <<EOF
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: noble noble-updates noble-security
-          Components: main universe multiverse
-          Architectures: armhf arm64
-          EOF
-
-          # --- multi-arch ---
-          sudo dpkg --add-architecture armhf
-          sudo dpkg --add-architecture arm64
-
-          # --- debug ---
-          echo "==== FINAL SOURCES ===="
-          grep -R . /etc/apt/sources.list.d/
-
-          # --- update ---
           sudo apt-get update
 
       - name: Install depencies
@@ -167,6 +139,7 @@ jobs:
           git log --pretty=format:"- %h %ad **%s** %d by %an" --date=short --no-merges >> CHANGELOG.md
 
       - name: Create release
+        if: ${{ github.ref_name =~ '.*-(main|ci)$' }}
         uses: softprops/action-gh-release@v2
         with:
           files: release/*
