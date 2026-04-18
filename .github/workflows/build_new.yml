@@ -57,7 +57,7 @@ jobs:
           Components: main universe multiverse
           Architectures: amd64 i386
           EOF
-          
+
                     # --- ARM (ports) ---
                     sudo tee /etc/apt/sources.list.d/ports.sources > /dev/null <<EOF
           Types: deb
@@ -66,7 +66,7 @@ jobs:
           Components: main universe multiverse
           Architectures: armhf arm64
           EOF
-          
+
           # --- Arch aktivieren ---
           sudo dpkg --add-architecture armhf
           sudo dpkg --add-architecture arm64
@@ -102,8 +102,8 @@ jobs:
           mkdir -p out/${{ matrix.board }}
 
           # SD Images
-          if compgen -G "../SD/*" > /dev/null; then
-            cp -r ../SD/* out/${{ matrix.board }}/
+          if compgen -G "../SD/*.tar.gz*" > /dev/null; then
+            cp -r ../SD/*.tar.gz* out/${{ matrix.board }}/
           fi
 
           # DEB Pakete
@@ -115,6 +115,7 @@ jobs:
           if compgen -G "*.itb" > /dev/null; then
             cp *.itb out/${{ matrix.board }}/
           fi
+          ls -lh out/${{ matrix.board }}/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
