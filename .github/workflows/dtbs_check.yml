@@ -2,17 +2,29 @@ name: DTBS Check
 
 on:
   push:
-  pull_request:
 
 jobs:
-  dtbs-arm64:
-    name: DTBS Check (arm64)
+  dtbs:
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            cross: aarch64-linux-gnu-
+            compiler: gcc-aarch64-linux-gnu
+            defconfig: defconfig
+          - arch: arm
+            cross: arm-linux-gnueabihf-
+            compiler: gcc-arm-linux-gnueabihf
+            defconfig: multi_v7_defconfig
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # shared cache
       - name: Cache dt-schema
         uses: actions/cache@v4
         with:
@@ -21,16 +33,19 @@ jobs:
             ~/.local/lib/python*/site-packages/dtschema
           key: ${{ runner.os }}-dtschema-${{ github.ref_name }}-${{ hashFiles('**/*.yaml') }}
 
-      - name: Cache DTBs (arm64)
+      # arch-specific cache
+      - name: Cache DTBs
         uses: actions/cache@v4
         with:
-          path: arch/arm64/boot/dts/
-          key: ${{ runner.os }}-dtbs-arm64-${{ github.ref_name }}-${{ hashFiles('arch/arm64/**/*.dts', 'arch/arm64/**/*.dtsi') }}
+          path: arch/${{ matrix.arch }}/boot/dts/
+          key: ${{ runner.os }}-dtbs-${{ matrix.arch }}-${{ github.ref_name }}-${{ hashFiles(format('arch/{0}/**/*.dts', matrix.arch), format('arch/{0}/**/*.dtsi', matrix.arch)) }}
 
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y swig yamllint python3-pip python3-venv gcc-aarch64-linux-gnu make
+          sudo apt install -y \
+            swig yamllint python3-pip python3-venv \
+            make ${{ matrix.compiler }}
 
       - name: Setup Python venv
         run: |
@@ -38,9 +53,8 @@ jobs:
           . .venv/bin/activate
           pip install --upgrade pip
           pip install dtschema
-          pip show dtschema
 
-      - name: Run DT checks (arm64)
+      - name: Run DT checks
         shell: bash
         run: |
           set -o pipefail
@@ -48,87 +62,27 @@ jobs:
           LOGDIR=logs
           mkdir -p $LOGDIR
 
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
+          export ARCH=${{ matrix.arch }}
+          export CROSS_COMPILE=${{ matrix.cross }}
           export MAKEFLAGS="-j$(nproc)"
 
           source .venv/bin/activate
 
-          make dt_binding_check \
-            2>&1 | tee $LOGDIR/dt_binding_check_arm64.log
+          # bindings only for arm64 (save time)
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            make dt_binding_check \
+              2>&1 | tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log
+          fi
 
-          make defconfig \
-            2>&1 | tee $LOGDIR/defconfig_arm64.log
+          make ${{ matrix.defconfig }} \
+            2>&1 | tee $LOGDIR/defconfig_${{ matrix.arch }}.log
 
           make dtbs_check \
-            2>&1 | tee $LOGDIR/dtbs_check_arm64.log
+            2>&1 | tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log
 
-      - name: Upload logs (arm64)
+      - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dtbs-logs-arm64
-          path: logs/
-
-
-  dtbs-arm:
-    name: DTBS Check (arm)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Cache dt-schema
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/dtschema
-            ~/.local/lib/python*/site-packages/dtschema
-          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}-${{ hashFiles('**/*.yaml') }}
-
-      - name: Cache DTBs (arm)
-        uses: actions/cache@v4
-        with:
-          path: arch/arm/boot/dts/
-          key: ${{ runner.os }}-dtbs-arm-${{ github.ref_name }}-${{ hashFiles('arch/arm/**/*.dts', 'arch/arm/**/*.dtsi') }}
-
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y swig yamllint python3-pip python3-venv gcc-arm-linux-gnueabihf make
-
-      - name: Setup Python venv
-        run: |
-          python3 -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install dtschema
-          pip show dtschema
-
-      - name: Run DT checks (arm)
-        shell: bash
-        run: |
-          set -o pipefail
-
-          LOGDIR=logs
-          mkdir -p $LOGDIR
-
-          export ARCH=arm
-          export CROSS_COMPILE=arm-linux-gnueabihf-
-          export MAKEFLAGS="-j$(nproc)"
-
-          source .venv/bin/activate
-
-          make multi_v7_defconfig \
-            2>&1 | tee $LOGDIR/defconfig_arm.log
-
-          make dtbs_check \
-            2>&1 | tee $LOGDIR/dtbs_check_arm.log
-
-      - name: Upload logs (arm)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dtbs-logs-arm
+          name: dtbs-logs-${{ matrix.arch }}
           path: logs/
