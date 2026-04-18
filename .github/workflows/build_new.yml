@@ -45,12 +45,12 @@ jobs:
         run: |
           set -e
 
-          # --- alles Alte weg ---
+          # --- cleanup ---
           sudo rm -f /etc/apt/sources.list
           sudo rm -f /etc/apt/sources.list.d/*.sources
           sudo rm -f /etc/apt/sources.list.d/*.list
 
-          # --- Host (amd64) ---
+          # --- host (amd64) ---
           sudo tee /etc/apt/sources.list.d/ubuntu.sources > /dev/null <<EOF
           Types: deb
           URIs: http://archive.ubuntu.com/ubuntu
@@ -68,15 +68,15 @@ jobs:
           Architectures: armhf arm64
           EOF
 
-          # --- Arch aktivieren ---
+          # --- multi-arch ---
           sudo dpkg --add-architecture armhf
           sudo dpkg --add-architecture arm64
 
-          # --- Debug ---
+          # --- debug ---
           echo "==== FINAL SOURCES ===="
           grep -R . /etc/apt/sources.list.d/
 
-          # --- Update ---
+          # --- update ---
           sudo apt-get update
 
       - name: Install depencies
@@ -92,30 +92,34 @@ jobs:
 
       - name: Run build for ${{ matrix.board }}
         run: |
-
           bash build.sh importconfig
           bash build.sh build
           bash build.sh cryptodev
           bash build.sh pack
 
+      - name: Run deb build for ${{ matrix.board }}
+        run: |
+          bash build.sh pack_debs
+
       - name: Collect artifacts
         run: |
           mkdir -p out/${{ matrix.board }}
 
-          # SD Images
+          # ITB files
+          if compgen -G "*-[0-9]*.itb" > /dev/null; then
+            cp *-[0-9]*.itb out/${{ matrix.board }}/
+          fi
+
+          # full kernel package
           if compgen -G "../SD/*.tar.gz*" > /dev/null; then
             cp -r ../SD/*.tar.gz* out/${{ matrix.board }}/
           fi
 
-          # DEB Pakete
-          if compgen -G "../*.deb" > /dev/null; then
-            cp ../*.deb out/${{ matrix.board }}/
-          fi
+          # DEB packages
+          find .. -maxdepth 1 -type f -name "*.deb" \
+            \( -name "linux-image*.deb" -o -name "linux-headers*.deb" \) \
+            -exec cp {} out/${{ matrix.board }}/ \;
 
-          # ITB Files
-          if compgen -G "*-[0-9]*.itb" > /dev/null; then
-            cp *-[0-9]*.itb out/${{ matrix.board }}/
-          fi
           ls -lh out/${{ matrix.board }}/
 
       - name: Upload artifacts
