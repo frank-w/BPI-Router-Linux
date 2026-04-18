@@ -122,6 +122,7 @@ jobs:
         with:
           name: build-${{ matrix.board }}
           path: out/${{ matrix.board }}
+          retention-days: 1
 
   release:
     runs-on: ubuntu-latest
