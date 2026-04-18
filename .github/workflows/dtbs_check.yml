@@ -36,6 +36,7 @@ jobs:
 
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
+          export MAKEFLAGS="-j$(nproc)"
 
           source .venv/bin/activate
 
@@ -87,6 +88,7 @@ jobs:
 
           export ARCH=arm
           export CROSS_COMPILE=arm-linux-gnueabihf-
+          export MAKEFLAGS="-j$(nproc)"
 
           source .venv/bin/activate
 
