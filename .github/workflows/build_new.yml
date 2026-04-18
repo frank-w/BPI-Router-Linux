@@ -148,7 +148,7 @@ jobs:
       - name: Generate changelog
         run: |
           echo -e "# Release\n**Commit:** ${{ github.sha }}\n**Branch:** ${{ env.BRANCH }}\n**Kernel:** ${{ env.KERNELVER }}\n\n## Changelog\n" > CHANGELOG.md
-          git log --pretty=format:"- **%s** (`%h`)" >> CHANGELOG.md
+          git log --pretty=format:"- %h %ad **%s** %d by %an" --date=short --no-merges >> CHANGELOG.md
 
       - name: Create release
         uses: softprops/action-gh-release@v2
