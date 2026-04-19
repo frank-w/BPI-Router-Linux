@@ -1,0 +1,55 @@
+name: mergebase
+
+on:
+  push:
+
+jobs:
+  get_merge_base:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM_REMOTE: torvalds
+      UPSTREAM_URL: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+      UPSTREAM_BRANCH: master
+      FETCH_STEP: 100
+      FETCH_MAX: 2000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 200
+
+      - name: Add upstream remote (torvalds)
+        run: |
+          git remote add $UPSTREAM_REMOTE $UPSTREAM_URL 2>/dev/null || true
+
+      - name: Find upstream merge-base (torvalds/master)
+        run: |
+          set -e
+
+          DEPTH=$FETCH_STEP
+
+          # get Upstream initial flat
+          git fetch $UPSTREAM_REMOTE $UPSTREAM_BRANCH --depth=$DEPTH
+
+          while true; do
+            BASE=$(git merge-base HEAD FETCH_HEAD || true)
+
+            if [ -n "$BASE" ]; then
+              echo "Found merge-base: $BASE"
+              echo "BASE=$BASE" >> $GITHUB_ENV
+              break
+            fi
+
+            if [ $DEPTH -ge $FETCH_MAX ]; then
+              echo "Fallback to full fetch..."
+              git fetch $UPSTREAM_REMOTE $UPSTREAM_BRANCH --unshallow
+              BASE=$(git merge-base HEAD FETCH_HEAD)
+              echo "BASE=$BASE" >> $GITHUB_ENV
+              break
+            fi
+
+            echo "No base yet till $DEPTH, deepening by $FETCH_STEP..."
+            git fetch $UPSTREAM_REMOTE $UPSTREAM_BRANCH --deepen=$FETCH_STEP
+            DEPTH=$((DEPTH + FETCH_STEP))
+          done
