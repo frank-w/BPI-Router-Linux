@@ -30,7 +30,7 @@ jobs:
         with:
           path: |
             ~/.cache/dtschema
-            ~/.local/lib/python*/site-packages/dtschema
+            .venv/lib/python*/site-packages/dtschema
           key: ${{ runner.os }}-dtschema-${{ github.ref_name }}-${{ hashFiles('**/*.yaml') }}
 
       # arch-specific cache
