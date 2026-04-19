@@ -122,9 +122,14 @@ jobs:
           make ${{ matrix.defconfig }} \
             2>&1 | tee $LOGDIR/defconfig_${{ matrix.arch }}.log
 
-          make dtbs_check DTB_FILES="$DTB_FILTER" \
+          DTB_LIST=$(ls $DTB_FILTER)
+          make $DTB_LIST \
             > >(tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log) \
             2> >(tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log \
+                     $LOGDIR/dtbs_check_${{ matrix.arch }}_stderr.log >&2)
+          make V=1 dtbs_check DTB_FILES="$DTB_FILTER" \
+            > >(tee -a $LOGDIR/dtbs_check_${{ matrix.arch }}.log) \
+            2> >(tee -a $LOGDIR/dtbs_check_${{ matrix.arch }}.log \
                      $LOGDIR/dtbs_check_${{ matrix.arch }}_stderr.log >&2)
 
       - name: Upload logs
