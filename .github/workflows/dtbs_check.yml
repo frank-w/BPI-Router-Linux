@@ -13,14 +13,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cache dt-schema
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/dtschema
-            .venv/lib/python*/site-packages/dtschema
-          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}
-
       - name: Install dependencies
         run: |
           sudo apt update
@@ -32,6 +24,14 @@ jobs:
           source .venv/bin/activate
           pip install --upgrade pip
           pip install dtschema
+
+      - name: Cache dt-schema
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/dtschema
+            .venv/lib/python*/site-packages/dtschema
+          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}
 
       - name: Run DT binding check
         shell: bash
