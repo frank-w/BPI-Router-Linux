@@ -4,6 +4,8 @@ on:
   push:
 
 jobs:
+
+
   dt_binding_check:
     runs-on: ubuntu-latest
 
@@ -73,7 +75,7 @@ jobs:
     env:
       ARCH: ${{ matrix.arch }}
       CROSS_COMPILE: ${{ matrix.cross }}
-      MAKEFLAGS: -j$(nproc)
+      MAKEFLAGS: -j2
       DTB_FILTER: arch/${{ matrix.arch }}/boot/dts/mediatek/mt7*.dtb
 
     steps:
