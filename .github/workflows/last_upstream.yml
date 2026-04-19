@@ -23,33 +23,27 @@ jobs:
         run: |
           git remote add $UPSTREAM_REMOTE $UPSTREAM_URL 2>/dev/null || true
 
+      - name: Get kernel version
+        run: |
+          KVER=$(make -s kernelversion)
+          echo "Kernel version: $KVER"
+
+          echo "KVER=$KVER" >> $GITHUB_ENV
+
+      - name: Derive upstream tag
+        run: |
+          # Beispiel: 7.0.0-rc1 → v7.0-rc1
+          BASE_TAG="v${KVER%.*}"
+
+          echo "Derived base tag: $BASE_TAG"
+          echo "BASE_TAG=$BASE_TAG" >> $GITHUB_ENV
+          git fetch torvalds "$BASE_TAG" --depth=1
+          BASE=$(git rev-parse FETCH_HEAD)
+          echo "Base with torvalds/master via tag: $BASE"
+          echo "BASE=$BASE" >> $GITHUB_ENV
+
       - name: Find upstream merge-base (torvalds/master)
         run: |
-          set -e
-
-          DEPTH=$FETCH_STEP
-
-          # get Upstream initial flat
-          git fetch $UPSTREAM_REMOTE $UPSTREAM_BRANCH --depth=$DEPTH
-
-          while true; do
-            BASE=$(git merge-base HEAD FETCH_HEAD || true)
-
-            if [ -n "$BASE" ]; then
-              echo "Found merge-base: $BASE"
-              echo "BASE=$BASE" >> $GITHUB_ENV
-              break
-            fi
-
-            if [ $DEPTH -ge $FETCH_MAX ]; then
-              echo "Fallback to full fetch..."
-              git fetch $UPSTREAM_REMOTE $UPSTREAM_BRANCH --unshallow
-              BASE=$(git merge-base HEAD FETCH_HEAD)
-              echo "BASE=$BASE" >> $GITHUB_ENV
-              break
-            fi
-
-            echo "No base yet till $DEPTH, deepening by $FETCH_STEP..."
-            git fetch $UPSTREAM_REMOTE $UPSTREAM_BRANCH --deepen=$FETCH_STEP
-            DEPTH=$((DEPTH + FETCH_STEP))
-          done
+          BASE=$(git merge-base HEAD torvalds/master)
+          echo "Merge base with torvalds/master: $BASE"
+          #echo "BASE=$BASE" >> $GITHUB_ENV
