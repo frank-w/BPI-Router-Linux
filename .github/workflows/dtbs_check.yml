@@ -18,6 +18,7 @@ jobs:
         with:
           path: |
             ~/.cache/dtschema
+            .venv/lib/python*/site-packages/dtschema
           key: ${{ runner.os }}-dtschema-${{ github.ref_name }}
 
       - name: Install dependencies
