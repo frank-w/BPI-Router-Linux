@@ -77,7 +77,7 @@ jobs:
           make ${{ matrix.defconfig }} \
             2>&1 | tee $LOGDIR/defconfig_${{ matrix.arch }}.log
 
-          make dtbs_check DTB_FILES="arch/${ARCH}/boot/dts/mediatek/*.dtb \
+          make dtbs_check DTB_FILES="arch/${ARCH}/boot/dts/mediatek/*.dtb" \
             2>&1 | tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log
 
       - name: Upload logs
