@@ -73,7 +73,9 @@ jobs:
           # bindings only for arm64 (save time)
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             make dt_binding_check \
-              2>&1 | tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log
+              > >(tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log) \
+              2> >(tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log \
+                       $LOGDIR/dt_binding_check_${{ matrix.arch }}_stderr.log >&2)
           fi
 
       - name: Run DTBS checks
@@ -90,7 +92,9 @@ jobs:
             2>&1 | tee $LOGDIR/defconfig_${{ matrix.arch }}.log
 
           make dtbs_check DTB_FILES="$DTB_FILTER" \
-            2>&1 | tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log
+            > >(tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log) \
+            2> >(tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log \
+                     $LOGDIR/dtbs_check_${{ matrix.arch }}_stderr.log >&2)
 
       - name: Upload logs
         if: always()
