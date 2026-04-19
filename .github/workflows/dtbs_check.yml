@@ -4,14 +4,58 @@ on:
   push:
 
 jobs:
-  dtbs:
+  dt_binding_check:
     runs-on: ubuntu-latest
 
-    env:
-      ARCH: ${{ matrix.arch }}
-      CROSS_COMPILE: ${{ matrix.cross }}
-      MAKEFLAGS: -j$(nproc)
-      DTB_FILTER: arch/${{ matrix.arch }}/boot/dts/mediatek/mt7*.dtb
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache dt-schema
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/dtschema
+          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y swig yamllint python3-pip python3-venv make
+
+      - name: Setup Python venv
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install dtschema
+
+      - name: Run DT binding check
+        shell: bash
+        run: |
+          set -o pipefail
+
+          LOGDIR=logs
+          mkdir -p $LOGDIR
+
+          source .venv/bin/activate
+
+          make dt_binding_check \
+              > >(tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log) \
+              2> >(tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log \
+                       $LOGDIR/dt_binding_check_${{ matrix.arch }}_stderr.log >&2)
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dt-binding-logs
+          path: logs/
+
+
+  dtbs:
+    needs: dt_binding_check
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -26,25 +70,28 @@ jobs:
             compiler: gcc-arm-linux-gnueabihf
             defconfig: multi_v7_defconfig
 
+    env:
+      ARCH: ${{ matrix.arch }}
+      CROSS_COMPILE: ${{ matrix.cross }}
+      MAKEFLAGS: -j$(nproc)
+      DTB_FILTER: arch/${{ matrix.arch }}/boot/dts/mediatek/mt7*.dtb
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # shared cache
+      # shared cache (nur restore nötig)
       - name: Cache dt-schema
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/dtschema
-            .venv/lib/python*/site-packages/dtschema
-          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}-${{ hashFiles('**/*.yaml') }}
+          path: ~/.cache/dtschema
+          key: ${{ runner.os }}-dtschema-${{ github.ref_name }}
 
-      # arch-specific cache
       - name: Cache DTBs
         uses: actions/cache@v4
         with:
           path: arch/${{ matrix.arch }}/boot/dts/
-          key: ${{ runner.os }}-dtbs-${{ matrix.arch }}-${{ github.ref_name }}-${{ hashFiles(format('arch/{0}/**/*.dts', matrix.arch), format('arch/{0}/**/*.dtsi', matrix.arch)) }}
+          key: ${{ runner.os }}-dtbs-${{ matrix.arch }}-${{ github.ref_name }}
 
       - name: Install dependencies
         run: |
@@ -56,27 +103,8 @@ jobs:
       - name: Setup Python venv
         run: |
           python3 -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install dtschema
-
-      - name: Run DT binding checks
-        shell: bash
-        run: |
-          set -o pipefail
-
-          LOGDIR=logs
-          mkdir -p $LOGDIR
-
           source .venv/bin/activate
-
-          # bindings only for arm64 (save time)
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            make dt_binding_check \
-              > >(tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log) \
-              2> >(tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log \
-                       $LOGDIR/dt_binding_check_${{ matrix.arch }}_stderr.log >&2)
-          fi
+          pip install dtschema
 
       - name: Run DTBS checks
         shell: bash
