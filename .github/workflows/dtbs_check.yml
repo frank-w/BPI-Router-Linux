@@ -7,6 +7,12 @@ jobs:
   dtbs:
     runs-on: ubuntu-latest
 
+    env:
+      ARCH: ${{ matrix.arch }}
+      CROSS_COMPILE: ${{ matrix.cross }}
+      MAKEFLAGS: -j$(nproc)
+      DTB_FILTER: arch/${{ matrix.arch }}/boot/dts/mediatek/mt7*.dtb
+
     strategy:
       fail-fast: false
       matrix:
@@ -62,10 +68,6 @@ jobs:
           LOGDIR=logs
           mkdir -p $LOGDIR
 
-          export ARCH=${{ matrix.arch }}
-          export CROSS_COMPILE=${{ matrix.cross }}
-          export MAKEFLAGS="-j$(nproc)"
-
           source .venv/bin/activate
 
           # bindings only for arm64 (save time)
@@ -74,10 +76,20 @@ jobs:
               2>&1 | tee $LOGDIR/dt_binding_check_${{ matrix.arch }}.log
           fi
 
+      - name: Run DTBS checks
+        shell: bash
+        run: |
+          set -o pipefail
+
+          LOGDIR=logs
+          mkdir -p $LOGDIR
+
+          source .venv/bin/activate
+
           make ${{ matrix.defconfig }} \
             2>&1 | tee $LOGDIR/defconfig_${{ matrix.arch }}.log
 
-          make dtbs_check DTB_FILES="arch/${ARCH}/boot/dts/mediatek/*.dtb" \
+          make dtbs_check DTB_FILES="$DTB_FILTER" \
             2>&1 | tee $LOGDIR/dtbs_check_${{ matrix.arch }}.log
 
       - name: Upload logs
