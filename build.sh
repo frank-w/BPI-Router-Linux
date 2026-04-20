@@ -350,8 +350,8 @@ function pack_debs {
 	export KDEB_COMPRESS=gzip
 	export DEB_BUILD_OPTIONS="nocheck noautodbgsym"
 
-	echo "LOCALVERSION=${gitbranch} board=$baseboard ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
-	board="$baseboard" make -j${numproc} bindeb-pkg
+	echo "LOCALVERSION=${gitbranch} board=$board ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
+	board="$board" make -j${numproc} bindeb-pkg
 	if [[ $? -ne 0 ]];then exit 1;fi;
 	ls ../*.deb
 }
