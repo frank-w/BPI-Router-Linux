@@ -1770,6 +1770,59 @@ bool dsa_mdb_present_in_other_db(struct dsa_switch *ds, int port,
 }
 EXPORT_SYMBOL_GPL(dsa_mdb_present_in_other_db);
 
+static int dsa_switch_for_each_bridge_host_list(struct dsa_switch *ds,
+						const struct dsa_bridge *bridge,
+						bool is_mdb,
+						dsa_bridge_host_walk_cb_t cb,
+						void *ctx)
+{
+	struct dsa_mac_addr *a;
+	struct dsa_port *dp;
+	int err = 0;
+
+	dsa_switch_for_each_port(dp, ds) {
+		if (!dsa_port_is_cpu(dp) && !dsa_port_is_dsa(dp))
+			continue;
+
+		mutex_lock(&dp->addr_lists_lock);
+
+		list_for_each_entry(a, is_mdb ? &dp->mdbs : &dp->fdbs, list) {
+			if (a->db.type != DSA_DB_BRIDGE)
+				continue;
+			if (a->db.bridge.num != bridge->num)
+				continue;
+
+			err = cb(ds, a->addr, a->vid, &a->db, ctx);
+			if (err)
+				break;
+		}
+
+		mutex_unlock(&dp->addr_lists_lock);
+		if (err)
+			break;
+	}
+
+	return err;
+}
+
+int dsa_switch_for_each_bridge_host_fdb(struct dsa_switch *ds,
+					const struct dsa_bridge *bridge,
+					dsa_bridge_host_walk_cb_t cb,
+					void *ctx)
+{
+	return dsa_switch_for_each_bridge_host_list(ds, bridge, false, cb, ctx);
+}
+EXPORT_SYMBOL_GPL(dsa_switch_for_each_bridge_host_fdb);
+
+int dsa_switch_for_each_bridge_host_mdb(struct dsa_switch *ds,
+					const struct dsa_bridge *bridge,
+					dsa_bridge_host_walk_cb_t cb,
+					void *ctx)
+{
+	return dsa_switch_for_each_bridge_host_list(ds, bridge, true, cb, ctx);
+}
+EXPORT_SYMBOL_GPL(dsa_switch_for_each_bridge_host_mdb);
+
 /* Helpers for switches without specific HSR offloads, but which can implement
  * NETIF_F_HW_HSR_DUP because their tagger uses dsa_xmit_port_mask()
  */
