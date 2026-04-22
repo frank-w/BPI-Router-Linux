@@ -207,7 +207,7 @@ static int mxl862xx_busy_wait(struct mxl862xx_priv *priv)
 	int val;
 
 	return readx_poll_timeout(mxl862xx_ctrl_read, priv, val,
-				  !(val & CTRL_BUSY_MASK), 15, 500000);
+				  !(val & CTRL_BUSY_MASK), 50, 5000000);
 }
 
 /* Issue a firmware command with CRC-6 protection on the ctrl and len_ret
