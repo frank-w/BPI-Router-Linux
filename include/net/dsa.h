@@ -1338,6 +1338,18 @@ bool dsa_mdb_present_in_other_db(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_mdb *mdb,
 				 struct dsa_db db);
 
+typedef int (*dsa_bridge_host_walk_cb_t)(struct dsa_switch *ds,
+					 const unsigned char *addr, u16 vid,
+					 const struct dsa_db *db, void *ctx);
+int dsa_switch_for_each_bridge_host_fdb(struct dsa_switch *ds,
+					const struct dsa_bridge *bridge,
+					dsa_bridge_host_walk_cb_t cb,
+					void *ctx);
+int dsa_switch_for_each_bridge_host_mdb(struct dsa_switch *ds,
+					const struct dsa_bridge *bridge,
+					dsa_bridge_host_walk_cb_t cb,
+					void *ctx);
+
 int dsa_port_simple_hsr_validate(struct dsa_switch *ds, int port,
 				 struct net_device *hsr,
 				 struct netlink_ext_ack *extack);
