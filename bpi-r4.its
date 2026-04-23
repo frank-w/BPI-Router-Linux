@@ -269,6 +269,14 @@
 			description = "EMMC FDT overlay blob for R4 Pro";
 			fdt = "fdt-ov-pro-emmc";
 		};
+		ov-pro-cn13 {
+			description = "CN15 FDT overlay blob for R4 Pro";
+			fdt = "fdt-ov-pro-cn13";
+		};
+		ov-pro-cn14 {
+			description = "CN18 FDT overlay blob for R4 Pro";
+			fdt = "fdt-ov-pro-cn14";
+		};
 		ov-pro-cn15 {
 			description = "CN15 FDT overlay blob for R4 Pro";
 			fdt = "fdt-ov-pro-cn15";
