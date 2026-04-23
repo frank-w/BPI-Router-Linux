@@ -193,6 +193,7 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 			   int *wed_index)
 {
 	struct mtk_wdma_info info = {};
+	struct mtk_mac *mac;
 	int pse_port, dsa_port, queue;
 
 	if (mtk_flow_get_wdma_info(dev, dest_mac, &info) == 0) {
@@ -230,9 +231,12 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 	else
 		return -EOPNOTSUPP;
 
-	if (dsa_port >= 0) {
+	if (dsa_port >= 0)
 		mtk_foe_entry_set_dsa(eth, foe, dsa_port);
-		queue = 3 + dsa_port;
+
+	if (dsa_port >= 0 && dsa_port < MTK_DSA_USER_PORT_MAX) {
+		mac = netdev_priv(dev);
+		queue = mac->dsa_queue_base + mac->dsa_port_rank[dsa_port];
 	} else {
 		queue = pse_port - 1;
 	}
