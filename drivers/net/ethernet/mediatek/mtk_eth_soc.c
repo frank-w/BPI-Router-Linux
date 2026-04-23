@@ -3938,6 +3938,7 @@ static int mtk_device_event(struct notifier_block *n, unsigned long event, void 
 	struct net_device *ldev;
 	struct list_head *iter;
 	struct dsa_port *dp;
+	unsigned int queue;
 
 	if (event != NETDEV_CHANGE)
 		return NOTIFY_DONE;
@@ -3962,13 +3963,17 @@ found:
 		return NOTIFY_DONE;
 
 	dp = dsa_port_from_netdev(dev);
-	if (dp->index >= eth->soc->num_tx_queues)
+	if (dp->index >= MTK_DSA_USER_PORT_MAX)
+		return NOTIFY_DONE;
+
+	queue = mac->dsa_queue_base + mac->dsa_port_rank[dp->index];
+	if (queue >= eth->soc->num_tx_queues)
 		return NOTIFY_DONE;
 
 	if (mac->speed > 0 && mac->speed <= s.base.speed)
 		s.base.speed = 0;
 
-	mtk_set_queue_speed(eth, dp->index + 3, s.base.speed);
+	mtk_set_queue_speed(eth, queue, s.base.speed);
 
 	return NOTIFY_DONE;
 }
@@ -5347,12 +5352,17 @@ static u16 mtk_select_queue(struct net_device *dev, struct sk_buff *skb,
 			    struct net_device *sb_dev)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
+	unsigned int dp_idx;
 	unsigned int queue = 0;
 
-	if (netdev_uses_dsa(dev))
-		queue = skb_get_queue_mapping(skb) + 3;
-	else
+	if (netdev_uses_dsa(dev)) {
+		dp_idx = skb_get_queue_mapping(skb);
+		if (dp_idx < MTK_DSA_USER_PORT_MAX)
+			queue = mac->dsa_queue_base +
+				mac->dsa_port_rank[dp_idx];
+	} else {
 		queue = mac->id;
+	}
 
 	if (queue >= dev->num_tx_queues)
 		queue = 0;
