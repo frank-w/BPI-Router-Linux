@@ -10,6 +10,7 @@
 #include <net/flow_offload.h>
 #include <net/pkt_cls.h>
 #include <net/dsa.h>
+#include <linux/dsa/8021q.h>
 #include "mtk_eth_soc.h"
 #include "mtk_wed.h"
 
@@ -166,8 +167,21 @@ mtk_flow_mangle_ipv4(const struct flow_action_entry *act,
 	return 0;
 }
 
+/*
+ * Inspect *dev as a DSA user netdev.  On success, substitute *dev with
+ * the conduit netdev, return the DSA user port's dp->index, and in
+ * *push_vid hand back either 0 (native MTK tag; the PPE injects its
+ * magic etype later via mtk_foe_entry_set_dsa()) or the outer 802.1Q
+ * VID the PPE should push on the egressing frame (tag_8021q taggers
+ * that use an outer Q-in-Q tag with a standalone per-port VID, i.e.
+ * the MxL862xx tag_8021q tagger).
+ *
+ * Other tag_8021q-based taggers (sja1105, ocelot_8021q, ...) use
+ * different tag layers and/or bridge-scoped VIDs; do not extend the
+ * switch below to cover them without per-tagger review.
+ */
 static int
-mtk_flow_get_dsa_port(struct net_device **dev)
+mtk_flow_get_dsa_port(struct net_device **dev, u16 *push_vid)
 {
 #if IS_ENABLED(CONFIG_NET_DSA)
 	struct dsa_port *dp;
@@ -176,8 +190,16 @@ mtk_flow_get_dsa_port(struct net_device **dev)
 	if (IS_ERR(dp))
 		return -ENODEV;
 
-	if (dp->cpu_dp->tag_ops->proto != DSA_TAG_PROTO_MTK)
+	switch (dp->cpu_dp->tag_ops->proto) {
+	case DSA_TAG_PROTO_MTK:
+		*push_vid = 0;
+		break;
+	case DSA_TAG_PROTO_MXL862_8021Q:
+		*push_vid = dsa_tag_8021q_standalone_vid(dp);
+		break;
+	default:
 		return -ENODEV;
+	}
 
 	*dev = dsa_port_to_conduit(dp);
 
@@ -195,6 +217,7 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 	struct mtk_wdma_info info = {};
 	struct mtk_mac *mac;
 	int pse_port, dsa_port, queue;
+	u16 push_vid = 0;
 
 	if (mtk_flow_get_wdma_info(dev, dest_mac, &info) == 0) {
 		mtk_foe_entry_set_wdma(eth, foe, info.wdma_idx, info.queue,
@@ -220,7 +243,7 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 		goto out;
 	}
 
-	dsa_port = mtk_flow_get_dsa_port(&dev);
+	dsa_port = mtk_flow_get_dsa_port(&dev, &push_vid);
 
 	if (dev == eth->netdev[0])
 		pse_port = PSE_GDM1_PORT;
@@ -231,8 +254,12 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 	else
 		return -EOPNOTSUPP;
 
-	if (dsa_port >= 0)
-		mtk_foe_entry_set_dsa(eth, foe, dsa_port);
+	if (dsa_port >= 0) {
+		if (push_vid)
+			mtk_foe_entry_set_vlan(eth, foe, push_vid);
+		else
+			mtk_foe_entry_set_dsa(eth, foe, dsa_port);
+	}
 
 	if (dsa_port >= 0 && dsa_port < MTK_DSA_USER_PORT_MAX) {
 		mac = netdev_priv(dev);
