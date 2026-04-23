@@ -71,6 +71,7 @@ static const struct mtk_reg_map mtk_reg_map = {
 		.rx_ptr		= 0x1900,
 		.rx_cnt_cfg	= 0x1904,
 		.qcrx_ptr	= 0x1908,
+		.page		= 0x19f0,
 		.glo_cfg	= 0x1a04,
 		.rst_idx	= 0x1a08,
 		.delay_irq	= 0x1a0c,
@@ -144,6 +145,7 @@ static const struct mtk_reg_map mt7986_reg_map = {
 		.rx_ptr		= 0x4500,
 		.rx_cnt_cfg	= 0x4504,
 		.qcrx_ptr	= 0x4508,
+		.page		= 0x45f0,
 		.glo_cfg	= 0x4604,
 		.rst_idx	= 0x4608,
 		.delay_irq	= 0x460c,
@@ -206,6 +208,7 @@ static const struct mtk_reg_map mt7988_reg_map = {
 		.rx_ptr		= 0x4500,
 		.rx_cnt_cfg	= 0x4504,
 		.qcrx_ptr	= 0x4508,
+		.page		= 0x45f0,
 		.glo_cfg	= 0x4604,
 		.rst_idx	= 0x4608,
 		.delay_irq	= 0x460c,
@@ -870,7 +873,8 @@ static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
 		}
 	}
 
-	ofs = MTK_QTX_OFFSET * idx;
+	mtk_w32(eth, idx / MTK_QTX_PER_PAGE, soc->reg_map->qdma.page);
+	ofs = MTK_QTX_OFFSET * (idx % MTK_QTX_PER_PAGE);
 	mtk_w32(eth, val, soc->reg_map->qdma.qtx_sch + ofs);
 }
 
@@ -2791,7 +2795,11 @@ static int mtk_tx_alloc(struct mtk_eth *eth)
 			soc->reg_map->qdma.crx_ptr);
 		mtk_w32(eth, ring->last_free_ptr, soc->reg_map->qdma.drx_ptr);
 
-		for (i = 0, ofs = 0; i < MTK_QDMA_NUM_QUEUES; i++) {
+		for (i = 0; i < soc->num_tx_queues; i++) {
+			mtk_w32(eth, i / MTK_QTX_PER_PAGE,
+				soc->reg_map->qdma.page);
+			ofs = MTK_QTX_OFFSET * (i % MTK_QTX_PER_PAGE);
+
 			val = (QDMA_RES_THRES << 8) | QDMA_RES_THRES;
 			mtk_w32(eth, val, soc->reg_map->qdma.qtx_cfg + ofs);
 
@@ -2803,7 +2811,6 @@ static int mtk_tx_alloc(struct mtk_eth *eth)
 			if (mtk_is_netsys_v1(eth))
 				val |= MTK_QTX_SCH_LEAKY_BUCKET_EN;
 			mtk_w32(eth, val, soc->reg_map->qdma.qtx_sch + ofs);
-			ofs += MTK_QTX_OFFSET;
 		}
 		val = MTK_QDMA_TX_SCH_MAX_WFQ | (MTK_QDMA_TX_SCH_MAX_WFQ << 16);
 		mtk_w32(eth, val, soc->reg_map->qdma.tx_sch_rate);
@@ -3615,7 +3622,7 @@ static void mtk_dma_free(struct mtk_eth *eth)
 	int i, j, txqs = 1;
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_QDMA))
-		txqs = MTK_QDMA_NUM_QUEUES;
+		txqs = soc->num_tx_queues;
 
 	for (i = 0; i < MTK_MAX_DEVS; i++) {
 		if (!eth->netdev[i])
@@ -3911,7 +3918,7 @@ found:
 		return NOTIFY_DONE;
 
 	dp = dsa_port_from_netdev(dev);
-	if (dp->index >= MTK_QDMA_NUM_QUEUES)
+	if (dp->index >= eth->soc->num_tx_queues)
 		return NOTIFY_DONE;
 
 	if (mac->speed > 0 && mac->speed <= s.base.speed)
@@ -5384,7 +5391,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	}
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_QDMA))
-		txqs = MTK_QDMA_NUM_QUEUES;
+		txqs = eth->soc->num_tx_queues;
 
 	eth->netdev[id] = alloc_etherdev_mqs(sizeof(*mac), txqs, 1);
 	if (!eth->netdev[id]) {
@@ -6138,6 +6145,7 @@ static const struct mtk_soc_data mt2701_data = {
 	.required_clks = MT7623_CLKS_BITMAP,
 	.required_pctl = true,
 	.version = 1,
+	.num_tx_queues = 16,
 	.rss_num = 0,
 	.tx = {
 		.desc_size = sizeof(struct mtk_tx_dma),
@@ -6165,6 +6173,7 @@ static const struct mtk_soc_data mt7621_data = {
 	.offload_version = 1,
 	.ppe_num = 1,
 	.hash_offset = 2,
+	.num_tx_queues = 16,
 	.foe_entry_size = MTK_FOE_ENTRY_V1_SIZE,
 	.rss_num = 0,
 	.tx = {
@@ -6195,6 +6204,7 @@ static const struct mtk_soc_data mt7622_data = {
 	.ppe_num = 1,
 	.hash_offset = 2,
 	.has_accounting = true,
+	.num_tx_queues = 16,
 	.foe_entry_size = MTK_FOE_ENTRY_V1_SIZE,
 	.rss_num = 0,
 	.tx = {
@@ -6223,6 +6233,7 @@ static const struct mtk_soc_data mt7623_data = {
 	.offload_version = 1,
 	.ppe_num = 1,
 	.hash_offset = 2,
+	.num_tx_queues = 16,
 	.foe_entry_size = MTK_FOE_ENTRY_V1_SIZE,
 	.disable_pll_modes = true,
 	.rss_num = 0,
@@ -6251,6 +6262,7 @@ static const struct mtk_soc_data mt7629_data = {
 	.required_pctl = false,
 	.has_accounting = true,
 	.version = 1,
+	.num_tx_queues = 16,
 	.rss_num = 0,
 	.tx = {
 		.desc_size = sizeof(struct mtk_tx_dma),
@@ -6280,6 +6292,7 @@ static const struct mtk_soc_data mt7981_data = {
 	.ppe_num = 2,
 	.hash_offset = 4,
 	.has_accounting = true,
+	.num_tx_queues = 16,
 	.foe_entry_size = MTK_FOE_ENTRY_V2_SIZE,
 	.rss_num = 4,
 	.tx = {
@@ -6310,6 +6323,7 @@ static const struct mtk_soc_data mt7986_data = {
 	.ppe_num = 2,
 	.hash_offset = 4,
 	.has_accounting = true,
+	.num_tx_queues = 16,
 	.foe_entry_size = MTK_FOE_ENTRY_V2_SIZE,
 	.rss_num = 4,
 	.tx = {
@@ -6340,6 +6354,7 @@ static const struct mtk_soc_data mt7988_data = {
 	.ppe_num = 3,
 	.hash_offset = 4,
 	.has_accounting = true,
+	.num_tx_queues = 32,
 	.foe_entry_size = MTK_FOE_ENTRY_V3_SIZE,
 	.rss_num = 4,
 	.tx = {

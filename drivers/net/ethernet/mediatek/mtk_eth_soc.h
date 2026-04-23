@@ -26,7 +26,7 @@
 #define MTK_MAX_DSA_PORTS	7
 #define MTK_DSA_PORT_MASK	GENMASK(2, 0)
 
-#define MTK_QDMA_NUM_QUEUES	16
+#define MTK_QTX_PER_PAGE	16
 #define MTK_QDMA_PAGE_SIZE	2048
 #define MTK_MAX_RX_LENGTH	1536
 #define MTK_MAX_RX_LENGTH_2K	2048
@@ -1288,6 +1288,7 @@ struct mtk_reg_map {
 		u32	rx_ptr;		/* rx base pointer */
 		u32	rx_cnt_cfg;	/* rx max count configuration */
 		u32	qcrx_ptr;	/* rx cpu pointer */
+		u32	page;		/* tx queue page select */
 		u32	glo_cfg;	/* global configuration */
 		u32	rst_idx;	/* reset index */
 		u32	delay_irq;	/* delay interrupt */
@@ -1345,6 +1346,7 @@ struct mtk_soc_data {
 	u8		hash_offset;
 	u8		version;
 	u8		ppe_num;
+	u16		num_tx_queues;
 	u16		foe_entry_size;
 	netdev_features_t hw_features;
 	bool		has_accounting;
