@@ -26,6 +26,14 @@
 #define MTK_MAX_DSA_PORTS	7
 #define MTK_DSA_PORT_MASK	GENMASK(2, 0)
 
+/*
+ * Upper bound on dp->index across all DSA switches we support attaching
+ * to an MT7988 / MT7986 / MT7622 / MT7621 conduit.  Sized to cover the
+ * 16-port MaxLinear MxL862xx with room to spare; increase when a larger
+ * switch needs per-port queue mapping.
+ */
+#define MTK_DSA_USER_PORT_MAX	32
+
 #define MTK_QTX_PER_PAGE	16
 #define MTK_QDMA_PAGE_SIZE	2048
 #define MTK_MAX_RX_LENGTH	1536
@@ -1519,6 +1527,8 @@ struct mtk_mac {
 	int				hwlro_ip_cnt;
 	unsigned int			syscfg0;
 	struct notifier_block		device_notifier;
+	u8				dsa_queue_base;
+	u8				dsa_port_rank[MTK_DSA_USER_PORT_MAX];
 };
 
 /* the struct describing the SoC. these are declared in the soc_xyz.c files */

@@ -3887,6 +3887,48 @@ static void mtk_gdm_config(struct mtk_eth *eth, u32 id, u32 config)
 }
 
 
+/*
+ * Recompute the per-conduit DSA user-port queue map.  Each conduit's mac
+ * gets a queue base (queues 0..MTK_MAX_DEVS-1 are reserved for non-DSA
+ * egress via GDM{1,2,3}), followed by a contiguous rank for every user
+ * port of the DSA switch attached to that conduit.  dsa_port_rank[]
+ * translates dp->index (which may be non-contiguous and may collide
+ * across switches) into that rank.
+ *
+ * Call this on DSA topology changes.  Idempotent.
+ */
+static void mtk_update_dsa_queue_map(struct mtk_eth *eth)
+{
+	struct net_device *conduit;
+	struct dsa_switch *ds;
+	struct mtk_mac *mac;
+	struct dsa_port *dp;
+	u8 base = MTK_MAX_DEVS;
+	u8 rank;
+	int i;
+
+	for (i = 0; i < MTK_MAX_DEVS; i++) {
+		conduit = eth->netdev[i];
+		if (!conduit)
+			continue;
+
+		mac = netdev_priv(conduit);
+		mac->dsa_queue_base = base;
+
+		if (!netdev_uses_dsa(conduit))
+			continue;
+
+		ds = conduit->dsa_ptr->ds;
+		rank = 0;
+		dsa_switch_for_each_user_port(dp, ds) {
+			if (dp->index < MTK_DSA_USER_PORT_MAX)
+				mac->dsa_port_rank[dp->index] = rank;
+			rank++;
+		}
+		base += rank;
+	}
+}
+
 static int mtk_device_event(struct notifier_block *n, unsigned long event, void *ptr)
 {
 	struct mtk_mac *mac = container_of(n, struct mtk_mac, device_notifier);
@@ -3910,6 +3952,8 @@ static int mtk_device_event(struct notifier_block *n, unsigned long event, void 
 found:
 	if (!dsa_user_dev_check(dev))
 		return NOTIFY_DONE;
+
+	mtk_update_dsa_queue_map(eth);
 
 	if (__ethtool_get_link_ksettings(dev, &s))
 		return NOTIFY_DONE;
@@ -5369,7 +5413,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	phy_interface_t phy_mode;
 	struct phylink *phylink;
 	struct mtk_mac *mac;
-	int id, err, count;
+	int id, err, count, i;
 	unsigned int sid;
 	int txqs = 1;
 	u32 val;
@@ -5403,6 +5447,16 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	mac->id = id;
 	mac->hw = eth;
 	mac->of_node = np;
+
+	/*
+	 * Initialize the DSA user-port queue map to an identity mapping
+	 * starting at MTK_MAX_DEVS, so that a mac without any DSA switch
+	 * attached keeps the historic "queue = dp->index + 3" layout.
+	 * mtk_update_dsa_queue_map() rewrites this once DSA state is up.
+	 */
+	mac->dsa_queue_base = MTK_MAX_DEVS;
+	for (i = 0; i < MTK_DSA_USER_PORT_MAX; i++)
+		mac->dsa_port_rank[i] = i;
 
 	memset(mac->hwlro_ip, 0, sizeof(mac->hwlro_ip));
 	mac->hwlro_ip_cnt = 0;
