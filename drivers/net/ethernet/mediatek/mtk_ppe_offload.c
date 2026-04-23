@@ -280,7 +280,8 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 	int err = 0;
 	int i;
 
-	if (rhashtable_lookup(&eth->flow_table, &f->cookie, mtk_flow_ht_params))
+	if (rhashtable_lookup_fast(&eth->flow_table, &f->cookie,
+				   mtk_flow_ht_params))
 		return -EEXIST;
 
 	if (flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_META)) {
@@ -522,8 +523,8 @@ mtk_flow_offload_destroy(struct mtk_eth *eth, struct flow_cls_offload *f)
 {
 	struct mtk_flow_entry *entry;
 
-	entry = rhashtable_lookup(&eth->flow_table, &f->cookie,
-				  mtk_flow_ht_params);
+	entry = rhashtable_lookup_fast(&eth->flow_table, &f->cookie,
+				       mtk_flow_ht_params);
 	if (!entry)
 		return -ENOENT;
 
@@ -544,8 +545,8 @@ mtk_flow_offload_stats(struct mtk_eth *eth, struct flow_cls_offload *f)
 	struct mtk_foe_accounting diff;
 	u32 idle;
 
-	entry = rhashtable_lookup(&eth->flow_table, &f->cookie,
-				  mtk_flow_ht_params);
+	entry = rhashtable_lookup_fast(&eth->flow_table, &f->cookie,
+				       mtk_flow_ht_params);
 	if (!entry)
 		return -ENOENT;
 
