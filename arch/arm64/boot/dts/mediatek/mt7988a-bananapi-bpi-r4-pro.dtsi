@@ -257,13 +257,13 @@
 				};
 			};
 
-			port@13 {
+			/*port@13 {
 				reg = <13>;
 				label = "sfp-lan";
 				phy-mode = "10gbase-r";
 				managed = "in-band-status";
 				sfp = <&sfp1>;
-			};
+			};*/
 		};
 
 		mdio {
