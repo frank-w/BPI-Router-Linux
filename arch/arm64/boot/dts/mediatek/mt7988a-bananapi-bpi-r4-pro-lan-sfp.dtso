@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2025 MediaTek Inc.
+ * Author: Frank Wunderlich <frank-w@public-files.de>
+ */
+
+/* This enables LAN-SFP on BPI-R4-Pro */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	compatible = "bananapi,bpi-r4-pro", "mediatek,mt7988a";
+};
+
+&{/soc/ethernet@15100000/mdio-bus/switch@10/ports} {
+	//we need to set address/size-cells to avoid warning
+	// Warning (reg_format): /fragment@0/__overlay__/port@13:reg: property has invalid length (4 bytes) (#address-cells == 2, #size-cells == 1)
+	#address-cells = <1>;
+	#size-cells = <0>;
+	port@13 {
+		reg = <13>;
+		label = "lan6";
+		sfp = <&sfp1>;
+		managed = "in-band-status";
+		phy-mode = "usxgmii";
+		status = "okay";
+	};
+};
+
+&{/soc/pinctrl@1001f000} {
+	sfp-lan-hog {
+		gpio-hog;
+		gpios = <54 GPIO_ACTIVE_HIGH>;
+		output-low; /* select sfp */
+	};
+};
