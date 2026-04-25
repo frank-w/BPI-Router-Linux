@@ -15,7 +15,7 @@
 		     "mediatek,mt7988a";
 };
 
-&eth {
+/*&eth {
 	mux: mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -51,7 +51,7 @@
 	phy-connection-type = "usxgmii";
 	phy-handle = <&phy28>;
 	status = "okay";
-};
+};*/
 
 &mdio_bus {
 	/* external Airoha AN8831X connected to MXL switch */
@@ -114,7 +114,7 @@
 	};
 };
 
-&switch16 {
+/*&switch16 {
 	ds_mux: ds-mux-bus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -123,7 +123,7 @@
 			compatible = "mxl862xx,ds-mux";
 			reg = <12>;
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
-			/* SFP1 module detect (shared with sfp1 node) */
+			// SFP1 module detect (shared with sfp1 node)
 			mod-def0-gpios = <&pio 69 GPIO_ACTIVE_LOW>;
 			sfp-present-channel = <0>;
 			#address-cells = <1>;
@@ -147,7 +147,7 @@
 	};
 
 	ports {
-		port13: port@6 {
+		port13: port@13 {
 			reg = <13>;
 			label = "lan6";
 			phy-mode = "10gbase-r";
@@ -157,4 +157,4 @@
 		};
 
 	};
-};
+};*/
