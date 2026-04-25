@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2025 MediaTek Inc.
+ * Author: Frank Wunderlich <frank-w@public-files.de>
+ */
+
+/* This enables WAN-PHY on BPI-R4-Pro */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	compatible = "bananapi,bpi-r4-pro", "mediatek,mt7988a";
+};
+
+&{/soc/ethernet@15100000/mac@1} {
+	//usxgmii has link flapping with every fw
+	phy-mode = "usxgmii";
+	phy-connection-type = "usxgmii";
+	managed = "in-band-status"; //needed for usxgmii
+	//phy-mode = "10gbase-r";
+	//phy-connection-type = "10gbase-r";
+	phy-handle = <&phy28>;
+	status = "okay";
+};
+
+&{/soc/pinctrl@1001f000} {
+	wan-phy-hog {
+		gpio-hog;
+		gpios = <3 GPIO_ACTIVE_HIGH>;
+		output-low; /* select phy */
+	};
+};
