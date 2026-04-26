@@ -4,7 +4,7 @@
  * Author: Frank Wunderlich <frank-w@public-files.de>
  */
 
-/* This WAN-SFP on BPI-R4-Pro */
+/* This enables WAN-PHY on BPI-R4-Pro */
 
 /dts-v1/;
 /plugin/;
@@ -16,6 +16,9 @@
 };
 
 &{/soc/ethernet@15100000/mac@1} {
+	//usxgmii has link flapping with every fw
+	//phy-mode = "usxgmii";
+	//managed = "in-band-status"; //needed for usxgmii
 	phy-mode = "10gbase-r";
 	phy-connection-type = "10gbase-r";
 	phy-handle = <&phy28>;

@@ -293,10 +293,7 @@
 
 &gmac1 {
 	label = "sfp-wan";
-	sfp = <&sfp2>;
 	phy-mode = "10gbase-r";
-	managed = "in-band-status";
-	sfp = <&sfp2>;
 
 	status = "okay";
 };
