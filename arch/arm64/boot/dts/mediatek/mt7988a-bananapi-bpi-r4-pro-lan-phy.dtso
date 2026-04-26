@@ -4,7 +4,7 @@
  * Author: Frank Wunderlich <frank-w@public-files.de>
  */
 
-/* This enables LAN-SFP on BPI-R4-Pro */
+/* This enables LAN-PHY on BPI-R4-Pro */
 
 /dts-v1/;
 /plugin/;
