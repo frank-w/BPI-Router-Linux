@@ -4,7 +4,7 @@
  * Author: Frank Wunderlich <frank-w@public-files.de>
  */
 
-/* This WAN-SFP on BPI-R4-Pro */
+/* This enables WAN-SFP on BPI-R4-Pro */
 
 /dts-v1/;
 /plugin/;
