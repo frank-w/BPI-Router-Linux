@@ -16,7 +16,9 @@
 };
 
 &{/soc/ethernet@15100000/mac@1} {
-	phy-mode = "usxgmii";
+	//phy-mode = "usxgmii";
+	phy-mode = "10gbase-r";
+	phy-connection-type = "10gbase-r";
 	phy-handle = <&phy28>;
 	status = "okay";
 };
