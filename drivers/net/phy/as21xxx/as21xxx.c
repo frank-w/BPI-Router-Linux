@@ -1152,6 +1152,8 @@ done:
 	link_up = ((status & AN_STATES1_ARB_MASK) >> AN_STATES1_ARB_OFST) == LINK_GOOD;
 	phydev->link = link_up;
 	phydev->autoneg_complete = link_up;
+
+	//phydev_info(phydev, "linkup: %d (bmcr %x)\n", link_up,bmcr);
 	/* Consider the case that autoneg was started and "aneg complete"
 	 * bit has been reset, but "link up" bit not yet.
 	 */
@@ -1248,6 +1250,7 @@ static void aeon_read_speed(struct phy_device *phydev)
 		phydev->speed = SPEED_10;
 		phydev->duplex = DUPLEX_FULL;
 	}
+	phydev_info(phydev, "speed: %x (phydev->speed %d)\n", speed,phydev->speed);
 }
 
 static void aeon_resolve_aneg_linkmode(struct phy_device *phydev)
@@ -1569,8 +1572,10 @@ static int aeon_gen1_config_init(struct phy_device *phydev)
 	}
 
 	aeon_config_led(phydev);
-	if (phydev->interface == PHY_INTERFACE_MODE_USXGMII)
+	if (phydev->interface == PHY_INTERFACE_MODE_USXGMII){
+		phydev_info(phydev, "usxgmii v1\n");
 		ret = aeon_dpc_ra_enable(phydev);
+	}
 
 	return ret;
 }
@@ -1590,9 +1595,10 @@ static int aeon_gen2_config_init(struct phy_device *phydev)
 	}
 
 	aeon_config_led(phydev);
-	if (phydev->interface == PHY_INTERFACE_MODE_USXGMII)
+	if (phydev->interface == PHY_INTERFACE_MODE_USXGMII) {
+		phydev_info(phydev, "usxgmii v2\n");
 		ret = aeon_dpc_ra_enable(phydev);
-
+	}
 	return ret;
 }
 
