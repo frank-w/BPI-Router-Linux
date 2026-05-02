@@ -127,7 +127,7 @@ jobs:
         with:
           path: artifacts
 
-      - name: Generate changelog
+      - name: Copy files for release
         run: |
           mkdir release
           find artifacts -type f \( -name "*.itb" -o -name "*.tar.gz*" -o -name "*.img" -o -name "*.deb" \) \
