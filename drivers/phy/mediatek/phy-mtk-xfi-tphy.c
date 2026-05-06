@@ -72,6 +72,23 @@ struct mtk_xfi_tphy {
 	bool			da_war;
 };
 
+bool mtk_xfi_tphy_valid_ctle(struct phy *phy)
+{
+	struct mtk_xfi_tphy *xfi_tphy = phy_get_drvdata(phy);
+	unsigned int val, ctle;
+
+	writel(0x00000404, xfi_tphy->base + 0x00);
+	writel(0x00d600d5, xfi_tphy->base + 0x10);
+
+	val = readl(xfi_tphy->base + 0xd0);
+
+	ctle = FIELD_GET(GENMASK(12, 8), val);
+	if (ctle > 10)
+	       return false;
+
+	return true;
+}
+
 /**
  * mtk_xfi_tphy_setup() - Setup phy for specified interface mode.
  * @xfi_tphy: XFI phy instance.
