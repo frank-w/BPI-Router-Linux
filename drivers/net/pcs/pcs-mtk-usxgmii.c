@@ -311,6 +311,26 @@ static void mtk_usxgmii_pcs_restart_an(struct phylink_pcs *pcs)
 	mtk_m32(mpcs, RG_PCS_AN_CTRL0, USXGMII_AN_RESTART, USXGMII_AN_RESTART);
 }
 
+extern bool mtk_xfi_tphy_valid_ctle(struct phy *phy);
+
+static int mtk_usxgmii_pcs_link_status(struct mtk_usxgmii_pcs *mpcs)
+{
+	int status;
+
+	/* Refresh USXGMII link status by toggling RG_PCS_RX_STATUS_UPDATE */
+	mtk_m32(mpcs, RG_PCS_RX_STATUS0, RG_PCS_RX_STATUS_UPDATE,
+		RG_PCS_RX_STATUS_UPDATE);
+	ndelay(1020);
+	mtk_m32(mpcs, RG_PCS_RX_STATUS0, RG_PCS_RX_STATUS_UPDATE, 0);
+	ndelay(1020);
+
+	/* Read USXGMII link status */
+	status = FIELD_GET(RG_PCS_RX_LINK_STATUS,
+			   mtk_r32(mpcs, RG_PCS_RX_STATUS0));
+
+	return status;
+}
+
 static void mtk_usxgmii_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
 				    phy_interface_t interface,
 				    int speed, int duplex)
@@ -320,6 +340,10 @@ static void mtk_usxgmii_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mo
 	/* Reconfiguring USXGMII to ensure the quality of the RX signal
 	 * after the line side link up.
 	 */
+	if (mtk_usxgmii_pcs_link_status(mpcs) &&
+	    mtk_xfi_tphy_valid_ctle(mpcs->xfi_tphy))
+		return;
+
 	mtk_usxgmii_pcs_config(pcs, neg_mode, interface, NULL, false);
 	phy_reset(mpcs->xfi_tphy);
 	phy_set_mode_ext(mpcs->xfi_tphy, PHY_MODE_ETHERNET, interface);
