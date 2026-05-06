@@ -1,5 +1,6 @@
 config AS21XXX_PHY_191
 	tristate "Aeonsemi AS21xxx PHYs v1.9.1"
+	depends on !AS21XXX_PHY
 	help
 	  Currently supports the Aeonsemi AS21xxx PHY.
 
