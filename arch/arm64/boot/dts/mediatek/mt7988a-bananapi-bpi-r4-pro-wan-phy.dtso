@@ -17,10 +17,11 @@
 
 &{/soc/ethernet@15100000/mac@1} {
 	//usxgmii has link flapping with every fw
-	//phy-mode = "usxgmii";
-	//managed = "in-band-status"; //needed for usxgmii
-	phy-mode = "10gbase-r";
-	phy-connection-type = "10gbase-r";
+	phy-mode = "usxgmii";
+	phy-connection-type = "usxgmii";
+	managed = "in-band-status"; //needed for usxgmii
+	//phy-mode = "10gbase-r";
+	//phy-connection-type = "10gbase-r";
 	phy-handle = <&phy28>;
 	status = "okay";
 };
