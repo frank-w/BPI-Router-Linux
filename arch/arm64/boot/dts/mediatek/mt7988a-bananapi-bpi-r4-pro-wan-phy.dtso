@@ -27,7 +27,7 @@
 };
 
 &{/soc/pinctrl@1001f000} {
-	sfp-wan-hog {
+	wan-phy-hog {
 		gpio-hog;
 		gpios = <3 GPIO_ACTIVE_HIGH>;
 		output-low; /* select phy */
