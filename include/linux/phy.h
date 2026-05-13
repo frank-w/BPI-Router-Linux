@@ -582,6 +582,7 @@ struct phy_oatc14_sqi_capability {
  * @wol_enabled: Set to true if the PHY or the attached MAC have Wake-on-LAN
  * 		 enabled.
  * @is_genphy_driven: PHY is driven by one of the generic PHY drivers
+ * @has_sfp_mod_phy: Set true if downstream SFP bus's module contains a PHY
  * @state: State of the PHY for management purposes
  * @dev_flags: Device-specific flags used by the PHY driver.
  *
@@ -594,6 +595,8 @@ struct phy_oatc14_sqi_capability {
  * @phylink: Pointer to phylink instance for this PHY
  * @sfp_bus_attached: Flag indicating whether the SFP bus has been attached
  * @sfp_bus: SFP bus attached to this PHY's fiber port
+ * @sfp_cage_port: The phy_port connected to the downstream SFP cage
+ * @mod_port: phy_port representing the SFP module, if it is phy-less
  * @attached_dev: The attached enet driver's device instance ptr
  * @adjust_link: Callback for the enet controller to respond to changes: in the
  *               link state.
@@ -706,6 +709,7 @@ struct phy_device {
 	unsigned irq_rerun:1;
 
 	unsigned default_timestamp:1;
+	unsigned has_sfp_mod_phy:1;
 
 	int rate_matching;
 
@@ -785,6 +789,8 @@ struct phy_device {
 	/* This may be modified under the rtnl lock */
 	bool sfp_bus_attached;
 	struct sfp_bus *sfp_bus;
+	struct phy_port *sfp_cage_port;
+	struct phy_port *mod_port;
 	struct phylink *phylink;
 	struct net_device *attached_dev;
 	struct mii_timestamper *mii_ts;
