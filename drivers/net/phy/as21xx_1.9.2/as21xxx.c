@@ -1050,9 +1050,11 @@ static int aeon_gen1_probe(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
+	#ifdef CONFIG_AS21XXX_DEBUGFS
 	ret = as21xxx_debugfs_init(phydev);
 	if (ret)
 		return ret;
+	#endif
 
 	/* Enable PTP clk if not already Enabled */
 	ret = phy_set_bits_mmd(phydev, MDIO_MMD_VEND1, VEND1_PTP_CLK,
@@ -1504,7 +1506,9 @@ static int aeon_gen2_match_phy_device(struct phy_device *phydev,
 
 static void aeon_gen1_remove(struct phy_device *phydev)
 {
+	#ifdef CONFIG_AS21XXX_DEBUGFS
 	as21xxx_debugfs_remove(phydev);
+	#endif
 }
 
 static int aeon_wait_reset_complete(struct phy_device *phydev)

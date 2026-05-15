@@ -10,3 +10,9 @@ config AS21XXX_PHY_192
 	  AS21511JB1, AS21511PB1, AS21510JB1, AS21510PB1, AS21210JB1,
 	  AS21210PB1 that all register with the PHY ID 0x7500 0x7500
 	  before the firmware is loaded.
+
+config CONFIG_AS21XXX_DEBUGFS
+	tristate "Aeonsemi AS21xxx DEBUG-FS"
+	depends on AS21XXX_PHY_192
+	help
+	  Debugfs entries for Aeonsemi AS21xxx PHY.
