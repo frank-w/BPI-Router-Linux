@@ -83,6 +83,11 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-emmc.dtbo");
 			type = "flat_dt";
 		};
+		fdt-ov-be14 {
+			description = "DT overlay for BE14 wifi card eeprom";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-wifi-be14.dtbo");
+			type = "flat_dt";
+		};
 		fdt-ov-lite-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-sd.dtbo");
@@ -256,6 +261,10 @@
 		ov-emmc {
 			description = "EMMC FDT overlay blob for R4";
 			fdt = "fdt-ov-emmc";
+		};
+		ov-be14 {
+			description = "BE14 FDT overlay blob for R4";
+			fdt = "fdt-ov-be14";
 		};
 		ov-lite-sd {
 			description = "SD FDT overlay blob for R4 Lite";
