@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Author: Wilfried Teiken <wteiken@teiken.org>
+ */
+
+/* This enables the 2.5G port BPI-R4-Pro-4E */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "bananapi,bpi-r4-pro-4e", "mediatek,mt7988a";
+};
+
+&gmac1 {
+        phy = <&int_2p5g_phy>;
+        phy-mode = "internal";
+        status = "okay";
+};
+
+&pio {
+        i2p5gbe_led0_pins: i2p5gbe-led0-pins {
+                mux {
+                        function = "led";
+                        groups = "2p5gbe_led0";
+                };
+        };
+};
+
+&int_2p5g_phy {
+        pinctrl-0 = <&i2p5gbe_led0_pins>;
+        pinctrl-names = "i2p5gbe-led";
+        status = "okay";
+};
+
