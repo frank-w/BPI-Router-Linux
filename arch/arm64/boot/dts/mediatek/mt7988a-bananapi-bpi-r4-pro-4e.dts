@@ -14,3 +14,25 @@
 		     "bananapi,bpi-r4-pro",
 		     "mediatek,mt7988a";
 };
+
+&switch16 {
+	ports {
+		port13: port@13 {
+			reg = <13>;
+			label = "lan7";
+			phy-mode = "10gbase-r";
+			managed = "in-band-status";
+			sfp = <&sfp1>;
+			status = "okay";
+		};
+	};
+};
+
+&gsw_phy2 {
+        status = "okay";
+};
+
+&gsw_port2 {
+        status = "okay";
+	label = "lan6";
+};
