@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2025 MediaTek Inc.
+ * Author: Frank Wunderlich <frank-w@public-files.de>
+ */
+
+/* This updates NAND size to 256MB on BPI-R4-8G */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "bananapi,bpi-r4", "mediatek,mt7988a";
+};
+
+&{/soc/spi@11007000/flash@0/partitions/partition@200000} {
+	reg = <0x200000 0xfe00000>;
+};
