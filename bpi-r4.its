@@ -148,6 +148,18 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-emmc.dtbo");
 			type = "flat_dt";
 		};
+
+		fdt-ov-pro-4e-wan-phy {
+			description = "DT overlay for R4Pro 4E WAN-PHY";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-4e-wan-2g5.dtbo");
+			type = "flat_dt";
+		};
+		fdt-ov-pro-4e-wan-sfp {
+			description = "DT overlay for R4Pro 4E WAN-SFP";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-4e-wan-sfp.dtbo");
+			type = "flat_dt";
+		};
+
 		fdt-ov-pro-8x-lan-phy {
 			description = "DT overlay for R4Pro LAN-PHY";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-lan-phy.dtbo");
@@ -313,6 +325,14 @@
 		ov-pro-cn18 {
 			description = "CN18 FDT overlay blob for R4 Pro";
 			fdt = "fdt-ov-pro-cn18";
+		};
+		ov-pro-4e-wan-phy {
+			description = "WAN-PHY FDT overlay blob for R4 Pro 4E";
+			fdt = "fdt-ov-pro-4e-wan-phy";
+		};
+		ov-pro-4e-wan-sfp {
+			description = "WAN-SFP FDT overlay blob for R4 Pro 4E";
+			fdt = "fdt-ov-pro-4e-wan-sfp";
 		};
 		//setenv addconf "#ov-pro-8x-lan-phy#ov-pro-8x-wan-phy"
 		ov-pro-8x-lan-phy {
