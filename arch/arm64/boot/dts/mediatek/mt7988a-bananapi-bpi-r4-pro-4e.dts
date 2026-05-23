@@ -20,20 +20,18 @@
 };
 
 &gsw_port2 {
-	label = "lan5";
+	label = "lan6";
 	status = "okay";
 };
 
 &switch16 {
 	ports {
-		port6: port@6 {
-			reg = <12>;
-			label = "lan6";
-			phy-mode = "usxgmii";
-			phy-connection-type = "usxgmii";
+		port13: port@13 {
+			reg = <13>;
+			label = "lan7";
+			phy-mode = "10gbase-r";
 			managed = "in-band-status";
 			sfp = <&sfp1>;
-
 			status = "okay";
 		};
 	};
