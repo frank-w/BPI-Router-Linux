@@ -15,6 +15,15 @@
 		     "mediatek,mt7988a";
 };
 
+&gsw_phy2 {
+	status = "okay";
+};
+
+&gsw_port2 {
+	label = "lan5";
+	status = "okay";
+};
+
 &switch16 {
 	ports {
 		port6: port@6 {
@@ -28,13 +37,4 @@
 			status = "okay";
 		};
 	};
-};
-
-&gsw_phy2 {
-        status = "okay";
-};
-
-&gsw_port2 {
-        status = "okay";
-	label = "lan5";
 };
