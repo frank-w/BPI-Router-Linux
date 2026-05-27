@@ -563,16 +563,22 @@
 	};
 
 	/* pcie-2-hog (1L0 0=key-b (CN15), 1=key-m (CN13))
-	 * Add one overlay to set (CN13 is enabled by default):
+	 * Add one overlay to configure the CN to connect (CN13 is default):
          * - mt7988a-bananapi-bpi-r4-pro-cn13
          * - mt7988a-bananapi-bpi-r4-pro-cn15
 	 */
+        pcie_2_hog: pcie-2-hog {
+                gpios = <79 GPIO_ACTIVE_HIGH>;
+        };
 
 	/* pcie-3-hog (1L1 0=key-b (CN18), 1=key-m (CN14))
-	 * Add one overlay to set (CN14 is enabled by default):
+	 * Add one overlay to configure the CN to connect  (CN14 is default):
          * - mt7988a-bananapi-bpi-r4-pro-cn14
          * - mt7988a-bananapi-bpi-r4-pro-cn18
 	 */
+        pcie_3_hog: pcie-3-hog {
+                gpios = <63 GPIO_ACTIVE_HIGH>;
+        };
 
 	pwm0_pins: pwm0-pins {
 		mux {
