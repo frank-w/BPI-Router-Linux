@@ -562,17 +562,17 @@
 		};
 	};
 
-	/* 1L0 0=key-b (CN15), 1=key-m (CN13) */
-	pcie-2-hog {
-		gpio-hog;
-		gpios = <79 GPIO_ACTIVE_HIGH>;
-	};
+	/* pcie-2-hog (1L0 0=key-b (CN15), 1=key-m (CN13))
+	 * Add one overlay to set (CN13 is enabled by default):
+         * - mt7988a-bananapi-bpi-r4-pro-cn13
+         * - mt7988a-bananapi-bpi-r4-pro-cn15
+	 */
 
-	/* 1L1 0=key-b (CN18), 1=key-m (CN14) */
-	pcie-3-hog {
-		gpio-hog;
-		gpios = <63 GPIO_ACTIVE_HIGH>;
-	};
+	/* pcie-3-hog (1L1 0=key-b (CN18), 1=key-m (CN14))
+	 * Add one overlay to set (CN14 is enabled by default):
+         * - mt7988a-bananapi-bpi-r4-pro-cn14
+         * - mt7988a-bananapi-bpi-r4-pro-cn18
+	 */
 
 	pwm0_pins: pwm0-pins {
 		mux {

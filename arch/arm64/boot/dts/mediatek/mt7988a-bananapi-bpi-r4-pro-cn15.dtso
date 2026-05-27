@@ -15,6 +15,10 @@
 	compatible = "bananapi,bpi-r4-pro", "mediatek,mt7988a";
 };
 
-&{/soc/pinctrl@1001f000/pcie-2-hog} {
-	output-low;
+&pio {
+	pcie-2-hog {
+		gpio-hog;
+		gpios = <79 GPIO_ACTIVE_HIGH>;
+		output-low;
+	};
 };
