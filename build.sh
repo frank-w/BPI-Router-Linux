@@ -1139,12 +1139,10 @@ if [ -n "$kernver" ]; then
 			;;
 
 		"dtbs_check")
-			export ARCH=arm64
-			export CROSS_COMPILE='aarch64-linux-gnu-'
-			if [[ "$2" == "disable_unrelated" ]];then
-				sed -i.bak '/mediatek\|rockchip/! s/^/#/' arch/arm64/boot/dts/Makefile
-				sed -i.bak '/bpi/! s/^/#/' arch/arm64/boot/dts/{mediatek,rockchip}/Makefile
-			fi
+			unset ARCH
+			unset CROSS_COMPILE
+			unset CC
+			unset HOSTCC
 			if [[ ! -e .venv ]];then
 				python3 -m venv .venv
 			fi
@@ -1152,6 +1150,14 @@ if [ -n "$kernver" ]; then
 			if [[ $? -ne 0 ]];then exit 1;fi
 			pip3 install dtschema --upgrade
 			pip3 show dtschema
+			if [[ $? -ne 0 ]];then exit 1;fi
+
+			if [[ "$2" == "disable_unrelated" ]];then
+				sed -i.bak '/mediatek\|rockchip/! s/^/#/' arch/arm64/boot/dts/Makefile
+				sed -i.bak '/bpi/! s/^/#/' arch/arm64/boot/dts/{mediatek,rockchip}/Makefile
+			fi
+			export ARCH=arm64
+			export CROSS_COMPILE='aarch64-linux-gnu-'
 			make dt_binding_check 2>&1 | tee dtbs_check.log
 			make defconfig
 			make dtbs_check 2>&1 | tee -a dtbs_check.log
