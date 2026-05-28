@@ -4898,13 +4898,45 @@ static void mtk_uninit(struct net_device *dev)
 	mtk_rx_irq_disable(eth, ~0);
 }
 
+static void mtk_netdev_restart_work(struct work_struct *work)
+{
+	struct mtk_eth *eth = container_of(work, struct mtk_eth, netdev_restart_work);
+	unsigned long restart = 0;
+	int i;
+
+	rtnl_lock();
+
+	for (i = 0; i < MTK_MAX_DEVS; i++) {
+		if (!eth->netdev[i] || !netif_running(eth->netdev[i]))
+			continue;
+
+		mtk_stop(eth->netdev[i]);
+		__set_bit(i, &restart);
+	}
+
+	for (i = 0; i < MTK_MAX_DEVS; i++) {
+		if (!test_bit(i, &restart) || !eth->netdev[i])
+			continue;
+
+		if (mtk_open(eth->netdev[i])) {
+			netif_alert(eth, ifup, eth->netdev[i],
+				    "Netdev restart failed, closing device...\n");
+			dev_close(eth->netdev[i]);
+		}
+	}
+
+	rtnl_unlock();
+}
+
 static int mtk_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
 	int i, length, max_mtu = 0;
+	u32 rx_buf_len;
 
 	WRITE_ONCE(dev->mtu, new_mtu);
+	rx_buf_len = eth->rx_buf_len;
 
 	for (i = 0; i < MTK_MAX_DEVS; i++) {
 		if (!eth->netdev[i])
@@ -4927,6 +4959,13 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
 	else
 		eth->rx_buf_len = DIV_ROUND_UP(length, MTK_MAX_RX_LENGTH_UNIT) *
 				  MTK_MAX_RX_LENGTH_UNIT;
+
+	if (eth->rx_buf_len != rx_buf_len && refcount_read(&eth->dma_refcnt) > 0) {
+		netdev_info(dev,
+			    "RX buffer length changed (%u -> %u), scheduling netdevs restart\n",
+			    rx_buf_len, eth->rx_buf_len);
+		schedule_work(&eth->netdev_restart_work);
+	}
 
 	max_mtu = mtk_max_gmac_mtu(eth);
 	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
@@ -5097,6 +5136,7 @@ static int mtk_cleanup(struct mtk_eth *eth)
 	mtk_unreg_dev(eth);
 	mtk_free_dev(eth);
 	cancel_work_sync(&eth->pending_work);
+	cancel_work_sync(&eth->netdev_restart_work);
 	cancel_delayed_work_sync(&eth->reset.monitor_work);
 
 	return 0;
@@ -5962,6 +6002,7 @@ static int mtk_probe(struct platform_device *pdev)
 
 	eth->msg_enable = netif_msg_init(mtk_msg_level, MTK_DEFAULT_MSG_ENABLE);
 	INIT_WORK(&eth->pending_work, mtk_pending_work);
+	INIT_WORK(&eth->netdev_restart_work, mtk_netdev_restart_work);
 
 	err = mtk_hw_init(eth, false);
 	if (err)
