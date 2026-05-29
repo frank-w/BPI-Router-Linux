@@ -4051,7 +4051,7 @@ static int mtk_open(struct net_device *dev)
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
 	struct mtk_mac *target_mac;
-	int i, err, ppe_num, mtu;
+	int i, err, ppe_num;
 
 	ppe_num = eth->soc->ppe_num;
 
@@ -4097,10 +4097,6 @@ static int mtk_open(struct net_device *dev)
 			}
 			mtk_gdm_config(eth, target_mac->id, gdm_config);
 		}
-
-		mtu = mtk_max_gmac_mtu(eth);
-		for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
-			mtk_ppe_update_mtu(eth->ppe[i], mtu);
 
 		napi_enable(&eth->tx_napi);
 		napi_enable(&eth->rx_napi[0].napi);
@@ -4932,20 +4928,13 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
-	int i, length, max_mtu = 0;
+	int length, max_mtu = 0;
 	u32 rx_buf_len;
 
 	WRITE_ONCE(dev->mtu, new_mtu);
 	rx_buf_len = eth->rx_buf_len;
 
-	for (i = 0; i < MTK_MAX_DEVS; i++) {
-		if (!eth->netdev[i])
-			continue;
-
-		if (eth->netdev[i]->mtu > max_mtu)
-			max_mtu = eth->netdev[i]->mtu;
-	}
-
+	max_mtu = mtk_max_gmac_mtu(eth);
 	length = max_mtu + MTK_RX_ETH_HLEN;
 
 	if (rcu_access_pointer(eth->prog) &&
@@ -4966,10 +4955,6 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
 			    rx_buf_len, eth->rx_buf_len);
 		schedule_work(&eth->netdev_restart_work);
 	}
-
-	max_mtu = mtk_max_gmac_mtu(eth);
-	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
-		mtk_ppe_update_mtu(eth->ppe[i], max_mtu);
 
 	return 0;
 }
