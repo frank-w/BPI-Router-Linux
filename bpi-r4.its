@@ -88,6 +88,11 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-wifi-be14.dtbo");
 			type = "flat_dt";
 		};
+		fdt-ov-nand {
+			description = "DT overlay for NAND size on 8G boards";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-nand.dtbo");
+			type = "flat_dt";
+		};
 		fdt-ov-lite-sd {
 			description = "Flattened Device Tree blob";
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7987a-bananapi-bpi-r4-lite-sd.dtbo");
@@ -277,6 +282,10 @@
 		ov-be14 {
 			description = "BE14 FDT overlay blob for R4";
 			fdt = "fdt-ov-be14";
+		};
+		ov-nand {
+			description = "NAND FDT overlay blob for R4";
+			fdt = "fdt-ov-nand";
 		};
 		ov-lite-sd {
 			description = "SD FDT overlay blob for R4 Lite";
