@@ -484,6 +484,12 @@
 			reg = <0x0 0x200000>;
 			read-only;
 		};
+
+		partition@200000 {
+			label = "ubi";
+			reg = <0x200000 0x7e00000>;
+			compatible = "linux,ubi";
+		};
 	};
 };
 
