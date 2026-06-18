@@ -178,28 +178,9 @@ static void mxl862xx_legacy_pcs_get_state(struct phylink_pcs *pcs,
 	}
 }
 
-static unsigned int
-mxl862xx_legacy_pcs_inband_caps(struct phylink_pcs *pcs,
-				phy_interface_t interface)
-{
-	switch (interface) {
-	case PHY_INTERFACE_MODE_SGMII:
-	case PHY_INTERFACE_MODE_USXGMII:
-		return LINK_INBAND_ENABLE;
-	case PHY_INTERFACE_MODE_1000BASEX:
-		return LINK_INBAND_DISABLE | LINK_INBAND_ENABLE;
-	case PHY_INTERFACE_MODE_10GBASER:
-	case PHY_INTERFACE_MODE_2500BASEX:
-		return LINK_INBAND_DISABLE;
-	default:
-		return 0;
-	}
-}
-
 static const struct phylink_pcs_ops mxl862xx_legacy_pcs_ops = {
 	.pcs_get_state = mxl862xx_legacy_pcs_get_state,
 	.pcs_config = mxl862xx_legacy_pcs_config,
-	.pcs_inband_caps = mxl862xx_legacy_pcs_inband_caps,
 };
 
 static int mxl862xx_xpcs_port_id(int port)
