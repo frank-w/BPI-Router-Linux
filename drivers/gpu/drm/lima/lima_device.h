@@ -90,6 +90,10 @@ struct lima_device {
 	struct reset_control *reset;
 	struct regulator *regulator;
 
+	/* MediaTek SMI local arbiter the GPU masters the bus through */
+	struct device *larb_dev;
+	struct device_link *larb_link;
+
 	struct lima_ip ip[lima_ip_num];
 	struct lima_sched_pipe pipe[lima_pipe_num];
 
