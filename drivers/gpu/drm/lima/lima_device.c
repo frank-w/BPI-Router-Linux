@@ -7,6 +7,9 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
+#include <linux/of.h>
+#include <linux/of_platform.h>
+#include <linux/pm_runtime.h>
 
 #include "lima_device.h"
 #include "lima_gp.h"
@@ -205,6 +208,84 @@ static void lima_regulator_fini(struct lima_device *dev)
 	lima_regulator_disable(dev);
 }
 
+/*
+ * On MediaTek SoCs (e.g. MT7623) the Mali masters the system bus through an
+ * SMI local arbiter ("larb") that lives in a different power domain (DISP)
+ * than the GPU core itself (MFG). genpd only attaches the GPU's own domain,
+ * so without explicitly powering the SMI larb the GPU register block is
+ * unreachable on the bus: every register reads back 0 and the first MMU
+ * register write-readback ("gpmmu dte write test") fails with -EIO.
+ *
+ * The "mediatek,larb" phandle is optional; platforms without it (i.e. every
+ * non-MediaTek Utgard) skip this entirely. Powering the larb device also
+ * pulls up the SMI-common it chains to, via the larb driver's own link.
+ */
+static int lima_larb_init(struct lima_device *dev)
+{
+	struct device_node *larb_np;
+	struct platform_device *larb_pdev;
+	int err;
+
+	larb_np = of_parse_phandle(dev->dev->of_node, "mediatek,larb", 0);
+	if (!larb_np)
+		return 0;
+
+	larb_pdev = of_find_device_by_node(larb_np);
+	of_node_put(larb_np);
+	if (!larb_pdev)
+		return -EPROBE_DEFER;
+
+	/* larb driver not bound yet -> retry once it is */
+	if (!platform_get_drvdata(larb_pdev)) {
+		put_device(&larb_pdev->dev);
+		return -EPROBE_DEFER;
+	}
+
+	dev->larb_dev = &larb_pdev->dev;
+
+	dev->larb_link = device_link_add(dev->dev, dev->larb_dev,
+					 DL_FLAG_STATELESS | DL_FLAG_PM_RUNTIME);
+	if (!dev->larb_link) {
+		dev_err(dev->dev, "failed to link SMI larb\n");
+		err = -EINVAL;
+		goto err_put;
+	}
+
+	/*
+	 * The MMU dte test in lima_device_init() runs before pm_runtime is
+	 * enabled for the GPU, so the device link cannot resume the larb for
+	 * us yet. Hold the larb powered for as long as the GPU is bound; the
+	 * DISP/SMI domain is cheap and this mirrors how the mali-utgard
+	 * driver pinned it via mtk_smi_larb_get() (removed from mainline).
+	 */
+	err = pm_runtime_resume_and_get(dev->larb_dev);
+	if (err) {
+		dev_err(dev->dev, "failed to power SMI larb: %d\n", err);
+		device_link_del(dev->larb_link);
+		dev->larb_link = NULL;
+		goto err_put;
+	}
+
+	return 0;
+
+err_put:
+	put_device(dev->larb_dev);
+	dev->larb_dev = NULL;
+	return err;
+}
+
+static void lima_larb_fini(struct lima_device *dev)
+{
+	if (!dev->larb_dev)
+		return;
+
+	pm_runtime_put(dev->larb_dev);
+	device_link_del(dev->larb_link);
+	put_device(dev->larb_dev);
+	dev->larb_link = NULL;
+	dev->larb_dev = NULL;
+}
+
 static int lima_init_ip(struct lima_device *dev, int index)
 {
 	struct platform_device *pdev = to_platform_device(dev->dev);
@@ -368,6 +449,10 @@ int lima_device_init(struct lima_device *ldev)
 	if (err)
 		goto err_out0;
 
+	err = lima_larb_init(ldev);
+	if (err)
+		goto err_out1;
+
 	ldev->empty_vm = lima_vm_create(ldev);
 	if (!ldev->empty_vm) {
 		err = -ENOMEM;
@@ -431,6 +516,7 @@ err_out3:
 err_out2:
 	lima_vm_put(ldev->empty_vm);
 err_out1:
+	lima_larb_fini(ldev);
 	lima_regulator_fini(ldev);
 err_out0:
 	lima_clk_fini(ldev);
@@ -459,6 +545,8 @@ void lima_device_fini(struct lima_device *ldev)
 			    ldev->dlbu_cpu, ldev->dlbu_dma);
 
 	lima_vm_put(ldev->empty_vm);
+
+	lima_larb_fini(ldev);
 
 	lima_regulator_fini(ldev);
 
