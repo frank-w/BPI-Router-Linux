@@ -775,8 +775,15 @@ int wiphy_verify_iface_combinations(struct wiphy *wiphy,
 			 * and IBSS in the same interface, but it seems that
 			 * some drivers support that, possibly only with fixed
 			 * beacon intervals for IBSS.
+			 *
+			 * Skip this for the multi-radio global combination,
+			 * which holds the union of all radios' capabilities
+			 * rather than a concurrent set; the real constraint is
+			 * enforced on each per-radio combination, verified with
+			 * combined_radio == false.
 			 */
-			if (WARN_ON(types & BIT(NL80211_IFTYPE_ADHOC) &&
+			if (!combined_radio &&
+			    WARN_ON(types & BIT(NL80211_IFTYPE_ADHOC) &&
 				    c->beacon_int_min_gcd)) {
 				return -EINVAL;
 			}
