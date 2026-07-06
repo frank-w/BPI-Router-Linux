@@ -299,9 +299,6 @@ static void mt7996_led_set_config(struct led_classdev *led_cdev,
 	mphy = container_of(led_cdev, struct mt76_phy, leds.cdev);
 	dev = container_of(mphy->dev, struct mt7996_dev, mt76);
 
-	/* select TX blink mode, 2: only data frames */
-	mt76_rmw_field(dev, MT_TMAC_TCR0(mphy->band_idx), MT_TMAC_TCR0_TX_BLINK, 2);
-
 	/* enable LED */
 	mt76_wr(dev, MT_LED_EN(mphy->band_idx), 1);
 
@@ -313,8 +310,18 @@ static void mt7996_led_set_config(struct led_classdev *led_cdev,
 	/* turn LED off */
 	if (delay_off == 0xff && delay_on == 0x0) {
 		val = MT_LED_CTRL_POLARITY | MT_LED_CTRL_KICK;
+	} else if (delay_on == 0xff && delay_off == 0x0) {
+		/* steady on: BLINK_MODE cleared, pin driven statically by
+		 * the polarity bit (mirror of the off branch above).
+		 */
+		val = MT_LED_CTRL_KICK;
 	} else {
-		/* control LED */
+		/* TX-activity blink via the MAC blink engine.
+		 * select TX blink mode, 2: only data frames
+		 */
+		mt76_rmw_field(dev, MT_TMAC_TCR0(mphy->band_idx),
+			       MT_TMAC_TCR0_TX_BLINK, 2);
+
 		val = MT_LED_CTRL_BLINK_MODE | MT_LED_CTRL_KICK;
 		if (mphy->band_idx == MT_BAND1)
 			val |= MT_LED_CTRL_BLINK_BAND_SEL;
