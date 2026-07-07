@@ -241,6 +241,38 @@ static void mt7996_pci_remove(struct pci_dev *pdev)
 	mt7996_unregister_device(dev);
 }
 
+static pci_ers_result_t
+mt7996_pci_error_detected(struct pci_dev *pdev, pci_channel_state_t state)
+{
+	struct mt76_dev *mdev = pci_get_drvdata(pdev);
+
+	dev_err(&pdev->dev, "PCIe error detected (state=%u), marking device removed\n",
+		state);
+
+	/* Flag the device gone so every liveness check - including
+	 * mt7996_dev_gone() guarding the reset worker - short-circuits before
+	 * it can touch the now-unreachable MMIO window. This is the same idiom
+	 * the mt792x PCIe driver uses on surprise removal, and it does not rely
+	 * on the controller updating pci_dev->error_state.
+	 */
+	set_bit(MT76_REMOVED, &mdev->phy.state);
+
+	/* Wake anyone blocked on an MCU response so it fails fast instead of
+	 * stalling to timeout against a dead endpoint.
+	 */
+	wake_up(&mdev->mcu.wait);
+
+	/* The MAC and firmware state cannot survive a PCIe link loss and this
+	 * driver has no slot_reset re-init path, so request a clean disconnect
+	 * rather than a doomed recovery attempt.
+	 */
+	return PCI_ERS_RESULT_DISCONNECT;
+}
+
+static const struct pci_error_handlers mt7996_pci_err_handler = {
+	.error_detected = mt7996_pci_error_detected,
+};
+
 struct pci_driver mt7996_hif_driver = {
 	.name		= KBUILD_MODNAME "_hif",
 	.id_table	= mt7996_hif_device_table,
@@ -253,6 +285,7 @@ struct pci_driver mt7996_pci_driver = {
 	.id_table	= mt7996_pci_device_table,
 	.probe		= mt7996_pci_probe,
 	.remove		= mt7996_pci_remove,
+	.err_handler	= &mt7996_pci_err_handler,
 };
 
 MODULE_DEVICE_TABLE(pci, mt7996_pci_device_table);
