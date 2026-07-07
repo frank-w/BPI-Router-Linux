@@ -1938,6 +1938,36 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 		return PTR_ERR(phy);
 	}
 
+	/* Some RollBall modules stop gating PHY register access (reads
+	 * returning 0xffff) slightly before the PHY's identifier registers
+	 * are stable. A probe landing in this window reads a plausible
+	 * devices-in-package value but all-zero device identifiers, which
+	 * no PHY driver can match. sfp_add_phy() then fails hard with
+	 * -EINVAL and the state machine enters SFP_S_FAIL, requiring a
+	 * physical re-plug. Treat all-zero identifiers as "PHY not ready"
+	 * instead, so the existing R_PHY_RETRY/phy_t_retry logic applies.
+	 */
+	if (is_c45) {
+		bool ids_zero = true;
+		int i;
+
+		for (i = 1; i < ARRAY_SIZE(phy->c45_ids.device_ids); i++) {
+			if (phy->c45_ids.device_ids[i] &&
+			    phy->c45_ids.device_ids[i] != 0xffffffff) {
+				ids_zero = false;
+				break;
+			}
+		}
+
+		if (ids_zero) {
+			dev_info(sfp->dev,
+				 "PHY identifiers read as zero (devs_in_pkg 0x%08x), retrying\n",
+				 phy->c45_ids.devices_in_package);
+			phy_device_free(phy);
+			return -ENODEV;
+		}
+	}
+
 	/* Mark this PHY as being on a SFP module */
 	phy->is_on_sfp_module = true;
 
@@ -1951,6 +1981,13 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 
 	err = sfp_add_phy(sfp->sfp_bus, phy);
 	if (err) {
+		if (is_c45)
+			dev_err(sfp->dev,
+				"PHY c45 ids: PMA 0x%08x PCS 0x%08x AN 0x%08x devs_in_pkg 0x%08x\n",
+				phy->c45_ids.device_ids[MDIO_MMD_PMAPMD],
+				phy->c45_ids.device_ids[MDIO_MMD_PCS],
+				phy->c45_ids.device_ids[MDIO_MMD_AN],
+				phy->c45_ids.devices_in_package);
 		phy_device_remove(phy);
 		phy_device_free(phy);
 		dev_err(sfp->dev, "sfp_add_phy failed: %pe\n", ERR_PTR(err));
