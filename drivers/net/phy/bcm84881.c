@@ -83,10 +83,24 @@ static int bcm84881_config_init(struct phy_device *phydev)
 
 static int bcm8489x_config_init(struct phy_device *phydev)
 {
+	bcm84881_fill_possible_interfaces(phydev);
 	__set_bit(PHY_INTERFACE_MODE_USXGMII, phydev->possible_interfaces);
 
-	if (phydev->interface != PHY_INTERFACE_MODE_USXGMII)
+	/* The BCM84891 is found both soldered down and attached over
+	 * USXGMII, and inside SFP+ copper modules (e.g. various
+	 * "OEM SFP-10G-T" RollBall modules), where the host-side
+	 * interface is 10GBASE-R with SGMII/2500BASE-X rate switching,
+	 * as with the BCM84881. Accept both attachments.
+	 */
+	switch (phydev->interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_2500BASEX:
+	case PHY_INTERFACE_MODE_10GBASER:
+	case PHY_INTERFACE_MODE_USXGMII:
+		break;
+	default:
 		return -ENODEV;
+	}
 
 	/* MDIO_CTRL1_LPOWER is set at boot on the tested platform. Does not
 	 * recur on ifdown/ifup, cable events, or link-partner advertisement
