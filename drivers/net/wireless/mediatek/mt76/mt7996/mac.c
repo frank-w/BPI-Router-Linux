@@ -2136,6 +2136,26 @@ void mt7996_update_channel(struct mt76_phy *mphy)
 	state->noise = -(phy->noise >> 4);
 }
 
+/* True when the PCIe endpoint is no longer reachable: either the driver has
+ * flagged it removed (PCIe .error_detected handler / unplug) or the AER core
+ * has taken the channel offline. Any MMIO access past this point would read
+ * from a dead register window and raise an asynchronous external abort /
+ * SError on arm64 (mtk-pcie-gen3), which is an unconditional kernel panic.
+ */
+static bool mt7996_dev_gone(struct mt7996_dev *dev)
+{
+	struct mt76_dev *mdev = &dev->mt76;
+
+	if (test_bit(MT76_REMOVED, &dev->mphy.state))
+		return true;
+
+	if (dev_is_pci(mdev->dev) &&
+	    pci_channel_offline(to_pci_dev(mdev->dev)))
+		return true;
+
+	return false;
+}
+
 static bool
 mt7996_wait_reset_state(struct mt7996_dev *dev, u32 state)
 {
@@ -2469,6 +2489,13 @@ void mt7996_mac_reset_work(struct work_struct *work)
 	dev = container_of(work, struct mt7996_dev, reset_work);
 	hw = mt76_hw(dev);
 
+	if (mt7996_dev_gone(dev)) {
+		dev_warn(dev->mt76.dev,
+			 "%s: PCIe endpoint unreachable, skipping MAC reset\n",
+			 wiphy_name(hw->wiphy));
+		return;
+	}
+
 	/* chip full reset */
 	if (dev->recovery.restart) {
 		/* disable WA/WM WDT */
@@ -2698,6 +2725,14 @@ void mt7996_reset(struct mt7996_dev *dev)
 		return;
 
 	if (dev->recovery.hw_full_reset)
+		return;
+
+	/* Endpoint surprise-removed (e.g. SFP hot-pull browning out the WiFi
+	 * rail on BPI-R4): driving the recovery worker would touch the now-
+	 * unreachable MMIO window and raise an SError, turning a WiFi hiccup
+	 * into a kernel panic. Bail out instead.
+	 */
+	if (mt7996_dev_gone(dev))
 		return;
 
 	/* wm/wa exception: do full recovery */
