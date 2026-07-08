@@ -1950,6 +1950,7 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 	if (is_c45) {
 		u32 devs = phy->c45_ids.devices_in_package;
 		bool ids_valid = false;
+		int ret;
 		int i;
 
 		/* Absent MMDs leave their identifier zero; a gated or
@@ -1982,6 +1983,25 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 			dev_info(sfp->dev,
 				 "PHY identifiers unstable (devs_in_pkg 0x%08x), retrying\n",
 				 phy->c45_ids.devices_in_package);
+			phy_device_free(phy);
+			return -ENODEV;
+		}
+
+		/* Plausible identifiers do not guarantee the PMA/PMD control
+		 * register is out of the gated window. phy_init_hw()'s soft
+		 * reset during attach writes MDIO_CTRL1 and polls the reset
+		 * bit to self-clear; a gated read returns 0xffff so the bit
+		 * never clears and sfp_add_phy() fails -ETIMEDOUT (which has
+		 * been seen to later fault the PHY state machine on interface
+		 * teardown). Require that same register to read back live
+		 * before attaching, so the retry logic waits out the wake
+		 * window and the PHY is attached exactly once, cleanly.
+		 */
+		ret = phy_read_mmd(phy, MDIO_MMD_PMAPMD, MDIO_CTRL1);
+		if (ret < 0 || ret == 0xffff || (ret & MDIO_CTRL1_RESET)) {
+			dev_info(sfp->dev,
+				 "PHY control register not ready (0x%04x), retrying\n",
+				 ret);
 			phy_device_free(phy);
 			return -ENODEV;
 		}
