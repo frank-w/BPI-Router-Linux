@@ -1948,20 +1948,39 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 	 * instead, so the existing R_PHY_RETRY/phy_t_retry logic applies.
 	 */
 	if (is_c45) {
-		bool ids_zero = true;
+		u32 devs = phy->c45_ids.devices_in_package;
+		bool ids_valid = false;
 		int i;
 
+		/* Absent MMDs leave their identifier zero; a gated or
+		 * timed-out RollBall access reads 0xffff, so an identifier
+		 * with either 16-bit half at 0xffff is corrupt. Require at
+		 * least one fully plausible identifier before accepting the
+		 * PHY.
+		 */
 		for (i = 1; i < ARRAY_SIZE(phy->c45_ids.device_ids); i++) {
-			if (phy->c45_ids.device_ids[i] &&
-			    phy->c45_ids.device_ids[i] != 0xffffffff) {
-				ids_zero = false;
+			u32 id = phy->c45_ids.device_ids[i];
+
+			if (id && (id & 0xffff) != 0xffff &&
+			    (id >> 16) != 0xffff) {
+				ids_valid = true;
 				break;
 			}
 		}
 
-		if (ids_zero) {
+		/* devices_in_package selects which MMDs are enumerated, so a
+		 * timed-out read leaving either 16-bit half at 0xffff makes
+		 * the map itself untrustworthy -- one clean identifier is not
+		 * enough to accept it. Seen on a BCM84891 that answered PMA
+		 * (0x35905081) while the rest of the mailbox was still gated
+		 * (devs_in_pkg 0xffff009b): the id-only check passed on the
+		 * clean PMA, attached a half-awake PHY, and its reset poll
+		 * then failed -ETIMEDOUT during attach.
+		 */
+		if (!ids_valid ||
+		    (devs & 0xffff) == 0xffff || (devs >> 16) == 0xffff) {
 			dev_info(sfp->dev,
-				 "PHY identifiers read as zero (devs_in_pkg 0x%08x), retrying\n",
+				 "PHY identifiers unstable (devs_in_pkg 0x%08x), retrying\n",
 				 phy->c45_ids.devices_in_package);
 			phy_device_free(phy);
 			return -ENODEV;
