@@ -33,8 +33,10 @@
 #define MXL862XX_API_READ(dev, cmd, data) \
 	mxl862xx_api_wrap(dev, cmd, &(data), sizeof((data)), true)
 
-/* DSA port index is 0 based, the MXL FW has 1 as the base index */
+/* DSA port index is 1 based (i.e., port 0 is unused), matching MXL FW */
 #define DSA_MXL_PORT(port) ((port))
+/* MDIO port index is 0 based, adjust to DSA */
+#define DSA_MDIO_PORT(port) ((port - 1))
 
 #define MXL862XX_SDMA_PCTRLP(p) (0xBC0 + ((p) * 0x6))
 #define MXL862XX_SDMA_PCTRL_EN BIT(0) /* SDMA Port Enable */
@@ -129,8 +131,10 @@ static const struct mxl862xx_mibs mxl862xx_mibs_tx[] = {
 
 static int mxl862xx_phy_read_mmd(struct mxl862xx_priv *priv, int port, int devadd, int reg)
 {
+	if (port<1)
+		return -EINVAL;
 	struct mdio_relay_data param = {
-		.phy = port,
+		.phy = DSA_MDIO_PORT(port),
 		.mmd = devadd,
 		.reg = reg & 0xffff,
 	};
@@ -146,8 +150,10 @@ static int mxl862xx_phy_read_mmd(struct mxl862xx_priv *priv, int port, int devad
 static int mxl862xx_phy_write_mmd(struct mxl862xx_priv *priv, int port,
 				  int devadd, int reg, u16 data)
 {
+	if (port<1)
+		return -EINVAL;
 	struct mdio_relay_data param = {
-		.phy = port,
+		.phy = DSA_MDIO_PORT(port),
 		.mmd = devadd,
 		.reg = reg,
 		.data = data,
@@ -367,7 +373,7 @@ static enum dsa_tag_protocol mxl862_parse_tag_proto(struct dsa_switch *ds, uint8
 
 	if (!strcmp(user_protocol, "mxl862"))
 		tag_proto = DSA_TAG_PROTO_MXL862;
-	else if (!strcmp(user_protocol, "mxl862_8021q"))
+	else if (!strcmp(user_protocol, "mxl862xx-8021q"))
 		tag_proto = DSA_TAG_PROTO_MXL862_8021Q;
 	else
 		dev_warn(ds->dev,
