@@ -1496,12 +1496,14 @@ static int aeon_gen2_match_phy_device(struct phy_device *phydev,
 				      const struct phy_driver *phydrv)
 {
 	/* AEONSEMI get pid. */
-	phydev->phy_id = aeon_gen2_read_pid(phydev);
+	u32 phy_id = aeon_gen2_read_pid(phydev);
 
-	if (phydev->phy_id == PHY_ID_AS22XXX)
-		return 1;
+	if (phy_id != PHY_ID_AS22XXX)
+		return 0;
 
-	return 0;
+	phydev->phy_id = phy_id;
+
+	return 1;
 }
 
 static void aeon_gen1_remove(struct phy_device *phydev)
