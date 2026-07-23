@@ -344,11 +344,17 @@
 };
 
 &gsw_phy3 {
-	status = "disabled";
+	pinctrl-0 = <&gbe3_led0_pins>;
+	pinctrl-names = "gbe-led";
+};
+
+&gsw_phy3_led0 {
+	color = <LED_COLOR_ID_YELLOW>;
+	status = "okay";
 };
 
 &gsw_port3 {
-	status = "disabled";
+	label = "lan-fpc";
 };
 
 &i2c0 {
@@ -512,6 +518,13 @@
 		mux {
 			function = "led";
 			groups = "gbe0_led0";
+		};
+	};
+
+	gbe3_led0_pins: gbe3-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe3_led0";
 		};
 	};
 
