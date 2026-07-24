@@ -9,6 +9,12 @@ numproc=$(grep ^processor /proc/cpuinfo  | wc -l)
 
 . build.conf
 
+if [[ -d "/run/media/$USER" ]]; then
+    mountroot="/run/media/$USER"
+else
+    mountroot="/media/$USER"
+fi
+
 r64newswver=1.0
 if [[ -z "$board" ]];then board="bpi-r2";fi
 
@@ -221,7 +227,7 @@ function check_dep()
 
 function getuenvpath {
 	if [[ $crosscompile -ne 0 ]];then
-		uenv_base=/media/${USER}/BPI-BOOT/
+		uenv_base=${mountroot}/BPI-BOOT/
 	else
 		uenv_base=/boot/
 	fi
@@ -460,11 +466,11 @@ function install
 		itbinput=n
 		imginput=n
 		read -p "Press [enter] to copy data to SD-Card..."
-		if  [[ -d /media/$USER/BPI-BOOT ]]; then
+		if  [[ -d ${mountroot}/BPI-BOOT ]]; then
 
-			targetdir=/media/$USER/BPI-BOOT
+			targetdir=${mountroot}/BPI-BOOT
 			if [[ "$board" == "bpi-r2" || "$board" == "bpi-r64" ]];then
-				targetdir=/media/$USER/BPI-BOOT/bananapi/$board/linux
+				targetdir=$targetdir/bananapi/$board/linux
 			fi
 			mkdir -p $targetdir
 			kernelfile=$targetdir/$imagename
@@ -506,7 +512,7 @@ function install
 			fi
 
 			if [[ "$board" == "bpi-r2pro" ]];then
-				targetdir=/media/$USER/BPI-BOOT/extlinux
+				targetdir=${mountroot}/BPI-BOOT/extlinux
 				read -e -i "$imginput" -p "install img kernel (img.gz) [yn]? " imginput
 				if [[ "$imginput" == "y" ]];then
 					dtbname=${imgname}.dtb
@@ -550,7 +556,7 @@ function install
 
 			if [[ "$dtinput" == "y" ]] || [[ "$ndtinput" == "y" ]] || [[ "$itbinput" == "y" ]]  || [[ "$imginput" == "y" ]];then
 				echo "copy modules (root needed because of ext-fs permission)"
-				export INSTALL_MOD_PATH=/media/$USER/BPI-ROOT/;
+				export INSTALL_MOD_PATH=${mountroot}/BPI-ROOT/;
 				echo "INSTALL_MOD_PATH: $INSTALL_MOD_PATH"
 				sudo make ARCH=$ARCH INSTALL_MOD_PATH=$INSTALL_MOD_PATH KBUILD_OUTPUT=$KBUILD_OUTPUT modules_install
 
@@ -1117,9 +1123,9 @@ if [ -n "$kernver" ]; then
 
 		"lskernel")
 			echo "list kernels on sd-card"
-			ls -lh /media/$USER/BPI-BOOT/bananapi/$board/linux/
+			ls -lh ${mountroot}/BPI-BOOT/bananapi/$board/linux/
 			echo "available DTBs:"
-			ls -lh /media/$USER/BPI-BOOT/bananapi/$board/linux/dtb
+			ls -lh ${mountroot}/BPI-BOOT/bananapi/$board/linux/dtb
 			;;
 
 		"defconfig")
