@@ -1104,10 +1104,14 @@ if [ -n "$kernver" ]; then
 
 		"umount")
 			echo "umount SD Media"
-			dev=$(mount | grep BPI-ROOT | head -1 | sed -e 's/[0-9] .*$/?/' | sort -u)
-			echo "$dev"
-			if [[ ! -z "$dev" ]];then
-				umount $dev
+			device=$(
+				findmnt -rn -o SOURCE -S LABEL=BPI-ROOT ||
+				findmnt -rn -o SOURCE -S LABEL=BPI-BOOT
+			)
+
+			if [[ -n "$device" ]]; then
+				disk="/dev/$(lsblk -no PKNAME "$device")"
+				umount "$disk"* 2>/dev/null
 			fi
 			;;
 
