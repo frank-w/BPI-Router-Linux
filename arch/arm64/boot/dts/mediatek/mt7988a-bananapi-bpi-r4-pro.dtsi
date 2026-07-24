@@ -24,6 +24,9 @@
 		i2c4 = &imux1_sfp1;
 		i2c5 = &imux2_sfp2;
 		i2c6 = &imux3_wifi;
+		serial0 = &serial0;
+		serial1 = &serial1;
+		serial2 = &serial2;
 	};
 
 	chosen {
