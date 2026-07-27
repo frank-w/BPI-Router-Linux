@@ -16,19 +16,35 @@
 };
 
 &gsw_phy2 {
+	pinctrl-0 = <&gbe2_led0_pins>;
+	pinctrl-names = "gbe-led";
+	status = "okay";
+};
+
+&gsw_phy2_led0 {
+	color = <LED_COLOR_ID_YELLOW>;
 	status = "okay";
 };
 
 &gsw_port2 {
-	label = "lan5";
+	label = "lan6";
 	status = "okay";
+};
+
+&pio {
+	gbe2_led0_pins: gbe2-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe2_led0";
+		};
+	};
 };
 
 &switch16 {
 	ports {
 		port6: port@6 {
 			reg = <12>;
-			label = "lan6";
+			label = "sfp-lan";
 			phy-mode = "usxgmii";
 			phy-connection-type = "usxgmii";
 			managed = "in-band-status";
