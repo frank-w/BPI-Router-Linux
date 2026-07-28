@@ -566,6 +566,8 @@ struct phy_oatc14_sqi_capability {
  *	      from userspace, similar to ifindex. A zero index means the PHY
  *	      wasn't assigned an id yet.
  * @phy_id: UID for this device found during discovery
+ * @fw_version: PHY firmware version reported to userspace via
+ *		ETHTOOL_MSG_PHY_GET
  * @c45_ids: 802.3-c45 Device Identifiers if is_c45.
  * @is_c45:  Set to true if this PHY uses clause 45 addressing.
  * @is_internal: Set to true if this PHY is internal to a MAC.
@@ -676,6 +678,8 @@ struct phy_device {
 
 	u32 phyindex;
 	u32 phy_id;
+
+	char fw_version[ETHTOOL_FWVERS_LEN];
 
 	struct phy_c45_device_ids c45_ids;
 	unsigned is_c45:1;
