@@ -1797,6 +1797,9 @@ attribute-sets:
       -
         name: downstream-sfp-name
         type: string
+      -
+        name: fwversion
+        type: string
   -
     name: tsconfig
     attr-cnt-name: __ethtool-a-tsconfig-cnt
@@ -2736,6 +2739,7 @@ operations:
             - upstream-index
             - upstream-sfp-name
             - downstream-sfp-name
+            - fwversion
       dump: *phy-get-op
     -
       name: phy-ntf
