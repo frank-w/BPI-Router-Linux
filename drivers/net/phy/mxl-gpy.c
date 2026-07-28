@@ -75,7 +75,6 @@
 #define PHY_LED_HWCONTROL(idx)	BIT(8 + (idx))
 #define PHY_LED_ON(idx)		BIT(idx)
 
-#define PHY_FWV_REL_MASK	BIT(15)
 #define PHY_FWV_MAJOR_MASK	GENMASK(11, 8)
 #define PHY_FWV_MINOR_MASK	GENMASK(7, 0)
 
@@ -378,14 +377,15 @@ static int gpy_probe(struct phy_device *phydev)
 	priv->fw_major = FIELD_GET(PHY_FWV_MAJOR_MASK, fw_version);
 	priv->fw_minor = FIELD_GET(PHY_FWV_MINOR_MASK, fw_version);
 
+	/* MaxLinear only ever refers to the GPHY firmware version as a
+	 * hexadecimal number matching the raw PHY_FWV register.
+	 */
+	snprintf(phydev->fw_version, sizeof(phydev->fw_version), "%04x",
+		 fw_version);
+
 	ret = gpy_hwmon_register(phydev);
 	if (ret)
 		return ret;
-
-	/* Show GPY PHY FW version in dmesg */
-	phydev_info(phydev, "Firmware Version: %d.%d (0x%04X%s)\n",
-		    priv->fw_major, priv->fw_minor, fw_version,
-		    fw_version & PHY_FWV_REL_MASK ? "" : " test version");
 
 	return 0;
 }
