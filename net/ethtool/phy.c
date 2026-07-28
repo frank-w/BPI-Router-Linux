@@ -24,6 +24,7 @@ struct phy_reply_data {
 	char *upstream_sfp_name;
 	unsigned int upstream_index;
 	char *downstream_sfp_name;
+	char *fwversion;
 };
 
 #define PHY_REPDATA(__reply_base) \
@@ -63,6 +64,10 @@ static int phy_reply_size(const struct ethnl_req_info *req_info,
 	/* ETHTOOL_A_PHY_DOWNSTREAM_SFP_NAME */
 	if (rep_data->downstream_sfp_name)
 		size += nla_total_size(strlen(rep_data->downstream_sfp_name) + 1);
+
+	/* ETHTOOL_A_PHY_FWVERSION */
+	if (rep_data->fwversion)
+		size += nla_total_size(strlen(rep_data->fwversion) + 1);
 
 	return size;
 }
@@ -126,8 +131,18 @@ static int phy_prepare_data(const struct ethnl_req_info *req_info,
 		}
 	}
 
+	if (phydev->fw_version[0]) {
+		rep_data->fwversion = kstrdup(phydev->fw_version, GFP_KERNEL);
+		if (!rep_data->fwversion) {
+			ret = -ENOMEM;
+			goto err_free_downstream_sfp;
+		}
+	}
+
 	return 0;
 
+err_free_downstream_sfp:
+	kfree(rep_data->downstream_sfp_name);
 err_free_upstream_sfp:
 	kfree(rep_data->upstream_sfp_name);
 err_free_drvname:
@@ -167,6 +182,10 @@ static int phy_fill_reply(struct sk_buff *skb,
 			   rep_data->downstream_sfp_name))
 		return -EMSGSIZE;
 
+	if (rep_data->fwversion &&
+	    nla_put_string(skb, ETHTOOL_A_PHY_FWVERSION, rep_data->fwversion))
+		return -EMSGSIZE;
+
 	return 0;
 }
 
@@ -178,6 +197,7 @@ static void phy_cleanup_data(struct ethnl_reply_data *reply_data)
 	kfree(rep_data->name);
 	kfree(rep_data->upstream_sfp_name);
 	kfree(rep_data->downstream_sfp_name);
+	kfree(rep_data->fwversion);
 }
 
 const struct ethnl_request_ops ethnl_phy_request_ops = {
