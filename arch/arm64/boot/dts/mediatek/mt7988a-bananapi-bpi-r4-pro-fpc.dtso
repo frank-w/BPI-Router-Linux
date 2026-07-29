@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2021 MediaTek Inc.
+ * Author: Frank Wunderlich <frank-w@public-files.de>
+ */
+
+/* This enables the LAN-Port with FPC connector on BPI-R4-Pro */
+
+#include <dt-bindings/leds/common.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "bananapi,bpi-r4-pro", "mediatek,mt7988a";
+};
+
+&{/soc/pinctrl@1001f000} {
+	gbe3_led0_pins: gbe3-led0-pins {
+		mux {
+			function = "led";
+			groups = "gbe3_led0";
+		};
+	};
+};
+
+&{/soc/switch@15020000/mdio/ethernet-phy@3} {
+	pinctrl-0 = <&gbe3_led0_pins>;
+	pinctrl-names = "gbe-led";
+	status = "okay";
+};
+
+&{/soc/switch@15020000/mdio/ethernet-phy@3/leds/led@0} {
+	color = <LED_COLOR_ID_YELLOW>;
+	status = "okay";
+};
+
+&{/soc/switch@15020000/ports/port@3} {
+	label = "lan-fpc";
+	status = "okay";
+};
