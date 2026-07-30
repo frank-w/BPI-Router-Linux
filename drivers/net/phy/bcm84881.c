@@ -260,6 +260,32 @@ static int bcm84881_get_features(struct phy_device *phydev)
 	return 0;
 }
 
+static const int bcm8489x_features[] = {
+	ETHTOOL_LINK_MODE_Autoneg_BIT,
+	ETHTOOL_LINK_MODE_100baseT_Half_BIT,
+	ETHTOOL_LINK_MODE_100baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_5000baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_10000baseT_Full_BIT,
+};
+
+static int bcm8489x_get_features(struct phy_device *phydev)
+{
+	/* The PMA/PMD abilities of this family are fixed and known, and
+	 * on some modules every MDIO access is expensive (RollBall
+	 * MDIO-over-I2C mailbox, tens to hundreds of ms per register),
+	 * so do not spend half a dozen reads at attach time discovering
+	 * constants. EEE abilities may vary with firmware; keep reading
+	 * those.
+	 */
+	linkmode_set_bit_array(bcm8489x_features,
+			       ARRAY_SIZE(bcm8489x_features),
+			       phydev->supported);
+
+	return genphy_c45_read_eee_abilities(phydev);
+}
+
 static int bcm84881_config_aneg(struct phy_device *phydev)
 {
 	bool changed = false;
@@ -515,7 +541,7 @@ static struct phy_driver bcm84881_drivers[] = {
 		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm8489x_config_init,
 		.probe		= bcm84881_probe,
-		.get_features	= bcm84881_get_features,
+		.get_features	= bcm8489x_get_features,
 		.config_aneg	= bcm84881_config_aneg,
 		.aneg_done	= bcm84881_aneg_done,
 		.read_status	= bcm84881_read_status,
@@ -530,7 +556,7 @@ static struct phy_driver bcm84881_drivers[] = {
 		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm8489x_config_init,
 		.probe		= bcm84881_probe,
-		.get_features	= bcm84881_get_features,
+		.get_features	= bcm8489x_get_features,
 		.config_aneg	= bcm84881_config_aneg,
 		.aneg_done	= bcm84881_aneg_done,
 		.read_status	= bcm84881_read_status,
