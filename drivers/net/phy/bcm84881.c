@@ -319,7 +319,7 @@ static int bcm84881_read_status(struct phy_device *phydev)
 {
 	bool was_resolved;
 	unsigned int mode;
-	int bmsr, val;
+	int bmsr, val, stat1;
 
 	/* Whether the previous poll left a fully resolved link whose
 	 * negotiated parameters (lp_advertising, speed, duplex, pause,
@@ -330,6 +330,33 @@ static int bcm84881_read_status(struct phy_device *phydev)
 	was_resolved = phydev->link && phydev->autoneg_complete &&
 		       phydev->speed != SPEED_UNKNOWN;
 
+	stat1 = -1;
+
+	/* In polling mode with the link previously up and resolved, a
+	 * single read of the AN status register is normally sufficient
+	 * to confirm nothing changed: the link status bit is latched
+	 * low, so a momentary drop or a renegotiation since the last
+	 * poll reads as 0 even if the link has already come back, and
+	 * autoneg-complete deasserts across a renegotiation. This
+	 * mirrors the polling-mode single-read logic in
+	 * genphy_c45_read_link().
+	 */
+	if (phy_polling_mode(phydev) && was_resolved) {
+		stat1 = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
+		if (stat1 < 0)
+			return stat1;
+
+		if ((stat1 & MDIO_STAT1_LSTATUS) &&
+		    (stat1 & MDIO_AN_STAT1_COMPLETE))
+			return 0;
+
+		/* Something changed. The latched status has now been
+		 * consumed, so the full evaluation below must reuse
+		 * this value rather than re-read the register, which
+		 * would miss a momentary link drop.
+		 */
+	}
+
 	val = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1);
 	if (val < 0)
 		return val;
@@ -339,17 +366,19 @@ static int bcm84881_read_status(struct phy_device *phydev)
 		return 0;
 	}
 
-	val = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
-	if (val < 0)
-		return val;
+	if (stat1 < 0) {
+		stat1 = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
+		if (stat1 < 0)
+			return stat1;
+	}
 
 	bmsr = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_C22 + MII_BMSR);
 	if (bmsr < 0)
 		return bmsr;
 
-	phydev->autoneg_complete = !!(val & MDIO_AN_STAT1_COMPLETE) &&
+	phydev->autoneg_complete = !!(stat1 & MDIO_AN_STAT1_COMPLETE) &&
 				   !!(bmsr & BMSR_ANEGCOMPLETE);
-	phydev->link = !!(val & MDIO_STAT1_LSTATUS) &&
+	phydev->link = !!(stat1 & MDIO_STAT1_LSTATUS) &&
 		       !!(bmsr & BMSR_LSTATUS);
 	if (phydev->autoneg == AUTONEG_ENABLE && !phydev->autoneg_complete)
 		phydev->link = false;
