@@ -4644,8 +4644,13 @@ static void mtk_hw_reset_monitor_work(struct work_struct *work)
 		goto out;
 
 	/* DMA stuck checks */
-	if (mtk_hw_check_dma_hang(eth) && atomic_read(&eth->reset.force))
-		schedule_work(&eth->pending_work);
+	if (mtk_hw_check_dma_hang(eth)) {
+		if (atomic_read(&eth->reset.force))
+			schedule_work(&eth->pending_work);
+		else
+			dev_err_ratelimited(eth->dev,
+					    "DMA hang detected, automatic recovery is disabled (echo 2 > /sys/kernel/debug/mtketh/reset to enable)\n");
+	}
 
 out:
 	schedule_delayed_work(&eth->reset.monitor_work,
