@@ -219,6 +219,19 @@ static int xhci_mtk_host_enable(struct xhci_hcd_mtk *mtk)
 	/* power on and enable u3 ports except skipped ones */
 	for (i = 0; i < mtk->num_u3_ports; i++) {
 		if ((0x1 << i) & mtk->u3p_dis_msk) {
+			/*
+			 * Park skipped ports instead of leaving them in
+			 * their power-on default state: the port's PHY may
+			 * be uninitialized or its SerDes lane owned by
+			 * another controller (e.g. PCIe), in which case a
+			 * powered-up port whose MAC clock domain is never
+			 * released from reset can hold the interrupt line
+			 * asserted, getting it disabled by the spurious
+			 * IRQ detector and killing the whole host.
+			 */
+			value = readl(&ippc->u3_ctrl_p[i]);
+			value |= CTRL_U3_PORT_PDN | CTRL_U3_PORT_DIS;
+			writel(value, &ippc->u3_ctrl_p[i]);
 			u3_ports_disabled++;
 			continue;
 		}
