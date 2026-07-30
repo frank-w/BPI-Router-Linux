@@ -1875,9 +1875,29 @@ static int mtk_tx_map(struct sk_buff *skb, struct net_device *dev,
 		}
 	}
 
-	/* store skb to cleanup */
-	itx_buf->type = MTK_TYPE_SKB;
-	itx_buf->data = skb;
+	/* Attach the skb to the job's last descriptor, not its first.
+	 *
+	 * The QDMA releases descriptors progressively: a descriptor's DDONE
+	 * bit asserts that the engine has consumed that descriptor's buffer,
+	 * not that the job it belongs to has finished.  mtk_poll_tx_qdma()
+	 * reclaims in submission order, so with the skb on the first
+	 * descriptor it is freed - dropping every fragment page reference of
+	 * the whole job - as soon as the engine is done with the first
+	 * buffer, while the remaining buffers may still be queued for fetch.
+	 * Anything that then reuses or sanitises those pages (init_on_free
+	 * zeroes them immediately) is read by the engine instead of the
+	 * payload.  Keying the free to the last descriptor holds the pages
+	 * until every buffer has been consumed.
+	 */
+	if (MTK_HAS_CAPS(soc->caps, MTK_QDMA)) {
+		itx_buf->data = (void *)MTK_DMA_DUMMY_DESC;
+		tx_buf = mtk_desc_to_tx_buf(ring, txd, soc->tx.desc_size);
+		tx_buf->type = MTK_TYPE_SKB;
+		tx_buf->data = skb;
+	} else {
+		itx_buf->type = MTK_TYPE_SKB;
+		itx_buf->data = skb;
+	}
 
 	if (!MTK_HAS_CAPS(soc->caps, MTK_QDMA)) {
 		if (k & 0x1)
