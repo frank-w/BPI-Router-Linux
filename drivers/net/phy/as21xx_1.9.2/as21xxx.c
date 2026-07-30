@@ -1615,6 +1615,21 @@ static int aeon_gen1_config_init(struct phy_device *phydev)
 		if (ret)
 			return ret;
 
+		/* The restarted MCU begins a fresh command sequence
+		 * while priv->parity_status still holds whatever the
+		 * commands before the reload left it at, so the first
+		 * command after the reload can match the parity of a
+		 * status the new firmware has not produced.
+		 * aeon_gen1_probe() re-syncs after loading the firmware
+		 * for this reason; do the same here. A failure is not
+		 * fatal - the retry loop below recovers, just noisily.
+		 */
+		ret = aeon_ipc_sync_parity(phydev, phydev->priv);
+		if (ret)
+			phydev_warn(phydev,
+				    "IPC parity sync after firmware reload failed (%d)\n",
+				    ret);
+
 		ret = aeon_wait_reset_complete(phydev);
 		if (!ret) {
 			/* Enable PTP clk if not already Enabled */
