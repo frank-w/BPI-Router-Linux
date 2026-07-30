@@ -317,8 +317,18 @@ static int bcm84881_aneg_done(struct phy_device *phydev)
 
 static int bcm84881_read_status(struct phy_device *phydev)
 {
+	bool was_resolved;
 	unsigned int mode;
 	int bmsr, val;
+
+	/* Whether the previous poll left a fully resolved link whose
+	 * negotiated parameters (lp_advertising, speed, duplex, pause,
+	 * mdix, interface) are still valid. They can only change through
+	 * a renegotiation, which is observable below as a link drop, an
+	 * autoneg restart or autoneg-complete deasserting.
+	 */
+	was_resolved = phydev->link && phydev->autoneg_complete &&
+		       phydev->speed != SPEED_UNKNOWN;
 
 	val = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1);
 	if (val < 0)
@@ -343,6 +353,15 @@ static int bcm84881_read_status(struct phy_device *phydev)
 		       !!(bmsr & BMSR_LSTATUS);
 	if (phydev->autoneg == AUTONEG_ENABLE && !phydev->autoneg_complete)
 		phydev->link = false;
+
+	/* On some modules every MDIO access is expensive (RollBall
+	 * MDIO-over-I2C mailbox, tens to hundreds of ms per register).
+	 * If the link was already up and resolved on the previous poll
+	 * and still is, the negotiated parameters cannot have changed:
+	 * skip re-reading them and keep the cached values.
+	 */
+	if (was_resolved && phydev->link && phydev->autoneg_complete)
+		return 0;
 
 	linkmode_zero(phydev->lp_advertising);
 	phydev->speed = SPEED_UNKNOWN;
