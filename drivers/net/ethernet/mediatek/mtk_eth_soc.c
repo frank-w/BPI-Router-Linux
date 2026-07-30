@@ -1789,8 +1789,11 @@ static int mtk_tx_map(struct sk_buff *skb, struct net_device *dev,
 	int queue = skb_get_queue_mapping(skb);
 	int k = 0;
 
-	if (skb->len <= MTK_MIN_TX_LENGTH) {
-		if (skb_put_padto(skb, MTK_MIN_TX_LENGTH))
+	if (skb->len < MTK_MIN_TX_LENGTH) {
+		/* __skb_put_padto() must not free the skb here: the caller
+		 * frees it on every error return from this function.
+		 */
+		if (__skb_put_padto(skb, MTK_MIN_TX_LENGTH, false))
 			return -ENOMEM;
 
 		txd_info.last = !skb_is_nonlinear(skb);
