@@ -145,6 +145,7 @@
 #define MT7996_RRO_MSDU_PG_CR_CNT	8
 #define MT7996_RRO_MSDU_PG_SIZE_PER_CR	0x10000
 
+struct mt7996_dev;
 struct mt7996_vif;
 struct mt7996_sta;
 struct mt7996_dfs_pulse;
@@ -313,6 +314,11 @@ struct mt7996_hif {
 
 	enum pci_bus_speed speed;
 	enum pcie_link_width width;
+
+	/* Owning device, set when the primary PCIe function claims this hif.
+	 * Lets the hif2 .error_detected handler reach the mt76 device.
+	 */
+	struct mt7996_dev *mt7996;
 };
 
 #define WED_RRO_ADDR_SIGNATURE_MASK	GENMASK(31, 24)
