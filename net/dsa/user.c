@@ -2805,6 +2805,15 @@ int dsa_user_create(struct dsa_port *port)
 	SET_NETDEV_DEVLINK_PORT(user_dev, &port->devlink_port);
 	user_dev->dev.of_node = port->dn;
 	user_dev->vlan_features = conduit->vlan_features;
+	/* A user port hands its transmit skbs straight to the conduit, so a
+	 * segmentation offload accepted here is performed by the conduit's
+	 * hardware.  Inherit its limits, or the stack evaluates the user port
+	 * against the defaults and only discovers the real ceiling one
+	 * dev_queue_xmit() later - after validate_xmit_skb() has already
+	 * linearized any fragment list, which for a coalesced superpacket is
+	 * an order-5 GFP_ATOMIC allocation.
+	 */
+	netif_inherit_tso_max(user_dev, conduit);
 
 	p = netdev_priv(user_dev);
 	user_dev->pcpu_stat_type = NETDEV_PCPU_STAT_TSTATS;
