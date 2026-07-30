@@ -3,6 +3,8 @@
  * Copyright (C) 2022 MediaTek Inc.
  */
 
+#include <linux/delay.h>
+#include <linux/gpio/consumer.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/pci.h>
@@ -142,6 +144,12 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 	if (hif2)
 		hif2->mt7996 = dev;
 
+	/* Optional reset line for slot_reset() recovery; absent on stock DT. */
+	dev->reset_gpio = devm_gpiod_get_optional(&pdev->dev, "reset",
+						  GPIOD_OUT_LOW);
+	if (IS_ERR(dev->reset_gpio))
+		dev->reset_gpio = NULL;
+
 	mt76_npu_init(mdev, pci_resource_start(pdev, 0),
 		      pci_domain_nr(pdev->bus) ? 3 : 2);
 
@@ -198,6 +206,11 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 	if (ret)
 		goto free_hif2_irq;
 
+	/* Snapshot config space so slot_reset() can restore BARs and the
+	 * command register after a PCIe bus reset clobbers them.
+	 */
+	pci_save_state(pdev);
+
 	return 0;
 
 free_hif2_irq:
@@ -243,26 +256,15 @@ static void mt7996_pci_remove(struct pci_dev *pdev)
 	mt7996_unregister_device(dev);
 }
 
-static pci_ers_result_t mt7996_pci_mark_removed(struct mt76_dev *mdev)
+static void mt7996_pci_mark_removed(struct mt76_dev *mdev)
 {
 	/* Flag the device gone so every liveness check - including
 	 * mt7996_dev_gone() guarding the reset worker - short-circuits before
-	 * it can touch the now-unreachable MMIO window. This is the same idiom
-	 * the mt792x PCIe driver uses on surprise removal, and it does not rely
-	 * on the controller updating pci_dev->error_state.
+	 * it can touch the now-unreachable MMIO window, and wake anyone blocked
+	 * on an MCU response so it fails fast instead of stalling to timeout.
 	 */
 	set_bit(MT76_REMOVED, &mdev->phy.state);
-
-	/* Wake anyone blocked on an MCU response so it fails fast instead of
-	 * stalling to timeout against a dead endpoint.
-	 */
 	wake_up(&mdev->mcu.wait);
-
-	/* The MAC and firmware state cannot survive a PCIe link loss and this
-	 * driver has no slot_reset re-init path, so request a clean disconnect
-	 * rather than a doomed recovery attempt.
-	 */
-	return PCI_ERS_RESULT_DISCONNECT;
 }
 
 static pci_ers_result_t
@@ -270,10 +272,20 @@ mt7996_pci_error_detected(struct pci_dev *pdev, pci_channel_state_t state)
 {
 	struct mt76_dev *mdev = pci_get_drvdata(pdev);
 
-	dev_err(&pdev->dev, "PCIe error detected (state=%u), marking device removed\n",
+	if (state == pci_channel_io_perm_failure)
+		return PCI_ERS_RESULT_DISCONNECT;
+
+	dev_err(&pdev->dev, "PCIe error detected (state=%u), requesting slot reset\n",
 		state);
 
-	return mt7996_pci_mark_removed(mdev);
+	mt7996_pci_mark_removed(mdev);
+
+	/* Ask the PCIe core to perform a secondary bus reset (PERST#) and then
+	 * call .slot_reset, where the chip is reinitialised. If recovery there
+	 * fails, slot_reset returns DISCONNECT and we end up in the same safe
+	 * state as before - WiFi down, the rest of the system alive.
+	 */
+	return PCI_ERS_RESULT_NEED_RESET;
 }
 
 static pci_ers_result_t
@@ -282,26 +294,103 @@ mt7996_hif_error_detected(struct pci_dev *pdev, pci_channel_state_t state)
 	struct mt7996_hif *hif = pci_get_drvdata(pdev);
 	struct mt7996_dev *dev = hif ? hif->mt7996 : NULL;
 
+	if (state == pci_channel_io_perm_failure)
+		return PCI_ERS_RESULT_DISCONNECT;
+
 	dev_err(&pdev->dev, "PCIe error detected (state=%u) on hif2\n", state);
 
 	/* hif2 is the second PCIe function of the same physical chip; a link
 	 * loss here downs the whole device. Mark the owning mt76 device removed
-	 * so its reset worker bails out too. The primary function may not have
-	 * claimed this hif yet (still probing), in which case there is nothing
-	 * to mark - just report the disconnect.
+	 * so its reset worker bails out too, then request the shared slot reset.
+	 * If the primary function has not claimed this hif yet, there is nothing
+	 * to reinitialise from here - just disconnect this function.
 	 */
 	if (!dev)
 		return PCI_ERS_RESULT_DISCONNECT;
 
-	return mt7996_pci_mark_removed(&dev->mt76);
+	mt7996_pci_mark_removed(&dev->mt76);
+
+	return PCI_ERS_RESULT_NEED_RESET;
+}
+
+static pci_ers_result_t mt7996_pci_slot_reset(struct pci_dev *pdev)
+{
+	struct mt76_dev *mdev = pci_get_drvdata(pdev);
+	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+
+	dev_info(&pdev->dev, "PCIe slot reset, reinitialising device\n");
+
+	/* The secondary bus reset clobbered config space; restore BARs and the
+	 * command register before any MMIO, and re-enable bus mastering.
+	 */
+	pci_restore_state(pdev);
+	pci_set_master(pdev);
+
+	/* Optional hard power-cycle of the card via a board GPIO wired in
+	 * parallel with the manual power switch. PERST# from the bus reset above
+	 * may not clear an MCU wedged by a supply brownout; cycling the rail
+	 * does. No-op when no reset-gpios is described in DT.
+	 */
+	if (dev->reset_gpio) {
+		gpiod_set_value_cansleep(dev->reset_gpio, 1);
+		msleep(20);
+		gpiod_set_value_cansleep(dev->reset_gpio, 0);
+		msleep(50);
+	}
+
+	/* Confirm the chip is actually back on the bus before promising the
+	 * core a recovery; a dead read returns all-ones.
+	 */
+	if (mt76_rr(dev, MT_HW_REV) == 0xffffffff) {
+		dev_err(&pdev->dev, "device unreachable after slot reset\n");
+		return PCI_ERS_RESULT_DISCONNECT;
+	}
+
+	/* Config space is valid and the channel is online again, so the
+	 * mt7996_dev_gone() guard must stop tripping for the reinit to run.
+	 */
+	clear_bit(MT76_REMOVED, &mdev->phy.state);
+
+	/* Reload firmware and rebuild DMA/NAPI/token state through the existing
+	 * full chip reset path (mt7996_mac_reset_work -> mt7996_mac_full_reset).
+	 */
+	dev->recovery.restart = true;
+	queue_work(mdev->wq, &dev->reset_work);
+
+	return PCI_ERS_RESULT_RECOVERED;
+}
+
+static pci_ers_result_t mt7996_hif_slot_reset(struct pci_dev *pdev)
+{
+	/* hif2 shares the chip with the primary function, which drives the
+	 * actual reinit from its own slot_reset. Here we only need this
+	 * function's own config space restored so the reinit can reach the
+	 * hif2 register window.
+	 */
+	pci_restore_state(pdev);
+	pci_set_master(pdev);
+
+	return PCI_ERS_RESULT_RECOVERED;
+}
+
+static void mt7996_pci_io_resume(struct pci_dev *pdev)
+{
+	/* The chip reinit queued from slot_reset ends in ieee80211_restart_hw(),
+	 * which restarts the queues, so nothing extra is required here.
+	 */
+	dev_info(&pdev->dev, "PCIe recovery complete\n");
 }
 
 static const struct pci_error_handlers mt7996_pci_err_handler = {
 	.error_detected = mt7996_pci_error_detected,
+	.slot_reset	= mt7996_pci_slot_reset,
+	.resume		= mt7996_pci_io_resume,
 };
 
 static const struct pci_error_handlers mt7996_hif_err_handler = {
 	.error_detected = mt7996_hif_error_detected,
+	.slot_reset	= mt7996_hif_slot_reset,
+	.resume		= mt7996_pci_io_resume,
 };
 
 struct pci_driver mt7996_hif_driver = {
