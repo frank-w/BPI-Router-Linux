@@ -248,7 +248,7 @@ static int mxl862xx_phy_read_mmd(struct mxl862xx_priv *priv, int addr,
 	};
 	int ret;
 
-	ret = MXL862XX_API_READ(priv, INT_GPHY_READ, param);
+	ret = MXL862XX_API_READ_QUIET(priv, INT_GPHY_READ, param);
 	if (ret)
 		return ret;
 
@@ -265,7 +265,7 @@ static int mxl862xx_phy_write_mmd(struct mxl862xx_priv *priv, int addr,
 		.data = cpu_to_le16(data),
 	};
 
-	return MXL862XX_API_WRITE(priv, INT_GPHY_WRITE, param);
+	return MXL862XX_API_WRITE_QUIET(priv, INT_GPHY_WRITE, param);
 }
 
 static int mxl862xx_phy_read_mii_bus(struct mii_bus *bus, int addr, int regnum)
