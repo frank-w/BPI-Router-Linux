@@ -1514,6 +1514,26 @@ static void aeon_gen1_remove(struct phy_device *phydev)
 	#endif
 }
 
+/* Read the IPC mailbox status, rejecting a not-responding mailbox.
+ *
+ * An all-ones IPC_STS is not a status the MCU can produce: the SIZE
+ * field would encode 31 bytes, more than the eight data registers can
+ * carry (AEON_IPC_DATA_MAX), and 0x3f is not a valid response opcode.
+ * It is what a C45 read returns when nothing drives the data phase -
+ * the IPC MCU held in reset, or the firmware not loaded.
+ */
+static int aeon_ipc_read_sts(struct phy_device *phydev)
+{
+	int sts = phy_read_mmd(phydev, MDIO_MMD_VEND1, VEND1_IPC_STS);
+
+	if (sts < 0)
+		return sts;
+	if (sts == 0xffff)
+		return -ENODEV;
+
+	return sts;
+}
+
 static int aeon_wait_reset_complete(struct phy_device *phydev)
 {
 	int val;
@@ -1524,7 +1544,70 @@ static int aeon_wait_reset_complete(struct phy_device *phydev)
 
 static int aeon_gen1_config_init(struct phy_device *phydev)
 {
-	int ret = aeon_wait_reset_complete(phydev);
+	int sts = aeon_ipc_read_sts(phydev);
+	int ret = sts;
+
+	/* phy_detach() asserts the PHY reset line when the DT node has
+	 * reset-gpios, so every interface down/up cycle stops the IPC
+	 * MCU and loses the firmware. Probing the IPC in that state
+	 * cannot succeed, but it is not free: the completion poll in
+	 * aeon_ipc_send_cmd() runs its full 2 s budget against a static
+	 * IPC_STS, and the parity resync below then spends another 2 s
+	 * the same way, both ahead of the firmware reload that is the
+	 * only possible recovery. Read the mailbox first and go
+	 * straight to the reload when it does not answer.
+	 */
+	if (sts >= 0)
+		ret = aeon_wait_reset_complete(phydev);
+
+	if (ret && sts >= 0) {
+		struct as21xxx_priv *priv = phydev->priv;
+		int id1, id2;
+
+		/* An IPC failure while the firmware is still running is
+		 * a lost completion that left the driver-side parity bit
+		 * out of sync with the IPC MCU, not a HW reset: after
+		 * one missed completion every subsequent command matches
+		 * the stale IPC_STS of the previous exchange and fails
+		 * instantly.
+		 *
+		 * The mailbox answered, so attempt a cheap recovery
+		 * before the multi-second firmware reload. Instead of
+		 * the NOOP-based sync, whose completion poll can itself
+		 * match stale status, derive the next parity directly
+		 * from IPC_STS: it carries the parity of the last
+		 * command the MCU has seen, so a command with the
+		 * flipped bit is guaranteed to be taken as new and its
+		 * completion cannot be confused with a stale one. If
+		 * the MCU is wedged rather than desynced the retry
+		 * costs one poll timeout before reaching the
+		 * reload as before.
+		 *
+		 * The PHY IDs are logged for diagnosis only: PMA/PMD
+		 * PHYSID keeps the generic pre-firmware value even with
+		 * firmware running, and the post-firmware behavior of
+		 * the PCS copy on this silicon is not yet confirmed,
+		 * so neither is trusted as a firmware-alive gate.
+		 */
+		id1 = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
+		id2 = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
+		sts = aeon_ipc_read_sts(phydev);
+
+		phydev_warn(phydev,
+			    "IPC probe failed (%d), pcs id %04x:%04x ipc_sts %04x, attempting parity resync\n",
+			    ret, id1, id2, sts);
+
+		if (sts >= 0) {
+			mutex_lock(&priv->ipc_lock);
+			priv->parity_status =
+				!FIELD_GET(AEON_IPC_STS_PARITY, sts);
+			mutex_unlock(&priv->ipc_lock);
+
+			ret = aeon_ipc_get_fw_version(phydev);
+			phydev_warn(phydev, "parity resync %s (%d)\n",
+				    ret ? "failed" : "recovered", ret);
+		}
+	}
 
 	if (ret) {
 		aeon_cl45_write(phydev, MDIO_MMD_VEND1, VEND1_PTP_CLK, 0x48);
