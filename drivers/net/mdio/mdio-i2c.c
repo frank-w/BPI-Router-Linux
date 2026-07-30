@@ -195,6 +195,11 @@ unlock:
 #define ROLLBALL_CMD_READ		0x02
 #define ROLLBALL_CMD_DONE		0x04
 
+/* Number of times a command is re-issued if the module does not
+ * signal ROLLBALL_CMD_DONE within the polling budget.
+ */
+#define ROLLBALL_CMD_RETRIES		3
+
 #define SFP_PAGE_ROLLBALL_MDIO		3
 
 static int __i2c_transfer_err(struct i2c_adapter *i2c, struct i2c_msg *msgs,
@@ -362,7 +367,7 @@ static int i2c_mii_read_rollball(struct mii_bus *bus, int phy_id, int devad,
 				 int reg)
 {
 	u8 buf[4], res[6];
-	int bus_addr, ret;
+	int bus_addr, ret, i;
 	u16 val;
 
 	bus_addr = i2c_mii_phy_addr(phy_id);
@@ -374,12 +379,23 @@ static int i2c_mii_read_rollball(struct mii_bus *bus, int phy_id, int devad,
 	buf[2] = (reg >> 8) & 0xff;
 	buf[3] = reg & 0xff;
 
-	ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_READ, buf,
-				   sizeof(buf));
-	if (ret < 0)
-		return ret;
+	/* Some modules (e.g. OEM SFP-10G-T with a BCM84891) occasionally
+	 * take longer than the polling budget to execute a command. Since
+	 * returning 0xffff for a timed-out read is indistinguishable from
+	 * register data, retry the command a few times first; re-issuing
+	 * the same read is idempotent.
+	 */
+	for (i = 0; i < ROLLBALL_CMD_RETRIES; i++) {
+		ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_READ,
+					   buf, sizeof(buf));
+		if (ret < 0)
+			return ret;
 
-	ret = i2c_rollball_mii_poll(bus, bus_addr, res, sizeof(res));
+		ret = i2c_rollball_mii_poll(bus, bus_addr, res, sizeof(res));
+		if (ret != -ETIMEDOUT)
+			break;
+	}
+
 	if (ret == -ETIMEDOUT)
 		return 0xffff;
 	else if (ret < 0)
@@ -393,7 +409,7 @@ static int i2c_mii_read_rollball(struct mii_bus *bus, int phy_id, int devad,
 static int i2c_mii_write_rollball(struct mii_bus *bus, int phy_id, int devad,
 				  int reg, u16 val)
 {
-	int bus_addr, ret;
+	int bus_addr, ret, i;
 	u8 buf[6];
 
 	bus_addr = i2c_mii_phy_addr(phy_id);
@@ -407,12 +423,17 @@ static int i2c_mii_write_rollball(struct mii_bus *bus, int phy_id, int devad,
 	buf[4] = val >> 8;
 	buf[5] = val & 0xff;
 
-	ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_WRITE, buf,
-				   sizeof(buf));
-	if (ret < 0)
-		return ret;
+	for (i = 0; i < ROLLBALL_CMD_RETRIES; i++) {
+		ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_WRITE,
+					   buf, sizeof(buf));
+		if (ret < 0)
+			return ret;
 
-	ret = i2c_rollball_mii_poll(bus, bus_addr, NULL, 0);
+		ret = i2c_rollball_mii_poll(bus, bus_addr, NULL, 0);
+		if (ret != -ETIMEDOUT)
+			break;
+	}
+
 	if (ret < 0)
 		return ret;
 
