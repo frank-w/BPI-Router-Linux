@@ -185,6 +185,18 @@
 			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-wan-sfp.dtbo");
 			type = "flat_dt";
 		};
+		fdt-r4pro-8x-emmc {
+			description = "BPI-R4 Pro 8X eMMC (base+cn13+cn14+emmc)";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-emmc.dtb");
+			type = "flat_dt"; arch = "arm64"; load = <0x47000000>; compression = "none";
+			hash-1 { algo = "sha1"; };
+		};
+		fdt-r4pro-8x-sd {
+			description = "BPI-R4 Pro 8X SD (base+cn13+cn14+sd)";
+			data = /incbin/("./arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-sd.dtb");
+			type = "flat_dt"; arch = "arm64"; load = <0x47000000>; compression = "none";
+			hash-1 { algo = "sha1"; };
+		};
 /*		ramdisk-1 {
 			description = "ramdisk";
 			data = /incbin/("./rootfs_arm64.cpio.gz");
@@ -199,6 +211,18 @@
 	};
 	configurations {
 		default = "conf-sd";
+		conf-r4pro-8x-emmc {
+			description = "Boot BPI-R4 Pro 8X (eMMC)";
+			kernel = "kernel-1";
+			fdt = "fdt-r4pro-8x-emmc";
+			hash-1 { algo = "sha1"; };
+		};
+		conf-r4pro-8x-sd {
+			description = "Boot BPI-R4 Pro 8X (SD)";
+			kernel = "kernel-1";
+			fdt = "fdt-r4pro-8x-sd";
+			hash-1 { algo = "sha1"; };
+		};
 		conf-base {
 			description = "Boot Linux kernel with base FDT blob for BPI-R4 dual SFP+";
 			kernel = "kernel-1";
