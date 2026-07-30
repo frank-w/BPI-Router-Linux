@@ -743,7 +743,7 @@ static int aeon_ipc_send_cmd(struct phy_device *phydev,
 {
 	bool curr_parity;
 	int ret;
-	unsigned int val;
+	int val;
 
 	/* The IPC sync by using a single parity bit.
 	 * Each CMD have alternately this bit set or clear
@@ -780,8 +780,11 @@ static int aeon_ipc_send_cmd(struct phy_device *phydev,
 				phydev, MDIO_MMD_VEND1, VEND1_IPC_STS);
 	if (val < 0)
 		ret = val;
-	if (ret)
-		phydev_err(phydev, "%s fail to polling status failed: %d\n", __func__, ret);
+	if (ret) {
+		phydev_err(phydev, "%s: status poll failed: %d\n",
+			   __func__, ret);
+		return ret;
+	}
 	*ret_sts = val;
 	if ((val & AEON_IPC_STS_STATUS) != AEON_IPC_STS_STATUS_SUCCESS)
 		return -EINVAL;
