@@ -225,7 +225,17 @@ static const struct mtk_gate infra_clks[] = {
 			  CLK_IS_CRITICAL),
 	GATE_INFRA3_FLAGS(CLK_INFRA_USB_FRMCNT_CK_P1, "infra_usb_frmcnt_ck_p1", "usb_frmcnt_p1_sel",
 			  9, CLK_IS_CRITICAL),
-	GATE_INFRA3(CLK_INFRA_USB_PIPE, "infra_usb_pipe", "sspxtp_sel", 10),
+	/*
+	 * Reference clock of the U3/PCIe combo serdes (xphyu3port0). The lane
+	 * is shared between ssusb0 and pcie2, but only the PHY consumer that
+	 * claims it holds this gate. On boards where pcie2 owns the lane, a
+	 * failed pcie2 probe (e.g. empty M.2 slot) calls phy_exit() and gates
+	 * this clock while ssusb0 still has a live SuperSpeed root hub on the
+	 * same PHY, which wedges the shared SSUSB interrupt. CCF cannot model
+	 * the cross-IP sharing, so keep the gate on.
+	 */
+	GATE_INFRA3_FLAGS(CLK_INFRA_USB_PIPE, "infra_usb_pipe", "sspxtp_sel", 10,
+			  CLK_IS_CRITICAL),
 	GATE_INFRA3(CLK_INFRA_USB_PIPE_CK_P1, "infra_usb_pipe_ck_p1", "usb_phy_sel", 11),
 	GATE_INFRA3(CLK_INFRA_USB_UTMI, "infra_usb_utmi", "top_xtal", 12),
 	GATE_INFRA3(CLK_INFRA_USB_UTMI_CK_P1, "infra_usb_utmi_ck_p1", "top_xtal", 13),
