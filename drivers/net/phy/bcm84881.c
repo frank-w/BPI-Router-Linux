@@ -430,12 +430,30 @@ static unsigned int bcm84881_inband_caps(struct phy_device *phydev,
 	return LINK_INBAND_DISABLE;
 }
 
+static int bcm84881_config_inband(struct phy_device *phydev,
+				  unsigned int modes)
+{
+	/* This PHY does not generate inband signalling in any mode (see
+	 * bcm84881_inband_caps()); inband is permanently disabled in
+	 * hardware. A request to disable inband therefore requires no
+	 * action, but must succeed: phylink treats any error from
+	 * phy_config_inband() (including -EOPNOTSUPP from a missing
+	 * config_inband method) as a major configuration failure which
+	 * forces and holds the link down.
+	 */
+	if (modes == LINK_INBAND_DISABLE)
+		return 0;
+
+	return -EINVAL;
+}
+
 static struct phy_driver bcm84881_drivers[] = {
 	{
 		.phy_id		= 0xae025150,
 		.phy_id_mask	= 0xfffffff0,
 		.name		= "Broadcom BCM84881",
 		.inband_caps	= bcm84881_inband_caps,
+		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm84881_config_init,
 		.probe		= bcm84881_probe,
 		.get_features	= bcm84881_get_features,
@@ -446,6 +464,7 @@ static struct phy_driver bcm84881_drivers[] = {
 		PHY_ID_MATCH_MODEL(0x35905080),
 		.name		= "Broadcom BCM84891",
 		.inband_caps	= bcm84881_inband_caps,
+		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm8489x_config_init,
 		.probe		= bcm84881_probe,
 		.get_features	= bcm84881_get_features,
@@ -460,6 +479,7 @@ static struct phy_driver bcm84881_drivers[] = {
 		PHY_ID_MATCH_MODEL(0x359050a0),
 		.name		= "Broadcom BCM84892",
 		.inband_caps	= bcm84881_inband_caps,
+		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm8489x_config_init,
 		.probe		= bcm84881_probe,
 		.get_features	= bcm84881_get_features,
