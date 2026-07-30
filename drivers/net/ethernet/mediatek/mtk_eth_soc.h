@@ -1478,6 +1478,12 @@ struct mtk_soc_data {
 
 #define MTK_DMA_MONITOR_TIMEOUT		msecs_to_jiffies(1000)
 
+/* The GDM MIB counters are clear-on-read and the packet counters are only
+ * 32 bits wide, so they have to be drained on a schedule rather than only
+ * when something asks for statistics.
+ */
+#define MTK_STATS_DRAIN_TIMEOUT		msecs_to_jiffies(1000)
+
 /* currently no SoC has more than 3 macs */
 #define MTK_MAX_DEVS	3
 
@@ -1569,6 +1575,9 @@ struct mtk_eth {
 	unsigned long			state;
 
 	const struct mtk_soc_data	*soc;
+
+	/* periodic drain of the clear-on-read GDM MIB counters */
+	struct delayed_work		stats_work;
 
 	spinlock_t			dim_lock;
 
