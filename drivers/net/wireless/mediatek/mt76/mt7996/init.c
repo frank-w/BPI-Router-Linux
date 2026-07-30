@@ -307,14 +307,23 @@ static void mt7996_led_set_config(struct led_classdev *led_cdev,
 	      FIELD_PREP(MT_LED_TX_BLINK_OFF_MASK, delay_off);
 	mt76_wr(dev, MT_LED_TX_BLINK(mphy->band_idx), val);
 
-	/* turn LED off */
+	/* In the two static branches MT_LED_CTRL_POLARITY selects the level
+	 * the pad is driven to, so active-low wiring has to invert it rather
+	 * than set it unconditionally.  In the blink branch the level comes
+	 * from the blink engine and POLARITY is a plain inversion flag.
+	 */
 	if (delay_off == 0xff && delay_on == 0x0) {
-		val = MT_LED_CTRL_POLARITY | MT_LED_CTRL_KICK;
+		/* turn LED off */
+		val = MT_LED_CTRL_KICK;
+		if (!mphy->leds.al)
+			val |= MT_LED_CTRL_POLARITY;
 	} else if (delay_on == 0xff && delay_off == 0x0) {
-		/* steady on: BLINK_MODE cleared, pin driven statically by
-		 * the polarity bit (mirror of the off branch above).
+		/* steady on: BLINK_MODE cleared, pad driven statically to the
+		 * level opposite to the off branch above.
 		 */
 		val = MT_LED_CTRL_KICK;
+		if (mphy->leds.al)
+			val |= MT_LED_CTRL_POLARITY;
 	} else {
 		/* TX-activity blink via the MAC blink engine.
 		 * select TX blink mode, 2: only data frames
@@ -325,10 +334,9 @@ static void mt7996_led_set_config(struct led_classdev *led_cdev,
 		val = MT_LED_CTRL_BLINK_MODE | MT_LED_CTRL_KICK;
 		if (mphy->band_idx == MT_BAND1)
 			val |= MT_LED_CTRL_BLINK_BAND_SEL;
+		if (mphy->leds.al)
+			val |= MT_LED_CTRL_POLARITY;
 	}
-
-	if (mphy->leds.al)
-		val |= MT_LED_CTRL_POLARITY;
 
 	mt76_wr(dev, MT_LED_CTRL(mphy->band_idx), val);
 	mt76_clear(dev, MT_LED_CTRL(mphy->band_idx), MT_LED_CTRL_KICK);
