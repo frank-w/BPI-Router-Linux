@@ -419,6 +419,12 @@ struct mt7996_dev {
 	struct wiphy_radio_freq_range radio_freqs[MT7996_MAX_RADIOS];
 
 	struct mt7996_hif *hif2;
+
+	/* Optional board GPIO wired to the WiFi card reset/power-enable (in
+	 * parallel with the manual switch), used for hard recovery after a PCIe
+	 * error when PERST# alone does not revive a brownout-wedged MCU.
+	 */
+	struct gpio_desc *reset_gpio;
 	struct mt7996_reg_desc reg;
 	u8 q_id[MT7996_MAX_QUEUE];
 	u32 q_int_mask[MT7996_MAX_QUEUE];
