@@ -139,6 +139,8 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 	mt7996_wfsys_reset(dev);
 	hif2 = mt7996_pci_init_hif2(pdev);
 	dev->hif2 = hif2;
+	if (hif2)
+		hif2->mt7996 = dev;
 
 	mt76_npu_init(mdev, pci_resource_start(pdev, 0),
 		      pci_domain_nr(pdev->bus) ? 3 : 2);
@@ -241,11 +243,73 @@ static void mt7996_pci_remove(struct pci_dev *pdev)
 	mt7996_unregister_device(dev);
 }
 
+static pci_ers_result_t mt7996_pci_mark_removed(struct mt76_dev *mdev)
+{
+	/* Flag the device gone so every liveness check - including
+	 * mt7996_dev_gone() guarding the reset worker - short-circuits before
+	 * it can touch the now-unreachable MMIO window. This is the same idiom
+	 * the mt792x PCIe driver uses on surprise removal, and it does not rely
+	 * on the controller updating pci_dev->error_state.
+	 */
+	set_bit(MT76_REMOVED, &mdev->phy.state);
+
+	/* Wake anyone blocked on an MCU response so it fails fast instead of
+	 * stalling to timeout against a dead endpoint.
+	 */
+	wake_up(&mdev->mcu.wait);
+
+	/* The MAC and firmware state cannot survive a PCIe link loss and this
+	 * driver has no slot_reset re-init path, so request a clean disconnect
+	 * rather than a doomed recovery attempt.
+	 */
+	return PCI_ERS_RESULT_DISCONNECT;
+}
+
+static pci_ers_result_t
+mt7996_pci_error_detected(struct pci_dev *pdev, pci_channel_state_t state)
+{
+	struct mt76_dev *mdev = pci_get_drvdata(pdev);
+
+	dev_err(&pdev->dev, "PCIe error detected (state=%u), marking device removed\n",
+		state);
+
+	return mt7996_pci_mark_removed(mdev);
+}
+
+static pci_ers_result_t
+mt7996_hif_error_detected(struct pci_dev *pdev, pci_channel_state_t state)
+{
+	struct mt7996_hif *hif = pci_get_drvdata(pdev);
+	struct mt7996_dev *dev = hif ? hif->mt7996 : NULL;
+
+	dev_err(&pdev->dev, "PCIe error detected (state=%u) on hif2\n", state);
+
+	/* hif2 is the second PCIe function of the same physical chip; a link
+	 * loss here downs the whole device. Mark the owning mt76 device removed
+	 * so its reset worker bails out too. The primary function may not have
+	 * claimed this hif yet (still probing), in which case there is nothing
+	 * to mark - just report the disconnect.
+	 */
+	if (!dev)
+		return PCI_ERS_RESULT_DISCONNECT;
+
+	return mt7996_pci_mark_removed(&dev->mt76);
+}
+
+static const struct pci_error_handlers mt7996_pci_err_handler = {
+	.error_detected = mt7996_pci_error_detected,
+};
+
+static const struct pci_error_handlers mt7996_hif_err_handler = {
+	.error_detected = mt7996_hif_error_detected,
+};
+
 struct pci_driver mt7996_hif_driver = {
 	.name		= KBUILD_MODNAME "_hif",
 	.id_table	= mt7996_hif_device_table,
 	.probe		= mt7996_pci_probe,
 	.remove		= mt7996_hif_remove,
+	.err_handler	= &mt7996_hif_err_handler,
 };
 
 struct pci_driver mt7996_pci_driver = {
@@ -253,6 +317,7 @@ struct pci_driver mt7996_pci_driver = {
 	.id_table	= mt7996_pci_device_table,
 	.probe		= mt7996_pci_probe,
 	.remove		= mt7996_pci_remove,
+	.err_handler	= &mt7996_pci_err_handler,
 };
 
 MODULE_DEVICE_TABLE(pci, mt7996_pci_device_table);
