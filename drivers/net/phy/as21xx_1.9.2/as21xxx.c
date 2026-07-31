@@ -1479,7 +1479,17 @@ static int aeon_config_led(struct phy_device *phydev)
 static int aeon_gen1_match_phy_device(struct phy_device *phydev,
 				      const struct phy_driver *phydrv)
 {
-	u32 phy_id = aeon_gen1_read_pid(phydev);
+	u32 phy_id;
+
+	/* Skip PHYs that are not Aeonsemi. Probing every PHY on every bus
+	 * sends vendor register accesses to foreign devices, which on a
+	 * DSA switch relay bus become failing firmware mailbox commands.
+	 */
+	if (!phy_id_compare_vendor(phydev->c45_ids.device_ids[MDIO_MMD_PCS],
+				   PHY_VENDOR_AEONSEMI))
+		return genphy_match_phy_device(phydev, phydrv);
+
+	phy_id = aeon_gen1_read_pid(phydev);
 
 	if (phy_id != PHY_ID_AS21XXX)
 		return 0;
@@ -1493,6 +1503,11 @@ static int aeon_gen1_match_phy_device(struct phy_device *phydev,
 static int aeon_gen2_match_phy_device(struct phy_device *phydev,
 				      const struct phy_driver *phydrv)
 {
+	/* Skip PHYs that are not Aeonsemi - see aeon_gen1_match_phy_device(). */
+	if (!phy_id_compare_vendor(phydev->c45_ids.device_ids[MDIO_MMD_PCS],
+				   PHY_VENDOR_AEONSEMI))
+		return genphy_match_phy_device(phydev, phydrv);
+
 	/* AEONSEMI get pid. */
 	u32 phy_id = aeon_gen2_read_pid(phydev);
 
