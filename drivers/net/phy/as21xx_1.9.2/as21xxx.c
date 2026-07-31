@@ -493,7 +493,6 @@ int aeon_cl45_read(struct phy_device *phydev, int dev_addr,
 	mutex_lock(&bus->mdio_lock);
 	ret = __mdiobus_c45_read(bus, phy_addr, dev_addr, phy_reg);
 	mutex_unlock(&bus->mdio_lock);
-	aeon_mdio_patch(phydev);
 
 	return ret;
 }
