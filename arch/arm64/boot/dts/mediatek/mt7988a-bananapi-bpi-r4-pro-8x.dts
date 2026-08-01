@@ -121,7 +121,7 @@
 
 		ds_mux0: ds-mux@0 {
 			compatible = "mxl862xx,ds-mux";
-			reg = <12>;
+			reg = <13>;
 			chan-sel-gpios = <&pio 54 GPIO_ACTIVE_HIGH>;
 			// SFP1 module detect (shared with sfp1 node)
 			mod-def0-gpios = <&pio 69 GPIO_ACTIVE_LOW>;
