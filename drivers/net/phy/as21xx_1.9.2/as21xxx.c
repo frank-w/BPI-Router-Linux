@@ -539,7 +539,6 @@ static int aeon_mdio_read(struct phy_device *phydev, int dev_addr,
 	}
 
 	ret = __mdiobus_c45_read(bus, phy_addr, dev_addr, phy_reg);
-	__mdiobus_c45_write(bus, 30, 0x1, 0x1, 0x1);
 
 	return ret;
 }
