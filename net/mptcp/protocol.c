@@ -1571,6 +1571,14 @@ static bool __mptcp_move_skbs(struct mptcp_sock *msk)
 
 	if (mptcp_ofo_queue(msk) || moved > 0) {
 		mptcp_check_data_fin((struct sock *)msk);
+
+		/* When multiple threads read from the same socket, the caller
+		 * filling the receive queue does not try to wake up any other
+		 * listener, which can stall it. Flag the data as ready and
+		 * issue the missing wakeup here.
+		 */
+		set_bit(MPTCP_DATA_READY, &msk->flags);
+		((struct sock *)msk)->sk_data_ready((struct sock *)msk);
 		return true;
 	}
 	return false;

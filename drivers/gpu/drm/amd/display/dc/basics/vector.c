@@ -292,7 +292,7 @@ bool dal_vector_reserve(struct vector *vector, uint32_t capacity)
 		return true;
 
 	new_container = krealloc(vector->container,
-				 capacity * vector->struct_size, GFP_KERNEL);
+				 array_size(capacity, vector->struct_size), GFP_KERNEL);
 
 	if (new_container) {
 		vector->container = new_container;
