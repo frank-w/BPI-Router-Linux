@@ -195,7 +195,7 @@ static ssize_t max16065_alarm_show(struct device *dev,
 		i2c_smbus_write_byte_data(data->client,
 					  MAX16065_FAULT(attr2->nr), val);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", !!val);
+	return sysfs_emit(buf, "%d\n", !!val);
 }
 
 static ssize_t max16065_input_show(struct device *dev,
@@ -208,20 +208,21 @@ static ssize_t max16065_input_show(struct device *dev,
 	if (unlikely(adc < 0))
 		return adc;
 
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-			ADC_TO_MV(adc, data->range[attr->index]));
+	return sysfs_emit(buf, "%d\n",
+			  ADC_TO_MV(adc, data->range[attr->index]));
 }
 
 static ssize_t max16065_current_show(struct device *dev,
 				     struct device_attribute *da, char *buf)
 {
 	struct max16065_data *data = max16065_update_device(dev);
+	int curr_sense = data->curr_sense;
 
-	if (unlikely(data->curr_sense < 0))
-		return data->curr_sense;
+	if (unlikely(curr_sense < 0))
+		return curr_sense;
 
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-			ADC_TO_CURR(data->curr_sense, data->curr_gain));
+	return sysfs_emit(buf, "%d\n",
+			  ADC_TO_CURR(curr_sense, data->curr_gain));
 }
 
 static ssize_t max16065_limit_store(struct device *dev,
@@ -257,8 +258,8 @@ static ssize_t max16065_limit_show(struct device *dev,
 	struct sensor_device_attribute_2 *attr2 = to_sensor_dev_attr_2(da);
 	struct max16065_data *data = dev_get_drvdata(dev);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-			data->limit[attr2->nr][attr2->index]);
+	return sysfs_emit(buf, "%d\n",
+			  data->limit[attr2->nr][attr2->index]);
 }
 
 /* Construct a sensor_device_attribute structure for each register */
