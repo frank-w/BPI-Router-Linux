@@ -42,8 +42,8 @@
 
 &switch16 {
 	ports {
-		port6: port@6 {
-			reg = <12>;
+		port13: port@13 {
+			reg = <13>;
 			label = "sfp-lan";
 			phy-mode = "usxgmii";
 			phy-connection-type = "usxgmii";
