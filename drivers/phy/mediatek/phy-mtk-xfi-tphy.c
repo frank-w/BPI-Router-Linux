@@ -72,6 +72,8 @@ struct mtk_xfi_tphy {
 	bool			da_war;
 };
 
+bool mtk_xfi_tphy_valid_ctle(struct phy *phy);
+
 bool mtk_xfi_tphy_valid_ctle(struct phy *phy)
 {
 	struct mtk_xfi_tphy *xfi_tphy = phy_get_drvdata(phy);
