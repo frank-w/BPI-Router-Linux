@@ -1763,6 +1763,13 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev,
 	 */
 	if (!bond_has_slaves(bond)) {
 		if (bond_dev->type != slave_dev->type) {
+			if (slave_dev->type != ARPHRD_ETHER &&
+			    BOND_MODE(bond) == BOND_MODE_8023AD) {
+				NL_SET_ERR_MSG(extack, "8023AD mode requires Ethernet devices");
+				slave_err(bond_dev, slave_dev,
+					  "Error: 8023AD mode requires Ethernet devices\n");
+				return -EINVAL;
+			}
 			slave_dbg(bond_dev, slave_dev, "change device type from %d to %d\n",
 				  bond_dev->type, slave_dev->type);
 
@@ -4011,10 +4018,10 @@ static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd
 
 	slave_dev = __dev_get_by_name(net, ifr->ifr_slave);
 
-	slave_dbg(bond_dev, slave_dev, "slave_dev=%p:\n", slave_dev);
-
 	if (!slave_dev)
 		return -ENODEV;
+
+	slave_dbg(bond_dev, slave_dev, "slave_dev=%p:\n", slave_dev);
 
 	switch (cmd) {
 	case BOND_ENSLAVE_OLD:
