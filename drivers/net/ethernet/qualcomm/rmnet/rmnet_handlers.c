@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2018, 2021, The Linux Foundation. All rights reserved.
  *
  * RMNET Data ingress/egress handler
  */
@@ -56,20 +56,22 @@ static void
 __rmnet_map_ingress_handler(struct sk_buff *skb,
 			    struct rmnet_port *port)
 {
+	struct rmnet_map_header *map_header = (void *)skb->data;
 	struct rmnet_endpoint *ep;
 	u16 len, pad;
 	u8 mux_id;
 
-	if (RMNET_MAP_GET_CD_BIT(skb)) {
+	if (map_header->flags & MAP_CMD_FLAG) {
+		/* Packet contains a MAP command (not data) */
 		if (port->data_format & RMNET_FLAGS_INGRESS_MAP_COMMANDS)
 			return rmnet_map_command(skb, port);
 
 		goto free_skb;
 	}
 
-	mux_id = RMNET_MAP_GET_MUX_ID(skb);
-	pad = RMNET_MAP_GET_PAD(skb);
-	len = RMNET_MAP_GET_LENGTH(skb) - pad;
+	mux_id = map_header->mux_id;
+	pad = map_header->flags & MAP_PAD_LEN_MASK;
+	len = ntohs(map_header->pkt_len) - pad;
 
 	if (mux_id >= RMNET_MAX_LOGICAL_EP)
 		goto free_skb;
@@ -80,12 +82,18 @@ __rmnet_map_ingress_handler(struct sk_buff *skb,
 
 	skb->dev = ep->egress_dev;
 
-	/* Subtract MAP header */
-	skb_pull(skb, sizeof(struct rmnet_map_header));
-	rmnet_set_skb_proto(skb);
-
-	if (port->data_format & RMNET_FLAGS_INGRESS_MAP_CKSUMV4) {
-		if (!rmnet_map_checksum_downlink_packet(skb, len + pad))
+	if ((port->data_format & RMNET_FLAGS_INGRESS_MAP_CKSUMV5) &&
+	    (map_header->flags & MAP_NEXT_HEADER_FLAG)) {
+		if (rmnet_map_process_next_hdr_packet(skb, len))
+			goto free_skb;
+		skb_pull(skb, sizeof(*map_header));
+		rmnet_set_skb_proto(skb);
+	} else {
+		/* Subtract MAP header */
+		skb_pull(skb, sizeof(*map_header));
+		rmnet_set_skb_proto(skb);
+		if (port->data_format & RMNET_FLAGS_INGRESS_MAP_CKSUMV4 &&
+		    !rmnet_map_checksum_downlink_packet(skb, len + pad))
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
 	}
 
@@ -118,7 +126,10 @@ rmnet_map_ingress_handler(struct sk_buff *skb,
 
 		consume_skb(skb);
 	} else {
-		__rmnet_map_ingress_handler(skb, port);
+		if (rmnet_map_validate_packet_len(skb, port))
+			__rmnet_map_ingress_handler(skb, port);
+		else
+			kfree_skb(skb);
 	}
 }
 
@@ -151,8 +162,18 @@ static int rmnet_map_egress_handler(struct sk_buff *skb,
 
 	map_header->mux_id = mux_id;
 
-	skb->protocol = htons(ETH_P_MAP);
+	if (READ_ONCE(port->egress_agg_params.count) > 1) {
+		unsigned int len;
 
+		len = rmnet_map_tx_aggregate(skb, port, orig_dev);
+		if (likely(len)) {
+			rmnet_vnd_tx_fixup_len(len, orig_dev);
+			return -EINPROGRESS;
+		}
+		return -ENOMEM;
+	}
+
+	skb->protocol = htons(ETH_P_MAP);
 	return 0;
 }
 
@@ -217,6 +238,7 @@ void rmnet_egress_handler(struct sk_buff *skb)
 	struct rmnet_port *port;
 	struct rmnet_priv *priv;
 	u8 mux_id;
+	int err;
 
 	sk_pacing_shift_update(skb->sk, 8);
 
@@ -229,8 +251,11 @@ void rmnet_egress_handler(struct sk_buff *skb)
 	if (!port)
 		goto drop;
 
-	if (rmnet_map_egress_handler(skb, port, mux_id, orig_dev))
+	err = rmnet_map_egress_handler(skb, port, mux_id, orig_dev);
+	if (err == -ENOMEM)
 		goto drop;
+	else if (err == -EINPROGRESS)
+		return;
 
 	rmnet_vnd_tx_fixup(skb, orig_dev);
 

@@ -24,7 +24,7 @@ static int rtw_lbkmode;/* RTL8712_AIR_TRX; */
 static int rtw_network_mode = Ndis802_11IBSS;/* Ndis802_11Infrastructure;infra, ad-hoc, auto */
 /* struct ndis_802_11_ssid	ssid; */
 static int rtw_channel = 1;/* ad-hoc support requirement */
-static int rtw_wireless_mode = WIRELESS_MODE_MAX;
+static int rtw_wireless_mode = WIRELESS_11BG_24N;
 static int rtw_vrtl_carrier_sense = AUTO_VCS;
 static int rtw_vcs_type = RTS_CTS;/*  */
 static int rtw_rts_thresh = 2347;/*  */
@@ -525,7 +525,7 @@ void rtw_unregister_netdevs(struct dvobj_priv *dvobj)
 
 	padapter = dvobj->padapters;
 
-	if (padapter == NULL)
+	if (!padapter)
 		return;
 
 	pnetdev = padapter->pnetdev;
@@ -638,7 +638,7 @@ struct dvobj_priv *devobj_init(void)
 	struct dvobj_priv *pdvobj = NULL;
 
 	pdvobj = rtw_zmalloc(sizeof(*pdvobj));
-	if (pdvobj == NULL)
+	if (!pdvobj)
 		return NULL;
 
 	mutex_init(&pdvobj->hw_init_mutex);

@@ -472,7 +472,7 @@ struct	wlan_network	*rtw_get_oldest_wlan_network(struct __queue *scanned_queue)
 		pwlan = LIST_CONTAINOR(plist, struct wlan_network, list);
 
 		if (!pwlan->fixed) {
-			if (oldest == NULL || time_after(oldest->last_scanned, pwlan->last_scanned))
+			if (!oldest || time_after(oldest->last_scanned, pwlan->last_scanned))
 				oldest = pwlan;
 		}
 
@@ -603,7 +603,7 @@ void rtw_update_scanned_network(struct adapter *adapter, struct wlan_bssid_ex *t
 			/* TODO: don't  select netowrk in the same ess as oldest if it's new enough*/
 		}
 
-		if (oldest == NULL || time_after(oldest->last_scanned, pnetwork->last_scanned))
+		if (!oldest || time_after(oldest->last_scanned, pnetwork->last_scanned))
 			oldest = pnetwork;
 
 		plist = get_next(plist);
@@ -2023,7 +2023,7 @@ static int rtw_check_join_candidate(struct mlme_priv *mlme
 			goto exit;
 	}
 
-	if (*candidate == NULL || (*candidate)->network.Rssi < competitor->network.Rssi) {
+	if (!*candidate || (*candidate)->network.Rssi < competitor->network.Rssi) {
 		*candidate = competitor;
 		updated = true;
 	}
@@ -2437,16 +2437,6 @@ void rtw_update_registrypriv_dev_network(struct adapter *adapter)
 	case WIRELESS_11G_24N:
 	case WIRELESS_11BG_24N:
 		pdev_network->NetworkTypeInUse = (Ndis802_11OFDM24);
-		break;
-	case WIRELESS_11A:
-	case WIRELESS_11A_5N:
-		pdev_network->NetworkTypeInUse = (Ndis802_11OFDM5);
-		break;
-	case WIRELESS_11ABGN:
-		if (pregistrypriv->channel > 14)
-			pdev_network->NetworkTypeInUse = (Ndis802_11OFDM5);
-		else
-			pdev_network->NetworkTypeInUse = (Ndis802_11OFDM24);
 		break;
 	default:
 		/*  TODO */

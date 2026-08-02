@@ -164,7 +164,7 @@ cifs_buf_get(void)
 	 * SMB2 header is bigger than CIFS one - no problems to clean some
 	 * more bytes for CIFS.
 	 */
-	size_t buf_size = sizeof(struct smb2_sync_hdr);
+	size_t buf_size = sizeof(struct smb2_hdr);
 
 	/*
 	 * We could use negotiated size instead of max_msgsize -
@@ -370,7 +370,7 @@ checkSMB(char *buf, unsigned int total_read, struct TCP_Server_Info *server)
 	/* otherwise, there is enough to get to the BCC */
 	if (check_smb_hdr(smb))
 		return -EIO;
-	clc_len = smbCalcSize(smb, server);
+	clc_len = smbCalcSize(smb);
 
 	if (4 + rfclen != total_read) {
 		cifs_dbg(VFS, "Length read does not match RFC1001 length %d\n",

@@ -117,8 +117,6 @@ struct inet6_ifaddr *ipv6_get_ifaddr(struct net *net,
 int ipv6_dev_get_saddr(struct net *net, const struct net_device *dev,
 		       const struct in6_addr *daddr, unsigned int srcprefs,
 		       struct in6_addr *saddr);
-int __ipv6_get_lladdr(struct inet6_dev *idev, struct in6_addr *addr,
-		      u32 banned_flags);
 int ipv6_get_lladdr(struct net_device *dev, struct in6_addr *addr,
 		    u32 banned_flags);
 bool inet_rcv_saddr_equal(const struct sock *sk, const struct sock *sk2,
@@ -334,8 +332,11 @@ static inline struct inet6_dev *__in6_dev_get(const struct net_device *dev)
 static inline struct inet6_dev *__in6_dev_stats_get(const struct net_device *dev,
 						    const struct sk_buff *skb)
 {
-	if (netif_is_l3_master(dev))
+	if (netif_is_l3_master(dev)) {
 		dev = dev_get_by_index_rcu(dev_net(dev), inet6_iif(skb));
+		if (!dev)
+			return NULL;
+	}
 	return __in6_dev_get(dev);
 }
 
@@ -406,6 +407,11 @@ static inline void __in6_dev_put(struct inet6_dev *idev)
 static inline void in6_dev_hold(struct inet6_dev *idev)
 {
 	refcount_inc(&idev->refcnt);
+}
+
+static inline bool in6_dev_hold_safe(struct inet6_dev *idev)
+{
+	return refcount_inc_not_zero(&idev->refcnt);
 }
 
 /* called with rcu_read_lock held */

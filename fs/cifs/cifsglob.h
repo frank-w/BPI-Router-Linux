@@ -32,6 +32,7 @@
 #include <crypto/internal/hash.h>
 #include <linux/scatterlist.h>
 #include <uapi/linux/cifs/cifs_mount.h>
+#include "../smbfs_common/smb2pdu.h"
 #include "smb2pdu.h"
 #include "smb2glob.h"
 
@@ -396,7 +397,7 @@ struct smb_version_operations {
 	int (*close_dir)(const unsigned int, struct cifs_tcon *,
 			 struct cifs_fid *);
 	/* calculate a size of SMB message */
-	unsigned int (*calc_smb_size)(void *buf, struct TCP_Server_Info *ptcpi);
+	unsigned int (*calc_smb_size)(void *buf);
 	/* check for STATUS_PENDING and process the response if yes */
 	bool (*is_status_pending)(char *buf, struct TCP_Server_Info *server);
 	/* check for STATUS_NETWORK_SESSION_EXPIRED */
@@ -866,7 +867,7 @@ revert_current_mid(struct TCP_Server_Info *server, const unsigned int val)
 
 static inline void
 revert_current_mid_from_hdr(struct TCP_Server_Info *server,
-			    const struct smb2_sync_hdr *shdr)
+			    const struct smb2_hdr *shdr)
 {
 	unsigned int num = le16_to_cpu(shdr->CreditCharge);
 

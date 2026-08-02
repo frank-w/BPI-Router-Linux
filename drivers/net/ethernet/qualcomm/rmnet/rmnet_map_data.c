@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2018, 2021, The Linux Foundation. All rights reserved.
  *
  * RMNET Data MAP protocol
  */
@@ -8,9 +8,11 @@
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <net/ip6_checksum.h>
+#include <linux/bitfield.h>
 #include "rmnet_config.h"
 #include "rmnet_map.h"
 #include "rmnet_private.h"
+#include "rmnet_vnd.h"
 
 #define RMNET_MAP_DEAGGR_SPACING  64
 #define RMNET_MAP_DEAGGR_HEADROOM (RMNET_MAP_DEAGGR_SPACING / 2)
@@ -197,22 +199,16 @@ rmnet_map_ipv4_ul_csum_header(void *iphdr,
 			      struct rmnet_map_ul_csum_header *ul_header,
 			      struct sk_buff *skb)
 {
-	struct iphdr *ip4h = (struct iphdr *)iphdr;
-	__be16 *hdr = (__be16 *)ul_header, offset;
+	struct iphdr *ip4h = iphdr;
+	u16 val;
 
-	offset = htons((__force u16)(skb_transport_header(skb) -
-				     (unsigned char *)iphdr));
-	ul_header->csum_start_offset = offset;
-	ul_header->csum_insert_offset = skb->csum_offset;
-	ul_header->csum_enabled = 1;
+	val = MAP_CSUM_UL_ENABLED_FLAG;
 	if (ip4h->protocol == IPPROTO_UDP)
-		ul_header->udp_ind = 1;
-	else
-		ul_header->udp_ind = 0;
+		val |= MAP_CSUM_UL_UDP_FLAG;
+	val |= skb->csum_offset & MAP_CSUM_UL_OFFSET_MASK;
 
-	/* Changing remaining fields to network order */
-	hdr++;
-	*hdr = htons((__force u16)*hdr);
+	ul_header->csum_start_offset = htons(skb_network_header_len(skb));
+	ul_header->csum_info = htons(val);
 
 	skb->ip_summed = CHECKSUM_NONE;
 
@@ -239,23 +235,16 @@ rmnet_map_ipv6_ul_csum_header(void *ip6hdr,
 			      struct rmnet_map_ul_csum_header *ul_header,
 			      struct sk_buff *skb)
 {
-	struct ipv6hdr *ip6h = (struct ipv6hdr *)ip6hdr;
-	__be16 *hdr = (__be16 *)ul_header, offset;
+	struct ipv6hdr *ip6h = ip6hdr;
+	u16 val;
 
-	offset = htons((__force u16)(skb_transport_header(skb) -
-				     (unsigned char *)ip6hdr));
-	ul_header->csum_start_offset = offset;
-	ul_header->csum_insert_offset = skb->csum_offset;
-	ul_header->csum_enabled = 1;
-
+	val = MAP_CSUM_UL_ENABLED_FLAG;
 	if (ip6h->nexthdr == IPPROTO_UDP)
-		ul_header->udp_ind = 1;
-	else
-		ul_header->udp_ind = 0;
+		val |= MAP_CSUM_UL_UDP_FLAG;
+	val |= skb->csum_offset & MAP_CSUM_UL_OFFSET_MASK;
 
-	/* Changing remaining fields to network order */
-	hdr++;
-	*hdr = htons((__force u16)*hdr);
+	ul_header->csum_start_offset = htons(skb_network_header_len(skb));
+	ul_header->csum_info = htons(val);
 
 	skb->ip_summed = CHECKSUM_NONE;
 
@@ -284,6 +273,7 @@ struct rmnet_map_header *rmnet_map_add_map_header(struct sk_buff *skb,
 		return map_header;
 	}
 
+	BUILD_BUG_ON(MAP_PAD_LEN_MASK < 3);
 	padding = ALIGN(map_datalen, 4) - map_datalen;
 
 	if (padding == 0)
@@ -297,9 +287,51 @@ struct rmnet_map_header *rmnet_map_add_map_header(struct sk_buff *skb,
 
 done:
 	map_header->pkt_len = htons(map_datalen + padding);
-	map_header->pad_len = padding & 0x3F;
+	/* This is a data packet, so the CMD bit is 0 */
+	map_header->flags = padding & MAP_PAD_LEN_MASK;
 
 	return map_header;
+}
+
+u32 rmnet_map_validate_packet_len(struct sk_buff *skb, struct rmnet_port *port)
+{
+	struct rmnet_map_v5_csum_header *next_hdr = NULL;
+	struct rmnet_map_header *maph;
+	void *data = skb->data;
+	u32 packet_len;
+
+	if (skb->len < sizeof(*maph))
+		return 0;
+
+	maph = (struct rmnet_map_header *)skb->data;
+
+	/* Some hardware can send us empty frames. Catch them */
+	if (!maph->pkt_len)
+		return 0;
+
+	packet_len = ntohs(maph->pkt_len) + sizeof(*maph);
+
+	if (port->data_format & RMNET_FLAGS_INGRESS_MAP_CKSUMV4) {
+		packet_len += sizeof(struct rmnet_map_dl_csum_trailer);
+	} else if ((port->data_format & RMNET_FLAGS_INGRESS_MAP_CKSUMV5) &&
+		   !(maph->flags & MAP_CMD_FLAG)) {
+		/* Mapv5 data pkt without csum hdr is invalid */
+		if (!(maph->flags & MAP_NEXT_HEADER_FLAG))
+			return 0;
+
+		packet_len += sizeof(*next_hdr);
+		next_hdr = data + sizeof(*maph);
+	}
+
+	if (skb->len < packet_len)
+		return 0;
+
+	if (next_hdr &&
+	    u8_get_bits(next_hdr->header_info, MAPV5_HDRINFO_HDR_TYPE_FMASK) !=
+	    RMNET_MAP_HEADER_TYPE_CSUM_OFFLOAD)
+		return 0;
+
+	return packet_len;
 }
 
 /* Deaggregates a single packet
@@ -311,24 +343,11 @@ done:
 struct sk_buff *rmnet_map_deaggregate(struct sk_buff *skb,
 				      struct rmnet_port *port)
 {
-	struct rmnet_map_header *maph;
 	struct sk_buff *skbn;
 	u32 packet_len;
 
-	if (skb->len == 0)
-		return NULL;
-
-	maph = (struct rmnet_map_header *)skb->data;
-	packet_len = ntohs(maph->pkt_len) + sizeof(struct rmnet_map_header);
-
-	if (port->data_format & RMNET_FLAGS_INGRESS_MAP_CKSUMV4)
-		packet_len += sizeof(struct rmnet_map_dl_csum_trailer);
-
-	if (((int)skb->len - (int)packet_len) < 0)
-		return NULL;
-
-	/* Some hardware can send us empty frames. Catch them */
-	if (ntohs(maph->pkt_len) == 0)
+	packet_len = rmnet_map_validate_packet_len(skb, port);
+	if (!packet_len)
 		return NULL;
 
 	skbn = alloc_skb(packet_len + RMNET_MAP_DEAGGR_SPACING, GFP_ATOMIC);
@@ -421,10 +440,229 @@ void rmnet_map_checksum_uplink_packet(struct sk_buff *skb,
 	}
 
 sw_csum:
-	ul_header->csum_start_offset = 0;
-	ul_header->csum_insert_offset = 0;
-	ul_header->csum_enabled = 0;
-	ul_header->udp_ind = 0;
+	memset(ul_header, 0, sizeof(*ul_header));
 
 	priv->stats.csum_sw++;
+}
+
+/* Process a MAPv5 packet header */
+int rmnet_map_process_next_hdr_packet(struct sk_buff *skb,
+				      u16 len)
+{
+	struct rmnet_priv *priv = netdev_priv(skb->dev);
+	struct rmnet_map_v5_csum_header *next_hdr;
+	u8 nexthdr_type;
+
+	next_hdr = (struct rmnet_map_v5_csum_header *)(skb->data +
+			sizeof(struct rmnet_map_header));
+
+	nexthdr_type = u8_get_bits(next_hdr->header_info,
+				   MAPV5_HDRINFO_HDR_TYPE_FMASK);
+
+	if (nexthdr_type != RMNET_MAP_HEADER_TYPE_CSUM_OFFLOAD)
+		return -EINVAL;
+
+	if (unlikely(!(skb->dev->features & NETIF_F_RXCSUM))) {
+		priv->stats.csum_sw++;
+	} else if (next_hdr->csum_info & MAPV5_CSUMINFO_VALID_FLAG) {
+		priv->stats.csum_ok++;
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+	} else {
+		priv->stats.csum_valid_unset++;
+	}
+
+	/* Pull csum v5 header */
+	skb_pull(skb, sizeof(*next_hdr));
+
+	return 0;
+}
+
+#define RMNET_AGG_BYPASS_TIME_NSEC 10000000L
+
+static void reset_aggr_params(struct rmnet_port *port)
+{
+	port->skbagg_head = NULL;
+	port->agg_count = 0;
+	port->agg_state = 0;
+	memset(&port->agg_time, 0, sizeof(struct timespec64));
+}
+
+static void rmnet_send_skb(struct rmnet_port *port, struct sk_buff *skb)
+{
+	if (skb_needs_linearize(skb, port->dev->features)) {
+		if (unlikely(__skb_linearize(skb))) {
+			struct rmnet_priv *priv;
+
+			priv = netdev_priv(port->rmnet_dev);
+			this_cpu_inc(priv->pcpu_stats->stats.tx_drops);
+			dev_kfree_skb_any(skb);
+			return;
+		}
+	}
+
+	dev_queue_xmit(skb);
+}
+
+static void rmnet_map_flush_tx_packet_work(struct work_struct *work)
+{
+	struct sk_buff *skb = NULL;
+	struct rmnet_port *port;
+
+	port = container_of(work, struct rmnet_port, agg_wq);
+
+	spin_lock_bh(&port->agg_lock);
+	if (likely(port->agg_state == -EINPROGRESS)) {
+		/* Buffer may have already been shipped out */
+		if (likely(port->skbagg_head)) {
+			skb = port->skbagg_head;
+			reset_aggr_params(port);
+		}
+		port->agg_state = 0;
+	}
+
+	spin_unlock_bh(&port->agg_lock);
+	if (skb)
+		rmnet_send_skb(port, skb);
+}
+
+static enum hrtimer_restart rmnet_map_flush_tx_packet_queue(struct hrtimer *t)
+{
+	struct rmnet_port *port;
+
+	port = container_of(t, struct rmnet_port, hrtimer);
+
+	schedule_work(&port->agg_wq);
+
+	return HRTIMER_NORESTART;
+}
+
+unsigned int rmnet_map_tx_aggregate(struct sk_buff *skb, struct rmnet_port *port,
+				    struct net_device *orig_dev)
+{
+	struct timespec64 diff, last;
+	unsigned int len = skb->len;
+	struct sk_buff *agg_skb;
+	int size;
+
+	spin_lock_bh(&port->agg_lock);
+	memcpy(&last, &port->agg_last, sizeof(struct timespec64));
+	ktime_get_real_ts64(&port->agg_last);
+
+	if (!port->skbagg_head) {
+		/* Check to see if we should agg first. If the traffic is very
+		 * sparse, don't aggregate.
+		 */
+new_packet:
+		diff = timespec64_sub(port->agg_last, last);
+		size = port->egress_agg_params.bytes - skb->len;
+
+		if (size < 0) {
+			/* dropped */
+			spin_unlock_bh(&port->agg_lock);
+			return 0;
+		}
+
+		if (diff.tv_sec > 0 || diff.tv_nsec > RMNET_AGG_BYPASS_TIME_NSEC ||
+		    size == 0)
+			goto no_aggr;
+
+		port->skbagg_head = skb_copy_expand(skb, 0, size, GFP_ATOMIC);
+		if (!port->skbagg_head)
+			goto no_aggr;
+
+		dev_kfree_skb_any(skb);
+		port->skbagg_head->protocol = htons(ETH_P_MAP);
+		port->agg_count = 1;
+		ktime_get_real_ts64(&port->agg_time);
+		skb_frag_list_init(port->skbagg_head);
+		goto schedule;
+	}
+	diff = timespec64_sub(port->agg_last, port->agg_time);
+	size = port->egress_agg_params.bytes - port->skbagg_head->len;
+
+	if (skb->len > size) {
+		agg_skb = port->skbagg_head;
+		reset_aggr_params(port);
+		spin_unlock_bh(&port->agg_lock);
+		hrtimer_cancel(&port->hrtimer);
+		rmnet_send_skb(port, agg_skb);
+		spin_lock_bh(&port->agg_lock);
+		goto new_packet;
+	}
+
+	if (skb_has_frag_list(port->skbagg_head))
+		port->skbagg_tail->next = skb;
+	else
+		skb_shinfo(port->skbagg_head)->frag_list = skb;
+
+	port->skbagg_head->len += skb->len;
+	port->skbagg_head->data_len += skb->len;
+	port->skbagg_head->truesize += skb->truesize;
+	port->skbagg_tail = skb;
+	port->agg_count++;
+
+	if (diff.tv_sec > 0 || diff.tv_nsec > port->egress_agg_params.time_nsec ||
+	    port->agg_count >= port->egress_agg_params.count ||
+	    port->skbagg_head->len == port->egress_agg_params.bytes) {
+		agg_skb = port->skbagg_head;
+		reset_aggr_params(port);
+		spin_unlock_bh(&port->agg_lock);
+		hrtimer_cancel(&port->hrtimer);
+		rmnet_send_skb(port, agg_skb);
+		return len;
+	}
+
+schedule:
+	if (!hrtimer_active(&port->hrtimer) && port->agg_state != -EINPROGRESS) {
+		port->agg_state = -EINPROGRESS;
+		hrtimer_start(&port->hrtimer,
+			      ns_to_ktime(port->egress_agg_params.time_nsec),
+			      HRTIMER_MODE_REL);
+	}
+	spin_unlock_bh(&port->agg_lock);
+
+	return len;
+
+no_aggr:
+	spin_unlock_bh(&port->agg_lock);
+	skb->protocol = htons(ETH_P_MAP);
+	dev_queue_xmit(skb);
+
+	return len;
+}
+
+void rmnet_map_update_ul_agg_config(struct rmnet_port *port, u32 size,
+				    u32 count, u32 time)
+{
+	spin_lock_bh(&port->agg_lock);
+	port->egress_agg_params.bytes = size;
+	WRITE_ONCE(port->egress_agg_params.count, count);
+	port->egress_agg_params.time_nsec = time * NSEC_PER_USEC;
+	spin_unlock_bh(&port->agg_lock);
+}
+
+void rmnet_map_tx_aggregate_init(struct rmnet_port *port)
+{
+	hrtimer_init(&port->hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	port->hrtimer.function = rmnet_map_flush_tx_packet_queue;
+	spin_lock_init(&port->agg_lock);
+	rmnet_map_update_ul_agg_config(port, 4096, 1, 800);
+	INIT_WORK(&port->agg_wq, rmnet_map_flush_tx_packet_work);
+}
+
+void rmnet_map_tx_aggregate_exit(struct rmnet_port *port)
+{
+	hrtimer_cancel(&port->hrtimer);
+	cancel_work_sync(&port->agg_wq);
+
+	spin_lock_bh(&port->agg_lock);
+	if (port->agg_state == -EINPROGRESS) {
+		if (port->skbagg_head) {
+			dev_kfree_skb_any(port->skbagg_head);
+			reset_aggr_params(port);
+		}
+
+		port->agg_state = 0;
+	}
+	spin_unlock_bh(&port->agg_lock);
 }

@@ -907,7 +907,7 @@ static int addrconf_fixup_forwarding(struct ctl_table *table, int *p, int newf)
 
 	if (newf)
 		rt6_purge_dflt_routers(net);
-	return 1;
+	return 0;
 }
 
 static void addrconf_linkdown_change(struct net *net, __s32 newf)
@@ -1851,8 +1851,8 @@ out:
 }
 EXPORT_SYMBOL(ipv6_dev_get_saddr);
 
-int __ipv6_get_lladdr(struct inet6_dev *idev, struct in6_addr *addr,
-		      u32 banned_flags)
+static int __ipv6_get_lladdr(struct inet6_dev *idev, struct in6_addr *addr,
+			      u32 banned_flags)
 {
 	struct inet6_ifaddr *ifp;
 	int err = -EADDRNOTAVAIL;
@@ -2110,15 +2110,17 @@ void addrconf_dad_failure(struct sk_buff *skb, struct inet6_ifaddr *ifp)
 	struct inet6_dev *idev = ifp->idev;
 	struct net *net = dev_net(ifp->idev->dev);
 
-	if (addrconf_dad_end(ifp)) {
+	spin_lock_bh(&ifp->lock);
+
+	if (ifp->state != INET6_IFADDR_STATE_DAD) {
+		spin_unlock_bh(&ifp->lock);
 		in6_ifa_put(ifp);
 		return;
 	}
+	ifp->state = INET6_IFADDR_STATE_POSTDAD;
 
 	net_info_ratelimited("%s: IPv6 duplicate address %pI6c used by %pM detected!\n",
 			     ifp->idev->dev->name, &ifp->addr, eth_hdr(skb)->h_source);
-
-	spin_lock_bh(&ifp->lock);
 
 	if (ifp->flags & IFA_F_STABLE_PRIVACY) {
 		struct in6_addr new_addr;
@@ -2167,6 +2169,11 @@ void addrconf_dad_failure(struct sk_buff *skb, struct inet6_ifaddr *ifp)
 		in6_ifa_put(ifp2);
 lock_errdad:
 		spin_lock_bh(&ifp->lock);
+		if (ifp->state != INET6_IFADDR_STATE_POSTDAD) {
+			spin_unlock_bh(&ifp->lock);
+			in6_ifa_put(ifp);
+			return;
+		}
 	}
 
 errdad:
@@ -4543,7 +4550,9 @@ restart:
 			    age >= ifp->valid_lft) {
 				spin_unlock(&ifp->lock);
 				in6_ifa_hold(ifp);
+				rcu_read_unlock_bh();
 				ipv6_del_addr(ifp);
+				rcu_read_lock_bh();
 				goto restart;
 			} else if (ifp->prefered_lft == INFINITY_LIFE_TIME) {
 				spin_unlock(&ifp->lock);
@@ -5167,17 +5176,20 @@ next:
 		break;
 	}
 	case MULTICAST_ADDR:
+		read_unlock_bh(&idev->lock);
 		fillargs->event = RTM_GETMULTICAST;
 
 		/* multicast address */
-		for (ifmca = idev->mc_list; ifmca;
-		     ifmca = ifmca->next, ip_idx++) {
+		for (ifmca = rtnl_dereference(idev->mc_list);
+		     ifmca;
+		     ifmca = rtnl_dereference(ifmca->next), ip_idx++) {
 			if (ip_idx < s_ip_idx)
 				continue;
 			err = inet6_fill_ifmcaddr(skb, ifmca, fillargs);
 			if (err < 0)
 				break;
 		}
+		read_lock_bh(&idev->lock);
 		break;
 	case ANYCAST_ADDR:
 		fillargs->event = RTM_GETANYCAST;
@@ -6162,10 +6174,8 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 
 static void ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 {
-	rcu_read_lock_bh();
 	if (likely(ifp->idev->dead == 0))
 		__ipv6_ifa_notify(event, ifp);
-	rcu_read_unlock_bh();
 }
 
 #ifdef CONFIG_SYSCTL
@@ -6187,6 +6197,8 @@ static int addrconf_sysctl_forward(struct ctl_table *ctl, int write,
 	lctl.data = &val;
 
 	ret = proc_dointvec(&lctl, write, buffer, lenp, ppos);
+	if (ret)
+		return ret;
 
 	if (write)
 		ret = addrconf_fixup_forwarding(ctl, valp, val);
@@ -6284,6 +6296,8 @@ static int addrconf_sysctl_disable(struct ctl_table *ctl, int write,
 	lctl.data = &val;
 
 	ret = proc_dointvec(&lctl, write, buffer, lenp, ppos);
+	if (ret)
+		return ret;
 
 	if (write)
 		ret = addrconf_disable_ipv6(ctl, valp, val);
@@ -6480,6 +6494,8 @@ int addrconf_sysctl_ignore_routes_with_linkdown(struct ctl_table *ctl,
 	lctl.data = &val;
 
 	ret = proc_dointvec(&lctl, write, buffer, lenp, ppos);
+	if (ret)
+		return ret;
 
 	if (write)
 		ret = addrconf_fixup_linkdown(ctl, valp, val);
@@ -6575,6 +6591,8 @@ static int addrconf_sysctl_disable_policy(struct ctl_table *ctl, int write,
 	lctl = *ctl;
 	lctl.data = &val;
 	ret = proc_dointvec(&lctl, write, buffer, lenp, ppos);
+	if (ret)
+		return ret;
 
 	if (write && (*valp != val))
 		ret = addrconf_disable_policy(ctl, valp, val);
