@@ -3642,8 +3642,9 @@ static bool bond_flow_dissect(struct bonding *bond, struct sk_buff *skb,
 
 	if (bond->params.xmit_policy > BOND_XMIT_POLICY_LAYER23) {
 		memset(fk, 0, sizeof(*fk));
-		return __skb_flow_dissect(NULL, skb, &flow_keys_bonding,
-					  fk, NULL, 0, 0, 0, 0);
+		return __skb_flow_dissect(dev_net(bond->dev), skb,
+					  &flow_keys_bonding, fk, NULL, 0, 0,
+					  0, 0);
 	}
 
 	fk->ports.ports = 0;
