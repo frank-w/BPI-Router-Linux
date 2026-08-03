@@ -13,6 +13,7 @@
 #include <linux/icmpv6.h>
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
+#include <linux/mii.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_mdio.h>
@@ -77,6 +78,9 @@ static const struct ethtool_rmon_hist_range mxl862xx_rmon_ranges[] = {
 
 #define MXL862XX_READY_TIMEOUT_MS	10000
 #define MXL862XX_READY_POLL_MS		100
+
+#define MXL862XX_PHY_READY_TIMEOUT_MS	5000
+#define MXL862XX_PHY_READY_POLL_MS	20
 
 /* Chip ID registers, read via SYS_MISC_REG_RD */
 #define MXL862XX_CHIPID_L		0xc0d28884
@@ -275,6 +279,25 @@ static int mxl862xx_phy_write_mmd(struct mxl862xx_priv *priv, int addr,
 	return MXL862XX_API_WRITE(priv, INT_GPHY_WRITE, param);
 }
 
+/* Quiet variant for polling: relay errors are expected while a GPHY is
+ * still booting its own firmware.
+ */
+static int mxl862xx_phy_read_quiet(struct mxl862xx_priv *priv, int addr,
+				   int regnum)
+{
+	struct mdio_relay_data param = {
+		.phy = addr,
+		.reg = cpu_to_le16(regnum),
+	};
+	int ret;
+
+	ret = MXL862XX_API_READ_QUIET(priv, INT_GPHY_READ, param);
+	if (ret)
+		return ret;
+
+	return le16_to_cpu(param.data);
+}
+
 static int mxl862xx_phy_read_mii_bus(struct mii_bus *bus, int addr, int regnum)
 {
 	return mxl862xx_phy_read_mmd(bus->priv, addr, 0, regnum);
@@ -388,6 +411,7 @@ static int mxl862xx_setup_mdio(struct dsa_switch *ds)
 {
 	struct mxl862xx_priv *priv = ds->priv;
 	struct device *dev = ds->dev;
+	struct device_node *child;
 	struct device_node *mdio_np;
 	struct mii_bus *bus;
 	int ret;
@@ -409,6 +433,45 @@ static int mxl862xx_setup_mdio(struct dsa_switch *ds)
 	mdio_np = of_get_child_by_name(dev->of_node, "mdio");
 	if (!mdio_np)
 		return -ENODEV;
+
+	/* The switch reports ready once its management firmware answers
+	 * commands, but each internal GPHY keeps booting its own
+	 * firmware for a window beyond that and the relay answers even
+	 * ID-register reads with an error until it is done.
+	 * of_mdiobus_register()'s one-shot scan permanently drops any
+	 * address that fails.  Wait for every DT-declared PHY to
+	 * identify itself before registering the bus.  The timeout is
+	 * deliberately generous: the window is firmware-dependent, and
+	 * the GPHYs boot in parallel so normally only the first address
+	 * polled waits at all.
+	 *
+	 * ds->phys_mii_mask cannot locate the PHYs here: it carries
+	 * user port indices (lan1 = port 1) while the GPHYs answer at
+	 * MDIO addresses 0-3.
+	 */
+	for_each_available_child_of_node(mdio_np, child) {
+		unsigned int waited;
+		u32 addr;
+		int id = 0;
+
+		if (of_property_read_u32(child, "reg", &addr) || addr > 31)
+			continue;
+
+		for (waited = 0; waited <= MXL862XX_PHY_READY_TIMEOUT_MS;
+		     waited += MXL862XX_PHY_READY_POLL_MS) {
+			id = mxl862xx_phy_read_quiet(priv, addr, MII_PHYSID1);
+			if (id > 0 && id != 0xffff)
+				break;
+			msleep(MXL862XX_PHY_READY_POLL_MS);
+		}
+		if (id <= 0 || id == 0xffff)
+			dev_warn(dev,
+				 "internal PHY %u not responding; its port will be missing\n",
+				 addr);
+		else if (waited)
+			dev_info(dev, "internal PHY %u ready after %ums\n",
+				 addr, waited);
+	}
 
 	ret = devm_of_mdiobus_register(dev, bus, mdio_np);
 	of_node_put(mdio_np);
