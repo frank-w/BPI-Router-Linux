@@ -114,6 +114,12 @@ static void mxl862xx_legacy_pcs_get_state(struct phylink_pcs *pcs,
 	};
 	int ret;
 
+	/* phylink presets state->link = 1 before calling pcs_get_state();
+	 * make sure a failed firmware read reports link down instead of a
+	 * spurious link up with SPEED_UNKNOWN.
+	 */
+	state->link = false;
+
 	ret = MXL862XX_API_READ(priv, MXL862XX_COMMON_PORTLINKCFGGET,
 				port_link_cfg);
 	if (ret)
@@ -408,6 +414,12 @@ static void mxl862xx_pcs_get_state(struct phylink_pcs *pcs,
 	struct mxl862xx_xpcs_pcs_state st = {};
 	int if_mode, ret;
 	u16 fw_speed, lpa, bmsr;
+
+	/* phylink presets state->link = 1 before calling pcs_get_state();
+	 * make sure a failed firmware read reports link down instead of a
+	 * spurious link up with SPEED_UNKNOWN.
+	 */
+	state->link = false;
 
 	if_mode = mxl862xx_xpcs_if_mode(state->interface);
 	if (if_mode < 0)
