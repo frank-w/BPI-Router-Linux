@@ -336,6 +336,30 @@ union mxl862xx_fw_version {
 #define MXL862XX_FW_VER_MIN(priv, maj, min, rev) \
 	((priv)->fw_version.raw >= MXL862XX_FW_VER(maj, min, rev))
 
+/* Firmware capability bits, see struct mxl862xx_priv::fw_caps.
+ *
+ * Each bit describes one behaviour of the switch firmware that the
+ * driver has to adapt to.  Capabilities are derived from the firmware
+ * version once in mxl862xx_wait_ready() and tested with
+ * mxl862xx_fw_has(); call sites must not compare versions directly, so
+ * that a firmware that moves a feature only needs the derivation
+ * updated.
+ *
+ * %MXL862XX_CAP_XPCS_API:       the XPCS command family is implemented and
+ *                               the SerDes can be driven through it instead
+ *                               of the legacy register path
+ * %MXL862XX_CAP_SERDES_STATS:   the equalisation, PRBS and signal-detect
+ *                               commands behind the SerDes ethtool statistics
+ *                               and self-test are implemented
+ * %MXL862XX_CAP_FW_GLOBAL_RULES: the firmware installs its own global PCE
+ *                               rules at init, which the driver has to
+ *                               disable because it manages the flow table
+ *                               itself
+ */
+#define MXL862XX_CAP_XPCS_API		BIT(0)
+#define MXL862XX_CAP_SERDES_STATS	BIT(1)
+#define MXL862XX_CAP_FW_GLOBAL_RULES	BIT(2)
+
 /* Bit indices for struct mxl862xx_priv::flags */
 #define MXL862XX_FLAG_CRC_ERR		0
 #define MXL862XX_FLAG_WORK_STOPPED	1
@@ -372,7 +396,10 @@ struct combo_port_mux {
  *                      used to unconditionally drop traffic (used to block
  *                      flooding)
  * @fw_version:         cached firmware version, populated at probe and
- *                      compared with MXL862XX_FW_VER_MIN()
+ *                      used to derive @fw_caps
+ * @fw_caps:            firmware capabilities derived from @fw_version at
+ *                      probe, a mask of %MXL862XX_CAP_ bits; test with
+ *                      mxl862xx_fw_has()
  * @serdes_ports:       SerDes interfaces incl. sub-interfaces in case of
  *                      10G_QXGMII
  * @ports:              per-port state, indexed by switch port number
@@ -413,6 +440,7 @@ struct mxl862xx_priv {
 	enum dsa_tag_protocol tag_proto;
 	u16 drop_meter;
 	union mxl862xx_fw_version fw_version;
+	u32 fw_caps;
 	struct mxl862xx_pcs serdes_ports[8];
 	struct mxl862xx_port ports[MXL862XX_MAX_PORTS];
 	u16 bridges[MXL862XX_MAX_BRIDGES + 1];
@@ -429,5 +457,17 @@ struct mxl862xx_priv {
 	struct delayed_work stats_work;
 	struct combo_port_mux *ds_mux[MXL862XX_MAX_PORTS];
 };
+
+/**
+ * mxl862xx_fw_has - Test whether the firmware provides a capability
+ * @priv: driver private data
+ * @cap: single %MXL862XX_CAP_ bit to test
+ *
+ * Return: true if the running firmware provides @cap.
+ */
+static inline bool mxl862xx_fw_has(const struct mxl862xx_priv *priv, u32 cap)
+{
+	return !!(priv->fw_caps & cap);
+}
 
 #endif /* __MXL862XX_H */

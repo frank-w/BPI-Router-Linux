@@ -540,7 +540,7 @@ void mxl862xx_setup_pcs(struct mxl862xx_priv *priv, struct mxl862xx_pcs *pcs,
 	pcs->priv = priv;
 	pcs->port = port;
 
-	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
+	if (mxl862xx_fw_has(priv, MXL862XX_CAP_XPCS_API))
 		pcs->pcs.ops = &mxl862xx_pcs_ops;
 	else
 		pcs->pcs.ops = &mxl862xx_legacy_pcs_ops;
@@ -636,7 +636,7 @@ static bool mxl862xx_port_has_serdes_stats(struct dsa_switch *ds, int port)
 	struct mxl862xx_priv *priv = ds->priv;
 
 	return port >= 9 && port <= 16 &&
-	       MXL862XX_FW_VER_MIN(priv, 1, 0, 80);
+	       mxl862xx_fw_has(priv, MXL862XX_CAP_SERDES_STATS);
 }
 
 int mxl862xx_serdes_stats_count(struct dsa_switch *ds, int port)
