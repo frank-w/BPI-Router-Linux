@@ -314,6 +314,30 @@ static int mxl862xx_phy_write_c45_mii_bus(struct mii_bus *bus, int addr,
 	return mxl862xx_phy_write_mmd(bus->priv, addr, devadd, regnum, val);
 }
 
+/**
+ * mxl862xx_init_fw_caps - Derive the firmware capability mask
+ * @priv: driver private data
+ *
+ * Translates the cached firmware version into the capability bits the
+ * rest of the driver tests with mxl862xx_fw_has().  Called once from
+ * mxl862xx_wait_ready() after the version has been read.
+ *
+ * Keeping the version comparisons in one place means a firmware that
+ * gains or moves a feature only needs this function updated, rather
+ * than every call site that depends on the feature.
+ */
+static void mxl862xx_init_fw_caps(struct mxl862xx_priv *priv)
+{
+	u32 caps = 0;
+
+	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
+		caps |= MXL862XX_CAP_XPCS_API | MXL862XX_CAP_SERDES_STATS;
+	else
+		caps |= MXL862XX_CAP_FW_GLOBAL_RULES;
+
+	priv->fw_caps = caps;
+}
+
 static int mxl862xx_wait_ready(struct dsa_switch *ds)
 {
 	struct mxl862xx_sys_fw_image_version ver = {};
@@ -347,6 +371,8 @@ static int mxl862xx_wait_ready(struct dsa_switch *ds)
 		priv->fw_version.major = ver.iv_major;
 		priv->fw_version.minor = ver.iv_minor;
 		priv->fw_version.revision = le16_to_cpu(ver.iv_revision);
+
+		mxl862xx_init_fw_caps(priv);
 
 		return 0;
 
@@ -1217,7 +1243,7 @@ static int mxl862xx_setup(struct dsa_switch *ds)
 	if (ret)
 		return ret;
 
-	if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 80)) {
+	if (mxl862xx_fw_has(priv, MXL862XX_CAP_FW_GLOBAL_RULES)) {
 		ret = mxl862xx_disable_fw_global_rules(ds);
 		if (ret)
 			return ret;
