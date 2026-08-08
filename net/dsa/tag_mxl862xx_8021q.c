@@ -23,6 +23,9 @@ static struct sk_buff *mxl862_8021q_xmit(struct sk_buff *skb,
 	u16 queue_mapping = skb_get_queue_mapping(skb);
 	u8 pcp = netdev_txq_to_tc(netdev, queue_mapping);
 
+	/* Tag the frame for the conduit's per-port TX queue */
+	skb_set_queue_mapping(skb, dp->index);
+
 	return dsa_8021q_xmit(skb, netdev, ETH_P_8021Q,
 			      (pcp << VLAN_PRIO_SHIFT) | tx_vid);
 }
