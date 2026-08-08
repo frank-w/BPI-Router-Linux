@@ -7,6 +7,7 @@
  * Copyright (C) 2025 Daniel Golle <daniel@makrotopia.org>
  */
 
+#include <linux/bitfield.h>
 #include <linux/iopoll.h>
 #include <linux/phylink.h>
 #include <net/dsa.h>
@@ -534,13 +535,294 @@ static const struct phylink_pcs_ops mxl862xx_pcs_ops = {
 	.pcs_inband_caps = mxl862xx_pcs_inband_caps,
 };
 
+/* Ops for the reshaped XPCS API (MXL862XX_CAP_XPCS_V2, firmware >=
+ * 1.0.84): PCS_CONFIG/PCS_GET_STATE/AN_RESTART take packed mode words,
+ * PCS_ENABLE and AN_DISABLE no longer exist (the bringup is idempotent
+ * and implicit in PCS_CONFIG, so there is no pre_config either) and
+ * 0x1a07 is PCS_LINK_UP.  PCS_DISABLE is unchanged, so the v1
+ * pcs_disable is reused.  This tree drives each XPCS as a single lane
+ * with sub-port 0; the quad USXGMII fields stay zero.
+ */
+
+static int mxl862xx_xpcs_errno(int result)
+{
+	switch (result) {
+	case -5:	/* Zephyr -EIO */
+		return -EIO;
+	case -134:	/* Zephyr -ENOTSUP */
+		return -EOPNOTSUPP;
+	default:	/* Zephyr -EINVAL and anything unexpected */
+		return -EINVAL;
+	}
+}
+
+static int mxl862xx_pcs_v2_config(struct phylink_pcs *pcs,
+				  unsigned int neg_mode,
+				  phy_interface_t interface,
+				  const unsigned long *advertising,
+				  bool permit_pause_to_mac)
+{
+	struct mxl862xx_pcs *mpcs = pcs_to_mxl862xx_pcs(pcs);
+	struct mxl862xx_priv *priv = mpcs->priv;
+	struct mxl862xx_xpcs_pcs_cfg_v2 cfg = {};
+	int port = mpcs->port;
+	int if_mode, ret, adv;
+
+	/* Sub-interfaces are set up implicitly by the main interface */
+	if (port != 9 && port != 13)
+		return 0;
+
+	if_mode = mxl862xx_xpcs_if_mode(interface);
+	if (if_mode < 0) {
+		dev_err(priv->ds->dev, "unsupported interface: %s\n",
+			phy_modes(interface));
+		return if_mode;
+	}
+
+	mpcs->if_mode = if_mode;
+
+	cfg.mode = cpu_to_le16(FIELD_PREP(MXL862XX_XPCS_CFG_PORT_ID,
+					  mxl862xx_xpcs_port_id(port)) |
+			       FIELD_PREP(MXL862XX_XPCS_CFG_INTERFACE,
+					  if_mode) |
+			       FIELD_PREP(MXL862XX_XPCS_CFG_NEG_MODE,
+					  mxl862xx_xpcs_neg_mode(neg_mode)) |
+			       FIELD_PREP(MXL862XX_XPCS_CFG_USX_LANE_MODE,
+					  MXL862XX_XPCS_USX_SINGLE) |
+			       FIELD_PREP(MXL862XX_XPCS_CFG_ROLE,
+					  MXL862XX_XPCS_ROLE_MAC) |
+			       FIELD_PREP(MXL862XX_XPCS_CFG_PERMIT_PAUSE,
+					  permit_pause_to_mac));
+
+	if (neg_mode & PHYLINK_PCS_NEG_INBAND) {
+		adv = phylink_mii_c22_pcs_encode_advertisement(interface,
+							       advertising);
+		if (adv >= 0)
+			cfg.advertising.cl37 = cpu_to_le16(adv);
+	}
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_XPCS_PCS_CONFIG, cfg);
+	if (ret)
+		return ret;
+
+	ret = (s16)le16_to_cpu(cfg.result);
+	if (ret < 0)
+		return mxl862xx_xpcs_errno(ret);
+
+	/* result > 0 means AN restart is needed */
+	return ret > 0 ? 1 : 0;
+}
+
+/* These interface modes carry no AN code word, so there is no
+ * negotiated pause to decode and phylink would otherwise resolve pause
+ * off.  Report the flow control the switch port is configured with,
+ * which is what the legacy register path reports for every mode.
+ */
+static void mxl862xx_pcs_read_flow_ctrl(struct mxl862xx_priv *priv, int port,
+					struct phylink_link_state *state)
+{
+	struct mxl862xx_port_cfg port_cfg = {
+		.port_id = port,
+	};
+
+	if (MXL862XX_API_READ(priv, MXL862XX_COMMON_PORTCFGGET, port_cfg))
+		return;
+
+	state->pause &= ~(MLO_PAUSE_RX | MLO_PAUSE_TX);
+	switch (port_cfg.flow_ctrl) {
+	case MXL862XX_FLOW_RXTX:
+		state->pause |= MLO_PAUSE_TXRX_MASK;
+		break;
+	case MXL862XX_FLOW_TX:
+		state->pause |= MLO_PAUSE_TX;
+		break;
+	case MXL862XX_FLOW_RX:
+		state->pause |= MLO_PAUSE_RX;
+		break;
+	case MXL862XX_FLOW_OFF:
+	default:
+		break;
+	}
+}
+
+static void mxl862xx_pcs_v2_get_state(struct phylink_pcs *pcs,
+				      unsigned int neg_mode,
+				      struct phylink_link_state *state)
+{
+	struct mxl862xx_pcs *mpcs = pcs_to_mxl862xx_pcs(pcs);
+	struct mxl862xx_priv *priv = mpcs->priv;
+	struct mxl862xx_xpcs_pcs_state_v2 st = {};
+	int port = mpcs->port;
+	int if_mode, ret;
+	u32 mode;
+	u16 bmsr;
+
+	/* phylink presets state->link = 1 before calling pcs_get_state();
+	 * make sure a failed firmware read reports link down instead of a
+	 * spurious link up with SPEED_UNKNOWN.
+	 */
+	state->link = false;
+
+	if_mode = mxl862xx_xpcs_if_mode(state->interface);
+	if (if_mode < 0)
+		return;
+
+	st.mode = cpu_to_le32(FIELD_PREP(MXL862XX_XPCS_ST_PORT_ID,
+					 mxl862xx_xpcs_port_id(port)) |
+			      FIELD_PREP(MXL862XX_XPCS_ST_INTERFACE,
+					 if_mode) |
+			      FIELD_PREP(MXL862XX_XPCS_ST_USX_LANE_MODE,
+					 MXL862XX_XPCS_USX_SINGLE));
+
+	ret = MXL862XX_API_READ(priv, MXL862XX_XPCS_PCS_GET_STATE, st);
+	if (ret)
+		return;
+
+	mode = le32_to_cpu(st.mode);
+	state->link = FIELD_GET(MXL862XX_XPCS_ST_LINK, mode) &&
+		      !FIELD_GET(MXL862XX_XPCS_ST_PCS_FAULT, mode);
+	state->an_complete = FIELD_GET(MXL862XX_XPCS_ST_AN_COMPLETE, mode);
+
+	switch (state->interface) {
+	case PHY_INTERFACE_MODE_1000BASEX:
+	case PHY_INTERFACE_MODE_2500BASEX:
+	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_QSGMII:
+		bmsr = (state->link ? BMSR_LSTATUS : 0) |
+		       (state->an_complete ? BMSR_ANEGCOMPLETE : 0);
+		phylink_mii_c22_pcs_decode_state(state, neg_mode, bmsr,
+						 le16_to_cpu(st.lpa.cl37));
+		break;
+
+	case PHY_INTERFACE_MODE_USXGMII:
+		if (state->link)
+			phylink_decode_usxgmii_word(state,
+						    le16_to_cpu(st.lpa.usx));
+		break;
+
+	case PHY_INTERFACE_MODE_10GBASER:
+	case PHY_INTERFACE_MODE_10GKR:
+		if (state->link) {
+			state->speed = SPEED_10000;
+			state->duplex = DUPLEX_FULL;
+			mxl862xx_pcs_read_flow_ctrl(priv, port, state);
+		}
+		break;
+
+	default:
+		state->link = false;
+		break;
+	}
+}
+
+static void mxl862xx_pcs_v2_an_restart(struct phylink_pcs *pcs)
+{
+	struct mxl862xx_pcs *mpcs = pcs_to_mxl862xx_pcs(pcs);
+	struct mxl862xx_priv *priv = mpcs->priv;
+	struct mxl862xx_xpcs_an_restart_v2 an = {};
+	int port = mpcs->port;
+
+	if (port != 9 && port != 13)
+		return;
+
+	an.mode = cpu_to_le16(FIELD_PREP(MXL862XX_XPCS_ANR_PORT_ID,
+					 mxl862xx_xpcs_port_id(port)) |
+			      FIELD_PREP(MXL862XX_XPCS_ANR_INTERFACE,
+					 mpcs->if_mode) |
+			      FIELD_PREP(MXL862XX_XPCS_ANR_USX_LANE_MODE,
+					 MXL862XX_XPCS_USX_SINGLE));
+
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_AN_RESTART, an);
+}
+
+static void mxl862xx_pcs_v2_link_up(struct phylink_pcs *pcs,
+				    unsigned int neg_mode,
+				    phy_interface_t interface, int speed,
+				    int duplex)
+{
+	struct mxl862xx_pcs *mpcs = pcs_to_mxl862xx_pcs(pcs);
+	struct mxl862xx_priv *priv = mpcs->priv;
+	struct mxl862xx_xpcs_pcs_link_up lu = {};
+	int port = mpcs->port;
+	int if_mode, dup;
+
+	if (port != 9 && port != 13)
+		return;
+
+	/* With inband AN the XPCS resolves speed and duplex from the
+	 * partner's AN word itself; skip the firmware round-trip.
+	 */
+	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED)
+		return;
+
+	if_mode = mxl862xx_xpcs_if_mode(interface);
+	if (if_mode < 0)
+		return;
+
+	dup = (duplex == DUPLEX_FULL) ? MXL862XX_XPCS_DUPLEX_FULL :
+					MXL862XX_XPCS_DUPLEX_HALF;
+
+	lu.mode = cpu_to_le16(FIELD_PREP(MXL862XX_XPCS_LU_PORT_ID,
+					 mxl862xx_xpcs_port_id(port)) |
+			      FIELD_PREP(MXL862XX_XPCS_LU_INTERFACE,
+					 if_mode) |
+			      FIELD_PREP(MXL862XX_XPCS_LU_USX_LANE_MODE,
+					 MXL862XX_XPCS_USX_SINGLE) |
+			      FIELD_PREP(MXL862XX_XPCS_LU_DUPLEX, dup));
+	lu.speed = cpu_to_le16(speed);
+
+	MXL862XX_API_WRITE(priv, MXL862XX_XPCS_PCS_LINK_UP, lu);
+}
+
+static unsigned int mxl862xx_pcs_v2_inband_caps(struct phylink_pcs *pcs,
+						phy_interface_t interface)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_QSGMII:
+	case PHY_INTERFACE_MODE_1000BASEX:
+	case PHY_INTERFACE_MODE_2500BASEX:
+		return LINK_INBAND_DISABLE | LINK_INBAND_ENABLE;
+	case PHY_INTERFACE_MODE_USXGMII:
+	case PHY_INTERFACE_MODE_10GKR:
+		return LINK_INBAND_ENABLE;
+	case PHY_INTERFACE_MODE_10GBASER:
+		return LINK_INBAND_DISABLE;
+	default:
+		return 0;
+	}
+}
+
+static const struct phylink_pcs_ops mxl862xx_pcs_v2_ops = {
+	.pcs_disable = mxl862xx_pcs_disable,
+	.pcs_config = mxl862xx_pcs_v2_config,
+	.pcs_get_state = mxl862xx_pcs_v2_get_state,
+	.pcs_an_restart = mxl862xx_pcs_v2_an_restart,
+	.pcs_link_up = mxl862xx_pcs_v2_link_up,
+	.pcs_inband_caps = mxl862xx_pcs_v2_inband_caps,
+};
+
 void mxl862xx_setup_pcs(struct mxl862xx_priv *priv, struct mxl862xx_pcs *pcs,
 			int port)
 {
 	pcs->priv = priv;
 	pcs->port = port;
 
-	if (mxl862xx_fw_has(priv, MXL862XX_CAP_XPCS_API))
+	/* Keep the CPU port on the legacy path.  Its link is fixed, so
+	 * phylink resolves it from the fixed-link configuration and never
+	 * calls pcs_get_state() for it, and the firmware refuses the
+	 * negotiation commands for an instance configured into a
+	 * fixed-rate mode, so the XPCS API adds nothing there.  It also
+	 * costs: PCS_CONFIG is not covered by that refusal and replaces
+	 * the configuration the legacy path installs, after which the
+	 * port keeps reporting link at 10G and forwards nothing, which
+	 * takes the switch off the network it is managed over.
+	 */
+	if (dsa_is_cpu_port(priv->ds, port))
+		pcs->pcs.ops = &mxl862xx_legacy_pcs_ops;
+	else if (mxl862xx_fw_has(priv, MXL862XX_CAP_XPCS_V2))
+		pcs->pcs.ops = &mxl862xx_pcs_v2_ops;
+	else if (mxl862xx_fw_has(priv, MXL862XX_CAP_XPCS_API))
 		pcs->pcs.ops = &mxl862xx_pcs_ops;
 	else
 		pcs->pcs.ops = &mxl862xx_legacy_pcs_ops;

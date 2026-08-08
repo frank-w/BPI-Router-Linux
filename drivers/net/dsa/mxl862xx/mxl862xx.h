@@ -360,11 +360,16 @@ union mxl862xx_fw_version {
  *                               underlying block on demand, instead of the
  *                               index being a direct offset into a
  *                               fixed-size pre-allocated block
+ * %MXL862XX_CAP_XPCS_V2:        the XPCS PCS commands take the reshaped
+ *                               (firmware >= 1.0.84) payloads: packed mode
+ *                               words, PCS_ENABLE and AN_DISABLE removed,
+ *                               and PCS_LINK_UP in place of FORCE_SPEED
  */
 #define MXL862XX_CAP_XPCS_API		BIT(0)
 #define MXL862XX_CAP_SERDES_STATS	BIT(1)
 #define MXL862XX_CAP_FW_GLOBAL_RULES	BIT(2)
 #define MXL862XX_CAP_PCE_LOGIC_IDX	BIT(3)
+#define MXL862XX_CAP_XPCS_V2		BIT(4)
 
 /* Bit indices for struct mxl862xx_priv::flags */
 #define MXL862XX_FLAG_CRC_ERR		0
