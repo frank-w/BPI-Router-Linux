@@ -1494,6 +1494,12 @@ static int mxl862xx_configure_sp_tag_proto(struct dsa_switch *ds, int port,
  * Per-port host flood control is implemented via egress sub-meters on
  * the VBP.
  *
+ * The bridge port map is written on every update rather than only at
+ * allocation time. It contains just the user port the VBP belongs to,
+ * and it is the path by which a CPU-originated frame reassigned onto
+ * the VBP reaches the wire, so it must never be left to the firmware
+ * to preserve across an unrelated field update.
+ *
  * This is intentionally separate from mxl862xx_set_bridge_port() because
  * the VBP and the physical bridge port are independent firmware entities:
  * host flood changes (deferred from atomic context) only need the VBP
@@ -1513,8 +1519,10 @@ static int mxl862xx_set_cpu_vbp(struct dsa_switch *ds, int port)
 	vbp_cfg.bridge_port_id = cpu_to_le16(p->bridge_port_cpu);
 	vbp_cfg.mask = cpu_to_le32(
 		MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_ID |
+		MXL862XX_BRIDGE_PORT_CONFIG_MASK_BRIDGE_PORT_MAP |
 		MXL862XX_BRIDGE_PORT_CONFIG_MASK_EGRESS_SUB_METER);
 	vbp_cfg.bridge_id = cpu_to_le16(p->fid);
+	mxl862xx_fw_portmap_set_bit(vbp_cfg.bridge_port_map, port);
 
 	for (i = 0; i < ARRAY_SIZE(mxl862xx_flood_meters); i++) {
 		idx = mxl862xx_flood_meters[i];
