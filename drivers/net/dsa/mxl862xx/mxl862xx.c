@@ -333,10 +333,25 @@ static void mxl862xx_init_fw_caps(struct mxl862xx_priv *priv)
 	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 83))
 		caps |= MXL862XX_CAP_PCE_LOGIC_IDX;
 
-	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
+	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 80)) {
 		caps |= MXL862XX_CAP_XPCS_API | MXL862XX_CAP_SERDES_STATS;
-	else
+
+		/* Firmware 1.0.84 reshaped the XPCS PCS commands: the
+		 * PCS_CONFIG and PCS_GET_STATE payloads changed layout
+		 * and size, PCS_ENABLE and AN_DISABLE were removed (the
+		 * bringup became implicit in PCS_CONFIG) and FORCE_SPEED
+		 * became PCS_LINK_UP.  The Zephyr -ENOTSUP (-134) that
+		 * XPCS_PCS_ENABLE draws on the BananaPi 1.0.85 build is
+		 * the v2 firmware refusing a removed v1 command, not the
+		 * API being absent: 0x1a03 and 0x1a06 are missing from
+		 * the 1.0.85 dispatch table while the v2 payload sizes
+		 * match it exactly.  Select the matching ops generation.
+		 */
+		if (MXL862XX_FW_VER_MIN(priv, 1, 0, 84))
+			caps |= MXL862XX_CAP_XPCS_V2;
+	} else {
 		caps |= MXL862XX_CAP_FW_GLOBAL_RULES;
+	}
 
 	priv->fw_caps = caps;
 }

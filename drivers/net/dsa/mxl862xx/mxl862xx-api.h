@@ -2749,6 +2749,157 @@ struct mxl862xx_xpcs_force_speed {
 	__le16 result;
 } __packed;
 
+/*
+ * Firmware >= 1.0.84 reshaped the XPCS PCS commands: PCS_CONFIG,
+ * PCS_GET_STATE and AN_RESTART take packed little-endian mode words
+ * instead of byte fields, PCS_ENABLE and AN_DISABLE were removed
+ * (bringup is implicit in PCS_CONFIG, power-down remains PCS_DISABLE)
+ * and command 0x1a07 became PCS_LINK_UP.  The layouts below match the
+ * payload sizes the 1.0.85 dispatch table declares (10/12/4/6) and the
+ * field decoding of the disassembled 1.0.85 0x1a07 handler.
+ */
+
+/**
+ * union mxl862xx_xpcs_an_word - XPCS AN code word, tagged by interface mode
+ * @cl37: 16-bit base page exchanged over the CL37 hardware AN path.
+ *        Carries the 802.3 CL37 base page for 1000BASE-X/2500BASE-X and
+ *        the Cisco SGMII config word for SGMII/QSGMII.
+ * @usx: USXGMII 16-bit AN code word, MDIO_USXGMII_* layout
+ * @cl73: CL73 48-bit base page (10GBASE-KR), per 802.3 Annex 28C
+ * @cl73.adv1: CL73 SR_AN_ADV1 / SR_AN_LP_ABL1
+ * @cl73.adv2: CL73 SR_AN_ADV2 / SR_AN_LP_ABL2
+ * @cl73.adv3: CL73 SR_AN_ADV3 / SR_AN_LP_ABL3
+ *
+ * The host picks the member based on the interface field of the
+ * surrounding struct.
+ */
+union mxl862xx_xpcs_an_word {
+	__le16 cl37;
+	__le16 usx;
+	struct {
+		__le16 adv1;
+		__le16 adv2;
+		__le16 adv3;
+	} cl73;
+} __packed;
+
+/* Fields of mxl862xx_xpcs_pcs_cfg_v2.mode */
+#define MXL862XX_XPCS_CFG_PORT_ID	GENMASK(1, 0)
+#define MXL862XX_XPCS_CFG_INTERFACE	GENMASK(7, 2)
+#define MXL862XX_XPCS_CFG_NEG_MODE	GENMASK(9, 8)
+#define MXL862XX_XPCS_CFG_PERMIT_PAUSE	BIT(10)
+#define MXL862XX_XPCS_CFG_USX_LANE_MODE	GENMASK(12, 11)
+#define MXL862XX_XPCS_CFG_ROLE		BIT(13)
+#define MXL862XX_XPCS_CFG_USX_SUBPORT	GENMASK(15, 14)
+
+/* MXL862XX_XPCS_CFG_ROLE values */
+#define MXL862XX_XPCS_ROLE_MAC		0
+#define MXL862XX_XPCS_ROLE_PHY		1
+
+/* usx_lane_mode values, all mode words */
+#define MXL862XX_XPCS_USX_SINGLE	0
+#define MXL862XX_XPCS_USX_QUAD		1
+
+/**
+ * struct mxl862xx_xpcs_pcs_cfg_v2 - PCS configuration, firmware >= 1.0.84
+ * @mode: packed input parameters, see MXL862XX_XPCS_CFG_*.  port_id is
+ *        the XPCS port index; interface is the PCS interface mode
+ *        (enum mxl862xx_xpcs_if_mode); neg_mode is the negotiation mode
+ *        (enum mxl862xx_xpcs_neg_mode); permit_pause allows pause to the
+ *        MAC; usx_lane_mode is the USXGMII lane mode; role is the
+ *        protocol role (MXL862XX_XPCS_ROLE_*); usx_subport selects the
+ *        QSGMII/QUSXGMII sub-port
+ * @advertising: AN code word the local end transmits; member selected by
+ *               the interface field.  Ignored when the local end does not
+ *               transmit an AN word or negotiation is not inband.
+ * @result: firmware result.  >0 means the host must follow with an AN
+ *          restart, 0 means no follow-up, <0 is a Zephyr errno
+ */
+struct mxl862xx_xpcs_pcs_cfg_v2 {
+	__le16 mode;
+	union mxl862xx_xpcs_an_word advertising;
+	__le16 result;
+} __packed;
+
+static_assert(sizeof(struct mxl862xx_xpcs_pcs_cfg_v2) == 10);
+
+/* Fields of mxl862xx_xpcs_pcs_state_v2.mode */
+#define MXL862XX_XPCS_ST_PORT_ID	GENMASK(1, 0)
+#define MXL862XX_XPCS_ST_INTERFACE	GENMASK(7, 2)
+#define MXL862XX_XPCS_ST_USX_LANE_MODE	GENMASK(9, 8)
+#define MXL862XX_XPCS_ST_USX_SUBPORT	GENMASK(11, 10)
+#define MXL862XX_XPCS_ST_LINK		BIT(12)
+#define MXL862XX_XPCS_ST_AN_COMPLETE	BIT(13)
+#define MXL862XX_XPCS_ST_DUPLEX		BIT(14)
+#define MXL862XX_XPCS_ST_PCS_FAULT	BIT(15)
+#define MXL862XX_XPCS_ST_PAUSE		GENMASK(17, 16)
+#define MXL862XX_XPCS_ST_LP_EEE_CAP	BIT(18)
+#define MXL862XX_XPCS_ST_LP_EEE_CS_CAP	BIT(19)
+
+/**
+ * struct mxl862xx_xpcs_pcs_state_v2 - PCS link state, firmware >= 1.0.84
+ * @mode: packed input parameters and firmware status, see
+ *        MXL862XX_XPCS_ST_*.  The host writes port_id, interface,
+ *        usx_lane_mode and usx_subport; the firmware fills in link,
+ *        an_complete, duplex, pcs_fault, pause (bit 0 symmetric, bit 1
+ *        asymmetric), lp_eee_cap and lp_eee_cs_cap
+ * @speed: resolved speed in Mbit/s (output)
+ * @lpa: link partner ability word (output); member selected by the
+ *       interface field
+ */
+struct mxl862xx_xpcs_pcs_state_v2 {
+	__le32 mode;
+	__le16 speed;
+	union mxl862xx_xpcs_an_word lpa;
+} __packed;
+
+static_assert(sizeof(struct mxl862xx_xpcs_pcs_state_v2) == 12);
+
+/* Fields of mxl862xx_xpcs_an_restart_v2.mode */
+#define MXL862XX_XPCS_ANR_PORT_ID	GENMASK(1, 0)
+#define MXL862XX_XPCS_ANR_INTERFACE	GENMASK(7, 2)
+#define MXL862XX_XPCS_ANR_USX_LANE_MODE	GENMASK(9, 8)
+#define MXL862XX_XPCS_ANR_USX_SUBPORT	GENMASK(11, 10)
+
+/**
+ * struct mxl862xx_xpcs_an_restart_v2 - AN restart, firmware >= 1.0.84
+ * @mode: packed input parameters, see MXL862XX_XPCS_ANR_*
+ * @result: firmware result.  0 on success, <0 is a Zephyr errno
+ */
+struct mxl862xx_xpcs_an_restart_v2 {
+	__le16 mode;
+	__le16 result;
+} __packed;
+
+static_assert(sizeof(struct mxl862xx_xpcs_an_restart_v2) == 4);
+
+/* Fields of mxl862xx_xpcs_pcs_link_up.mode */
+#define MXL862XX_XPCS_LU_PORT_ID	GENMASK(1, 0)
+#define MXL862XX_XPCS_LU_INTERFACE	GENMASK(7, 2)
+#define MXL862XX_XPCS_LU_DUPLEX		BIT(8)
+#define MXL862XX_XPCS_LU_USX_LANE_MODE	GENMASK(10, 9)
+#define MXL862XX_XPCS_LU_USX_SUBPORT	GENMASK(12, 11)
+
+/**
+ * struct mxl862xx_xpcs_pcs_link_up - PCS link-up, firmware >= 1.0.84
+ * @mode: packed input parameters, see MXL862XX_XPCS_LU_*.  duplex is the
+ *        duplex mode (enum mxl862xx_xpcs_duplex)
+ * @speed: resolved speed in Mbit/s
+ * @result: firmware result.  0 on success, <0 is a Zephyr errno
+ *
+ * Replaces FORCE_SPEED on command 0x1a07.  Called once per link-up
+ * event after the host has resolved the line-side speed and duplex.
+ * The firmware acts on SGMII, USXGMII and QSGMII and succeeds without
+ * doing anything for the fixed-rate interface modes.
+ */
+struct mxl862xx_xpcs_pcs_link_up {
+	__le16 mode;
+	__le16 speed;
+	__le16 result;
+} __packed;
+
+static_assert(sizeof(struct mxl862xx_xpcs_pcs_link_up) == 6);
+
 /**
  * struct mxl862xx_xpcs_loopback_cfg - loopback control
  * @port_id: XPCS port index
