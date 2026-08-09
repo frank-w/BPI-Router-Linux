@@ -330,6 +330,9 @@ static void mxl862xx_init_fw_caps(struct mxl862xx_priv *priv)
 {
 	u32 caps = 0;
 
+	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 83))
+		caps |= MXL862XX_CAP_PCE_LOGIC_IDX;
+
 	if (MXL862XX_FW_VER_MIN(priv, 1, 0, 80))
 		caps |= MXL862XX_CAP_XPCS_API | MXL862XX_CAP_SERDES_STATS;
 	else
@@ -707,18 +710,57 @@ static void mxl862xx_fill_cpu_trap_action(struct dsa_switch *ds, int port,
 	rule->action.fid = priv->cpu_trap_fid;
 }
 
+/* Install one of the per-CTP protocol trap rules.
+ *
+ * Two firmware interfaces exist for this, taking the same 466-byte
+ * struct mxl862xx_pce_rule.  With %MXL862XX_CAP_PCE_LOGIC_IDX the
+ * rule index is a logical index within the region selected by
+ * @region and @logicalportid, and the firmware grows the underlying
+ * block on demand.  Without it, the index is a direct offset into a
+ * block the firmware pre-allocated for the CTP at init, and a write
+ * past the end of that block is refused.
+ *
+ * The older interface is what makes firmware 1.0.85 refuse some of
+ * these writes with -1022: the pre-allocated block is smaller than it
+ * was on 1.0.70, so the higher trap offsets fall outside it, and the
+ * refusal pattern follows the block size rather than the port type
+ * (port 0 accepts offsets 1-4, port 1 accepts only 1-3).
+ *
+ * The rules installed here only add link-local trapping and IGMP/MLD
+ * snooping and the switch forwards normally without them, so a
+ * rejection is still logged rather than propagated: failing the write
+ * would abort mxl862xx_refresh_cpu_targets() and leave the board with
+ * no user ports at all.
+ */
+static int mxl862xx_pce_trap_write(struct mxl862xx_priv *priv,
+				   struct mxl862xx_pce_rule *rule)
+{
+	u16 cmd = mxl862xx_fw_has(priv, MXL862XX_CAP_PCE_LOGIC_IDX) ?
+		  MXL862XX_TFLOW_PCERULELOGICWRITE :
+		  MXL862XX_TFLOW_PCERULEWRITE;
+	int ret;
+
+	ret = mxl862xx_api_wrap(priv, cmd, rule, sizeof(*rule), false, true);
+	if (ret)
+		dev_warn(&priv->mdiodev->dev,
+			 "PCE trap rule rejected (port %u index %u): %pe\n",
+			 rule->logicalportid,
+			 le16_to_cpu(rule->pattern.index), ERR_PTR(ret));
+
+	return 0;
+}
+
 /* Install a PCE rule that traps IEEE 802.1D link-local frames
  * (01:80:c2:00:00:0x) to the CPU port for a single user port,
  * preventing the hardware bridge from flooding them to other ports.
  * The firmware does not install this rule by default because its own
  * STP module is not used when DSA manages STP.
  *
- * The rule is written into the port's per-CTP flow table at offset 1.
- * The firmware already allocates a 44-entry block for every CTP during
- * init (8 entries exposed initially, expandable), so no dynamic
- * allocation via PCERULEALLOC is needed. Using region=CTP causes the
- * firmware to translate the CTP-relative offset into an absolute
- * hardware index.
+ * The rule is written into the port's per-CTP flow table at index 1.
+ * Setting region=CTP makes the firmware resolve the index against that
+ * port's block rather than the global table, so no dynamic allocation
+ * via PCERULEALLOC is needed; see mxl862xx_pce_trap_write() for how the
+ * index is interpreted on either firmware interface.
  */
 static int mxl862xx_setup_link_local_trap(struct dsa_switch *ds, int port)
 {
@@ -736,7 +778,7 @@ static int mxl862xx_setup_link_local_trap(struct dsa_switch *ds, int port)
 
 	mxl862xx_fill_cpu_trap_action(ds, port, &rule);
 
-	return MXL862XX_API_WRITE(priv, MXL862XX_TFLOW_PCERULEWRITE, rule);
+	return mxl862xx_pce_trap_write(priv, &rule);
 }
 
 /* Install PCE rules that trap IGMP and MLD frames to the CPU port for
@@ -772,7 +814,7 @@ static int mxl862xx_setup_snooping_traps(struct dsa_switch *ds, int port)
 	rule.pattern.protocol = IPPROTO_IGMP;
 	rule.pattern.protocol_enable = 1;
 
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_TFLOW_PCERULEWRITE, rule);
+	ret = mxl862xx_pce_trap_write(priv, &rule);
 	if (ret)
 		return ret;
 
@@ -791,7 +833,7 @@ static int mxl862xx_setup_snooping_traps(struct dsa_switch *ds, int port)
 	rule.pattern.app_data_msb_enable = 1;
 	rule.pattern.app_mask_range_msb_select = 1; /* range mode */
 
-	ret = MXL862XX_API_WRITE(priv, MXL862XX_TFLOW_PCERULEWRITE, rule);
+	ret = mxl862xx_pce_trap_write(priv, &rule);
 	if (ret)
 		return ret;
 
@@ -808,7 +850,7 @@ static int mxl862xx_setup_snooping_traps(struct dsa_switch *ds, int port)
 	rule.pattern.app_data_msb_enable = 1;
 	/* app_mask_range_msb_select = 0: nibble mask mode (default) */
 
-	return MXL862XX_API_WRITE(priv, MXL862XX_TFLOW_PCERULEWRITE, rule);
+	return mxl862xx_pce_trap_write(priv, &rule);
 }
 
 static bool mxl862xx_is_lag_master(const struct mxl862xx_priv *priv, int port)

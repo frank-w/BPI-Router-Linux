@@ -355,10 +355,16 @@ union mxl862xx_fw_version {
  *                               rules at init, which the driver has to
  *                               disable because it manages the flow table
  *                               itself
+ * %MXL862XX_CAP_PCE_LOGIC_IDX:  PCE rules can be addressed by logical index
+ *                               within a region, and the firmware grows the
+ *                               underlying block on demand, instead of the
+ *                               index being a direct offset into a
+ *                               fixed-size pre-allocated block
  */
 #define MXL862XX_CAP_XPCS_API		BIT(0)
 #define MXL862XX_CAP_SERDES_STATS	BIT(1)
 #define MXL862XX_CAP_FW_GLOBAL_RULES	BIT(2)
+#define MXL862XX_CAP_PCE_LOGIC_IDX	BIT(3)
 
 /* Bit indices for struct mxl862xx_priv::flags */
 #define MXL862XX_FLAG_CRC_ERR		0
