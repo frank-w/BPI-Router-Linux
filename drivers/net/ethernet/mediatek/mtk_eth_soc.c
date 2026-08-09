@@ -1627,11 +1627,31 @@ static bool mtk_uses_dsa(struct net_device *dev)
 #endif
 }
 
-static bool non_mtk_uses_dsa(struct net_device *dev)
+/* The GDM transmit checksum engine is programmed with a single descriptor bit
+ * (TX_DMA_CHKSUM / TX_DMA_CHKSUM_V2) and no header offsets, so it locates the
+ * L3 and L4 headers by parsing the frame itself.  A DSA tagger that prepends
+ * an opaque header hides those headers from the parser, and checksum offload
+ * has to be refused on a conduit using such a tag.
+ *
+ * A tag_8021q based tagger hides nothing: dsa_8021q_xmit() inserts a real
+ * 802.1Q header with vlan_insert_tag(), so what reaches the GDM is an ordinary
+ * VLAN tagged Ethernet frame.  The parser handles those - the same hardware
+ * inserts VLAN tags itself via TX_DMA_INS_VLAN(_V2), which it could not place
+ * correctly against a parser unable to find the tag.
+ */
+static bool mtk_dsa_tag_hides_l3_hdr(struct net_device *dev)
 {
 #if IS_ENABLED(CONFIG_NET_DSA)
-	return netdev_uses_dsa(dev) &&
-	       dev->dsa_ptr->tag_ops->proto != DSA_TAG_PROTO_MTK;
+	if (!netdev_uses_dsa(dev))
+		return false;
+
+	switch (dev->dsa_ptr->tag_ops->proto) {
+	case DSA_TAG_PROTO_MTK:
+	case DSA_TAG_PROTO_MXL862_8021Q:
+		return false;
+	default:
+		return true;
+	}
 #else
 	return false;
 #endif
@@ -3604,11 +3624,11 @@ static netdev_features_t mtk_fix_features(struct net_device *dev,
 	}
 
 	if ((features & NETIF_F_IP_CSUM) &&
-	    non_mtk_uses_dsa(dev))
+	    mtk_dsa_tag_hides_l3_hdr(dev))
 		features &= ~NETIF_F_IP_CSUM;
 
 	if ((features & NETIF_F_IPV6_CSUM) &&
-	    non_mtk_uses_dsa(dev))
+	    mtk_dsa_tag_hides_l3_hdr(dev))
 		features &= ~NETIF_F_IPV6_CSUM;
 
 	return features;
