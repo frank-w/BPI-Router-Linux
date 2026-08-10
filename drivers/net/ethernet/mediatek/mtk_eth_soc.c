@@ -1342,6 +1342,30 @@ static void mtk_stats_update(struct mtk_eth *eth)
 	}
 }
 
+/* MTK_GDM1_AF and MTK_GDM2_AF describe a two-GDM frame engine and are the
+ * only trigger the driver has for draining the counters from the hot path.
+ * On NETSYS v3 that trigger does not fire, so drain them on a timer as well.
+ */
+static void mtk_stats_work(struct work_struct *work)
+{
+	struct delayed_work *del_work = to_delayed_work(work);
+	struct mtk_eth *eth = container_of(del_work, struct mtk_eth,
+					   stats_work);
+
+	if (test_bit(MTK_HW_INIT, &eth->state) &&
+	    !test_bit(MTK_RESETTING, &eth->state)) {
+		/* mtk_stats_update() is written for the NAPI path and takes
+		 * stats_lock with spin_trylock().  Keep the lock out of two
+		 * different contexts.
+		 */
+		local_bh_disable();
+		mtk_stats_update(eth);
+		local_bh_enable();
+	}
+
+	schedule_delayed_work(&eth->stats_work, MTK_STATS_DRAIN_TIMEOUT);
+}
+
 static void mtk_get_stats64(struct net_device *dev,
 			    struct rtnl_link_stats64 *storage)
 {
@@ -5105,6 +5129,7 @@ static int mtk_cleanup(struct mtk_eth *eth)
 	mtk_free_dev(eth);
 	cancel_work_sync(&eth->pending_work);
 	cancel_delayed_work_sync(&eth->reset.monitor_work);
+	cancel_delayed_work_sync(&eth->stats_work);
 
 	return 0;
 }
@@ -6161,6 +6186,7 @@ static int mtk_probe(struct platform_device *pdev)
 	INIT_WORK(&eth->rx_dim.work, mtk_dim_rx);
 	atomic_set(&eth->reset.force, 0);
 	INIT_DELAYED_WORK(&eth->reset.monitor_work, mtk_hw_reset_monitor_work);
+	INIT_DELAYED_WORK(&eth->stats_work, mtk_stats_work);
 
 	eth->tx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
 	INIT_WORK(&eth->tx_dim.work, mtk_dim_tx);
@@ -6492,6 +6518,7 @@ static int mtk_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, eth);
 	schedule_delayed_work(&eth->reset.monitor_work,
 			      MTK_DMA_MONITOR_TIMEOUT);
+	schedule_delayed_work(&eth->stats_work, MTK_STATS_DRAIN_TIMEOUT);
 
 	return 0;
 
