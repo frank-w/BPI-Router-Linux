@@ -4412,8 +4412,6 @@ static void mxl862xx_stats_poll(struct dsa_switch *ds, int port)
 		mxl862xx_delta32(rx_under, s->prev_rx_under_size_error_pkts) +
 		mxl862xx_delta32(rx_over, s->prev_rx_oversize_error_pkts) +
 		mxl862xx_delta32(rx_align, s->prev_rx_align_error_pkts);
-	s->tx_errors +=
-		mxl862xx_delta32(tx_drop, s->prev_tx_dropped_pkts);
 
 	s->rx_dropped +=
 		mxl862xx_delta32(rx_drop, s->prev_rx_dropped_pkts) +

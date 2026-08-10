@@ -53,6 +53,9 @@ static struct sk_buff *mxl862_tag_xmit(struct sk_buff *skb,
 	mxl862_tag[2] = htons(FIELD_PREP(MXL862_SUBIF_ID, sub_interface));
 	mxl862_tag[3] = htons(FIELD_PREP(MXL862_IGP_EGP, cpu_port));
 
+	/* Tag the frame for the conduit's per-port TX queue */
+	skb_set_queue_mapping(skb, dp->index);
+
 	return skb;
 }
 
