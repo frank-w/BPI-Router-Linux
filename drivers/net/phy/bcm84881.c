@@ -83,10 +83,24 @@ static int bcm84881_config_init(struct phy_device *phydev)
 
 static int bcm8489x_config_init(struct phy_device *phydev)
 {
+	bcm84881_fill_possible_interfaces(phydev);
 	__set_bit(PHY_INTERFACE_MODE_USXGMII, phydev->possible_interfaces);
 
-	if (phydev->interface != PHY_INTERFACE_MODE_USXGMII)
+	/* The BCM84891 is found both soldered down and attached over
+	 * USXGMII, and inside SFP+ copper modules (e.g. various
+	 * "OEM SFP-10G-T" RollBall modules), where the host-side
+	 * interface is 10GBASE-R with SGMII/2500BASE-X rate switching,
+	 * as with the BCM84881. Accept both attachments.
+	 */
+	switch (phydev->interface) {
+	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_2500BASEX:
+	case PHY_INTERFACE_MODE_10GBASER:
+	case PHY_INTERFACE_MODE_USXGMII:
+		break;
+	default:
 		return -ENODEV;
+	}
 
 	/* MDIO_CTRL1_LPOWER is set at boot on the tested platform. Does not
 	 * recur on ifdown/ifup, cable events, or link-partner advertisement
@@ -246,6 +260,32 @@ static int bcm84881_get_features(struct phy_device *phydev)
 	return 0;
 }
 
+static const int bcm8489x_features[] = {
+	ETHTOOL_LINK_MODE_Autoneg_BIT,
+	ETHTOOL_LINK_MODE_100baseT_Half_BIT,
+	ETHTOOL_LINK_MODE_100baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_5000baseT_Full_BIT,
+	ETHTOOL_LINK_MODE_10000baseT_Full_BIT,
+};
+
+static int bcm8489x_get_features(struct phy_device *phydev)
+{
+	/* The PMA/PMD abilities of this family are fixed and known, and
+	 * on some modules every MDIO access is expensive (RollBall
+	 * MDIO-over-I2C mailbox, tens to hundreds of ms per register),
+	 * so do not spend half a dozen reads at attach time discovering
+	 * constants. EEE abilities may vary with firmware; keep reading
+	 * those.
+	 */
+	linkmode_set_bit_array(bcm8489x_features,
+			       ARRAY_SIZE(bcm8489x_features),
+			       phydev->supported);
+
+	return genphy_c45_read_eee_abilities(phydev);
+}
+
 static int bcm84881_config_aneg(struct phy_device *phydev)
 {
 	bool changed = false;
@@ -303,8 +343,45 @@ static int bcm84881_aneg_done(struct phy_device *phydev)
 
 static int bcm84881_read_status(struct phy_device *phydev)
 {
+	bool was_resolved;
 	unsigned int mode;
-	int bmsr, val;
+	int bmsr, val, stat1;
+
+	/* Whether the previous poll left a fully resolved link whose
+	 * negotiated parameters (lp_advertising, speed, duplex, pause,
+	 * mdix, interface) are still valid. They can only change through
+	 * a renegotiation, which is observable below as a link drop, an
+	 * autoneg restart or autoneg-complete deasserting.
+	 */
+	was_resolved = phydev->link && phydev->autoneg_complete &&
+		       phydev->speed != SPEED_UNKNOWN;
+
+	stat1 = -1;
+
+	/* In polling mode with the link previously up and resolved, a
+	 * single read of the AN status register is normally sufficient
+	 * to confirm nothing changed: the link status bit is latched
+	 * low, so a momentary drop or a renegotiation since the last
+	 * poll reads as 0 even if the link has already come back, and
+	 * autoneg-complete deasserts across a renegotiation. This
+	 * mirrors the polling-mode single-read logic in
+	 * genphy_c45_read_link().
+	 */
+	if (phy_polling_mode(phydev) && was_resolved) {
+		stat1 = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
+		if (stat1 < 0)
+			return stat1;
+
+		if ((stat1 & MDIO_STAT1_LSTATUS) &&
+		    (stat1 & MDIO_AN_STAT1_COMPLETE))
+			return 0;
+
+		/* Something changed. The latched status has now been
+		 * consumed, so the full evaluation below must reuse
+		 * this value rather than re-read the register, which
+		 * would miss a momentary link drop.
+		 */
+	}
 
 	val = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1);
 	if (val < 0)
@@ -315,20 +392,31 @@ static int bcm84881_read_status(struct phy_device *phydev)
 		return 0;
 	}
 
-	val = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
-	if (val < 0)
-		return val;
+	if (stat1 < 0) {
+		stat1 = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
+		if (stat1 < 0)
+			return stat1;
+	}
 
 	bmsr = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_C22 + MII_BMSR);
 	if (bmsr < 0)
 		return bmsr;
 
-	phydev->autoneg_complete = !!(val & MDIO_AN_STAT1_COMPLETE) &&
+	phydev->autoneg_complete = !!(stat1 & MDIO_AN_STAT1_COMPLETE) &&
 				   !!(bmsr & BMSR_ANEGCOMPLETE);
-	phydev->link = !!(val & MDIO_STAT1_LSTATUS) &&
+	phydev->link = !!(stat1 & MDIO_STAT1_LSTATUS) &&
 		       !!(bmsr & BMSR_LSTATUS);
 	if (phydev->autoneg == AUTONEG_ENABLE && !phydev->autoneg_complete)
 		phydev->link = false;
+
+	/* On some modules every MDIO access is expensive (RollBall
+	 * MDIO-over-I2C mailbox, tens to hundreds of ms per register).
+	 * If the link was already up and resolved on the previous poll
+	 * and still is, the negotiated parameters cannot have changed:
+	 * skip re-reading them and keep the cached values.
+	 */
+	if (was_resolved && phydev->link && phydev->autoneg_complete)
+		return 0;
 
 	linkmode_zero(phydev->lp_advertising);
 	phydev->speed = SPEED_UNKNOWN;
@@ -416,12 +504,30 @@ static unsigned int bcm84881_inband_caps(struct phy_device *phydev,
 	return LINK_INBAND_DISABLE;
 }
 
+static int bcm84881_config_inband(struct phy_device *phydev,
+				  unsigned int modes)
+{
+	/* This PHY does not generate inband signalling in any mode (see
+	 * bcm84881_inband_caps()); inband is permanently disabled in
+	 * hardware. A request to disable inband therefore requires no
+	 * action, but must succeed: phylink treats any error from
+	 * phy_config_inband() (including -EOPNOTSUPP from a missing
+	 * config_inband method) as a major configuration failure which
+	 * forces and holds the link down.
+	 */
+	if (modes == LINK_INBAND_DISABLE)
+		return 0;
+
+	return -EINVAL;
+}
+
 static struct phy_driver bcm84881_drivers[] = {
 	{
 		.phy_id		= 0xae025150,
 		.phy_id_mask	= 0xfffffff0,
 		.name		= "Broadcom BCM84881",
 		.inband_caps	= bcm84881_inband_caps,
+		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm84881_config_init,
 		.probe		= bcm84881_probe,
 		.get_features	= bcm84881_get_features,
@@ -432,9 +538,10 @@ static struct phy_driver bcm84881_drivers[] = {
 		PHY_ID_MATCH_MODEL(0x35905080),
 		.name		= "Broadcom BCM84891",
 		.inband_caps	= bcm84881_inband_caps,
+		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm8489x_config_init,
 		.probe		= bcm84881_probe,
-		.get_features	= bcm84881_get_features,
+		.get_features	= bcm8489x_get_features,
 		.config_aneg	= bcm84881_config_aneg,
 		.aneg_done	= bcm84881_aneg_done,
 		.read_status	= bcm84881_read_status,
@@ -446,9 +553,10 @@ static struct phy_driver bcm84881_drivers[] = {
 		PHY_ID_MATCH_MODEL(0x359050a0),
 		.name		= "Broadcom BCM84892",
 		.inband_caps	= bcm84881_inband_caps,
+		.config_inband	= bcm84881_config_inband,
 		.config_init	= bcm8489x_config_init,
 		.probe		= bcm84881_probe,
-		.get_features	= bcm84881_get_features,
+		.get_features	= bcm8489x_get_features,
 		.config_aneg	= bcm84881_config_aneg,
 		.aneg_done	= bcm84881_aneg_done,
 		.read_status	= bcm84881_read_status,

@@ -11,6 +11,7 @@
  * of their settings.
  */
 #include <linux/i2c.h>
+#include <linux/jiffies.h>
 #include <linux/mdio/mdio-i2c.h>
 #include <linux/phy.h>
 #include <linux/sfp.h>
@@ -195,6 +196,26 @@ unlock:
 #define ROLLBALL_CMD_READ		0x02
 #define ROLLBALL_CMD_DONE		0x04
 
+/* Wall-clock budget for i2c_rollball_mii_poll(): generous enough to
+ * ride out the module's post-insertion wake window, during which the
+ * mailbox can stall for hundreds of ms.
+ */
+#define ROLLBALL_POLL_TIMEOUT_MS	1000
+
+/* Completion-poll backoff: first sleep is short so modules that answer
+ * in a couple of ms return promptly; the interval then doubles up to
+ * the cap so modules that take tens of ms per command are not hammered
+ * with status reads (each poll iteration costs four I2C transactions
+ * for the page save/set/read/restore dance).
+ */
+#define ROLLBALL_POLL_SLEEP_MIN_US	2000
+#define ROLLBALL_POLL_SLEEP_MAX_US	32000
+
+/* Number of times a command is re-issued if the module does not
+ * signal ROLLBALL_CMD_DONE within the polling budget.
+ */
+#define ROLLBALL_CMD_RETRIES		3
+
 #define SFP_PAGE_ROLLBALL_MDIO		3
 
 static int __i2c_transfer_err(struct i2c_adapter *i2c, struct i2c_msg *msgs,
@@ -298,7 +319,9 @@ static int i2c_rollball_mii_poll(struct mii_bus *bus, int bus_addr, u8 *buf,
 	struct i2c_adapter *i2c = bus->priv;
 	struct i2c_msg msgs[2];
 	u8 cmd_addr, tmp, *res;
-	int i, ret;
+	unsigned long deadline;
+	unsigned long sleep_us;
+	int ret;
 
 	cmd_addr = ROLLBALL_CMD_ADDR;
 
@@ -315,12 +338,22 @@ static int i2c_rollball_mii_poll(struct mii_bus *bus, int bus_addr, u8 *buf,
 	msgs[1].len = len;
 	msgs[1].buf = res;
 
-	/* By experiment it takes up to 70 ms to access a register for these
-	 * SFPs. Sleep 20ms between iterations and try 10 times.
+	/* Some of these SFPs answer within a couple of ms once running,
+	 * others take tens of ms per command, and any of them can stall
+	 * for hundreds of ms while the module is still waking after
+	 * insertion. Poll with exponential backoff: the first iteration
+	 * sleeps only a couple of ms so a fast module returns promptly
+	 * instead of paying a fixed 20 ms per register access, while the
+	 * backoff keeps the number of status-poll I2C transactions for a
+	 * slow module close to the fixed-interval scheme's. The whole
+	 * loop is bounded by a generous wall-clock budget for the wake
+	 * window. Sleep as TASK_IDLE (usleep_range_idle): the CPU is free
+	 * while we wait, so the poll must not inflate the load average.
 	 */
-	i = 10;
+	deadline = jiffies + msecs_to_jiffies(ROLLBALL_POLL_TIMEOUT_MS);
+	sleep_us = ROLLBALL_POLL_SLEEP_MIN_US;
 	do {
-		msleep(20);
+		usleep_range_idle(sleep_us, sleep_us * 2);
 
 		ret = i2c_transfer_rollball(i2c, msgs, ARRAY_SIZE(msgs));
 		if (ret)
@@ -328,7 +361,10 @@ static int i2c_rollball_mii_poll(struct mii_bus *bus, int bus_addr, u8 *buf,
 
 		if (*res == ROLLBALL_CMD_DONE)
 			return 0;
-	} while (i-- > 0);
+
+		sleep_us = min_t(unsigned long, sleep_us * 2,
+				 ROLLBALL_POLL_SLEEP_MAX_US);
+	} while (time_before(jiffies, deadline));
 
 	dev_dbg(&bus->dev, "poll timed out\n");
 
@@ -362,7 +398,7 @@ static int i2c_mii_read_rollball(struct mii_bus *bus, int phy_id, int devad,
 				 int reg)
 {
 	u8 buf[4], res[6];
-	int bus_addr, ret;
+	int bus_addr, ret, i;
 	u16 val;
 
 	bus_addr = i2c_mii_phy_addr(phy_id);
@@ -374,12 +410,23 @@ static int i2c_mii_read_rollball(struct mii_bus *bus, int phy_id, int devad,
 	buf[2] = (reg >> 8) & 0xff;
 	buf[3] = reg & 0xff;
 
-	ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_READ, buf,
-				   sizeof(buf));
-	if (ret < 0)
-		return ret;
+	/* Some modules (e.g. OEM SFP-10G-T with a BCM84891) occasionally
+	 * take longer than the polling budget to execute a command. Since
+	 * returning 0xffff for a timed-out read is indistinguishable from
+	 * register data, retry the command a few times first; re-issuing
+	 * the same read is idempotent.
+	 */
+	for (i = 0; i < ROLLBALL_CMD_RETRIES; i++) {
+		ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_READ,
+					   buf, sizeof(buf));
+		if (ret < 0)
+			return ret;
 
-	ret = i2c_rollball_mii_poll(bus, bus_addr, res, sizeof(res));
+		ret = i2c_rollball_mii_poll(bus, bus_addr, res, sizeof(res));
+		if (ret != -ETIMEDOUT)
+			break;
+	}
+
 	if (ret == -ETIMEDOUT)
 		return 0xffff;
 	else if (ret < 0)
@@ -393,7 +440,7 @@ static int i2c_mii_read_rollball(struct mii_bus *bus, int phy_id, int devad,
 static int i2c_mii_write_rollball(struct mii_bus *bus, int phy_id, int devad,
 				  int reg, u16 val)
 {
-	int bus_addr, ret;
+	int bus_addr, ret, i;
 	u8 buf[6];
 
 	bus_addr = i2c_mii_phy_addr(phy_id);
@@ -407,12 +454,17 @@ static int i2c_mii_write_rollball(struct mii_bus *bus, int phy_id, int devad,
 	buf[4] = val >> 8;
 	buf[5] = val & 0xff;
 
-	ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_WRITE, buf,
-				   sizeof(buf));
-	if (ret < 0)
-		return ret;
+	for (i = 0; i < ROLLBALL_CMD_RETRIES; i++) {
+		ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_WRITE,
+					   buf, sizeof(buf));
+		if (ret < 0)
+			return ret;
 
-	ret = i2c_rollball_mii_poll(bus, bus_addr, NULL, 0);
+		ret = i2c_rollball_mii_poll(bus, bus_addr, NULL, 0);
+		if (ret != -ETIMEDOUT)
+			break;
+	}
+
 	if (ret < 0)
 		return ret;
 
