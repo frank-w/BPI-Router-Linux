@@ -1028,6 +1028,7 @@ static int aeon_gen1_probe(struct phy_device *phydev)
 	struct as21xxx_priv *priv;
 	int ret;
 
+	phydev_err(phydev, "%s:%d:%08x",__func__,__LINE__,phydev->phy_id);
 	priv = devm_kzalloc(&phydev->mdio.dev,
 			    sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -1495,6 +1496,7 @@ static int aeon_gen1_match_phy_device(struct phy_device *phydev,
 		return 0;
 
 	phydev->phy_id = phy_id;
+	phydev_err(phydev, "%s:%d:%08x",__func__,__LINE__,phydev->phy_id);
 	aeon_cl45_write(phydev, MDIO_MMD_VEND1, VEND1_PTP_CLK, 0x48);
 
 	return 1;
@@ -1515,6 +1517,8 @@ static int aeon_gen2_match_phy_device(struct phy_device *phydev,
 		return 0;
 
 	phydev->phy_id = phy_id;
+	phydev_err(phydev, "%s:%d:%08x",__func__,__LINE__,phydev->phy_id);
+
 
 	return 1;
 }
