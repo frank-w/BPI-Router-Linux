@@ -21,6 +21,19 @@ struct mdio_relay_data {
 } __packed;
 
 /**
+ * struct mxl862xx_register - Register access parameter to directly read
+ *                            internal registers
+ * @addr: Register address offset for read access
+ * @data: Value read from the register address
+ *
+ * Used for direct register read operations.
+ */
+struct mxl862xx_register {
+	__le16 addr;
+	__le16 data;
+} __packed;
+
+/**
  * struct mxl862xx_register_mod - Register access parameter to directly
  *                                modify internal registers
  * @addr: Register address offset for modification

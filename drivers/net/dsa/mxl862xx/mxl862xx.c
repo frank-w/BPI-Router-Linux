@@ -365,6 +365,7 @@ int mxl862xx_wait_ready(struct dsa_switch *ds)
 	struct mxl862xx_sys_fw_image_version ver = {};
 	unsigned long start = jiffies, timeout;
 	struct mxl862xx_priv *priv = ds->priv;
+	struct mxl862xx_register reg = {};
 	struct mxl862xx_cfg cfg = {};
 	int ret;
 
@@ -376,12 +377,29 @@ int mxl862xx_wait_ready(struct dsa_switch *ds)
 			goto not_ready_yet;
 
 		/* being able to perform CFGGET indicates that
-		 * the firmware is ready
+		 * the firmware is servicing API requests
 		 */
 		ret = MXL862XX_API_READ_QUIET(priv,
 					      MXL862XX_COMMON_CFGGET,
 					      cfg);
 		if (ret)
+			goto not_ready_yet;
+
+		/* The firmware application enables ingress SDMA on all
+		 * ports as the very last step of its boot-time default
+		 * configuration; driver configuration issued before that
+		 * point may be silently overwritten. The reset cleared
+		 * this bit on all ports and the driver has not touched
+		 * any port state yet at this point, so the bit of
+		 * logical port 0 (switch-internal port, never enabled by
+		 * the driver) being set means the firmware boot-time
+		 * configuration has completed.
+		 */
+		reg.addr = cpu_to_le16(MXL862XX_SDMA_PCTRLP(0));
+		ret = MXL862XX_API_READ_QUIET(priv,
+					      MXL862XX_COMMON_REGISTERGET,
+					      reg);
+		if (ret || !(le16_to_cpu(reg.data) & MXL862XX_SDMA_PCTRL_EN))
 			goto not_ready_yet;
 
 		dev_info(ds->dev, "switch ready after %ums, firmware %u.%u.%u (build %u)\n",
