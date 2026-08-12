@@ -1,0 +1,9 @@
+diff a/drivers/net/dsa/mxl862xx/mxl862xx-cmd.h b/drivers/net/dsa/mxl862xx/mxl862xx-cmd.h	(rejected hunks)
+@@ -26,6 +26,7 @@
+ #define SYS_MISC_MAGIC			0x1900
+ #define MXL862XX_XPCS_MAGIC		0x1a00
+ 
++#define MXL862XX_COMMON_REGISTERGET	(MXL862XX_COMMON_MAGIC + 0x1)
+ #define MXL862XX_COMMON_CFGGET		(MXL862XX_COMMON_MAGIC + 0x9)
+ #define MXL862XX_COMMON_CFGSET		(MXL862XX_COMMON_MAGIC + 0xa)
+ #define MXL862XX_COMMON_REGISTERMOD	(MXL862XX_COMMON_MAGIC + 0x11)
