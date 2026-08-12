@@ -3592,17 +3592,6 @@ static void mtk_rss_uninit(struct mtk_eth *eth)
 static netdev_features_t mtk_fix_features(struct net_device *dev,
 					  netdev_features_t features)
 {
-	if (!(features & NETIF_F_LRO)) {
-		struct mtk_mac *mac = netdev_priv(dev);
-		int ip_cnt = mtk_hwlro_get_ip_cnt(mac);
-
-		if (ip_cnt) {
-			netdev_info(dev, "RX flow is programmed, LRO should keep on\n");
-
-			features |= NETIF_F_LRO;
-		}
-	}
-
 	if ((features & NETIF_F_IP_CSUM) &&
 	    non_mtk_uses_dsa(dev))
 		features &= ~NETIF_F_IP_CSUM;
