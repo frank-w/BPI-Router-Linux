@@ -900,6 +900,22 @@ static int as21xxx_led_polarity_set(struct phy_device *phydev, int index,
 			      mask, val);
 }
 
+static int as21xxx_match_read_mmd(struct phy_device *phydev, int devad,
+				  u16 regnum)
+{
+	struct mii_bus *bus = phydev->mdio.bus;
+	int val;
+
+	/* The first C45 response belongs to the preceding transaction. */
+	__mdiobus_c45_read(bus, phydev->mdio.addr, devad, regnum);
+	__mdiobus_write(bus, 0x0, MII_BMSR, 0x1);
+
+	val = __mdiobus_c45_read(bus, phydev->mdio.addr, devad, regnum);
+	__mdiobus_write(bus, 0x0, MII_BMSR, 0x1);
+
+	return val;
+}
+
 static int as21xxx_match_phy_device(struct phy_device *phydev,
 				    const struct phy_driver *phydrv)
 {
@@ -914,12 +930,12 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 		return genphy_match_phy_device(phydev, phydrv);
 
 	/* Read PHY ID to handle firmware loaded or HW reset */
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
+	ret = as21xxx_match_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
 	if (ret < 0)
 		return ret;
 	phy_id = ret << 16;
 
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
+	ret = as21xxx_match_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
 	if (ret < 0)
 		return ret;
 	phy_id |= ret;
