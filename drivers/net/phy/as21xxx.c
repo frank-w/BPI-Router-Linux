@@ -916,6 +916,26 @@ static int as21xxx_match_read_mmd(struct phy_device *phydev, int devad,
 	return val;
 }
 
+static int as21xxx_match_refresh_pcs_id(struct phy_device *phydev)
+{
+	u32 phy_id;
+	int ret;
+
+	ret = as21xxx_match_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
+	if (ret < 0)
+		return ret;
+	phy_id = ret << 16;
+
+	ret = as21xxx_match_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
+	if (ret < 0)
+		return ret;
+	phy_id |= ret;
+
+	phydev->c45_ids.device_ids[MDIO_MMD_PCS] = phy_id;
+
+	return 0;
+}
+
 static int as21xxx_match_phy_device(struct phy_device *phydev,
 				    const struct phy_driver *phydrv)
 {
@@ -923,6 +943,12 @@ static int as21xxx_match_phy_device(struct phy_device *phydev,
 	u16 ret_sts;
 	u32 phy_id;
 	int ret;
+
+	if (phydev->c45_ids.device_ids[MDIO_MMD_PCS] == 0xffffffff) {
+		ret = as21xxx_match_refresh_pcs_id(phydev);
+		if (ret < 0)
+			return ret;
+	}
 
 	/* Skip PHY that are not AS21xxx */
 	if (!phy_id_compare_vendor(phydev->c45_ids.device_ids[MDIO_MMD_PCS],
