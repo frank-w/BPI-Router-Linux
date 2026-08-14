@@ -21,6 +21,7 @@
 #include "mxl862xx.h"
 #include "mxl862xx-api.h"
 #include "mxl862xx-cmd.h"
+#include "mxl862xx-fw.h"
 #include "mxl862xx-host.h"
 #include "mxl862xx-phylink.h"
 
@@ -70,6 +71,13 @@ static const struct ethtool_rmon_hist_range mxl862xx_rmon_ranges[] = {
 
 #define MXL862XX_READY_TIMEOUT_MS	10000
 #define MXL862XX_READY_POLL_MS		100
+
+/* Chip ID registers, read via SYS_MISC_REG_RD */
+#define MXL862XX_CHIPID_L		0xc0d28884
+#define MXL862XX_CHIPID_M		0xc0d28888
+#define MXL862XX_CHIPID_L_PNUML		GENMASK(15, 12)
+#define MXL862XX_CHIPID_M_PNUMM		GENMASK(11, 0)
+#define MXL862XX_CHIPID_M_VERSION	GENMASK(14, 12)
 
 #define MXL862XX_TCM_INST_SEL		0xe00
 #define MXL862XX_TCM_CBS		0xe12
@@ -222,7 +230,45 @@ static int mxl862xx_phy_write_c45_mii_bus(struct mii_bus *bus, int addr,
 	return mxl862xx_phy_write_mmd(bus->priv, addr, devadd, regnum, val);
 }
 
-static int mxl862xx_wait_ready(struct dsa_switch *ds)
+/* The CHIP ID registers are only readable through the firmware mailbox, so
+ * the values are cached here and stay zero while no firmware answers.
+ */
+static int mxl862xx_read_chip_id(struct mxl862xx_priv *priv)
+{
+	struct mxl862xx_sys_reg_rw reg = {};
+	u16 chipid_l, chipid_m;
+	int ret;
+
+	reg.addr = cpu_to_le32(MXL862XX_CHIPID_L);
+	ret = MXL862XX_API_READ(priv, SYS_MISC_REG_RD, reg);
+	if (ret)
+		return ret;
+	chipid_l = le32_to_cpu(reg.val);
+
+	reg.addr = cpu_to_le32(MXL862XX_CHIPID_M);
+	ret = MXL862XX_API_READ(priv, SYS_MISC_REG_RD, reg);
+	if (ret)
+		return ret;
+	chipid_m = le32_to_cpu(reg.val);
+
+	priv->asic_id = FIELD_GET(MXL862XX_CHIPID_L_PNUML, chipid_l) |
+			FIELD_GET(MXL862XX_CHIPID_M_PNUMM, chipid_m) << 4;
+	priv->asic_rev = FIELD_GET(MXL862XX_CHIPID_M_VERSION, chipid_m);
+
+	return 0;
+}
+
+/**
+ * mxl862xx_wait_ready - wait for the switch firmware to become operational
+ * @ds: DSA switch instance
+ *
+ * Poll the firmware until it reports its version and accepts
+ * configuration commands, then cache the firmware version and chip ID.
+ * Takes at least two seconds.
+ *
+ * Return: 0 on success or a negative error code.
+ */
+int mxl862xx_wait_ready(struct dsa_switch *ds)
 {
 	struct mxl862xx_sys_fw_image_version ver = {};
 	unsigned long start = jiffies, timeout;
@@ -254,6 +300,11 @@ static int mxl862xx_wait_ready(struct dsa_switch *ds)
 		priv->fw_version.major = ver.iv_major;
 		priv->fw_version.minor = ver.iv_minor;
 		priv->fw_version.revision = le16_to_cpu(ver.iv_revision);
+
+		ret = mxl862xx_read_chip_id(priv);
+		if (ret)
+			dev_warn(ds->dev, "failed to read chip ID: %pe\n",
+				 ERR_PTR(ret));
 		return 0;
 
 not_ready_yet:
@@ -1547,6 +1598,13 @@ static int mxl862xx_port_mdb_add(struct dsa_switch *ds, int port,
 	qparam.tci = cpu_to_le16(FIELD_PREP(MXL862XX_TCI_VLAN_ID, mdb->vid));
 
 	ret = MXL862XX_API_READ(priv, MXL862XX_MAC_TABLEENTRYQUERY, qparam);
+	/* A flash blocks the API (-EBUSY) and its teardown drops the MAC
+	 * table (-ENODEV); there is then nothing to program, and the reprobe
+	 * rebuilds the configuration. See mxl862xx_port_mdb_del().
+	 */
+	if ((ret == -EBUSY && priv->block_host) ||
+	    (ret == -ENODEV && priv->skip_teardown))
+		return 0;
 	if (ret)
 		return ret;
 
@@ -1584,6 +1642,13 @@ static int mxl862xx_port_mdb_del(struct dsa_switch *ds, int port,
 	ether_addr_copy(qparam.mac, mdb->addr);
 
 	ret = MXL862XX_API_READ(priv, MXL862XX_MAC_TABLEENTRYQUERY, qparam);
+	/* A flash blocks the API (-EBUSY) and its teardown drops the MAC
+	 * table (-ENODEV); a delete then has nothing to do. Outside these,
+	 * both are bus errors and must be reported.
+	 */
+	if ((ret == -EBUSY && priv->block_host) ||
+	    (ret == -ENODEV && priv->skip_teardown))
+		return 0;
 	if (ret)
 		return ret;
 
@@ -2097,6 +2162,8 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
 	.get_pause_stats = mxl862xx_get_pause_stats,
 	.get_rmon_stats = mxl862xx_get_rmon_stats,
 	.get_stats64 = mxl862xx_get_stats64,
+	.devlink_info_get = mxl862xx_devlink_info_get,
+	.devlink_flash_update = mxl862xx_devlink_flash_update,
 };
 
 static int mxl862xx_probe(struct mdio_device *mdiodev)
@@ -2161,6 +2228,12 @@ static void mxl862xx_remove(struct mdio_device *mdiodev)
 
 	priv = ds->priv;
 
+	/* Wait out a flash in flight and bar a new one before the DSA core
+	 * frees the user netdevs; the devlink instance lock does not cover
+	 * that free, which dsa_unregister_switch() reaches first.
+	 */
+	mxl862xx_flash_shutdown(ds);
+
 	set_bit(MXL862XX_FLAG_WORK_STOPPED, &priv->flags);
 
 	dsa_unregister_switch(ds);
@@ -2186,6 +2259,8 @@ static void mxl862xx_shutdown(struct mdio_device *mdiodev)
 		return;
 
 	priv = ds->priv;
+
+	mxl862xx_flash_shutdown(ds);
 
 	dsa_switch_shutdown(ds);
 
