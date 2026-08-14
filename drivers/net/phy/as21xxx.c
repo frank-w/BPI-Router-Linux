@@ -900,29 +900,111 @@ static int as21xxx_led_polarity_set(struct phy_device *phydev, int index,
 			      mask, val);
 }
 
+/* phydev->drv is not assigned while match_phy_device() is running, so
+ * phy_read_mmd() cannot dispatch to the AS21xxx read workaround.
+ */
+static int as21xxx_read_mmd(struct phy_device *phydev, int devad,
+			    u16 regnum);
+
+static int as21xxx_match_refresh_pcs_id(struct phy_device *phydev)
+{
+	u32 phy_id;
+	int ret;
+
+	phy_lock_mdio_bus(phydev);
+
+	ret = as21xxx_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
+	if (ret < 0)
+		goto out_unlock;
+	phy_id = ret << 16;
+
+	ret = as21xxx_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
+	if (ret < 0)
+		goto out_unlock;
+	phy_id |= ret;
+
+	phydev->c45_ids.device_ids[MDIO_MMD_PCS] = phy_id;
+
+	ret = 0;
+out_unlock:
+	phy_unlock_mdio_bus(phydev);
+	return ret;
+}
+
 static int as21xxx_match_phy_device(struct phy_device *phydev,
 				    const struct phy_driver *phydrv)
 {
 	struct as21xxx_priv *priv;
 	u16 ret_sts;
+	const char *fw_name;
 	u32 phy_id;
+	u32 shifted_phy_id;
 	int ret;
+
+	if (!phy_id_compare_vendor(
+			phydev->c45_ids.device_ids[MDIO_MMD_PCS],
+			PHY_VENDOR_AEONSEMI) &&
+	    !of_property_read_string(phydev->mdio.dev.of_node, "firmware-name",
+				     &fw_name)) {
+		ret = as21xxx_match_refresh_pcs_id(phydev);
+		if (ret < 0)
+			return ret;
+
+		if (phy_id_compare_vendor(
+				phydev->c45_ids.device_ids[MDIO_MMD_PCS],
+				PHY_VENDOR_AEONSEMI))
+			phydev_info(phydev,
+				    "Aeonsemi recovery: stale cached PCS ID refreshed to %08x\n",
+				    phydev->c45_ids.device_ids[MDIO_MMD_PCS]);
+	}
 
 	/* Skip PHY that are not AS21xxx */
 	if (!phy_id_compare_vendor(phydev->c45_ids.device_ids[MDIO_MMD_PCS],
-				   PHY_VENDOR_AEONSEMI))
-		return genphy_match_phy_device(phydev, phydrv);
+				   PHY_VENDOR_AEONSEMI)) {
+		shifted_phy_id =
+			phydev->c45_ids.device_ids[MDIO_MMD_PMAPMD] << 16 |
+			phydev->c45_ids.device_ids[MDIO_MMD_PCS] >> 16;
+
+		if (!phy_id_compare_vendor(shifted_phy_id,
+					   PHY_VENDOR_AEONSEMI))
+			return genphy_match_phy_device(phydev, phydrv);
+
+		phydev_warn(phydev,
+			    "Aeonsemi recovery: shifted C45 PHY ID %08x, refreshing PCS ID\n",
+			    shifted_phy_id);
+
+		ret = as21xxx_match_refresh_pcs_id(phydev);
+		if (ret < 0)
+			return ret;
+
+		if (!phy_id_compare_vendor(
+				phydev->c45_ids.device_ids[MDIO_MMD_PCS],
+				PHY_VENDOR_AEONSEMI))
+			return genphy_match_phy_device(phydev, phydrv);
+
+		phydev_info(phydev,
+			    "Aeonsemi recovery: shifted C45 ID refreshed to %08x\n",
+			    phydev->c45_ids.device_ids[MDIO_MMD_PCS]);
+	}
 
 	/* Read PHY ID to handle firmware loaded or HW reset */
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
-	if (ret < 0)
+	phy_lock_mdio_bus(phydev);
+
+	ret = as21xxx_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
+	if (ret < 0) {
+		phy_unlock_mdio_bus(phydev);
 		return ret;
+	}
 	phy_id = ret << 16;
 
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
-	if (ret < 0)
+	ret = as21xxx_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
+	if (ret < 0) {
+		phy_unlock_mdio_bus(phydev);
 		return ret;
+	}
 	phy_id |= ret;
+
+	phy_unlock_mdio_bus(phydev);
 
 	/* With PHY ID not the generic AS21xxx one assume
 	 * the firmware just loaded
