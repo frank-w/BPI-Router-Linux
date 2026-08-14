@@ -12,9 +12,11 @@
 #include <linux/crc16.h>
 #include <linux/iopoll.h>
 #include <linux/limits.h>
+#include <linux/sched.h>
 #include <linux/unaligned.h>
 #include <net/dsa.h>
 #include "mxl862xx.h"
+#include "mxl862xx-cmd.h"
 #include "mxl862xx-host.h"
 
 #define CTRL_BUSY_MASK			BIT(15)
@@ -339,6 +341,24 @@ int mxl862xx_api_wrap(struct mxl862xx_priv *priv, u16 cmd, void *_data,
 	dev_dbg(&priv->mdiodev->dev, "CMD %04x DATA %*ph\n", cmd, size, data);
 
 	mutex_lock_nested(&priv->mdiodev->bus->mdio_lock, MDIO_MUTEX_NESTED);
+
+	if (priv->skip_teardown) {
+		ret = read ? -ENODEV : 0;
+		goto out;
+	}
+
+	/* During the post-flash readiness poll block_host stays set, but the
+	 * flash path's own firmware version reads must reach the new image;
+	 * host writes stay blocked so stale resource IDs cannot corrupt it.
+	 * A blocked write reports success: the reprobe discards the switch
+	 * configuration anyway, and a bridge tearing down over a flash must
+	 * not see port_vlan_del() fail, which leaks its VLAN group.
+	 */
+	if (priv->block_host && cmd != SYS_MISC_FW_UPDATE &&
+	    !(read && priv->flash_owner == current)) {
+		ret = read ? -EBUSY : 0;
+		goto out;
+	}
 
 	max = (size + 1) / 2;
 
