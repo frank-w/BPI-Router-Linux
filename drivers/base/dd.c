@@ -1436,3 +1436,118 @@ void driver_detach(const struct device_driver *drv)
 		put_device(dev);
 	}
 }
+
+struct device_reprobe {
+	struct delayed_work work;
+	const struct device_driver *drv;
+	const char *drv_name;
+	struct device *dev;
+};
+
+static void device_reprobe_work_fn(struct work_struct *work)
+{
+	struct device_reprobe *rp = container_of(work, struct device_reprobe,
+						 work.work);
+	struct device *dev = rp->dev;
+	bool detached = false;
+	int ret;
+
+	device_lock(dev);
+	/*
+	 * rp->drv is only compared, never dereferenced: the driver it points
+	 * to may have been unregistered and freed. The saved name rejects a
+	 * freed address the allocator has since handed to another driver.
+	 */
+	if (!defer_all_probes && !dev->p->dead && dev->driver == rp->drv &&
+	    !strcmp(dev->driver->name, rp->drv_name)) {
+		__device_release_driver(dev, NULL);
+		detached = true;
+	}
+	device_unlock(dev);
+
+	if (detached) {
+		ret = device_attach(dev);
+		if (ret < 0 && ret != -EPROBE_DEFER)
+			dev_err_probe(dev, ret,
+				      "re-probe failed, device left unbound\n");
+	}
+
+	put_device(dev);
+	kfree(rp->drv_name);
+	kfree(rp);
+}
+
+/**
+ * device_schedule_reprobe - schedule a deferred detach and re-probe
+ * @dev: device to detach and re-probe
+ * @delay_ms: delay in milliseconds before the re-probe runs
+ *
+ * Schedule a detach and re-probe of @dev after @delay_ms milliseconds,
+ * from built-in driver-core work rather than a driver-owned work item,
+ * so the bound driver may call it without pinning its own module. The
+ * binding is recorded as the driver pointer plus a copy of its name; the
+ * pointer is only ever compared, never dereferenced, and the name copy
+ * guards against a freed &struct device_driver address the allocator
+ * later hands to a different driver.
+ *
+ * The re-probe is skipped when the work runs if @dev has since been
+ * removed, is no longer bound, is bound to a different driver, or probing
+ * has been blocked for a system shutdown. The work is freezable, so one
+ * pending across system suspend runs once the system has resumed. A
+ * failed re-probe leaves @dev unbound, as a failed initial probe would.
+ *
+ * This is device_reprobe() deferred, and shares its limitations;
+ * __device_release_driver() is unchanged. The detach and the re-attach
+ * are not one locked operation, so an administrative unbind arriving
+ * between them may be undone, and the attach half runs the normal probe
+ * path with no shutdown re-check of its own. If @dev has managed
+ * consumers, detaching it unbinds them as any driver release does, so a
+ * re-probe a concurrent device_shutdown() overtakes may run ->remove()
+ * in place of ->shutdown(). None of this is specific to this helper.
+ *
+ * Buses that take the parent lock to bind (only usb_bus_type) are refused
+ * with -EINVAL: the parent would have to be recorded before either lock
+ * is held, where device_move() can replace it.
+ *
+ * Context: May sleep (allocates with %GFP_KERNEL). May be called from any
+ * process context, @dev's own device lock held included, but not from
+ * @dev's ->probe(), which the scheduled work would detach.
+ *
+ * Returns: 0 on success, -EINVAL if @dev is not a registered device
+ * bound to a driver or sits on a bus which takes the parent lock to
+ * bind, -ENOMEM on allocation failure.
+ */
+int device_schedule_reprobe(struct device *dev, unsigned int delay_ms)
+{
+	const struct device_driver *drv;
+	struct device_reprobe *rp;
+
+	drv = READ_ONCE(dev->driver);
+	/*
+	 * A bus taking the parent lock would need @dev's parent pinned until
+	 * the work runs, which device_move() can invalidate.
+	 */
+	if (!drv || !dev->bus || dev->bus->need_parent_lock || !dev->p ||
+	    dev->p->dead || !device_is_registered(dev))
+		return -EINVAL;
+
+	rp = kzalloc_obj(*rp);
+	if (!rp)
+		return -ENOMEM;
+
+	rp->drv_name = kstrdup(drv->name, GFP_KERNEL);
+	if (!rp->drv_name) {
+		kfree(rp);
+		return -ENOMEM;
+	}
+
+	rp->dev = get_device(dev);
+	rp->drv = drv;
+
+	INIT_DELAYED_WORK(&rp->work, device_reprobe_work_fn);
+	queue_delayed_work(system_freezable_wq, &rp->work,
+			   msecs_to_jiffies(delay_ms));
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(device_schedule_reprobe);
