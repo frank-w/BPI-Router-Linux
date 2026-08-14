@@ -47,7 +47,12 @@ void mxl862xx_phylink_get_caps(struct dsa_switch *ds, int port,
 		fallthrough;
 	case 10 ... 12:
 	case 14 ... 16:
-		if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 84))
+		/* Rescue mode has no firmware version, so bypass the gate and
+		 * advertise the full set; a CPU port on a quad sub-interface
+		 * would otherwise get an empty mask and fail phylink_create().
+		 */
+		if (!READ_ONCE(priv->rescue_mode) &&
+		    !MXL862XX_FW_VER_MIN(priv, 1, 0, 84))
 			break;
 		__set_bit(PHY_INTERFACE_MODE_QSGMII, config->supported_interfaces);
 		__set_bit(PHY_INTERFACE_MODE_10G_QXGMII, config->supported_interfaces);
@@ -406,6 +411,8 @@ mxl862xx_phylink_mac_select_pcs(struct phylink_config *config,
 
 	switch (port) {
 	case 9 ... 16:
+		if (READ_ONCE(priv->rescue_mode))
+			return NULL;
 		if (!MXL862XX_FW_VER_MIN(priv, 1, 0, 84)) {
 			dev_warn_once(dp->ds->dev,
 				      "SerDes PCS unsupported on old firmware.\n");
