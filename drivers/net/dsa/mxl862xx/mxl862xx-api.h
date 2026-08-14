@@ -1225,6 +1225,16 @@ struct mxl862xx_sys_fw_image_version {
 } __packed;
 
 /**
+ * struct mxl862xx_sys_reg_rw - System register read/write
+ * @addr: 32-bit register address
+ * @val: register value
+ */
+struct mxl862xx_sys_reg_rw {
+	__le32 addr;
+	__le32 val;
+} __packed;
+
+/**
  * enum mxl862xx_port_type - Port Type
  * @MXL862XX_LOGICAL_PORT: Logical Port
  * @MXL862XX_PHYSICAL_PORT: Physical Port

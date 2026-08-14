@@ -303,6 +303,10 @@ struct mxl862xx_fw_version {
  *                      flooding)
  * @fw_version:         cached firmware version, populated at probe and
  *                      compared with MXL862XX_FW_VER_MIN()
+ * @asic_id:            chip part number read from the CHIP ID registers,
+ *                      reported as the devlink "asic.id" fixed version
+ * @asic_rev:           chip version read from the CHIP ID registers,
+ *                      reported as the devlink "asic.rev" fixed version
  * @serdes_ports:       SerDes interfaces incl. sub-interfaces in case of
  *                      10G_QXGMII or QSGMII
  * @serdes_refcount:    per-XPCS count of sub-ports enabled by phylink;
@@ -319,6 +323,19 @@ struct mxl862xx_fw_version {
  * @evlan_ingress_size: per-port ingress Extended VLAN block size
  * @evlan_egress_size:  per-port egress Extended VLAN block size
  * @vf_block_size:      per-port VLAN Filter block size
+ * @block_host:         during a firmware flash, a host firmware read fails
+ *                      with -EBUSY and a write reports success without
+ *                      touching the bus, so a teardown racing the flash
+ *                      does not fail; FW_UPDATE and the flash owner's own
+ *                      reads still reach the bus
+ * @flash_owner:        task running the post-flash readiness poll; only its
+ *                      own firmware reads pass block_host
+ * @skip_teardown:      during the post-flash reprobe teardown, a host
+ *                      firmware read fails with -ENODEV and a write reports
+ *                      success without touching the bus
+ * @shutting_down:      set under the devlink instance lock once ->shutdown()
+ *                      or .remove() has begun, so no flash starts while the
+ *                      switch is going away
  * @stats_work:         periodic work item that polls RMON hardware counters
  *                      and accumulates them into 64-bit per-port stats
  */
@@ -329,6 +346,8 @@ struct mxl862xx_priv {
 	unsigned long flags;
 	u16 drop_meter;
 	struct mxl862xx_fw_version fw_version;
+	u16 asic_id;
+	u8 asic_rev;
 	struct mxl862xx_pcs serdes_ports[8];
 	int serdes_refcount[2];
 	struct mutex serdes_lock;
@@ -337,7 +356,13 @@ struct mxl862xx_priv {
 	u16 evlan_ingress_size;
 	u16 evlan_egress_size;
 	u16 vf_block_size;
+	struct task_struct *flash_owner;
+	bool block_host;
+	bool skip_teardown;
+	bool shutting_down;
 	struct delayed_work stats_work;
 };
+
+int mxl862xx_wait_ready(struct dsa_switch *ds);
 
 #endif /* __MXL862XX_H */
