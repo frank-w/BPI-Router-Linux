@@ -15,7 +15,7 @@
 	compatible = "bananapi,bpi-r4-pro", "mediatek,mt7988a";
 };
 
-&{/soc/ethernet@15100000/mdio-bus/switch@10/ports} {
+&{/soc/ethernet@15100000/mdio-bus/switch@16/ports} {
 	//we need to set address/size-cells to avoid warning
 	// Warning (reg_format): /fragment@0/__overlay__/port@13:reg: property has invalid length (4 bytes) (#address-cells == 2, #size-cells == 1)
 	#address-cells = <1>;
