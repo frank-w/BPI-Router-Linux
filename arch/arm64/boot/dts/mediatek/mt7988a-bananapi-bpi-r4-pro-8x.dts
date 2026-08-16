@@ -36,18 +36,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			phy24_led0: led0@0 {
+			led@0 {
 				reg = <0>;
 				linux,default-trigger = "netdev";
+				color = <LED_COLOR_ID_GREEN>;
+				function = LED_FUNCTION_LAN;
 				active-high;
-				status = "okay";
 			};
 
-			phy24_led1: led1@1 {
+			led@1 {
 				reg = <1>;
 				linux,default-trigger = "netdev";
+				color = <LED_COLOR_ID_YELLOW>;
+				function = LED_FUNCTION_LAN;
 				active-high;
-				status = "okay";
 			};
 		};
 	};
@@ -65,18 +67,20 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			phy28_led0: led0@0 {
+			led@0 {
 				reg = <0>;
 				linux,default-trigger = "netdev";
+				color = <LED_COLOR_ID_GREEN>;
+				function = LED_FUNCTION_WAN;
 				active-high;
-				status = "okay";
 			};
 
-			phy28_led1: led1@1 {
+			led@1 {
 				reg = <1>;
 				linux,default-trigger = "netdev";
+				color = <LED_COLOR_ID_YELLOW>;
+				function = LED_FUNCTION_WAN;
 				active-high;
-				status = "okay";
 			};
 		};
 	};
