@@ -147,14 +147,14 @@
 	};
 
 	ports {
-		port13: port@13 {
+		port@13 {
 			reg = <13>;
 			label = "lan6";
-			phy-mode = "10gbase-r";
-			phy-connection-type = "10gbase-r";
+			managed = "in-band-status";
 			phy-handle = <&phy24>;
+			phy-mode = "usxgmii";
+			phy-connection-type = "usxgmii";
 			status = "okay";
 		};
-
 	};
 };*/
