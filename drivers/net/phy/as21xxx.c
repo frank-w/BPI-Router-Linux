@@ -640,8 +640,53 @@ static int as21xxx_probe(struct phy_device *phydev)
 	return 0;
 }
 
+static int as21xxx_led_set_event(struct phy_device *phydev, u8 index,
+				 enum as21xxx_led_event event)
+{
+	return phy_modify_mmd(phydev, MDIO_MMD_VEND1,
+			      VEND1_LED_REG(index),
+			      VEND1_LED_REG_A_EVENT,
+			      FIELD_PREP(VEND1_LED_REG_A_EVENT, event));
+}
+
+#define AS21XXX_LED_BLINK_RATE_15_6HZ	0x1
+
+/* Default LED setup:
+ *   LED0  On: link detected, blink: Rx/Tx activity
+ *   LED1  On: any link detected
+ *
+ * The firmware leaves the LED event registers unconfigured and registering
+ * the DT LED class devices drives them to EVENT_OFF, so program the defaults
+ * here. config_init() runs after of_phy_leds(), and userspace or the netdev
+ * trigger can still override them later.
+ */
+static int as21xxx_led_config_default(struct phy_device *phydev)
+{
+	int ret;
+
+	ret = phy_modify_mmd(phydev, MDIO_MMD_VEND1, VEND1_LED_CONF,
+			     VEND1_LED_CONFG_BLINK,
+			     FIELD_PREP(VEND1_LED_CONFG_BLINK,
+					AS21XXX_LED_BLINK_RATE_15_6HZ));
+	if (ret)
+		return ret;
+
+	ret = as21xxx_led_set_event(phydev, 0,
+				    VEND1_LED_REG_A_EVENT_ON_LINK_BLINK_ACT);
+	if (ret)
+		return ret;
+
+	return as21xxx_led_set_event(phydev, 1, VEND1_LED_REG_A_EVENT_ON_LINK);
+}
+
 static int as21xxx_config_init(struct phy_device *phydev)
 {
+	int ret;
+
+	ret = as21xxx_led_config_default(phydev);
+	if (ret)
+		return ret;
+
 	if (phydev->interface == PHY_INTERFACE_MODE_USXGMII)
 		return aeon_dpc_ra_enable(phydev);
 
@@ -1159,6 +1204,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.name		= "Aeonsemi AS21210PB1",
 		.probe		= as21xxx_probe,
 		.match_phy_device = as21xxx_match_phy_device,
+		.config_init	= as21xxx_config_init,
 		.read_status	= as21xxx_read_status,
 		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
@@ -1173,6 +1219,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.name		= "Aeonsemi AS21510JB1",
 		.probe		= as21xxx_probe,
 		.match_phy_device = as21xxx_match_phy_device,
+		.config_init	= as21xxx_config_init,
 		.read_status	= as21xxx_read_status,
 		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
@@ -1187,6 +1234,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.name		= "Aeonsemi AS21510PB1",
 		.probe		= as21xxx_probe,
 		.match_phy_device = as21xxx_match_phy_device,
+		.config_init	= as21xxx_config_init,
 		.read_status	= as21xxx_read_status,
 		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
@@ -1201,6 +1249,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.name		= "Aeonsemi AS21511JB1",
 		.probe		= as21xxx_probe,
 		.match_phy_device = as21xxx_match_phy_device,
+		.config_init	= as21xxx_config_init,
 		.read_status	= as21xxx_read_status,
 		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
@@ -1215,6 +1264,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.name		= "Aeonsemi AS21210JB1",
 		.probe		= as21xxx_probe,
 		.match_phy_device = as21xxx_match_phy_device,
+		.config_init	= as21xxx_config_init,
 		.read_status	= as21xxx_read_status,
 		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
@@ -1229,6 +1279,7 @@ static struct phy_driver as21xxx_drivers[] = {
 		.name		= "Aeonsemi AS21511PB1",
 		.probe		= as21xxx_probe,
 		.match_phy_device = as21xxx_match_phy_device,
+		.config_init	= as21xxx_config_init,
 		.read_status	= as21xxx_read_status,
 		.read_mmd	= as21xxx_read_mmd,
 		.led_brightness_set = as21xxx_led_brightness_set,
