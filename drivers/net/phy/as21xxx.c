@@ -1015,10 +1015,13 @@ static int as21xxx_read_mmd(struct phy_device *phydev, int devad,
 	struct mii_bus *bus = phydev->mdio.bus;
 	int val;
 
-	val = __mdiobus_c45_read(bus, phydev->mdio.addr, devad,
-				 regnum);
+	/* The first C45 response belongs to the preceding transaction. */
+	__mdiobus_c45_read(bus, phydev->mdio.addr, devad, regnum);
 
-	/* FIXME: verify if it's actually ok to limit this to MII_BMSR */
+	__mdiobus_write(bus, 0x0, MII_BMSR, 0x1);
+
+	val = __mdiobus_c45_read(bus, phydev->mdio.addr, devad, regnum);
+
 	__mdiobus_write(bus, 0x0, MII_BMSR, 0x1);
 
 	return val;
