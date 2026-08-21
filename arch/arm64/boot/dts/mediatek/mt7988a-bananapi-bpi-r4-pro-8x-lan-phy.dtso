@@ -23,8 +23,9 @@
 	port@13 {
 		reg = <13>;
 		label = "lan6";
-		phy-mode = "10gbase-r";
-		phy-connection-type = "10gbase-r";
+		phy-mode = "usxgmii";
+		phy-connection-type = "usxgmii";
+		managed = "in-band-status"; //needed for usxgmii
 		phy-handle = <&phy24>;
 		status = "okay";
 	};
