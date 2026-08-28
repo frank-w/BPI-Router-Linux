@@ -603,6 +603,7 @@ static int aeon_dpc_ra_enable(struct phy_device *phydev)
 static int as21xxx_probe(struct phy_device *phydev)
 {
 	struct as21xxx_priv *priv;
+	u16 ret_sts;
 	int ret;
 
 	priv = devm_kzalloc(&phydev->mdio.dev,
@@ -624,6 +625,28 @@ static int as21xxx_probe(struct phy_device *phydev)
 	phydev->c45_ids.devices_in_package &= ~BIT(0);
 
 	ret = aeon_ipc_sync_parity(phydev, priv);
+	if (ret == -ETIMEDOUT) {
+		phydev_warn(phydev,
+			    "Aeonsemi recovery: IPC unresponsive, resetting PHY\n");
+
+		phy_device_reset(phydev, 1);
+		phy_device_reset(phydev, 0);
+
+		ret = aeon_firmware_load(phydev);
+		if (ret)
+			return ret;
+
+		priv->parity_status = false;
+		ret = aeon_ipc_sync_parity(phydev, priv);
+		if (ret)
+			return ret;
+
+		/* Wait for the freshly loaded firmware to become ready. */
+		ret = aeon_ipc_noop(phydev, priv, &ret_sts);
+		if (!ret)
+			phydev_info(phydev,
+				    "Aeonsemi recovery: IPC reset and firmware reload succeeded\n");
+	}
 	if (ret)
 		return ret;
 
