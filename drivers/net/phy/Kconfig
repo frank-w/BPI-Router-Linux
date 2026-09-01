@@ -80,6 +80,7 @@ comment "MII PHY device drivers"
 
 config AS21XXX_PHY
 	tristate "Aeonsemi AS21xxx PHYs"
+	depends on HWMON || HWMON=n
 	help
 	  Currently supports the Aeonsemi AS21xxx PHY.
 
