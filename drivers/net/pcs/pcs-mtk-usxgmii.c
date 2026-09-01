@@ -415,6 +415,7 @@ static const struct phylink_pcs_ops mtk_usxgmii_pcs_ops = {
 
 static int mtk_usxgmii_probe(struct platform_device *pdev)
 {
+	struct fwnode_pcs_provider *pcs_provider;
 	struct device *dev = &pdev->dev;
 	struct mtk_usxgmii_pcs *mpcs;
 
@@ -453,21 +454,12 @@ static int mtk_usxgmii_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, mpcs);
 
-	return fwnode_pcs_add_provider(dev_fwnode(dev), fwnode_pcs_simple_get, &mpcs->pcs);
+	pcs_provider = devm_fwnode_pcs_add_provider(dev, dev_fwnode(dev), fwnode_pcs_simple_xlate, &mpcs->pcs);
+	if (IS_ERR(pcs_provider))
+		return PTR_ERR(pcs_provider);
+
+	return 0;
 }
-
-static void mtk_usxgmii_remove(struct platform_device *pdev)
-{
-	struct mtk_usxgmii_pcs *mpcs = platform_get_drvdata(pdev);
-
-	fwnode_pcs_del_provider(dev_fwnode(&pdev->dev));
-
-	rtnl_lock();
-	phylink_release_pcs(&mpcs->pcs);
-	rtnl_unlock();
-
-	fwnode_handle_put(mpcs->fwnode);
-};
 
 static const struct of_device_id mtk_usxgmii_of_mtable[] = {
 	{ .compatible = "mediatek,mt7988-usxgmiisys" },
@@ -481,7 +473,6 @@ static struct platform_driver mtk_usxgmii_driver = {
 		.of_match_table		= mtk_usxgmii_of_mtable,
 	},
 	.probe = mtk_usxgmii_probe,
-	.remove = mtk_usxgmii_remove,
 };
 module_platform_driver(mtk_usxgmii_driver);
 
