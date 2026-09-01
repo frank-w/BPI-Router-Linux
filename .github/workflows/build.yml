@@ -1,0 +1,148 @@
+name: Build
+
+on:
+  push:
+    branches:
+    - '*-main'
+    - '*-ci'
+    - '*-rc'
+    paths-ignore:
+    - README*
+    - .github/workflows/*.yml
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [bpi-r2, bpi-r64, bpi-r2pro, bpi-r3, bpi-r4]
+
+    steps:
+      - name: Setup env
+        run: |
+          echo "UBUNTU_MAJOR_VERSION=$(cat /etc/issue | head -1|sed -e 's/^Ubuntu \([0-9]\+\).*$/\1/')" >> $GITHUB_ENV
+          echo $UBUNTU_MAJOR_VERSION
+
+      - name: Checkout (shallow)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache/${{ matrix.board }}
+          key: ccache-${{ github.ref_name }}-${{ matrix.board }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ github.ref_name }}-${{ matrix.board }}-
+
+      - name: update apt-repos (u24)
+        if: env.UBUNTU_MAJOR_VERSION == '24'
+        run: |
+          sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ports.sources
+          sudo sed -i.bak -e 's/^\(Suites:.*\)$/\1\nArchitectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources
+          sudo sed -i.bak -e 's/^URIs:.*$/URIs: http:\/\/ports.ubuntu.com\/ubuntu-ports\//' /etc/apt/sources.list.d/ports.sources
+          sudo sed -i -e 's/^\(Suites:.*\)$/\1\nArchitectures: armhf arm64/' /etc/apt/sources.list.d/ports.sources
+          cat /etc/apt/sources.list.d/ports.sources
+
+          sudo apt-get update
+
+      - name: Install depencies
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo dpkg --add-architecture arm64
+          sudo apt update
+          sudo apt install ccache libssl-dev:armhf libssl-dev:arm64 build-essential u-boot-tools python3-mako debhelper fakeroot gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu make device-tree-compiler libncurses5-dev libelf-dev libdw-dev
+
+      - name: Configure board to ${{ matrix.board }}
+        run: |
+          sed -ri 's/^#(board=${{ matrix.board }})$/\1/' build.conf #change board to ${{ matrix.board }}
+
+      - name: Run build for ${{ matrix.board }}
+        run: |
+          bash build.sh importconfig
+          bash build.sh build
+          bash build.sh cryptodev
+          bash build.sh pack
+
+      - name: Run deb build for ${{ matrix.board }}
+        run: |
+          bash build.sh pack_debs
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out/${{ matrix.board }}
+
+          # ITB files
+          if compgen -G "*-[0-9]*.itb" > /dev/null; then
+            cp *-[0-9]*.itb out/${{ matrix.board }}/
+          fi
+
+          # full kernel package
+          if compgen -G "../SD/*.tar.gz*" > /dev/null; then
+            cp -r ../SD/*.tar.gz* out/${{ matrix.board }}/
+          fi
+
+          # DEB packages
+          find .. -maxdepth 1 -type f -name "*.deb" \
+            \( \
+              -name "linux-image*.deb" -o \
+              -name "linux-headers*.deb" \
+            \) \
+            ! -name "*dbg*.deb" \
+            -exec cp {} out/${{ matrix.board }}/ \;
+
+          ls -lh out/${{ matrix.board }}/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.board }}
+          path: out/${{ matrix.board }}
+          retention-days: 1
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout (longer history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Setup env
+        run: |
+          echo "DT=$(date +'%Y-%m-%d_%H%M')" >> $GITHUB_ENV
+          echo "KERNELVER=$(make kernelversion)" >> $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          echo $BRANCH $KERNELVER $DT
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy files for release
+        run: |
+          mkdir release
+          find artifacts -type f \( -name "*.itb" -o -name "*.tar.gz*" -o -name "*.img" -o -name "*.deb" \) \
+            -exec cp {} release/ \;
+
+      - name: Generate changelog
+        run: |
+          echo -e "# Release\n**Commit:** ${{ github.sha }}\n**Branch:** ${{ env.BRANCH }}\n**Kernel:** ${{ env.KERNELVER }}\n\n## Changelog\n" > CHANGELOG.md
+          git log --pretty=format:"- %h %ad **%s** %d by %an" --date=short --no-merges >> CHANGELOG.md
+
+      - name: Create release
+        if: endsWith(github.ref_name, '-main') || endsWith(github.ref_name, '-ci')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          body_path: CHANGELOG.md
+          draft: ${{ endsWith(github.ref, '-ci') }}
+          tag_name: "CI-BUILD-${{ env.BRANCH }}-${{ env.KERNELVER }}-${{ env.DT }}"
