@@ -41,4 +41,6 @@ config PCS_RZN1_MIIC
 	  Renesas RZ/N1, RZ/N2H, and RZ/T2H SoCs. This PCS converts MII to
 	  RMII/RGMII, or can be set in pass-through mode for MII.
 
+source "drivers/net/pcs/airoha/Kconfig"
+
 endmenu
