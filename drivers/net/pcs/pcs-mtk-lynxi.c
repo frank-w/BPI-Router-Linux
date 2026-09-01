@@ -529,6 +529,7 @@ EXPORT_SYMBOL(mtk_pcs_lynxi_destroy);
 static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	struct fwnode_pcs_provider *pcs_provider;
 	struct device_node *np = dev->of_node;
 	struct mtk_pcs_lynxi *mpcs;
 	struct phylink_pcs *pcs;
@@ -574,19 +575,13 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, mpcs);
 
-	return fwnode_pcs_add_provider(of_fwnode_handle(np), fwnode_pcs_simple_get, &mpcs->pcs);
+	pcs_provider = devm_fwnode_pcs_add_provider(dev, dev_fwnode(dev),
+						    fwnode_pcs_simple_xlate, &mpcs->pcs);
+	if (IS_ERR(pcs_provider))
+		return PTR_ERR(pcs_provider);
+
+	return 0;
 }
-
-static void mtk_pcs_lynxi_remove(struct platform_device *pdev)
-{
-	struct mtk_pcs_lynxi *mpcs = platform_get_drvdata(pdev);
-
-	fwnode_pcs_del_provider(dev_fwnode(&pdev->dev));
-
-	rtnl_lock();
-	phylink_release_pcs(&mpcs->pcs);
-	rtnl_unlock();
-};
 
 static const struct of_device_id mtk_pcs_lynxi_of_match[] = {
 	{ .compatible = "mediatek,mt7988-sgmii", .data = (void *)MTK_NETSYS_V3_AMA_RGC3 },
@@ -600,7 +595,6 @@ static struct platform_driver mtk_pcs_lynxi_driver = {
 		.of_match_table		= mtk_pcs_lynxi_of_match,
 	},
 	.probe = mtk_pcs_lynxi_probe,
-	.remove = mtk_pcs_lynxi_remove,
 };
 module_platform_driver(mtk_pcs_lynxi_driver);
 #endif
