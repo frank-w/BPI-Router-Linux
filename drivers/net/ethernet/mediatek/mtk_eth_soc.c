@@ -5404,6 +5404,17 @@ static const struct net_device_ops mtk_netdev_ops = {
 	.ndo_select_queue	= mtk_select_queue,
 };
 
+static int mtk_fill_available_pcs(struct phylink_config *config,
+				     struct phylink_pcs **available_pcs,
+				     unsigned int num_possible_pcs)
+{
+	struct device *dev = config->dev;
+
+	return fwnode_phylink_pcs_parse(dev_fwnode(dev), available_pcs,
+					num_possible_pcs);
+}
+
+
 static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 {
 	const struct phylink_mac_ops *mac_ops = &mtk_phylink_ops;
@@ -5411,9 +5422,9 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	phy_interface_t phy_mode;
 	struct phylink *phylink;
 	struct mtk_mac *mac;
-	int id, err, count;
 	unsigned int sid;
 	int txqs = 1;
+	int id, err;
 	u32 val;
 
 	if (!_id) {
@@ -5494,7 +5505,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	mac->phylink_config.lpi_capabilities = MAC_100FD | MAC_1000FD |
 		MAC_2500FD;
 	mac->phylink_config.lpi_timer_default = 1000;
-	mac->phylink_config.num_available_pcs = 0;
+	mac->phylink_config.fill_available_pcs = mtk_fill_available_pcs;
 
 	/* MT7623 gmac0 is now missing its speed-specific PLL configuration
 	 * in its .mac_config method (since state->speed is not valid there.
@@ -5538,25 +5549,6 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 				mac->phylink_config.pcs_interfaces);
 			__set_bit(PHY_INTERFACE_MODE_USXGMII,
 				mac->phylink_config.pcs_interfaces);
-
-			err = fwnode_phylink_pcs_parse(of_fwnode_handle(np), NULL, &count);
-			if (err == -ENODEV) {
-				err = 0;
-				goto no_pcs;
-			}
-
-			if (count > 2)
-				err = -ENOMEM;
-
-			if (err)
-				goto free_netdev;
-
-			err = fwnode_phylink_pcs_parse(of_fwnode_handle(np), mac->available_pcs, &count);
-			if (err)
-				goto free_netdev;
-
-			mac->phylink_config.available_pcs = mac->available_pcs;
-			mac->phylink_config.num_available_pcs = count;
 		} else {
 			if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) {
 				/* single LynxI PCS used by either GMAC */
@@ -5571,8 +5563,6 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 			} else {
 				sid = id;
 			}
-			mac->phylink_config.available_pcs = &eth->sgmii_pcs[sid];
-			mac->phylink_config.num_available_pcs = 1;
 		}
 
 		phy_interface_or(mac->phylink_config.supported_interfaces,
