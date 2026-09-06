@@ -650,6 +650,11 @@
 #define MTK_GDM_RX_FC		0x24
 #define MTK_GDM_RX_FC_OFFSET(eth, i)	(i * (mtk_is_netsys_v3_or_greater(eth) ? MTK_STAT_OFFSET_V3 : MTK_STAT_OFFSET) + MTK_GDM_RX_FC)
 
+#define MTK_FE_IRQ_SHARED	0
+#define MTK_FE_IRQ_TX		1
+#define MTK_FE_IRQ_RX		2
+#define MTK_FE_IRQ_NUM		(MTK_FE_IRQ_RX + 1)
+
 struct mtk_rx_dma {
 	unsigned int rxd1;
 	unsigned int rxd2;
@@ -1329,7 +1334,7 @@ struct mtk_eth {
 	struct net_device		*dummy_dev;
 	struct net_device		*netdev[MTK_MAX_DEVS];
 	struct mtk_mac			*mac[MTK_MAX_DEVS];
-	int				irq[3];
+	int				irq[MTK_FE_IRQ_NUM];
 	u32				msg_enable;
 	unsigned long			sysclk;
 	struct regmap			*ethsys;
