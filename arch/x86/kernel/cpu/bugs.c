@@ -3399,7 +3399,7 @@ ssize_t cpu_show_vmscape(struct device *dev, struct device_attribute *attr, char
 }
 #endif
 
-#ifdef CONFIG_MITIGATION_SRSO
+#ifdef CONFIG_CPU_SRSO
 /*
  * Called during exception/interrupt entry if interrupted during the
  * safe-RET sequence.  The safe-RET sequence consists of 3 instructions:
@@ -3422,8 +3422,8 @@ void noinstr handle_interrupted_saferet(struct pt_regs *regs)
 
 	if (rip == (unsigned long) srso_safe_ret ||
 	    rip == (unsigned long) srso_alias_safe_ret) {
-	    /* Modify stack pointer as if LEA executed: */
-	    regs->sp += 8;
+		/* Modify stack pointer as if LEA executed: */
+		regs->sp += 8;
 	}
 
 	/*
@@ -3436,4 +3436,4 @@ void noinstr handle_interrupted_saferet(struct pt_regs *regs)
 	/* 2. Pop rIP off the stack: */
 	regs->sp += 8;
 }
-#endif /* CONFIG_MITIGATION_SRSO */
+#endif /* CONFIG_CPU_SRSO */
