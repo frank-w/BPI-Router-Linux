@@ -298,7 +298,9 @@ void v4l2_async_notifier_cleanup(struct v4l2_async_notifier *notifier);
  *
  * @sd: pointer to &struct v4l2_subdev
  */
-int v4l2_async_register_subdev(struct v4l2_subdev *sd);
+#define v4l2_async_register_subdev(sd) \
+	__v4l2_async_register_subdev(sd, THIS_MODULE)
+int __v4l2_async_register_subdev(struct v4l2_subdev *sd, struct module *module);
 
 /**
  * v4l2_async_register_subdev_sensor_common - registers a sensor sub-device to
@@ -319,8 +321,11 @@ int v4l2_async_register_subdev(struct v4l2_subdev *sd);
  * An error is returned if the module is no longer loaded on any attempts
  * to register it.
  */
+#define v4l2_async_register_subdev_sensor_common(sd) \
+	__v4l2_async_register_subdev_sensor_common(sd, THIS_MODULE)
 int __must_check
-v4l2_async_register_subdev_sensor_common(struct v4l2_subdev *sd);
+__v4l2_async_register_subdev_sensor_common(struct v4l2_subdev *sd,
+					   struct module *module);
 
 /**
  * v4l2_async_unregister_subdev - unregisters a sub-device to the asynchronous

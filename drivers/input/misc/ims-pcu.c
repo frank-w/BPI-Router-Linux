@@ -964,9 +964,10 @@ out:
 	return retval;
 }
 
-static void ims_pcu_process_async_firmware(const struct firmware *fw,
+static void ims_pcu_process_async_firmware(const struct firmware *_fw,
 					   void *context)
 {
+	const struct firmware *fw __free(firmware) = _fw;
 	struct ims_pcu *pcu = context;
 	int error;
 
@@ -986,8 +987,6 @@ static void ims_pcu_process_async_firmware(const struct firmware *fw,
 	mutex_lock(&pcu->cmd_mutex);
 	ims_pcu_handle_firmware_update(pcu, fw);
 	mutex_unlock(&pcu->cmd_mutex);
-
-	release_firmware(fw);
 
 out:
 	complete(&pcu->async_firmware_done);
@@ -1192,6 +1191,8 @@ static ssize_t ims_pcu_reset_device(struct device *dev,
 		return -EINVAL;
 
 	dev_info(pcu->dev, "Attempting to reset device\n");
+
+	guard(mutex)(&pcu->cmd_mutex);
 
 	error = ims_pcu_execute_command(pcu, PCU_RESET, &reset_byte, 1);
 	if (error) {
