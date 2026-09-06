@@ -35,6 +35,7 @@
 	lan-phy-hog {
 		gpio-hog;
 		gpios = <54 GPIO_ACTIVE_HIGH>;
+		line-name = "lan-phy-hog";
 		output-high; /* select phy */
 	};
 };

@@ -30,6 +30,7 @@
 	wan-phy-hog {
 		gpio-hog;
 		gpios = <3 GPIO_ACTIVE_HIGH>;
+		line-name = "wan-phy-hog";
 		output-low; /* select phy */
 	};
 };

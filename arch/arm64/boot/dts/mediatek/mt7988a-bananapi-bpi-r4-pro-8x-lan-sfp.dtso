@@ -34,6 +34,7 @@
 	lan-sfp-hog {
 		gpio-hog;
 		gpios = <54 GPIO_ACTIVE_HIGH>;
+		line-name = "lan-sfp-hog";
 		output-low; /* select sfp */
 	};
 };

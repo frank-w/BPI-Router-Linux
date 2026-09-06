@@ -27,6 +27,7 @@
 	wan-sfp-hog {
 		gpio-hog;
 		gpios = <3 GPIO_ACTIVE_HIGH>;
+		line-name = "wan-sfp-hog";
 		output-high; /* select sfp */
 	};
 };
