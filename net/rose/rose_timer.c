@@ -135,6 +135,7 @@ static void rose_heartbeat_expiry(struct timer_list *t)
 			bh_unlock_sock(sk);
 			rose_destroy_socket(sk);
 			sock_put(sk);
+			sock_put(sk);
 			return;
 		}
 		break;
