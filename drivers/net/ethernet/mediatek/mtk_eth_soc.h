@@ -1537,6 +1537,8 @@ struct mtk_soc_data {
  * @clks:		clock array for all clocks required
  * @mii_bus:		If there is a bus we need to create an instance for it
  * @pending_work:	The workqueue used to reset the dma ring
+ * @rx_buf_len_work:	The workqueue used to reallocate the rx rings
+ *			when the largest MTU needs a different buffer length
  * @state:		Initialization and runtime state of the device
  * @soc:		Holding specific data among various SoCs
  */
@@ -1577,7 +1579,7 @@ struct mtk_eth {
 	struct mii_bus			*mii_bus;
 	unsigned int			mdc_divider;
 	struct work_struct		pending_work;
-	struct work_struct		netdev_restart_work;
+	struct work_struct		rx_buf_len_work;
 	unsigned long			state;
 
 	const struct mtk_soc_data	*soc;
