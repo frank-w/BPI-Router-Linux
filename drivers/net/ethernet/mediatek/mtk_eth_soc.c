@@ -3675,6 +3675,33 @@ static int mtk_dma_busy_wait(struct mtk_eth *eth)
 	return ret;
 }
 
+static int mtk_max_gmac_mtu(struct mtk_eth *eth)
+{
+	int i, max_mtu = ETH_DATA_LEN;
+
+	for (i = 0; i < ARRAY_SIZE(eth->netdev); i++)
+		if (eth->netdev[i] && eth->netdev[i]->mtu > max_mtu)
+			max_mtu = eth->netdev[i]->mtu;
+
+	return max_mtu;
+}
+
+/* The rx rings are shared by every MAC, so their buffers are sized for the
+ * largest MTU configured on any of them: MTK_MAX_RX_LENGTH when that fits,
+ * otherwise the next multiple of MTK_MAX_RX_LENGTH_UNIT, which is the
+ * granularity of the GMAC jumbo length field.
+ */
+static u32 mtk_rx_buf_len(struct mtk_eth *eth)
+{
+	int length = mtk_max_gmac_mtu(eth) + MTK_RX_ETH_HLEN;
+
+	if (length <= MTK_MAX_RX_LENGTH)
+		return MTK_MAX_RX_LENGTH;
+
+	return DIV_ROUND_UP(length, MTK_MAX_RX_LENGTH_UNIT) *
+	       MTK_MAX_RX_LENGTH_UNIT;
+}
+
 static int mtk_dma_init(struct mtk_eth *eth)
 {
 	int err;
@@ -3682,6 +3709,12 @@ static int mtk_dma_init(struct mtk_eth *eth)
 
 	if (mtk_dma_busy_wait(eth))
 		return -EBUSY;
+
+	/* Derived here, at ring allocation, so that eth->rx_buf_len always
+	 * describes the buffers the rings actually hold and mtk_mac_config()
+	 * never lets a MAC accept a frame the rings cannot take.
+	 */
+	eth->rx_buf_len = mtk_rx_buf_len(eth);
 
 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_QDMA)) {
 		/* QDMA needs scratch memory for internal reordering of the
@@ -4063,25 +4096,73 @@ found:
 	return NOTIFY_DONE;
 }
 
-static int mtk_max_gmac_mtu(struct mtk_eth *eth)
+/* Bring up the DMA rings, the PPEs and the GDM forwarding shared by every
+ * MAC.  Called with no user of the rings.
+ */
+static int mtk_rings_start(struct mtk_eth *eth)
 {
-	int i, max_mtu = ETH_DATA_LEN;
+	const struct mtk_soc_data *soc = eth->soc;
+	int ppe_num = soc->ppe_num;
+	struct mtk_mac *target_mac;
+	u32 gdm_config;
+	int i, err;
 
-	for (i = 0; i < ARRAY_SIZE(eth->netdev); i++)
-		if (eth->netdev[i] && eth->netdev[i]->mtu > max_mtu)
-			max_mtu = eth->netdev[i]->mtu;
+	err = mtk_start_dma(eth);
+	if (err)
+		return err;
 
-	return max_mtu;
+	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
+		mtk_ppe_start(eth->ppe[i]);
+
+	for (i = 0; i < MTK_MAX_DEVS; i++) {
+		if (!eth->netdev[i])
+			continue;
+
+		target_mac = netdev_priv(eth->netdev[i]);
+		if (!soc->offload_version) {
+			target_mac->ppe_idx = 0;
+			gdm_config = MTK_GDMA_TO_PDMA;
+		} else if (ppe_num >= 3 && target_mac->id == 2) {
+			target_mac->ppe_idx = 2;
+			gdm_config = soc->reg_map->gdma_to_ppe[2];
+		} else if (ppe_num >= 2 && target_mac->id == 1) {
+			target_mac->ppe_idx = 1;
+			gdm_config = soc->reg_map->gdma_to_ppe[1];
+		} else {
+			target_mac->ppe_idx = 0;
+			gdm_config = soc->reg_map->gdma_to_ppe[0];
+		}
+		mtk_gdm_config(eth, target_mac->id, gdm_config);
+	}
+
+	napi_enable(&eth->tx_napi);
+	napi_enable(&eth->rx_napi[0].napi);
+	mtk_tx_irq_enable(eth, MTK_TX_DONE_INT);
+	mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth, 0));
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
+		for (i = 1; i < MTK_RX_RSS_NUM(eth); i++) {
+			napi_enable(&eth->rx_napi[MTK_RSS_RING(i)].napi);
+			mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth, MTK_RSS_RING(i)));
+		}
+	}
+
+	if (eth->hwlro) {
+		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
+			napi_enable(&eth->rx_napi[MTK_HW_LRO_RING(eth, i)].napi);
+			mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth,
+							       MTK_HW_LRO_RING(eth, i)));
+		}
+	}
+
+	return 0;
 }
 
 static int mtk_open(struct net_device *dev)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
-	struct mtk_mac *target_mac;
-	int i, err, ppe_num;
-
-	ppe_num = eth->soc->ppe_num;
+	int i, err;
 
 	err = phylink_of_phy_connect(mac->phylink, mac->of_node, 0);
 	if (err) {
@@ -4092,58 +4173,10 @@ static int mtk_open(struct net_device *dev)
 
 	/* we run 2 netdevs on the same dma ring so we only bring it up once */
 	if (!refcount_read(&eth->dma_refcnt)) {
-		const struct mtk_soc_data *soc = eth->soc;
-		u32 gdm_config;
-		int i;
-
-		err = mtk_start_dma(eth);
+		err = mtk_rings_start(eth);
 		if (err) {
 			phylink_disconnect_phy(mac->phylink);
 			return err;
-		}
-
-		for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
-			mtk_ppe_start(eth->ppe[i]);
-
-		for (i = 0; i < MTK_MAX_DEVS; i++) {
-			if (!eth->netdev[i])
-				continue;
-
-			target_mac = netdev_priv(eth->netdev[i]);
-			if (!soc->offload_version) {
-				target_mac->ppe_idx = 0;
-				gdm_config = MTK_GDMA_TO_PDMA;
-			} else if (ppe_num >= 3 && target_mac->id == 2) {
-				target_mac->ppe_idx = 2;
-				gdm_config = soc->reg_map->gdma_to_ppe[2];
-			} else if (ppe_num >= 2 && target_mac->id == 1) {
-				target_mac->ppe_idx = 1;
-				gdm_config = soc->reg_map->gdma_to_ppe[1];
-			} else {
-				target_mac->ppe_idx = 0;
-				gdm_config = soc->reg_map->gdma_to_ppe[0];
-			}
-			mtk_gdm_config(eth, target_mac->id, gdm_config);
-		}
-
-		napi_enable(&eth->tx_napi);
-		napi_enable(&eth->rx_napi[0].napi);
-		mtk_tx_irq_enable(eth, MTK_TX_DONE_INT);
-		mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth, 0));
-
-		if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSS)) {
-			for (i = 1; i < MTK_RX_RSS_NUM(eth); i++) {
-				napi_enable(&eth->rx_napi[MTK_RSS_RING(i)].napi);
-				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth, MTK_RSS_RING(i)));
-			}
-		}
-
-		if (eth->hwlro) {
-			for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
-				napi_enable(&eth->rx_napi[MTK_HW_LRO_RING(eth, i)].napi);
-				mtk_rx_irq_enable(eth, MTK_RX_DONE_INT(eth,
-								       MTK_HW_LRO_RING(eth, i)));
-			}
 		}
 
 		refcount_set(&eth->dma_refcnt, 1);
@@ -4210,21 +4243,12 @@ static void mtk_stop_dma(struct mtk_eth *eth, u32 glo_cfg)
 	}
 }
 
-static int mtk_stop(struct net_device *dev)
+/* Tear down what mtk_rings_start() brought up.  Called by the last user of
+ * the rings.
+ */
+static void mtk_rings_stop(struct mtk_eth *eth)
 {
-	struct mtk_mac *mac = netdev_priv(dev);
-	struct mtk_eth *eth = mac->hw;
 	int i;
-
-	phylink_stop(mac->phylink);
-
-	netif_tx_disable(dev);
-
-	phylink_disconnect_phy(mac->phylink);
-
-	/* only shutdown DMA if this is the last user */
-	if (!refcount_dec_and_test(&eth->dma_refcnt))
-		return 0;
 
 	for (i = 0; i < MTK_MAX_DEVS; i++)
 		mtk_gdm_config(eth, i, MTK_GDMA_DROP_ALL);
@@ -4260,6 +4284,24 @@ static int mtk_stop(struct net_device *dev)
 
 	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
 		mtk_ppe_stop(eth->ppe[i]);
+}
+
+static int mtk_stop(struct net_device *dev)
+{
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+
+	phylink_stop(mac->phylink);
+
+	netif_tx_disable(dev);
+
+	phylink_disconnect_phy(mac->phylink);
+
+	/* only shutdown DMA if this is the last user */
+	if (!refcount_dec_and_test(&eth->dma_refcnt))
+		return 0;
+
+	mtk_rings_stop(eth);
 
 	return 0;
 }
@@ -4927,48 +4969,103 @@ static void mtk_uninit(struct net_device *dev)
 	mtk_rx_irq_disable(eth, ~0);
 }
 
-static void mtk_netdev_restart_work(struct work_struct *work)
+static void mtk_set_max_rx_running(struct mtk_eth *eth, unsigned long running,
+				   u32 rx_buf_len)
 {
-	struct mtk_eth *eth = container_of(work, struct mtk_eth, netdev_restart_work);
-	unsigned long restart = 0;
 	int i;
 
+	for_each_set_bit(i, &running, MTK_MAX_DEVS)
+		mtk_set_mcr_max_rx(netdev_priv(eth->netdev[i]), rx_buf_len);
+}
+
+/* Reallocate the rx rings for a changed buffer length without touching the
+ * links.  The rings are shared, so the DMA has to stop for every MAC, but
+ * the MACs and their PHYs stay exactly as they are: nothing here goes
+ * through phylink, so no link drops, no PHY re-attaches and no SFP
+ * module restarts.
+ */
+static void mtk_rx_buf_len_work(struct work_struct *work)
+{
+	struct mtk_eth *eth = container_of(work, struct mtk_eth,
+					   rx_buf_len_work);
+	unsigned long running = 0;
+	u32 old_len, new_len;
+	int i, err;
+
 	rtnl_lock();
+
+	/* A frame-engine reset reopens every netdev itself, and
+	 * mtk_dma_init() sizes the rings from the MTUs when it does.
+	 */
+	if (test_bit(MTK_RESETTING, &eth->state))
+		goto out;
+
+	old_len = eth->rx_buf_len;
+	new_len = mtk_rx_buf_len(eth);
+	if (!refcount_read(&eth->dma_refcnt) || new_len == old_len)
+		goto out;
+
+	/* The tx completion path wakes every queue it finds stopped, so
+	 * disabling the queues alone does not keep mtk_start_xmit() off the
+	 * rings; the reset flag does, as it does for a frame-engine reset.
+	 */
+	set_bit(MTK_RESETTING, &eth->state);
 
 	for (i = 0; i < MTK_MAX_DEVS; i++) {
 		if (!eth->netdev[i] || !netif_running(eth->netdev[i]))
 			continue;
 
-		mtk_stop(eth->netdev[i]);
-		__set_bit(i, &restart);
+		netif_tx_disable(eth->netdev[i]);
+		__set_bit(i, &running);
 	}
 
-	for (i = 0; i < MTK_MAX_DEVS; i++) {
-		if (!test_bit(i, &restart) || !eth->netdev[i])
-			continue;
+	dev_info(eth->dev, "rx buffer length %u -> %u, reallocating the rx rings\n",
+		 old_len, new_len);
 
-		if (mtk_open(eth->netdev[i])) {
-			netif_alert(eth, ifup, eth->netdev[i],
-				    "Netdev restart failed, closing device...\n");
+	/* Shrinking: stop the MACs accepting frames the new rings cannot hold
+	 * before the rings change hands.  Growing: widen the MACs only once
+	 * the rings can take the larger frames, below.
+	 */
+	if (new_len < old_len)
+		mtk_set_max_rx_running(eth, running, new_len);
+
+	mtk_rings_stop(eth);
+
+	err = mtk_rings_start(eth);
+	if (err) {
+		dev_err(eth->dev, "failed to reallocate the rx rings: %d, closing the netdevs\n",
+			err);
+		/* The rings are already freed and the NAPIs already disabled;
+		 * hold one extra reference so that the last mtk_stop() does
+		 * not tear them down a second time.
+		 */
+		refcount_inc(&eth->dma_refcnt);
+		for_each_set_bit(i, &running, MTK_MAX_DEVS)
 			dev_close(eth->netdev[i]);
-		}
+		refcount_set(&eth->dma_refcnt, 0);
+		clear_bit(MTK_RESETTING, &eth->state);
+		goto out;
 	}
 
+	/* mtk_mac_config() may have raced the change with the previous
+	 * length; the rings are sized now, so this write is final.
+	 */
+	mtk_set_max_rx_running(eth, running, eth->rx_buf_len);
+
+	clear_bit(MTK_RESETTING, &eth->state);
+
+	for_each_set_bit(i, &running, MTK_MAX_DEVS)
+		netif_tx_wake_all_queues(eth->netdev[i]);
+
+out:
 	rtnl_unlock();
 }
 
 static int mtk_change_mtu(struct net_device *dev, int new_mtu)
 {
+	int length = new_mtu + MTK_RX_ETH_HLEN;
 	struct mtk_mac *mac = netdev_priv(dev);
 	struct mtk_eth *eth = mac->hw;
-	int length, max_mtu = 0;
-	u32 rx_buf_len;
-
-	WRITE_ONCE(dev->mtu, new_mtu);
-	rx_buf_len = eth->rx_buf_len;
-
-	max_mtu = mtk_max_gmac_mtu(eth);
-	length = max_mtu + MTK_RX_ETH_HLEN;
 
 	if (rcu_access_pointer(eth->prog) &&
 	    length > MTK_PP_MAX_BUF_SIZE) {
@@ -4976,18 +5073,16 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
 		return -EINVAL;
 	}
 
-	if (length <= MTK_MAX_RX_LENGTH)
-		eth->rx_buf_len = MTK_MAX_RX_LENGTH;
-	else
-		eth->rx_buf_len = DIV_ROUND_UP(length, MTK_MAX_RX_LENGTH_UNIT) *
-				  MTK_MAX_RX_LENGTH_UNIT;
+	WRITE_ONCE(dev->mtu, new_mtu);
 
-	if (eth->rx_buf_len != rx_buf_len && refcount_read(&eth->dma_refcnt) > 0) {
-		netdev_info(dev,
-			    "RX buffer length changed (%u -> %u), scheduling netdevs restart\n",
-			    rx_buf_len, eth->rx_buf_len);
-		schedule_work(&eth->netdev_restart_work);
-	}
+	/* The rx rings are shared and a running DMA cannot swap its buffers
+	 * in place; reallocate them if the largest MTU now needs a different
+	 * buffer length than the rings were allocated with.  With no user of
+	 * the rings, the next mtk_open() sizes them from the MTUs directly.
+	 */
+	if (refcount_read(&eth->dma_refcnt) &&
+	    mtk_rx_buf_len(eth) != eth->rx_buf_len)
+		schedule_work(&eth->rx_buf_len_work);
 
 	return 0;
 }
@@ -5174,9 +5269,9 @@ static int mtk_cleanup(struct mtk_eth *eth)
 {
 	mtk_sgmii_destroy(eth);
 	mtk_unreg_dev(eth);
+	cancel_work_sync(&eth->rx_buf_len_work);
 	mtk_free_dev(eth);
 	cancel_work_sync(&eth->pending_work);
-	cancel_work_sync(&eth->netdev_restart_work);
 	cancel_delayed_work_sync(&eth->reset.monitor_work);
 
 	return 0;
@@ -6072,7 +6167,7 @@ static int mtk_probe(struct platform_device *pdev)
 
 	eth->msg_enable = netif_msg_init(mtk_msg_level, MTK_DEFAULT_MSG_ENABLE);
 	INIT_WORK(&eth->pending_work, mtk_pending_work);
-	INIT_WORK(&eth->netdev_restart_work, mtk_netdev_restart_work);
+	INIT_WORK(&eth->rx_buf_len_work, mtk_rx_buf_len_work);
 
 	err = mtk_hw_init(eth, false);
 	if (err)
