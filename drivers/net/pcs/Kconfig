@@ -34,6 +34,7 @@ config PCS_MTK_LYNXI
 
 config PCS_MTK_USXGMII
 	tristate "MediaTek USXGMII PCS"
+	select OF
 	select FWNODE_PCS
 	select PCS_MTK_LYNXI
 	select PHY_COMMON_PROPS
