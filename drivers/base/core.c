@@ -4910,6 +4910,9 @@ void device_shutdown(void)
 			device_lock(parent);
 		device_lock(dev);
 
+		if (dev->p)
+			dev->p->shutdown_done = true;
+
 		/* Don't allow any more runtime suspends */
 		pm_runtime_get_noresume(dev);
 		pm_runtime_barrier(dev);

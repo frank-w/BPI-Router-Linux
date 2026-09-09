@@ -106,6 +106,10 @@ struct driver_private {
  * @dead: This device is currently either in the process of or has been
  *	  removed from the system. Any asynchronous events scheduled for this
  *	  device should exit without taking any action.
+ * @shutdown_done: Set once device_shutdown() has reached this device, under
+ *	  the device lock, before any shutdown callback runs. Read under the
+ *	  device lock. A deferred re-probe scheduled with
+ *	  device_schedule_reprobe() must not detach the device anymore.
  *
  * Nothing outside of the driver core should ever touch these fields.
  */
@@ -120,6 +124,7 @@ struct device_private {
 	char *deferred_probe_reason;
 	struct device *device;
 	u8 dead:1;
+	u8 shutdown_done:1;
 };
 #define to_device_private_parent(obj)	\
 	container_of(obj, struct device_private, knode_parent)
