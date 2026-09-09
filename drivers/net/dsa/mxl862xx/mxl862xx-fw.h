@@ -6,7 +6,10 @@
 #include <net/dsa.h>
 
 struct mxl862xx_priv;
+struct work_struct;
 
+int mxl862xx_rescue_mode_detect(struct mxl862xx_priv *priv);
+void mxl862xx_rescue_heal_work_fn(struct work_struct *work);
 int mxl862xx_devlink_info_get(struct dsa_switch *ds,
 			      struct devlink_info_req *req,
 			      struct netlink_ext_ack *extack);

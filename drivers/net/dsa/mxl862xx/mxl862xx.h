@@ -4,7 +4,9 @@
 #define __MXL862XX_H
 
 #include <asm/byteorder.h>
+#include <linux/bitops.h>
 #include <linux/mdio.h>
+#include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <net/dsa.h>
 
@@ -13,6 +15,10 @@ struct mxl862xx_priv;
 #define MXL862XX_MAX_PORTS		17
 #define MXL862XX_FIRST_SERDES_PORT	9
 #define MXL862XX_SERDES_SLOTS		4
+
+/* mxl862xx_rescue_mode_detect() return codes (negative values are errors) */
+#define MXL862XX_NOT_RESCUE		0
+#define MXL862XX_IN_RESCUE		1
 
 #define MXL862XX_DEFAULT_BRIDGE		0
 #define MXL862XX_MAX_BRIDGES		48
@@ -329,6 +335,16 @@ struct mxl862xx_fw_version {
  *                      block_host while polling the freshly booted image
  * @skip_teardown:      discard firmware API commands during the teardown
  *                      triggered by the post-flash reprobe
+ * @rescue_mode:        switch is in MCUboot; firmware API commands fail fast,
+ *                      only clause-22 SMDIO works. Set from setup() before the
+ *                      switch is registered and cleared under the MDIO bus lock
+ *                      for the benefit of mxl862xx_api_wrap(); other readers
+ *                      only need it to be a stable single flag.
+ * @rescue_ready:       (rescue_mode) loader is at a clean READY and will accept
+ *                      a flash; false while rescue_heal_work is draining
+ * @rescue_failed:      (rescue_mode) the self-heal gave up; the loader needs a
+ *                      power cycle and no flash can be accepted
+ * @rescue_heal_work:   background self-heal draining a wedged download to READY
  * @stats_work:         periodic work item that polls RMON hardware counters
  *                      and accumulates them into 64-bit per-port stats
  */
@@ -336,6 +352,7 @@ struct mxl862xx_priv {
 	struct dsa_switch *ds;
 	struct mdio_device *mdiodev;
 	struct work_struct crc_err_work;
+	struct work_struct rescue_heal_work;
 	unsigned long flags;
 	u16 drop_meter;
 	struct mxl862xx_fw_version fw_version;
@@ -352,6 +369,9 @@ struct mxl862xx_priv {
 	bool block_host;
 	bool flash_reading;
 	bool skip_teardown;
+	bool rescue_mode;
+	bool rescue_ready;
+	bool rescue_failed;
 	struct delayed_work stats_work;
 };
 
