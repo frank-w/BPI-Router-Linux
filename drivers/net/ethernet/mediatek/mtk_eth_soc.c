@@ -2815,8 +2815,11 @@ static int mtk_rx_alloc(struct mtk_eth *eth, int ring_no, int rx_flag)
 
 		pp = mtk_create_page_pool(eth, &ring->xdp_q, ring_no,
 					  rx_dma_size);
-		if (IS_ERR(pp))
+		if (IS_ERR(pp)) {
+			kfree(ring->data);
+			ring->data = NULL;
 			return PTR_ERR(pp);
+		}
 
 		ring->page_pool = pp;
 	}
