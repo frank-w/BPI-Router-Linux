@@ -321,8 +321,6 @@ static void mtk_usxgmii_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mo
 	 * after the line side link up.
 	 */
 	mtk_usxgmii_pcs_config(pcs, neg_mode, interface, NULL, false);
-	phy_reset(mpcs->xfi_tphy);
-	phy_set_mode_ext(mpcs->xfi_tphy, PHY_MODE_ETHERNET, interface);
 }
 
 static int mtk_usxgmii_pcs_enable(struct phylink_pcs *pcs)
