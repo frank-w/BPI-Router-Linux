@@ -356,16 +356,6 @@ static void mtk_pcs_lynxi_link_up(struct phylink_pcs *pcs,
 	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
 	unsigned int sgm_mode;
 
-	/* In force mode the PCS provides no link status feedback,
-	 * so re-init the T-PHY here as the only chance to recover
-	 * from a bad analog calibration. In-band modes are handled
-	 * by pcs_get_state and the link_poll worker instead.
-	 */
-	if (mpcs->xfi_tphy && neg_mode != PHYLINK_PCS_NEG_INBAND_ENABLED) {
-		mpcs->interface = PHY_INTERFACE_MODE_NA;
-		mtk_pcs_lynxi_config(pcs, neg_mode, interface, NULL, false);
-	}
-
 	if (neg_mode != PHYLINK_PCS_NEG_INBAND_ENABLED) {
 		/* Force the speed and duplex setting */
 		if (speed == SPEED_10)
