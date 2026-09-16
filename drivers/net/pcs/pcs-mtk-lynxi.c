@@ -293,11 +293,6 @@ static void mtk_pcs_lynxi_link_up(struct phylink_pcs *pcs,
 	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
 	unsigned int sgm_mode;
 
-	if (mpcs->xfi_tphy) {
-		phy_reset(mpcs->xfi_tphy);
-		phy_set_mode_ext(mpcs->xfi_tphy, PHY_MODE_ETHERNET, interface);
-	}
-
 	if (neg_mode != PHYLINK_PCS_NEG_INBAND_ENABLED) {
 		/* Force the speed and duplex setting */
 		if (speed == SPEED_10)
