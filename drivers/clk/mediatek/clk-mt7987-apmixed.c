@@ -78,7 +78,7 @@ static int clk_mt7987_apmixed_probe(struct platform_device *pdev)
 	clk_data = mtk_alloc_clk_data(ARRAY_SIZE(plls));
 	if (!clk_data)
 		return -ENOMEM;
-	r = mtk_clk_register_plls(node, plls, ARRAY_SIZE(plls), clk_data);
+	r = mtk_clk_register_plls(&pdev->dev, plls, ARRAY_SIZE(plls), clk_data);
 	if (r)
 		goto free_apmixed_data;
 	r = of_clk_add_hw_provider(node, of_clk_hw_onecell_get, clk_data);
