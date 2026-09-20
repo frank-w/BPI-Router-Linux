@@ -468,7 +468,7 @@ void mtk_pcs_lynxi_destroy(struct phylink_pcs *pcs)
 }
 EXPORT_SYMBOL(mtk_pcs_lynxi_destroy);
 
-#ifdef CONFIG_FWNODE_PCS
+#if IS_ENABLED(CONFIG_FWNODE_PCS)
 static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
