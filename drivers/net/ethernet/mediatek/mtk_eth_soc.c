@@ -2989,7 +2989,8 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 	lro_ctrl_dw0 |= MTK_LRO_ALT_PKT_CNT_MODE;
 
 	/* enable L4 PSH flag check */
-	lro_ctrl_dw0 |= MTK_LRO_L4_CTRL_PSH_EN;
+	if (mtk_is_netsys_v3_or_greater(eth))
+		lro_ctrl_dw0 |= MTK_LRO_L4_CTRL_PSH_EN;
 
 	/* bandwidth threshold setting */
 	mtk_w32(eth, MTK_HW_LRO_BW_THRE, MTK_PDMA_LRO_CTRL_DW2(reg_map));
