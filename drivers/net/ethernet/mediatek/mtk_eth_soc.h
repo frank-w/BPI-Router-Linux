@@ -1160,6 +1160,7 @@ struct mtk_reg_map {
 		u32	int_grp3;		/* interrupt group3 */
 		u32	tx_delay_irq;		/* tx delay interrupt */
 		u32	rx_delay_irq;		/* rx delay interrupt */
+		u32	lro_alt_timer;		/* lro auto-learn refresh timer */
 		u32	lro_ctrl_dw0;		/* lro ctrl dword0 */
 		u32	lro_alt_score_delta;	/* lro auto-learn score delta */
 		u32	lro_rx1_dly_int;	/* lro rx ring1 delay interrupt */
