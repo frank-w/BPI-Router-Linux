@@ -3003,7 +3003,7 @@ static int mtk_hwlro_rx_init(struct mtk_eth *eth)
 
 	/* set refresh timer for altering flows to 1 sec. (unit: 20us) */
 	mtk_w32(eth, (MTK_HW_LRO_TIMER_UNIT << 16) | MTK_HW_LRO_REFRESH_TIME,
-		MTK_PDMA_LRO_ALT_REFRESH_TIMER);
+		reg_map->pdma.lro_alt_timer);
 
 	if (mtk_is_netsys_v3_or_greater(eth)) {
 		val = mtk_r32(eth, reg_map->pdma.rx_cfg);
@@ -3054,17 +3054,19 @@ static void mtk_hwlro_rx_uninit(struct mtk_eth *eth)
 	u32 val;
 	int i;
 
-	/* relinquish lro rings, flush aggregated packets */
-	mtk_w32(eth, MTK_LRO_RING_RELINQUISH_REQ(eth), MTK_PDMA_LRO_CTRL_DW0(reg_map));
+	if (mtk_is_netsys_v1(eth)) {
+		/* relinquish lro rings, flush aggregated packets */
+		mtk_w32(eth, MTK_LRO_RING_RELINQUISH_REQ(eth), MTK_PDMA_LRO_CTRL_DW0(reg_map));
 
-	/* wait for relinquishments done */
-	for (i = 0; i < 10; i++) {
-		val = mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0(reg_map));
-		if (val & MTK_LRO_RING_RELINQUISH_DONE(eth)) {
-			msleep(20);
-			continue;
+		/* wait for relinquishments done */
+		for (i = 0; i < 10; i++) {
+			val = mtk_r32(eth, MTK_PDMA_LRO_CTRL_DW0(reg_map));
+			if (val & MTK_LRO_RING_RELINQUISH_DONE(eth)) {
+				msleep(20);
+				continue;
+			}
+			break;
 		}
-		break;
 	}
 
 	/* invalidate lro rings */
