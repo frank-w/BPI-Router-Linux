@@ -3304,16 +3304,13 @@ static int mtk_hwlro_get_fdir_all(struct net_device *dev,
 				  u32 *rule_locs)
 {
 	struct mtk_mac *mac = netdev_priv(dev);
-	int cnt = 0;
-	int i;
+	int i, cnt = 0;
 
 	for (i = 0; i < MTK_MAX_LRO_IP_CNT; i++) {
-		if (cnt == cmd->rule_cnt)
-			return -EMSGSIZE;
-
 		if (mac->hwlro_ip[i]) {
-			rule_locs[cnt] = i;
-			cnt++;
+			if (cnt >= cmd->rule_cnt)
+				return -EMSGSIZE;
+			rule_locs[cnt++] = i;
 		}
 	}
 
