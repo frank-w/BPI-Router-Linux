@@ -4305,6 +4305,14 @@ static int mtk_napi_init(struct mtk_eth *eth)
 		}
 	}
 
+	if (eth->hwlro) {
+		for (i = 0; i < MTK_HW_LRO_RING_NUM(eth); i++) {
+			rx_napi = &eth->rx_napi[MTK_HW_LRO_RING(eth, i)];
+			rx_napi->eth = eth;
+			rx_napi->rx_ring = &eth->rx_ring[MTK_HW_LRO_RING(eth, i)];
+		}
+	}
+
 	return 0;
 }
 
