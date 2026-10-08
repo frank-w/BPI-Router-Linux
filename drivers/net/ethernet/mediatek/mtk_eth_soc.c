@@ -4980,11 +4980,23 @@ static int mtk_set_eee(struct net_device *dev, struct ethtool_keee *eee)
 
 static u32 mtk_get_rxfh_key_size(struct net_device *dev)
 {
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+
+	if (!MTK_HAS_CAPS(eth->soc->caps, MTK_RSS))
+		return 0;
+
 	return MTK_RSS_HASH_KEYSIZE;
 }
 
 static u32 mtk_get_rxfh_indir_size(struct net_device *dev)
 {
+	struct mtk_mac *mac = netdev_priv(dev);
+	struct mtk_eth *eth = mac->hw;
+
+	if (!MTK_HAS_CAPS(eth->soc->caps, MTK_RSS))
+		return 0;
+
 	return MTK_RSS_MAX_INDIRECTION_TABLE;
 }
 
@@ -4994,6 +5006,9 @@ static int mtk_get_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh)
 	struct mtk_eth *eth = mac->hw;
 	struct mtk_rss_params *rss_params = &eth->rss_params;
 	int i;
+
+	if (!MTK_HAS_CAPS(eth->soc->caps, MTK_RSS))
+		return -EOPNOTSUPP;
 
 	rxfh->hfunc = ETH_RSS_HASH_TOP;	/* Toeplitz */
 
@@ -5018,6 +5033,9 @@ static int mtk_set_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh,
 	struct mtk_rss_params *rss_params = &eth->rss_params;
 	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
 	int i;
+
+	if (!MTK_HAS_CAPS(eth->soc->caps, MTK_RSS))
+		return -EOPNOTSUPP;
 
 	if (rxfh->hfunc != ETH_RSS_HASH_NO_CHANGE &&
 	    rxfh->hfunc != ETH_RSS_HASH_TOP)
