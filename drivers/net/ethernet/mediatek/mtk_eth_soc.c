@@ -4479,6 +4479,12 @@ static void mtk_pending_work(struct work_struct *work)
 	rtnl_unlock();
 }
 
+static void mtk_napi_del(struct mtk_eth *eth)
+{
+	netif_napi_del(&eth->tx_napi);
+	netif_napi_del(&eth->rx_napi);
+}
+
 static int mtk_free_dev(struct mtk_eth *eth)
 {
 	int i;
@@ -5354,6 +5360,9 @@ static int mtk_probe(struct platform_device *pdev)
 		dev_err(eth->dev, "failed to allocated dummy device\n");
 		goto err_unreg_netdev;
 	}
+	eth->dummy_dev->threaded = 1;
+	strcpy(eth->dummy_dev->name, "mtk_eth");
+
 	netif_napi_add(eth->dummy_dev, &eth->tx_napi, mtk_napi_tx);
 	netif_napi_add(eth->dummy_dev, &eth->rx_napi, mtk_napi_rx);
 
@@ -5379,6 +5388,7 @@ static int mtk_probe(struct platform_device *pdev)
 
 err_unreg_netdev:
 	mtk_unreg_dev(eth);
+	free_netdev(eth->dummy_dev);
 err_deinit_ppe:
 	/* A netdev opened while probe was still registering can have queued
 	 * the frame-engine reset worker, which takes rtnl and drives the
@@ -5390,6 +5400,8 @@ err_deinit_ppe:
 		netif_napi_del(&eth->rx_napi);
 		free_netdev(eth->dummy_dev);
 	}
+
+	mtk_napi_del(eth);
 	mtk_ppe_deinit(eth);
 	mtk_mdio_cleanup(eth);
 err_free_dev:
@@ -5422,8 +5434,7 @@ static void mtk_remove(struct platform_device *pdev)
 	mtk_wed_exit();
 	mtk_hw_deinit(eth);
 
-	netif_napi_del(&eth->tx_napi);
-	netif_napi_del(&eth->rx_napi);
+	mtk_napi_del(eth);
 	mtk_cleanup(eth);
 	free_netdev(eth->dummy_dev);
 	mtk_mdio_cleanup(eth);
