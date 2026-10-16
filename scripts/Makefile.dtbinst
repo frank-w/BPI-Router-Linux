@@ -37,6 +37,10 @@ dtbs := $(notdir $(dtbs))
 
 endif # CONFIG_ARCH_WANT_FLAT_DTB_INSTALL
 
+# Create destination directories up front: with parallel make, concurrent
+# 'install -D' calls race on creating the same parent directory.
+$(foreach dir, $(sort $(dir $(addprefix $(dst)/, $(dtbs)))), $(shell mkdir -p $(dir)))
+
 __dtbs_install: $(addprefix $(dst)/, $(dtbs))
 	@:
 
