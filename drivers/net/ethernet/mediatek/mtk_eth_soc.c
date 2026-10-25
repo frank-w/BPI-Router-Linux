@@ -5395,13 +5395,11 @@ err_deinit_ppe:
 	 * hardware; cancel it before anything below is torn down.
 	 */
 	cancel_work_sync(&eth->pending_work);
+	mtk_napi_del(eth);
 	if (eth->dummy_dev) {
-		netif_napi_del(&eth->tx_napi);
-		netif_napi_del(&eth->rx_napi);
 		free_netdev(eth->dummy_dev);
 	}
 
-	mtk_napi_del(eth);
 	mtk_ppe_deinit(eth);
 	mtk_mdio_cleanup(eth);
 err_free_dev:
