@@ -323,9 +323,11 @@ static int aeon_firmware_boot(struct phy_device *phydev, const u8 *data,
 		return -EINVAL;
 	}
 
-	/* Firmware is always aligned to u16 */
+	/* Firmware should be u16 aligned, zero-pad a trailing odd byte */
 	for (i = 0; i < size; i += 2) {
-		val = data[i + 1] << 8 | data[i];
+		val = data[i];
+		if (i + 1 < size)
+			val |= data[i + 1] << 8;
 
 		ret = phy_write_mmd(phydev, MDIO_MMD_VEND1,
 				    VEND1_GLB_REG_MDIO_INDIRECT_LOAD, val);
