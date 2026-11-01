@@ -4931,30 +4931,55 @@ static void mtk_sgmii_destroy(struct mtk_eth *eth)
 		mtk_pcs_lynxi_destroy(eth->sgmii_pcs[i]);
 }
 
+static struct phylink_pcs *mtk_get_internal_pcs(struct mtk_mac *mac)
+{
+	struct mtk_eth *eth = mac->hw;
+	unsigned int sid = mac->id;
+	struct phylink_pcs *pcs;
+
+	if (!MTK_HAS_CAPS(eth->soc->caps, MTK_SGMII) ||
+	    mtk_is_netsys_v3_or_greater(eth))
+		return NULL;
+
+	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII))
+		sid = 0;
+
+	pcs = eth->sgmii_pcs[sid];
+	if (pcs && MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII) &&
+	    !test_bit(mac->phy_mode, pcs->supported_interfaces))
+		return NULL;
+
+	return pcs;
+}
+
 static int mtk_fill_available_pcs(struct phylink_config *config,
-				     struct phylink_pcs **available_pcs,
-				     unsigned int num_possible_pcs)
+				  struct phylink_pcs **available_pcs,
+				  unsigned int num_possible_pcs)
 {
 	struct device *dev = config->dev;
-	struct mtk_mac *mac = container_of(config, struct mtk_mac, phylink_config);
+	struct mtk_mac *mac = container_of(config, struct mtk_mac,
+					   phylink_config);
 	struct mtk_eth *eth = mac->hw;
+	struct phylink_pcs *pcs;
+	unsigned int offset = 0;
 
-	if (MTK_HAS_CAPS(mac->hw->soc->caps, MTK_SGMII)) {
-		if (! mtk_is_netsys_v3_or_greater(mac->hw)) {
-			if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) {
-				// single LynxI PCS used by either GMAC
-				if (!test_bit(mac->phy_mode, eth->sgmii_pcs[0]->supported_interfaces))
-					return 0;
-				if (eth->shared_sgmii_used) {
-					return -EBUSY;
-				}
-				eth->shared_sgmii_used = true;
-			}
+	pcs = mtk_get_internal_pcs(mac);
+	if (pcs) {
+		if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) {
+			if (eth->shared_sgmii_used)
+				return -EBUSY;
+			eth->shared_sgmii_used = true;
 		}
+
+		available_pcs[offset++] = pcs;
 	}
 
-	return fwnode_phylink_pcs_parse(dev_fwnode(dev), available_pcs,
-					num_possible_pcs);
+	if (offset == num_possible_pcs)
+		return 0;
+
+	return fwnode_phylink_pcs_parse(dev_fwnode(dev),
+					available_pcs + offset,
+					num_possible_pcs - offset);
 }
 
 static int mtk_cleanup(struct mtk_eth *eth)
@@ -5436,7 +5461,9 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	/* LPI above 1 Gbps is not supported */
 	mac->phylink_config.lpi_capabilities = MAC_100FD | MAC_1000FD;
 	mac->phylink_config.lpi_timer_default = 1000;
-	mac->phylink_config.num_possible_pcs = fwnode_phylink_pcs_count(dev_fwnode(mac->phylink_config.dev));
+	mac->phylink_config.num_possible_pcs =
+		fwnode_phylink_pcs_count(dev_fwnode(mac->phylink_config.dev)) +
+		!!mtk_get_internal_pcs(mac);
 	mac->phylink_config.fill_available_pcs = mtk_fill_available_pcs;
 
 	/* MT7623 gmac0 is now missing its speed-specific PLL configuration
