@@ -1497,6 +1497,7 @@ struct mtk_eth {
  */
 struct mtk_mac {
 	int				id;
+	phy_interface_t			phy_mode;
 	phy_interface_t			interface;
 	u8				ppe_idx;
 	int				speed;

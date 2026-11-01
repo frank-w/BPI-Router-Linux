@@ -4931,6 +4931,32 @@ static void mtk_sgmii_destroy(struct mtk_eth *eth)
 		mtk_pcs_lynxi_destroy(eth->sgmii_pcs[i]);
 }
 
+static int mtk_fill_available_pcs(struct phylink_config *config,
+				     struct phylink_pcs **available_pcs,
+				     unsigned int num_possible_pcs)
+{
+	struct device *dev = config->dev;
+	struct mtk_mac *mac = container_of(config, struct mtk_mac, phylink_config);
+	struct mtk_eth *eth = mac->hw;
+
+	if (MTK_HAS_CAPS(mac->hw->soc->caps, MTK_SGMII)) {
+		if (! mtk_is_netsys_v3_or_greater(mac->hw)) {
+			if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) {
+				// single LynxI PCS used by either GMAC
+				if (!test_bit(mac->phy_mode, eth->sgmii_pcs[0]->supported_interfaces))
+					return 0;
+				if (eth->shared_sgmii_used) {
+					return -EBUSY;
+				}
+				eth->shared_sgmii_used = true;
+			}
+		}
+	}
+
+	return fwnode_phylink_pcs_parse(dev_fwnode(dev), available_pcs,
+					num_possible_pcs);
+}
+
 static int mtk_cleanup(struct mtk_eth *eth)
 {
 	mtk_sgmii_destroy(eth);
@@ -5326,9 +5352,8 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	const __be32 *_id = of_get_property(np, "reg", NULL);
 	phy_interface_t phy_mode;
 	struct phylink *phylink;
-	int id, err, count, i;
+	int id, err, i;
 	struct mtk_mac *mac;
-	unsigned int sid;
 	int txqs = 1;
 	u32 val;
 
@@ -5398,6 +5423,7 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 		dev_err(eth->dev, "incorrect phy-mode\n");
 		goto free_netdev;
 	}
+	mac->phy_mode = phy_mode;
 
 	/* mac config is not set */
 	mac->interface = PHY_INTERFACE_MODE_NA;
@@ -5410,7 +5436,8 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 	/* LPI above 1 Gbps is not supported */
 	mac->phylink_config.lpi_capabilities = MAC_100FD | MAC_1000FD;
 	mac->phylink_config.lpi_timer_default = 1000;
-	mac->phylink_config.num_available_pcs = 0;
+	mac->phylink_config.num_possible_pcs = fwnode_phylink_pcs_count(dev_fwnode(mac->phylink_config.dev));
+	mac->phylink_config.fill_available_pcs = mtk_fill_available_pcs;
 
 	/* MT7623 gmac0 is now missing its speed-specific PLL configuration
 	 * in its .mac_config method (since state->speed is not valid there.
@@ -5454,41 +5481,6 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 				mac->phylink_config.pcs_interfaces);
 			__set_bit(PHY_INTERFACE_MODE_USXGMII,
 				mac->phylink_config.pcs_interfaces);
-
-			err = fwnode_phylink_pcs_parse(of_fwnode_handle(np), NULL, &count);
-			if (err == -ENODEV) {
-				err = 0;
-				goto no_pcs;
-			}
-
-			if (count > 2)
-				err = -ENOMEM;
-
-			if (err)
-				goto free_netdev;
-
-			err = fwnode_phylink_pcs_parse(of_fwnode_handle(np), mac->available_pcs, &count);
-			if (err)
-				goto free_netdev;
-
-			mac->phylink_config.available_pcs = mac->available_pcs;
-			mac->phylink_config.num_available_pcs = count;
-		} else {
-			if (MTK_HAS_CAPS(eth->soc->caps, MTK_SHARED_SGMII)) {
-				/* single LynxI PCS used by either GMAC */
-				if (!test_bit(phy_mode, eth->sgmii_pcs[0]->supported_interfaces))
-					goto no_pcs;
-				if (eth->shared_sgmii_used) {
-					err = -EBUSY;
-					goto free_netdev;
-				}
-				sid = 0;
-				eth->shared_sgmii_used = true;
-			} else {
-				sid = id;
-			}
-			mac->phylink_config.available_pcs = &eth->sgmii_pcs[sid];
-			mac->phylink_config.num_available_pcs = 1;
 		}
 
 		phy_interface_or(mac->phylink_config.supported_interfaces,
@@ -5496,7 +5488,6 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
 				 mac->phylink_config.pcs_interfaces);
 	}
 
-no_pcs:
 	if (mtk_is_netsys_v3_or_greater(mac->hw) &&
 	    MTK_HAS_CAPS(mac->hw->soc->caps, MTK_ESW) &&
 	    id == MTK_GMAC1_ID) {
