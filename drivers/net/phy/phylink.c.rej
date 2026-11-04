@@ -1,0 +1,97 @@
+diff a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c	(rejected hunks)
+@@ -1939,11 +1964,95 @@ static int phylink_fill_available_pcs(struct phylink *pl,
+ 	}
+ 
+ out:
++	mutex_unlock(&pl->state_mutex);
++
+ 	kfree(pcss);
+ 
+ 	return ret;
+ }
+ 
++static void phylink_del_pcs(struct phylink *pl, struct phylink_pcs *pcs)
++{
++	lockdep_assert_held(&pl->state_mutex);
++
++	list_del(&pcs->list);
++	pcs->phylink = NULL;
++
++	/*
++	 * Check if we are removing the PCS currently
++	 * in use by this phylink instance. If this is the case,
++	 * tear down the link, force phylink resolve to reconfigure the
++	 * interface mode, disable the current PCS and set the
++	 * phylink PCS to NULL.
++	 */
++	if (pl->pcs == pcs) {
++		if (pl->old_link_state) {
++			phylink_link_down(pl);
++			pl->old_link_state = false;
++		}
++		if (pl->cfg_link_an_mode == MLO_AN_INBAND)
++			timer_delete_sync(&pl->link_poll);
++		phylink_pcs_disable(pl->pcs);
++
++		pl->force_major_config = true;
++		WRITE_ONCE(pl->pcs, NULL);
++	}
++}
++
++static int pcs_provider_notify(struct notifier_block *self,
++			       unsigned long val, void *data)
++{
++	struct phylink *pl = container_of(self, struct phylink, fwnode_pcs_nb);
++	struct fwnode_pcs_provider *pp = data;
++	struct phylink_pcs *pcs, *tmp;
++	bool resolve = false;
++
++	rtnl_lock();
++
++	mutex_lock(&pl->state_mutex);
++
++	/*
++	 * Loop all the PCS for phylink instance and check if
++	 * this notification is relevant for some of them.
++	 */
++	list_for_each_entry_safe(pcs, tmp, &pl->pcs_list, list) {
++		if (!fwnode_pcs_matches_provider(pp, pl->fwnode, pcs))
++			continue;
++
++		phylink_del_pcs(pl, pcs);
++		resolve = true;
++	}
++
++	/* Exit early if nothing has changed */
++	if (!resolve) {
++		mutex_unlock(&pl->state_mutex);
++		rtnl_unlock();
++		return NOTIFY_DONE;
++	}
++
++	/* Refresh supported interfaces */
++	phy_interface_copy(pl->supported_interfaces,
++			   pl->config->supported_interfaces);
++	list_for_each_entry(pcs, &pl->pcs_list, list)
++		phy_interface_or(pl->supported_interfaces,
++				 pl->supported_interfaces,
++				 pcs->supported_interfaces);
++
++	mutex_unlock(&pl->state_mutex);
++
++	/* Recalculate capabilities */
++	linkmode_fill(pl->supported);
++	linkmode_fill(pl->link_config.advertising);
++	phylink_validate_mask(pl, NULL, pl->supported, &pl->link_config,
++			      pl->supported_interfaces);
++
++	rtnl_unlock();
++
++	phylink_run_resolve(pl);
++
++	return NOTIFY_OK;
++}
++
+ /**
+  * phylink_update_pause_state() - Update the phylink pause frame configuration
+  * @pl: a pointer to a &struct phylink instance

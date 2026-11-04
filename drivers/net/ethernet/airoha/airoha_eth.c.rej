@@ -1,0 +1,43 @@
+diff a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/airoha/airoha_eth.c	(rejected hunks)
+@@ -2194,10 +2195,18 @@ static int airoha_dev_open(struct net_device *netdev)
+ 		return -EBUSY;
+ 	}
+ 
++	err = phylink_of_phy_connect(dev->phylink, netdev->dev.of_node, 0);
++	if (err) {
++		netdev_err(netdev, "could not attach PHY: %d\n", err);
++		return err;
++	}
++
++	phylink_start(dev->phylink);
++
+ 	netif_tx_start_all_queues(netdev);
+ 	err = airoha_set_vip_for_gdm_port(dev, true);
+ 	if (err)
+-		return err;
++		goto err_phy_stop;
+ 
+ 	if (netdev_uses_dsa(netdev))
+ 		airoha_fe_set(qdma->eth, REG_GDM_INGRESS_CFG(port->id),
+@@ -2219,6 +2228,12 @@ static int airoha_dev_open(struct net_device *netdev)
+ 		airoha_dev_lro_enable(dev);
+ 
+ 	return 0;
++
++err_phy_stop:
++	phylink_stop(dev->phylink);
++	phylink_disconnect_phy(dev->phylink);
++
++	return err;
+ }
+ 
+ static int airoha_dev_stop(struct net_device *netdev)
+@@ -2239,6 +2256,8 @@ static int airoha_dev_stop(struct net_device *netdev)
+ 	if (netdev->features & NETIF_F_LRO)
+ 		airoha_dev_lro_disable(dev);
+ 
++	phylink_disconnect_phy(dev->phylink);
++
+ 	return 0;
+ }
+ 
