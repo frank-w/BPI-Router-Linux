@@ -1535,7 +1535,7 @@ int device_schedule_reprobe(struct device *dev, unsigned int delay_ms)
 	 * A bus taking the parent lock would need @dev's parent pinned until
 	 * the work runs, which device_move() can invalidate.
 	 */
-	if (!drv || !dev->bus || dev->bus->need_parent_lock || !dev->p ||
+	if (!drv || !dev->bus || dev->type->need_parent_lock || !dev->p ||
 	    dev->p->dead || !device_is_registered(dev))
 		return -EINVAL;
 
