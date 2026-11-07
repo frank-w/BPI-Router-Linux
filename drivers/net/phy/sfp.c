@@ -559,6 +559,10 @@ static const struct sfp_quirk sfp_quirks[] = {
 	SFP_QUIRK_F("FS", "SFP-2.5G-T", sfp_fixup_rollball_wait4s),
 	SFP_QUIRK_F("FS", "SFP-10GM-T", sfp_fixup_rollball_wait4s),
 
+	// Fiberstore SFP-10G-T-30 is based on a Marvell 88X3310 and does not
+	// support Rollball protocol
+	SFP_QUIRK_F("FS", "SFP-10G-T-30", sfp_fixup_10gbaset_30m),
+
 	// Fiberstore GPON-ONU-34-20BI can operate at 2500base-X, but report 1.2GBd
 	// NRZ in their EEPROM
 	SFP_QUIRK("FS", "GPON-ONU-34-20BI", sfp_quirk_2500basex,
