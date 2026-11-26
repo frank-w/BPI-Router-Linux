@@ -397,17 +397,14 @@ void sis_enable_intx(struct pqi_ctrl_info *ctrl_info)
 	sis_set_doorbell_bit(ctrl_info, SIS_ENABLE_INTX);
 }
 
-void sis_shutdown_ctrl(struct pqi_ctrl_info *ctrl_info,
-	enum pqi_ctrl_shutdown_reason ctrl_shutdown_reason)
+void sis_shutdown_ctrl(struct pqi_ctrl_info *ctrl_info)
 {
 	if (readl(&ctrl_info->registers->sis_firmware_status) &
 		SIS_CTRL_KERNEL_PANIC)
 		return;
 
-	if (ctrl_info->firmware_triage_supported)
-		writel(ctrl_shutdown_reason, &ctrl_info->registers->sis_ctrl_shutdown_reason_code);
-
-	writel(SIS_TRIGGER_SHUTDOWN, &ctrl_info->registers->sis_host_to_ctrl_doorbell);
+	writel(SIS_TRIGGER_SHUTDOWN,
+		&ctrl_info->registers->sis_host_to_ctrl_doorbell);
 }
 
 int sis_pqi_reset_quiesce(struct pqi_ctrl_info *ctrl_info)
@@ -479,7 +476,7 @@ int sis_wait_for_fw_triage_completion(struct pqi_ctrl_info *ctrl_info)
 	return rc;
 }
 
-void sis_verify_structures(void)
+static void __attribute__((unused)) verify_structures(void)
 {
 	BUILD_BUG_ON(offsetof(struct sis_base_struct,
 		revision) != 0x0);
