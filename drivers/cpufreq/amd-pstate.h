@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * linux/include/linux/amd-pstate.h
- *
  * Copyright (C) 2022 Advanced Micro Devices, Inc.
  *
  * Author: Meng Li <li.meng@amd.com>
@@ -11,11 +9,6 @@
 #define _LINUX_AMD_PSTATE_H
 
 #include <linux/pm_qos.h>
-
-#define AMD_CPPC_EPP_PERFORMANCE		0x00
-#define AMD_CPPC_EPP_BALANCE_PERFORMANCE	0x80
-#define AMD_CPPC_EPP_BALANCE_POWERSAVE		0xBF
-#define AMD_CPPC_EPP_POWERSAVE			0xFF
 
 /*********************************************************************
  *                        AMD P-state INTERFACE                       *
@@ -39,11 +32,16 @@ struct amd_aperf_mperf {
  * @cppc_req_cached: cached performance request hints
  * @highest_perf: the maximum performance an individual processor may reach,
  *		  assuming ideal conditions
+ *		  For platforms that do not support the preferred core feature, the
+ *		  highest_pef may be configured with 166 or 255, to avoid max frequency
+ *		  calculated wrongly. we take the fixed value as the highest_perf.
  * @nominal_perf: the maximum sustained performance level of the processor,
  *		  assuming ideal operating conditions
  * @lowest_nonlinear_perf: the lowest performance level at which nonlinear power
  *			   savings are achieved
  * @lowest_perf: the absolute lowest performance level of the processor
+ * @prefcore_ranking: the preferred core ranking, the higher value indicates a higher
+ * 		  priority.
  * @max_freq: the frequency that mapped to highest_perf
  * @min_freq: the frequency that mapped to lowest_perf
  * @nominal_freq: the frequency that mapped to nominal_perf
@@ -73,6 +71,7 @@ struct amd_cpudata {
 	u32	nominal_perf;
 	u32	lowest_nonlinear_perf;
 	u32	lowest_perf;
+	u32     prefcore_ranking;
 	u32     min_limit_perf;
 	u32     max_limit_perf;
 	u32     min_limit_freq;
@@ -109,13 +108,7 @@ enum amd_pstate_mode {
 	AMD_PSTATE_GUIDED,
 	AMD_PSTATE_MAX,
 };
+const char *amd_pstate_get_mode_string(enum amd_pstate_mode mode);
+int amd_pstate_update_status(const char *buf, size_t size);
 
-static const char * const amd_pstate_mode_string[] = {
-	[AMD_PSTATE_UNDEFINED]   = "undefined",
-	[AMD_PSTATE_DISABLE]     = "disable",
-	[AMD_PSTATE_PASSIVE]     = "passive",
-	[AMD_PSTATE_ACTIVE]      = "active",
-	[AMD_PSTATE_GUIDED]      = "guided",
-	NULL,
-};
 #endif /* _LINUX_AMD_PSTATE_H */

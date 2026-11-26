@@ -9,9 +9,9 @@
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/clk-provider.h>
 #include <linux/regmap.h>
 #include <linux/reset-controller.h>
@@ -2022,7 +2022,7 @@ static struct clk_branch csiphy_ahb2crif_clk = {
 static struct clk_branch mdss_ahb_clk = {
 	.halt_reg = 0x2308,
 	.halt_check = BRANCH_HALT,
-	.hwcg_reg = 0x8a004,
+	.hwcg_reg = 0x2308,
 	.hwcg_bit = 1,
 	.clkr = {
 		.enable_reg = 0x2308,
@@ -2828,14 +2828,10 @@ static void sdm630_clock_override(void)
 
 static int mmcc_660_probe(struct platform_device *pdev)
 {
-	const struct of_device_id *id;
 	struct regmap *regmap;
 	bool is_sdm630;
 
-	id = of_match_device(mmcc_660_match_table, &pdev->dev);
-	if (!id)
-		return -ENODEV;
-	is_sdm630 = !!(id->data);
+	is_sdm630 = !!device_get_match_data(&pdev->dev);
 
 	regmap = qcom_cc_map(pdev, &mmcc_660_desc);
 	if (IS_ERR(regmap))

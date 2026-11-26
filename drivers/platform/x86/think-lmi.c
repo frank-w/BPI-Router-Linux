@@ -403,14 +403,13 @@ static ssize_t current_password_store(struct kobject *kobj,
 	struct tlmi_pwd_setting *setting = to_tlmi_pwd_setting(kobj);
 	size_t pwdlen;
 
-	pwdlen = strlen(buf);
+	/* Strip newline; setting password won't work if one is present. */
+	pwdlen = strchrnul(buf, '\n') - buf;
 	/* pwdlen == 0 is allowed to clear the password */
 	if (pwdlen && ((pwdlen < setting->minlen) || (pwdlen > setting->maxlen)))
 		return -EINVAL;
 
-	strscpy(setting->password, buf, setting->maxlen);
-	/* Strip out CR if one is present, setting password won't work if it is present */
-	strip_cr(setting->password);
+	strscpy(setting->password, buf, pwdlen + 1);
 	return count;
 }
 
@@ -680,9 +679,15 @@ static ssize_t certificate_thumbprint_show(struct kobject *kobj, struct kobj_att
 	if (!tlmi_priv.certificate_support || !setting->cert_installed)
 		return -EOPNOTSUPP;
 
-	count += cert_thumbprint(buf, "Md5", count);
-	count += cert_thumbprint(buf, "Sha1", count);
-	count += cert_thumbprint(buf, "Sha256", count);
+	count = cert_thumbprint(buf, "Md5", count);
+	if (count < 0)
+		return count;
+	count = cert_thumbprint(buf, "Sha1", count);
+	if (count < 0)
+		return count;
+	count = cert_thumbprint(buf, "Sha256", count);
+	if (count < 0)
+		return count;
 	return count;
 }
 
