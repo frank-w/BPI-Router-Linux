@@ -155,7 +155,9 @@ static int jpeg_v2_0_hw_init(void *handle)
 		(adev->doorbell_index.vcn.vcn_ring0_1 << 1), 0);
 
 	r = amdgpu_ring_test_helper(ring);
-	if (!r)
+	if (r)
+		cancel_delayed_work_sync(&adev->jpeg.idle_work);
+	else
 		DRM_INFO("JPEG decode initialized successfully.\n");
 
 	return r;
@@ -778,6 +780,7 @@ static const struct amd_ip_funcs jpeg_v2_0_ip_funcs = {
 static const struct amdgpu_ring_funcs jpeg_v2_0_dec_ring_vm_funcs = {
 	.type = AMDGPU_RING_TYPE_VCN_JPEG,
 	.align_mask = 0xf,
+	.no_user_fence = true,
 	.vmhub = AMDGPU_MMHUB_0,
 	.get_rptr = jpeg_v2_0_dec_ring_get_rptr,
 	.get_wptr = jpeg_v2_0_dec_ring_get_wptr,

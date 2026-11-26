@@ -354,7 +354,7 @@ static int isc_parse_dt(struct device *dev, struct isc_device *isc)
 			ret = -ENOMEM;
 			break;
 		}
-		subdev_entity->epn = epn;
+		subdev_entity->epn = of_node_get(epn);
 
 		flags = v4l2_epn.bus.parallel.flags;
 
@@ -374,6 +374,9 @@ static int isc_parse_dt(struct device *dev, struct isc_device *isc)
 		list_add_tail(&subdev_entity->list, &isc->subdev_entities);
 	}
 	of_node_put(epn);
+
+	list_for_each_entry(subdev_entity, &isc->subdev_entities, list)
+		of_node_put(subdev_entity->epn);
 
 	return ret;
 }
@@ -411,6 +414,8 @@ static int atmel_isc_probe(struct platform_device *pdev)
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return irq;
+
+	isc->irq = irq;
 
 	ret = devm_request_irq(dev, irq, isc_interrupt, 0,
 			       "atmel-sama5d2-isc", isc);

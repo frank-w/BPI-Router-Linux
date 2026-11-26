@@ -373,13 +373,12 @@ static int dlm_send_ack(int nodeid, uint32_t seq)
 
 	m_header = (struct dlm_header *)ppc;
 
-	m_header->h_version = (DLM_HEADER_MAJOR | DLM_HEADER_MINOR);
-	m_header->h_nodeid = dlm_our_nodeid();
-	m_header->h_length = mb_len;
+	m_header->h_version = cpu_to_le32(DLM_HEADER_MAJOR | DLM_HEADER_MINOR);
+	m_header->h_nodeid = cpu_to_le32(dlm_our_nodeid());
+	m_header->h_length = cpu_to_le16(mb_len);
 	m_header->h_cmd = DLM_ACK;
-	m_header->u.h_seq = seq;
+	m_header->u.h_seq = cpu_to_le32(seq);
 
-	header_out(m_header);
 	dlm_lowcomms_commit_msg(msg);
 	dlm_lowcomms_put_msg(msg);
 
@@ -402,12 +401,10 @@ static int dlm_send_fin(struct midcomms_node *node,
 
 	m_header = (struct dlm_header *)ppc;
 
-	m_header->h_version = (DLM_HEADER_MAJOR | DLM_HEADER_MINOR);
-	m_header->h_nodeid = dlm_our_nodeid();
-	m_header->h_length = mb_len;
+	m_header->h_version = cpu_to_le32(DLM_HEADER_MAJOR | DLM_HEADER_MINOR);
+	m_header->h_nodeid = cpu_to_le32(dlm_our_nodeid());
+	m_header->h_length = cpu_to_le16(mb_len);
 	m_header->h_cmd = DLM_FIN;
-
-	header_out(m_header);
 
 	pr_debug("sending fin msg to node %d\n", node->nodeid);
 	dlm_midcomms_commit_mhandle(mh);
@@ -1007,15 +1004,16 @@ static void dlm_fill_opts_header(struct dlm_opts *opts, uint16_t inner_len,
 				 uint32_t seq)
 {
 	opts->o_header.h_cmd = DLM_OPTS;
-	opts->o_header.h_version = (DLM_HEADER_MAJOR | DLM_HEADER_MINOR);
-	opts->o_header.h_nodeid = dlm_our_nodeid();
-	opts->o_header.h_length = DLM_MIDCOMMS_OPT_LEN + inner_len;
-	opts->o_header.u.h_seq = seq;
-	header_out(&opts->o_header);
+	opts->o_header.h_version = cpu_to_le32(DLM_HEADER_MAJOR | DLM_HEADER_MINOR);
+	opts->o_header.h_nodeid = cpu_to_le32(dlm_our_nodeid());
+	opts->o_header.h_length = cpu_to_le16(DLM_MIDCOMMS_OPT_LEN + inner_len);
+	opts->o_header.u.h_seq = cpu_to_le32(seq);
 }
 
-static void midcomms_new_msg_cb(struct dlm_mhandle *mh)
+static void midcomms_new_msg_cb(void *data)
 {
+	struct dlm_mhandle *mh = data;
+
 	atomic_inc(&mh->node->send_queue_cnt);
 
 	spin_lock(&mh->node->send_queue_lock);
@@ -1432,3 +1430,51 @@ int dlm_midcomms_close(int nodeid)
 
 	return ret;
 }
+
+/* debug functionality to send raw dlm msg from user space */
+struct dlm_rawmsg_data {
+	struct midcomms_node *node;
+	void *buf;
+};
+
+static void midcomms_new_rawmsg_cb(void *data)
+{
+	struct dlm_rawmsg_data *rd = data;
+	struct dlm_header *h = rd->buf;
+
+	switch (h->h_version) {
+	case cpu_to_le32(DLM_VERSION_3_1):
+		break;
+	default:
+		switch (h->h_cmd) {
+		case DLM_OPTS:
+			if (!h->u.h_seq)
+				h->u.h_seq = cpu_to_le32(rd->node->seq_send++);
+			break;
+		default:
+			break;
+		}
+		break;
+	}
+}
+
+int dlm_midcomms_rawmsg_send(struct midcomms_node *node, void *buf,
+			     int buflen)
+{
+	struct dlm_rawmsg_data rd;
+	struct dlm_msg *msg;
+	char *msgbuf;
+
+	rd.node = node;
+	rd.buf = buf;
+
+	msg = dlm_lowcomms_new_msg(node->nodeid, buflen, GFP_NOFS,
+				   &msgbuf, midcomms_new_rawmsg_cb, &rd);
+	if (!msg)
+		return -ENOMEM;
+
+	memcpy(msgbuf, buf, buflen);
+	dlm_lowcomms_commit_msg(msg);
+	return 0;
+}
+

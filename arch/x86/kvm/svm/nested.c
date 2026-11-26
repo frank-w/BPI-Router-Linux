@@ -292,10 +292,15 @@ static bool nested_vmcb_check_cr3_cr4(struct kvm_vcpu *vcpu,
 	return true;
 }
 
-/* Common checks that apply to both L1 and L2 state.  */
-static bool nested_vmcb_valid_sregs(struct kvm_vcpu *vcpu,
-				    struct vmcb_save_area *save)
+bool nested_vmcb_valid_sregs(struct kvm_vcpu *vcpu,
+			     struct vmcb_save_area *save, bool is_l1)
 {
+	if (is_l1 && (!(save->cr0 & X86_CR0_PG) ||
+		      !(save->cr0 & X86_CR0_PE) ||
+		      (save->rflags & X86_EFLAGS_VM) ||
+		      ((save->efer & EFER_LMA) && !(save->efer & EFER_LME))))
+		return false;
+
 	/*
 	 * FIXME: these should be done after copying the fields,
 	 * to avoid TOC/TOU races.  For these save area checks
@@ -461,6 +466,7 @@ void nested_vmcb02_compute_g_pat(struct vcpu_svm *svm)
 static void nested_vmcb02_prepare_save(struct vcpu_svm *svm, struct vmcb *vmcb12)
 {
 	bool new_vmcb12 = false;
+	u64 efer = READ_ONCE(vmcb12->save.efer);
 
 	nested_vmcb02_compute_g_pat(svm);
 	vmcb_mark_dirty(svm->vmcb, VMCB_NPT);
@@ -488,12 +494,16 @@ static void nested_vmcb02_prepare_save(struct vcpu_svm *svm, struct vmcb *vmcb12
 
 	kvm_set_rflags(&svm->vcpu, vmcb12->save.rflags | X86_EFLAGS_FIXED);
 
+	/* SVM ignores EFER.LMA if EFER.LME=0 (instead of failing VMRUN). */
+	if (!(efer & EFER_LME))
+		efer &= ~EFER_LMA;
+
 	/*
 	 * Force-set EFER_SVME even though it is checked earlier on the
 	 * VMCB12, because the guest can flip the bit between the check
 	 * and now.  Clearing EFER_SVME would call svm_free_nested.
 	 */
-	svm_set_efer(&svm->vcpu, vmcb12->save.efer | EFER_SVME);
+	svm_set_efer(&svm->vcpu, efer | EFER_SVME);
 
 	svm_set_cr0(&svm->vcpu, vmcb12->save.cr0);
 	svm_set_cr4(&svm->vcpu, vmcb12->save.cr4);
@@ -669,7 +679,7 @@ int nested_svm_vmrun(struct kvm_vcpu *vcpu)
 
 	nested_load_control_from_vmcb12(svm, &vmcb12->control);
 
-	if (!nested_vmcb_valid_sregs(vcpu, &vmcb12->save) ||
+	if (!nested_vmcb_valid_sregs(vcpu, &vmcb12->save, false) ||
 	    !nested_vmcb_check_controls(vcpu, &svm->nested.ctl)) {
 		vmcb12->control.exit_code    = SVM_EXIT_ERR;
 		vmcb12->control.exit_code_hi = -1u;
@@ -916,6 +926,7 @@ int svm_allocate_nested(struct vcpu_svm *svm)
 		goto err_free_vmcb02;
 	svm_vcpu_init_msrpm(&svm->vcpu, svm->nested.msrpm);
 
+	svm->nested.vmcb02.cpu = -1;
 	svm->nested.initialized = true;
 	return 0;
 
@@ -1359,10 +1370,7 @@ static int svm_set_nested_state(struct kvm_vcpu *vcpu,
 	 * Validate host state saved from before VMRUN (see
 	 * nested_svm_check_permissions).
 	 */
-	if (!(save->cr0 & X86_CR0_PG) ||
-	    !(save->cr0 & X86_CR0_PE) ||
-	    (save->rflags & X86_EFLAGS_VM) ||
-	    !nested_vmcb_valid_sregs(vcpu, save))
+	if (!nested_vmcb_valid_sregs(vcpu, save, true))
 		goto out_free;
 
 

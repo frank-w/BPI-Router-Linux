@@ -23,11 +23,8 @@ struct rnbd_srv_session {
 	struct rtrs_srv		*rtrs;
 	char			sessname[NAME_MAX];
 	int			queue_depth;
-	struct bio_set		sess_bio_set;
 
 	struct xarray		index_idr;
-	/* List of struct rnbd_srv_sess_dev */
-	struct list_head        sess_dev_list;
 	struct mutex		lock;
 	u8			ver;
 };
@@ -38,7 +35,7 @@ struct rnbd_srv_dev {
 	struct kobject                  dev_kobj;
 	struct kobject                  *dev_sessions_kobj;
 	struct kref                     kref;
-	char				id[NAME_MAX];
+	char				name[NAME_MAX];
 	/* List of rnbd_srv_sess_dev structs */
 	struct list_head		sess_dev_list;
 	struct mutex			lock;
@@ -49,8 +46,6 @@ struct rnbd_srv_dev {
 struct rnbd_srv_sess_dev {
 	/* Entry inside rnbd_srv_dev struct */
 	struct list_head		dev_list;
-	/* Entry inside rnbd_srv_session struct */
-	struct list_head		sess_list;
 	struct rnbd_dev			*rnbd_dev;
 	struct rnbd_srv_session		*sess;
 	struct rnbd_srv_dev		*dev;
@@ -69,8 +64,7 @@ void rnbd_srv_sess_dev_force_close(struct rnbd_srv_sess_dev *sess_dev,
 /* rnbd-srv-sysfs.c */
 
 int rnbd_srv_create_dev_sysfs(struct rnbd_srv_dev *dev,
-			      struct block_device *bdev,
-			      const char *dir_name);
+			      struct block_device *bdev);
 void rnbd_srv_destroy_dev_sysfs(struct rnbd_srv_dev *dev);
 int rnbd_srv_create_dev_session_sysfs(struct rnbd_srv_sess_dev *sess_dev);
 void rnbd_srv_destroy_dev_session_sysfs(struct rnbd_srv_sess_dev *sess_dev);

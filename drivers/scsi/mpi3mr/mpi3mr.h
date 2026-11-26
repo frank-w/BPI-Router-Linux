@@ -46,6 +46,7 @@
 #include "mpi/mpi30_init.h"
 #include "mpi/mpi30_ioc.h"
 #include "mpi/mpi30_sas.h"
+#include "mpi/mpi30_pci.h"
 #include "mpi3mr_debug.h"
 
 /* Global list and lock for storing multiple adapters managed by the driver */
@@ -123,7 +124,7 @@ extern int prot_mask;
 
 /* Definitions for Event replies and sense buffer allocated per controller */
 #define MPI3MR_NUM_EVT_REPLIES	64
-#define MPI3MR_SENSEBUF_SZ	256
+#define MPI3MR_SENSE_BUF_SZ	256
 #define MPI3MR_SENSEBUF_FACTOR	3
 #define MPI3MR_CHAINBUF_FACTOR	3
 #define MPI3MR_CHAINBUFDIX_FACTOR	2
@@ -183,20 +184,6 @@ enum mpi3mr_iocstate {
 	MRIOC_STATE_BECOMING_READY,
 	MRIOC_STATE_RESET_REQUESTED,
 	MRIOC_STATE_UNRECOVERABLE,
-};
-
-/* Init type definitions */
-enum mpi3mr_init_type {
-	MPI3MR_IT_INIT = 0,
-	MPI3MR_IT_RESET,
-	MPI3MR_IT_RESUME,
-};
-
-/* Cleanup reason definitions */
-enum mpi3mr_cleanup_reason {
-	MPI3MR_COMPLETE_CLEANUP = 0,
-	MPI3MR_REINIT_FAILURE,
-	MPI3MR_SUSPEND,
 };
 
 /* Reset reason code definitions*/
@@ -265,7 +252,7 @@ struct mpi3mr_ioc_facts {
 	u16 max_vds;
 	u16 max_hpds;
 	u16 max_advhpds;
-	u16 max_raidpds;
+	u16 max_raid_pds;
 	u16 min_devhandle;
 	u16 max_devhandle;
 	u16 max_op_req_q;
@@ -632,6 +619,7 @@ struct scmd_priv {
  * @ready_timeout: Controller ready timeout
  * @intr_info: Interrupt cookie pointer
  * @intr_info_count: Number of interrupt cookies
+ * @is_intr_info_set: Flag to indicate intr info is setup
  * @num_queues: Number of operational queues
  * @num_op_req_q: Number of operational request queues
  * @req_qinfo: Operational request queue info pointer
@@ -743,6 +731,7 @@ struct mpi3mr_ioc {
 
 	struct mpi3mr_intr_info *intr_info;
 	u16 intr_info_count;
+	bool is_intr_info_set;
 
 	u16 num_queues;
 	u16 num_op_req_q;
@@ -762,6 +751,7 @@ struct mpi3mr_ioc {
 	dma_addr_t reply_buf_dma_max_address;
 
 	u16 reply_free_qsz;
+	u16 reply_sz;
 	struct dma_pool *reply_free_q_pool;
 	__le64 *reply_free_q;
 	dma_addr_t reply_free_q_dma;
@@ -875,8 +865,9 @@ struct delayed_dev_rmhs_node {
 
 int mpi3mr_setup_resources(struct mpi3mr_ioc *mrioc);
 void mpi3mr_cleanup_resources(struct mpi3mr_ioc *mrioc);
-int mpi3mr_init_ioc(struct mpi3mr_ioc *mrioc, u8 init_type);
-void mpi3mr_cleanup_ioc(struct mpi3mr_ioc *mrioc, u8 reason);
+int mpi3mr_init_ioc(struct mpi3mr_ioc *mrioc);
+int mpi3mr_reinit_ioc(struct mpi3mr_ioc *mrioc, u8 is_resume);
+void mpi3mr_cleanup_ioc(struct mpi3mr_ioc *mrioc);
 int mpi3mr_issue_port_enable(struct mpi3mr_ioc *mrioc, u8 async);
 int mpi3mr_admin_request_post(struct mpi3mr_ioc *mrioc, void *admin_req,
 u16 admin_req_sz, u8 ignore_reset);
@@ -893,6 +884,7 @@ void mpi3mr_repost_sense_buf(struct mpi3mr_ioc *mrioc,
 				     u64 sense_buf_dma);
 
 void mpi3mr_memset_buffers(struct mpi3mr_ioc *mrioc);
+void mpi3mr_free_mem(struct mpi3mr_ioc *mrioc);
 void mpi3mr_os_handle_events(struct mpi3mr_ioc *mrioc,
 			     struct mpi3_event_notification_reply *event_reply);
 void mpi3mr_process_op_reply_desc(struct mpi3mr_ioc *mrioc,
