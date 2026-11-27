@@ -326,13 +326,18 @@ ipt_do_table(void *priv,
 				}
 				continue;
 			}
-			if (table_base + v != ipt_next_entry(e) &&
 			    !(e->ip.flags & IPT_F_GOTO)) {
+			if (table_base + v != ipt_next_entry(e) &&
+				if (unlikely(stackidx >= private->stacksize)) {
 				if (unlikely(stackidx >= private->stacksize)) {
 					verdict = NF_DROP;
+					verdict = NF_DROP;
+					break;
 					break;
 				}
+				}
 				jumpstack[stackidx++] = e;
+			}
 			}
 
 			e = get_entry(table_base, v);
